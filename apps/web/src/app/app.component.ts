@@ -426,7 +426,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     const applied = tool ? this.editor.updateProceduralDefaults(tool, patch) : this.editor.updateProcedural(patch);
     if (applied === false) this.notify(new Error("The floor plan parameters cannot be applied."));
   }
-  setProceduralNumber(key: "width" | "depth" | "thickness" | "openingAngle", event: Event) {
+  setProceduralNumber(key: "width" | "depth" | "thickness" | "length" | "openingAngle", event: Event) {
     const p = this.proceduralProperties(); if (!p) return;
     const value = key === "openingAngle" ? this.number(event) : this.distanceInput(event);
     if (!Number.isFinite(value) || value < (key === "openingAngle" ? 0 : 1) || value > (key === "openingAngle" ? 180 : 16384)) return;
