@@ -17,7 +17,7 @@ cd ximply-design-studio
 ./scripts/local.sh start
 ```
 
-On Windows, run `./scripts/local.ps1 start`. Open **http://localhost:8080**.
+On Windows, run `./scripts/local.ps1 start`. Open **http://localhost:8090**.
 The launcher creates a private local environment file and publishes only on loopback.
 Drawing and local project-file save/open do not require server authentication.
 

@@ -23,7 +23,7 @@ Set-Location ximply-design-studio
 ./scripts/local.ps1 start
 ```
 
-Open **http://localhost:8080**. The launcher creates an ignored `.env.local` with a
+Open **http://localhost:8090**. The launcher creates an ignored `.env.local` with a
 random API token; it never prints the token. If your Python executable is named
 `python` on macOS/Linux, use `python scripts/local.py start` instead.
 
@@ -67,6 +67,9 @@ volume and locally built images; export projects first:
 ```
 
 The token file is retained. No global Docker prune is performed.
+If upgrading from the previous 8080 default, set `XDS_PORT=8090` in `.env.local`,
+then stop and start again. Existing credentials and project volumes are preserved.
+
 To change port, set XDS_PORT in `.env.local`, stop, then start again.
 
 ## Development without Docker

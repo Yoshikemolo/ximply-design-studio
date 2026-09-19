@@ -6,7 +6,7 @@ from urllib.request import Request, urlopen
 
 
 def main() -> None:
-    base = 'http://127.0.0.1:8080'
+    base = 'http://127.0.0.1:8090'
     with urlopen(base, timeout=10) as response:
         assert b'xds-root' in response.read(), 'Missing editor application'
     with urlopen(base+'/api/health', timeout=10) as response:

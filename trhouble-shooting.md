@@ -7,7 +7,7 @@ rejects remote Docker contexts. Select your local Docker Desktop/default socket
 context. Run `python3 scripts/local.py logs` (or `python` on Windows) and inspect
 which service failed. Ports bind to 127.0.0.1 only.
 
-If port 8080 is in use, change XDS_PORT in `.env.local`, stop and start again.
+If port 8090 is in use, change XDS_PORT in `.env.local`, stop and start again.
 First build requires network access to the official npm, Python and container
 registries. Do not resolve installation failures using unverified package mirrors or
 `--force` peer dependency overrides. Node 24.19.0 is the tested local runtime.

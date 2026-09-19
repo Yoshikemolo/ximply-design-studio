@@ -20,7 +20,7 @@ def main() -> int:
     if args.action == 'start' and not environment.exists():
         descriptor = os.open(environment, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
         with os.fdopen(descriptor, 'w') as stream:
-            stream.write('XDS_API_TOKEN='+secrets.token_urlsafe(36)+'\nXDS_PORT=8080\n')
+            stream.write('XDS_API_TOKEN='+secrets.token_urlsafe(36)+'\nXDS_PORT=8090\n')
     if not environment.exists():
         parser.error('Local environment missing; run start first')
     commands = {'start': ['up', '--build', '-d', '--wait'], 'stop': ['down'],
@@ -38,7 +38,7 @@ def main() -> int:
         print('Local preview command failed. Check Docker Desktop, the local context and the troubleshooting guide.')
         return 1
     if args.action == 'start':
-        print('Open http://localhost:8080 (or the XDS_PORT you configured).')
+        print('Open http://localhost:8090 (or the XDS_PORT you configured).')
         print('For server storage, enter XDS_API_TOKEN from .env.local in File > Server. Do not share that file.')
     return 0
 

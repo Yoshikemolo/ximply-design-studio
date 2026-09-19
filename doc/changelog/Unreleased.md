@@ -11,12 +11,12 @@ version: "Unreleased"
 date: null
 summary: "Pending changes"
 breaking_changes: false
-capability_status: "design-only"
+capability_status: "local-preview"
 ---
 
 # Unreleased — Pending changes
 
-The editor is not implemented. These notes describe engineering foundations.
+Pending corrections to the local editor preview.
 
 ## Breaking changes
 
@@ -32,7 +32,7 @@ None.
 
 ## Fixes
 
-None.
+- Use localhost:8090 by default for the local editor to avoid conflicts with port 8080. Existing installations should set XDS_PORT=8090 in .env.local and restart; credentials and saved projects are preserved.
 
 ## Security
 
