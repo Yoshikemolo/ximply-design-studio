@@ -18,7 +18,7 @@ export class CanvasRenderer {
     ctx.save();this.transform(ctx,l);ctx.globalAlpha=l.opacity;ctx.globalCompositeOperation=l.blend;ctx.fillStyle=l.fill;ctx.strokeStyle=l.stroke;ctx.lineWidth=l.strokeWidth;ctx.lineCap='round';ctx.lineJoin='round';
     if(l.kind==='rectangle'){ctx.fillRect(0,0,l.width,l.height);if(l.strokeWidth)ctx.strokeRect(0,0,l.width,l.height);}
     if(l.kind==='ellipse'){ctx.beginPath();ctx.ellipse(l.width/2,l.height/2,l.width/2,l.height/2,0,0,Math.PI*2);ctx.fill();if(l.strokeWidth)ctx.stroke();}
-    if(l.kind==='path'&&l.points.length){ctx.beginPath();ctx.moveTo(l.points[0].x,l.points[0].y);for(const p of l.points.slice(1))ctx.lineTo(p.x,p.y);ctx.stroke();}
+    if(l.kind==='path'&&l.points.length&&l.strokeWidth>0){ctx.beginPath();ctx.moveTo(l.points[0].x,l.points[0].y);for(const p of l.points.slice(1))ctx.lineTo(p.x,p.y);ctx.stroke();}
     if(l.kind==='text'){ctx.font=`${l.fontSize}px sans-serif`;ctx.textBaseline='top';ctx.fillText(l.text,0,0);}
     if(l.kind==='image'){const image=painting??this.image(l.source,ready);ctx.filter=`brightness(${l.adjustments.brightness}%) contrast(${l.adjustments.contrast}%) saturate(${l.adjustments.saturation}%) blur(${l.adjustments.blur}px)`;if(image)ctx.drawImage(image,0,0,l.width,l.height);}
     ctx.restore();

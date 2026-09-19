@@ -93,11 +93,11 @@ The Docker nginx config serves SPA routes, including `/about?version=...`.
 
 ## Validation status
 
-The Angular build and automated domain/renderer/editor/API tests run in the development
-environment. Docker is unavailable there and the remote browser cannot reach its
-localhost, so container runtime and visual/browser-platform acceptance are not claimed.
-SonarQube and required human review remain pre-merge gates. This preview is available
-on its feature branch for local testing while those gates remain pending.
+The Angular build and automated domain/renderer/editor/API tests pass. GitHub Actions
+has built and started the Docker preview and passed the packaged HTTP smoke test.
+The remote browser cannot reach the development host, so visual browser acceptance
+is not claimed. SonarQube and independent human review remain pre-merge gates.
+This preview can be downloaded from its feature branch for local evaluation.
 
 See [trhouble-shooting.md](trhouble-shooting.md) for diagnosis and
 [the implementation plan](doc/implementation/PLAN-0002-0001.md) for boundaries.

@@ -2,7 +2,7 @@
 
 A layered vector and image editor by Ximplicity.
 
-**0.2.0-alpha.1 — first single-user local preview.** Draw shapes and freehand paths,
+**0.2.0-alpha.2 — first single-user local preview.** Draw shapes and freehand paths,
 edit text, transform layers, import and retouch images, undo/redo, save editable
 projects and export PNG/SVG. The architecture for the broader professional platform
 remains documented; this alpha implements a bounded first slice.
@@ -73,12 +73,13 @@ python3 -m unittest discover -s tests -v
 API tests require `services/api/requirements-dev.txt`, then
 `python -m pytest services/api/tests -q`.
 
-The Angular production build and automated tests have passed in the development
-environment. Docker is unavailable there and its localhost is unreachable from the
-remote browser, so Docker runtime and visual-browser acceptance remain unverified.
-The strict SonarQube gate, protection verification and independent human review are
-still required before merging. The preview is downloadable from its feature branch
-for local evaluation; green foundation tests are not a claim of full product quality.
+The Angular production build and automated tests pass. GitHub Actions also builds
+and starts the Docker preview, then verifies frontend delivery, authentication,
+artifact round-trip and the About deep link. See the [recorded container run](https://github.com/Yoshikemolo/ximply-design-studio/actions/runs/35444283893).
+Visual browser acceptance remains unverified because the remote browser cannot reach
+the development host. The strict SonarQube gate, protection verification and independent
+human review are still required before merging. The preview remains available from
+its feature branch for local evaluation; these tests are not full product certification.
 
 Public visibility is requested. A distribution license is not yet selected; see
 [LICENSE-DECISION.md](LICENSE-DECISION.md). Owner and reviewer: Yoshikemolo.

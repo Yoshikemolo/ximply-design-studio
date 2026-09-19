@@ -32,7 +32,7 @@ None.
 
 ## Fixes
 
-- Honor the explicit API version-file path in the shallow container layout, avoiding a repository-path lookup during startup.
+None.
 
 ## Security
 

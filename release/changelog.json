@@ -1,6 +1,37 @@
 {
-  "currentVersion": "0.2.0-alpha.1",
+  "currentVersion": "0.2.0-alpha.2",
   "entries": [
+    {
+      "version": "0.2.0-alpha.2",
+      "date": "2026-09-19",
+      "summary": "Validated local container preview",
+      "breakingChanges": [],
+      "changes": [
+        {
+          "type": "Improvement",
+          "description": "Validate all four resize handles and preserve the opposite anchor for rotated layers."
+        },
+        {
+          "type": "Fix",
+          "description": "Honor the configured version-file path in containers without assuming the repository directory depth."
+        },
+        {
+          "type": "Fix",
+          "description": "Render zero-width vector strokes consistently in the canvas and SVG export."
+        },
+        {
+          "type": "Engineering",
+          "description": "Verify packaged frontend delivery, bearer-token rejection, artifact save/open and the About deep link in disposable Docker services."
+        },
+        {
+          "type": "Engineering",
+          "description": "Record the local trial commands and preserve the strict pre-merge quality requirements."
+        }
+      ],
+      "capabilityStatus": "local-preview",
+      "markdown": "0.2.0-alpha.2.md",
+      "source": "doc/changelog/0.2.0-alpha.2.md"
+    },
     {
       "version": "0.2.0-alpha.1",
       "date": "2026-09-19",
