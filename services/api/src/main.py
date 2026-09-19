@@ -152,7 +152,8 @@ def inline_document_schema() -> dict:
 
 
 def create_app(repository: DocumentRepository | None = None, token: str | None = None) -> FastAPI:
-    version_file = Path(os.environ.get('XDS_VERSION_FILE', str(Path(__file__).resolve().parents[3]/'release/version.json')))
+    configured_version = os.environ.get('XDS_VERSION_FILE')
+    version_file = Path(configured_version) if configured_version else Path(__file__).resolve().parents[3]/'release/version.json'
     version = json.loads(version_file.read_text())['version']
     app = FastAPI(title='Ximply Design Studio local artifact API', version=version, docs_url='/api/docs', openapi_url='/api/openapi.json')
     store = repository or FileDocumentRepository(Path(os.environ.get('XDS_DATA_DIR', './data')))

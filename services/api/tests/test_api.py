@@ -83,3 +83,11 @@ class ApiTests(unittest.TestCase):
         self.assertEqual(422, self.client.post('/api/projects', json=document, headers=self.headers).status_code)
         document['layers'] = [{**layer, 'source':'https://remote.example/image.png'}]
         self.assertEqual(422, self.client.post('/api/projects', json=document, headers=self.headers).status_code)
+
+    def test_container_version_override_does_not_require_repository_layout(self):
+        from unittest.mock import patch
+        version = Path(self.folder.name)/'version.json'
+        version.write_text('{"version":"0.2.0-alpha.1"}')
+        with patch('src.main.__file__','/app/src/main.py'), patch.dict('os.environ', {'XDS_VERSION_FILE':str(version)}):
+            client = TestClient(create_app(self.repository, TOKEN))
+            self.assertEqual('0.2.0-alpha.1', client.get('/api/health').json()['version'])

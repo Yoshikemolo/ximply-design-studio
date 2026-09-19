@@ -35,6 +35,11 @@ jobs:
         env:
           XDS_API_TOKEN: ci-disposable-preview-token-not-for-other-environments
         run: python scripts/smoke_local.py
+      - name: Collect container diagnostics on failure
+        if: failure()
+        env:
+          XDS_API_TOKEN: ci-disposable-preview-token-not-for-other-environments
+        run: docker compose -f compose.local.yaml logs --no-color --tail 100
       - name: Stop disposable preview
         if: always()
         env:
