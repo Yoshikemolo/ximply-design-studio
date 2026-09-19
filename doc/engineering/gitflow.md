@@ -11,20 +11,20 @@ source: ["Project owner requirements and design foundation; methodology applicat
 
 # GitFlow profile
 
-This is the owner's GitFlow variant, using the exact branch families requested.
+This is the owner's GitFlow variant. The 2026-09-19 cleanup decision retains dev,
+release and main plus active feature/fix branches; it supersedes permanent qa/demo
+branches. QA and demo remain validation/deployment environments.
 
 | Branch | Purpose | Allowed source |
 | --- | --- | --- |
 | dev | Integration baseline | Reviewed feat/* or fix/* after required quality checks |
 | feat/* | New work | Created from current dev |
 | fix/* | Corrections | Created from current dev |
-| qa | Validation candidate | Exact selected dev candidate |
-| demo | Demonstration deployment | Validated dev candidate promoted after qa |
 | release | Release candidate | Same validated dev candidate, independent of demo-only configuration |
 | main | Stable production baseline | Explicitly approved release candidate |
 
 Create branches as `feat/FEAT-0003-docking` or `fix/SC-0008-focus-recovery`.
-No new work starts from main, release, qa or demo. Environment differences belong
+No new work starts from main or release. Environment differences belong
 in versioned deployment configuration, not divergent product implementations.
 
 ## Work and promotion
@@ -36,8 +36,8 @@ in versioned deployment configuration, not divergent product implementations.
    as well, using a merge queue or updated branch when base changes.
 4. After required owner/reviewer approval, merge to dev. The owner has requested this
    workflow; a failed or missing check never authorizes merge.
-5. Promote the same immutable candidate to qa and validate there; then propagate to
-   demo and release with tracked promotion PRs/checks. Do not rebuild different source
+5. Validate the same immutable candidate in the qa environment, then demonstrate it
+   in demo and prepare release through tracked checks. Do not rebuild different source
    for each environment. Deploy images by digest using an environment manifest.
 6. Promote release to main and deploy production only after explicit release approval
    and a configured destination. No production target is known yet.
@@ -53,7 +53,7 @@ request...` message is not automatically compliant; set a reviewed conventional 
 
 ## Required configuration before implementation merges
 
-Protect dev, qa, demo, release and main with applicable status checks, current-head
+Protect dev, release and main with applicable status checks, current-head
 analysis, resolved conversations, human review and no force push/bypass. The branch
 names now exist, but protection and deployment environments must be verified/configured
 separately; existence is not enforcement. Use read-only workflow permissions by default.
@@ -112,3 +112,24 @@ Sonar analysis; a green result from these workflows is not the strict product ga
 Branch protection requirements and Sonar service configuration must be verified
 separately. PR descriptions must state these limits instead of checked template
 claims with no linked evidence.
+
+## Cleanup checkpoint — 2026-09-19
+
+GitHub inventory verified five branches: dev, release, main, feat/drawing-preview
+and fix/contribution-preflight. PRs 8, 10 and 11 are closed without merging; no PRs
+remain open. Nine retired branches were removed. Their implementations are retained
+in surviving history; the quality-evidence branch's lone non-ancestor commit
+832c0b8b0984fa0a0cd684a859624eecdf8198f8 was patch-equivalent to work already on dev.
+No shared history, check result, protection or gate was rewritten or suppressed.
+
+Main remains the existing editor baseline; release remains the earlier design
+baseline. No unverified preview was promoted to make their heads appear aligned.
+Drawing and preflight improvements remain on the two active branches. Historical
+contribution-policy violations, missing Sonar configuration/evidence and coverage
+gaps remain explicit blockers to future integration. A tidy branch inventory does
+not make those failures pass.
+
+Later the same day the owner asked to consolidate both active branches into dev.
+Their unmerged work was replayed as squashed commits with conforming metadata, the
+remaining historical web merges were pinned by exact SHA, and the branches were
+retired. The Sonar gate stays paused by owner decision and is not evidence of quality.

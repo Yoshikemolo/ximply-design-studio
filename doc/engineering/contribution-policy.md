@@ -71,3 +71,45 @@ The owner's permission and persistent preferences apply only to ximply-design-st
 No write authorization is extended to other projects. ximply-ai-devflow is a read-only
 reference. Changelog discipline is recorded in AGENTS.md and the product footer and
 changelog contract; it is a repository rule, not an asserted account-wide memory.
+
+## Before publishing any contribution
+
+Validate proposed text before creating a commit or PR, including connector-created
+commits which do not invoke a local Git hook. Store the exact proposed texts in
+local files; do not include these temporary files in the commit.
+
+```bash
+python harness/check_contribution.py --message-file /path/to/commit-message.txt --pr-title-file /path/to/pr-title.txt --pr-body-file /path/to/pr-body.md
+```
+
+This offline check validates wording only. Verify the authenticated GitHub account
+is Yoshikemolo before publication and verify author/committer mapping on the returned
+commit before advancing a branch. For existing PRs, collect trusted metadata and run
+`check_contribution.py` against the full current head, including every introduced
+merge commit. Combining a report with proposed text checks enforces both; valid
+proposed text never masks invalid existing metadata.
+
+Local commits should enable `git config core.hooksPath .githooks` and use the owner's
+verified Git identity. Hooks do not run for web or API commits and are not the server
+quality gate. GitHub's merge button always records the web-flow committer, even when
+the person clicking it is the owner. That identity passes only under the verified
+web-flow rule above, with the pull request title as a Conventional Commit message.
+Integration must preserve validated commits under the existing GitFlow/review rules;
+never force-push or bypass required protections.
+
+PR 8 illustrates this distinction: the source conflict is fixed, but merge commits
+7c2af886570ded96107934cd2822f4665e3448e4 and
+aa92505cd29dedcb6d13e414db875679543e390e still fail metadata policy. Adding a later
+valid commit cannot change their immutable metadata. Repairing shared history or
+approving any exact historical exception requires a separate explicit owner decision;
+no such exception is introduced by this preflight improvement.
+
+Before enabling or publishing a workflow requiring an external service, verify its
+host, permissions, credentials and evidence-production process exist. For the strict
+quality workflow this means a reachable Sonar service, SONAR_HOST_URL and
+SONAR_ANALYSIS_MANIFEST_JSON variables, and a privately configured SONAR_TOKEN secret.
+The manifest must come from successful scans of the candidate revision; it is not
+an invented configuration default. Also measure coverage locally: configuration
+alone does not resolve coverage below policy. If a dependency is unavailable, report
+that blocker before publication and do not claim the candidate is ready for merge.
+After publication, inspect all current-head workflow conclusions, not just test jobs.
