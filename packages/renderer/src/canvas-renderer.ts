@@ -1,3 +1,4 @@
+import { materializeProcedural } from "../../domain/src/procedural";
 import { dimensionGeometry } from "../../domain/src/dimensions";
 import { lineEndGeometry, pathLineEnds, LineEnd } from "../../domain/src/line-endings";
 import { Point } from "../../domain/src/document";
@@ -55,7 +56,7 @@ export class CanvasRenderer {
       ctx.fillStyle = document.background;
       ctx.fillRect(0, 0, canvas.width, canvas.height);
     }
-    for (const layer of document.layers)
+    for (const layer of materializeProcedural(document).layers)
       if (layer.visible && !layer.guide)
         this.layer(
           ctx,
@@ -117,7 +118,7 @@ export class CanvasRenderer {
       ctx.arc(layer.width / 2, -28 * unit, 6 * unit, 0, Math.PI * 2);
       ctx.fill();
       ctx.stroke();
-      if (interaction.direct && layer.curves)
+      if (interaction.direct && layer.curves && !layer.procedural && !layer.dimension)
         for (const path of layer.curves)
           for (const node of path.nodes) {
             if (interaction.showHandles !== false)

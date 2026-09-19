@@ -1499,3 +1499,5 @@ textarea,
 
 .horizontal-ruler .ruler-tick.minor { height: 6px; bottom: 0; padding: 0; }
 .vertical-ruler .ruler-tick.minor { width: 6px; right: 0; padding: 0; }
+
+.procedural-properties { border: 1px solid var(--border); border-radius: 6px; margin: 10px 0; padding: 8px; min-width: 0; legend { font-size: 11px; padding: 0 4px; } .property-grid input { min-width: 0; width: 100%; } }

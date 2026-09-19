@@ -1,3 +1,5 @@
+import { Procedural, defaultProcedural, generateProcedural, syncProcedurals, validProcedural } from "../../../../packages/domain/src/procedural";
+import { openingHost } from "./procedural-placement";
 import { Dimension, DimensionFormat, defaultDimensionFormat, dimensionGeometry } from "../../../../packages/domain/src/dimensions";
 import { LineEnds, defaultLineEnds, validLineEnds } from "../../../../packages/domain/src/line-endings";
 import { snapDimensionPoint, DimensionSnap } from "./dimension-snapping";
@@ -77,7 +79,7 @@ export type ContextTarget = { revision: number; layerId: string } & (
 export class EditorService {
   contextAt(point: Point): ContextTarget | null {
     const selected = this.selected();
-    if (selected && this.selectedLayers().length === 1 && selected.visible && !selected.guide && !selected.dimension && selected.curves) {
+    if (selected && this.selectedLayers().length === 1 && selected.visible && !selected.guide && !selected.dimension && !selected.procedural && selected.curves) {
       const hit = this.findCurveNode(selected, point);
       if (hit) {
         if(!this.activeNodes().includes(hit.path + ":" + hit.index))this.activeNodes.set([hit.path + ":" + hit.index]);
@@ -284,7 +286,7 @@ export class EditorService {
   }
   private blendCandidates(): { back: Layer[]; front: Layer[]; parent: string[] } | null {
     const selected = this.selectedLayers();
-    if (selected.length < 2 || selected.some((layer) => this.isEffectivelyLocked(layer) || layer.guide || layer.dimension || !layer.visible)) return null;
+    if (selected.length < 2 || selected.some((layer) => this.isEffectivelyLocked(layer) || layer.guide || layer.dimension || layer.procedural || !layer.visible)) return null;
     const existing = new Set(this.document().blends?.flatMap((blend) => [...blend.backIds, ...blend.frontIds, ...blend.stepIds.flat()]) ?? []);
     if (selected.some((layer) => existing.has(layer.id))) return null;
     const parent = [...(selected[0].groupPath ?? [])];
@@ -361,6 +363,50 @@ export class EditorService {
     this.document.update((doc) => ({ ...doc, blends: doc.blends!.filter((item) => item.id !== blend.id), layers: doc.layers.filter((layer) => !generated.has(layer.id)).map((layer) => endpoints.has(layer.id) ? { ...layer, groupPath: (layer.groupPath ?? []).filter((id) => id !== blend.groupId) } : layer) }));
     this.selectedIds.set([...endpoints]); this.selectedId.set(blend.frontIds.at(-1) ?? null);
     this.changed(); return true;
+  }
+
+  readonly proceduralDefaults = signal<Record<Procedural['type'],Procedural>>({wall:defaultProcedural('wall'),door:defaultProcedural('door'),window:defaultProcedural('window'),pillar:defaultProcedural('pillar')});
+  private proceduralGesture?: {before:StudioDocument;start:Point;type:'wall'|'pillar';id:string;selectedId:string|null;selectedIds:string[]};
+  updateProceduralDefaults(type:Procedural['type'],patch:Record<string,unknown>):boolean {
+    const value=this.proceduralPatch(this.proceduralDefaults()[type],patch);if(!validProcedural(value))return false;
+    this.proceduralDefaults.update(all=>({...all,[type]:value}));return true;
+  }
+  private proceduralPatch(value:Procedural,patch:Record<string,unknown>):Procedural {
+    const next={...value,...patch,type:value.type} as Procedural;
+    if((next.type==='door'||next.type==='window')&&(value.type==='door'||value.type==='window')&&patch['width']!==undefined&&patch['leafWidths']===undefined)next.leafWidths=value.leafWidths.map(w=>w*next.width/value.width);
+    if(next.type==='pillar'&&next.shape==='circle'){if(patch['depth']!==undefined&&patch['width']===undefined)next.width=next.depth;else next.depth=next.width;}
+    return next;
+  }
+  updateProcedural(patch:Record<string,unknown>):boolean {
+    const layer=this.selected();if(!layer?.procedural||this.isEffectivelyLocked(layer))return false;
+    const procedural=this.proceduralPatch(layer.procedural,patch);if(!validProcedural(procedural))return false;
+    let next:StudioDocument;try{next=syncProcedurals({...this.document(),layers:this.document().layers.map(l=>l.id===layer.id?{...l,procedural}:l)});parseDocument(JSON.stringify(next));}catch{return false;}
+    this.history.commit(this.document());this.document.set(next);const defaults=structuredClone(procedural);if(defaults.type==='door'||defaults.type==='window')delete defaults.host;
+    this.proceduralDefaults.update(all=>({...all,[procedural.type]:defaults}));this.changed();return true;
+  }
+  private proceduralLayer(type:Procedural['type'],start:Point,end?:Point,id:string=crypto.randomUUID()):Layer {
+    let procedural=structuredClone(this.proceduralDefaults()[type]);
+    let layer={...newLayer('path',id,start,this.fill(),this.stroke(),this.size()),strokeStyle:{alignment:'center' as const,join:'miter' as const,cap:'butt' as const}};
+    if(type==='wall'&&procedural.type==='wall'){const b=end??{x:start.x+1,y:start.y};procedural={...procedural,start:{x:0,y:0},end:{x:b.x-start.x,y:b.y-start.y}};}
+    if(type==='pillar'&&procedural.type==='pillar'&&end){const box=bounds(start,end);layer={...layer,...box};procedural={...procedural,width:Math.max(1,box.width),depth:Math.max(1,box.height)};if(procedural.shape==='circle')procedural.depth=procedural.width;}
+    if(procedural.type==='door'||procedural.type==='window'){const host=openingHost(this.document().layers,start,procedural.width,12/this.zoom());if(host)procedural.host=host;else delete procedural.host;layer.x=start.x-procedural.width/2;layer.y=start.y-procedural.depth/2;}
+    layer.name=type[0].toUpperCase()+type.slice(1);layer.procedural=procedural;return generateProcedural(layer,this.document());
+  }
+  createProcedural(type:Procedural['type'],start:Point,end?:Point):boolean {
+    if(this.document().layers.length>=150)return false;
+    let layer:Layer,next:StudioDocument;try{layer=this.proceduralLayer(type,start,end);next=syncProcedurals({...this.document(),layers:[...this.document().layers,layer]});parseDocument(JSON.stringify(next));}catch{return false;}
+    this.history.commit(this.document());this.document.set(next);this.selectedId.set(layer.id);this.selectedIds.set([layer.id]);this.changed();return true;
+  }
+  private startProcedural(type:Procedural['type'],point:Point) {
+    point=this.snap(point);if(type==='door'||type==='window'){this.createProcedural(type,point);return;}
+    if(this.document().layers.length>=150)return;
+    this.proceduralGesture={before:structuredClone(this.document()),start:point,type,id:crypto.randomUUID(),selectedId:this.selectedId(),selectedIds:[...this.selectedIds()]};
+  }
+  private detachUnselectedHost(layer:Layer,ids:Set<string>):Layer {
+    const p=layer.procedural;return (p?.type==='door'||p?.type==='window')&&p.host&&!ids.has(p.host.wallId)?this.detachOpening(layer):layer;
+  }
+  private detachOpening(layer:Layer):Layer {
+    const p=layer.procedural;if((p?.type==='door'||p?.type==='window')&&p.host){const procedural={...p};delete procedural.host;return {...layer,procedural};}return layer;
   }
 
   readonly dimensionsVisible = signal(true);
@@ -676,6 +722,7 @@ export class EditorService {
     }
   }
   private changed() {
+    this.document.set(syncProcedurals(this.document()));
     this.synchronizeBlends();
     this.revision.update((x) => x + 1);
     this.renderer.prune(this.document().layers);
@@ -693,7 +740,7 @@ export class EditorService {
     }
   }
   previewDocument(): StudioDocument {
-    try { return syncBlends(this.document()); } catch { return this.document(); }
+    try { return syncBlends(syncProcedurals(this.document())); } catch { return this.document(); }
   }
   private synchronizeBlends() {
     const doc = this.document();
@@ -775,9 +822,10 @@ export class EditorService {
     this.applyTextUpdate((layer) => ({ ...layer, fontSize }));
   }
   updateLayer(patch: Partial<Layer>) {
-    const layer = this.selected();
+    let layer = this.selected();
     if (!layer || this.isEffectivelyLocked(layer) || layer.guide) return;
     this.history.commit(this.document());
+    if(["x","y","width","height","rotation","skewX","flipX","flipY"].some(key=>key in patch))layer=this.detachOpening(layer);
     if (patch.width !== undefined || patch.height !== undefined)
       patch = {
         ...resizeLayer(
@@ -855,6 +903,7 @@ export class EditorService {
         : {}),
     }));
     const copyIds = new Map(layers.map((layer, index) => [layer.id, copies[index].id]));
+    for(const copy of copies){const p=copy.procedural;if((p?.type==='door'||p?.type==='window')&&p.host){const wallId=copyIds.get(p.host.wallId);if(wallId)p.host={...p.host,wallId};else delete p.host;}}
     const blends = this.document().blends?.filter((blend) => [...blend.backIds, ...blend.frontIds, ...blend.stepIds.flat()].every((id) => copyIds.has(id))).map((blend) => ({ ...blend, id: crypto.randomUUID(), groupId: groups.get(blend.groupId)!, backIds: blend.backIds.map((id) => copyIds.get(id)!), frontIds: blend.frontIds.map((id) => copyIds.get(id)!), stepIds: blend.stepIds.map((step) => step.map((id) => copyIds.get(id)!)) }));
     for (const blend of blends ?? []) for (const step of blend.stepIds) for (const id of step) {
       const item = copies.find((layer) => layer.id === id)!;
@@ -902,6 +951,7 @@ export class EditorService {
     override?: ToolId,
   ) {
     const tool = override ?? this.tool();
+    if(["wall","door","window","pillar"].includes(tool)){this.startProcedural(tool as Procedural["type"],point);return;}
     if (["dimensionSmart", "dimensionLinear", "dimensionAngular"].includes(tool)) { this.startDimension(point, tool === "dimensionAngular" ? "angular" : "linear"); return; }
     const dimensionLayer=this.selected();
     if(tool === "select" && dimensionLayer?.dimension && !this.isEffectivelyLocked(dimensionLayer) && this.selectedLayers().length===1) {
@@ -960,7 +1010,7 @@ export class EditorService {
     }
     if (tool === "path") {
       const active = this.selected();
-      if (active?.kind === "path" && !active.dimension && !this.isEffectivelyLocked(active) && active.visible && !active.guide) {
+      if (active?.kind === "path" && !active.dimension && !active.procedural && !this.isEffectivelyLocked(active) && active.visible && !active.guide) {
         const curves = this.editableCurves(active),
           path = curves[0],
           p = localPoint(active, point);
@@ -995,7 +1045,7 @@ export class EditorService {
     if (
       tool === "select" &&
       this.selectedLayers().length === 1 &&
-      selectedPath?.curves && !selectedPath.dimension &&
+      selectedPath?.curves && !selectedPath.dimension && !selectedPath.procedural &&
       !this.isEffectivelyLocked(selectedPath) &&
       selectedPath.visible &&
       this.findCurveNode(selectedPath, point)
@@ -1087,7 +1137,7 @@ export class EditorService {
       if (
         active &&
         !this.isEffectivelyLocked(active) &&
-        !active.guide && !active.dimension &&
+        !active.guide && !active.dimension && !active.procedural &&
         active.visible &&
         ["path", "rectangle", "ellipse"].includes(active.kind)
       ) {
@@ -1196,6 +1246,7 @@ export class EditorService {
     };
   }
   move(point: Point, modifiers: { shift?: boolean; alt?: boolean; ctrl?: boolean } = {}) {
+    if(this.proceduralGesture){const g=this.proceduralGesture;const end=modifiers.shift?snapDirection(g.start,point,this.snapAngle()):this.snap(point);try{const layer=this.proceduralLayer(g.type,g.start,end,g.id);const next=syncProcedurals({...g.before,layers:[...g.before.layers,layer]});parseDocument(JSON.stringify(next));this.document.set(next);this.selectedId.set(layer.id);this.selectedIds.set([layer.id]);}catch{/* Keep the last valid preview. */}return;}
     if(this.dimensionLabelGesture){const layer=this.document().layers.find(l=>l.id===this.dimensionLabelGesture!.id)!;this.setLayer(layer.id,{dimension:{...layer.dimension!,labelPosition:localPoint(layer,point)}});return;}
     const draft=this.dimensionDraft();if(draft){const count=draft.kind=== "angular"?3:2;this.dimensionDraft.set({...draft,cursor:draft.points.length<count?this.dimensionPoint(point,draft.points.length===count-1):point});return;}
     if (this.areaGesture) { this.moveAreaSelection(point); return; }
@@ -1371,6 +1422,7 @@ export class EditorService {
     );
   }
   end() {
+    if(this.proceduralGesture){const g=this.proceduralGesture;this.proceduralGesture=undefined;if(this.document().layers.some(l=>l.id===g.id)){this.history.commit(g.before);this.changed();}return;}
     if(this.dimensionLabelGesture){this.history.commit(this.dimensionLabelGesture.before);this.dimensionLabelGesture=undefined;this.changed();return;}
     if (this.areaGesture) {
       if (!this.areaGesture.moved && !this.areaGesture.shift) { this.selectedId.set(null); this.selectedIds.set([]); this.activeNodes.set([]); }
@@ -1398,6 +1450,7 @@ export class EditorService {
     this.changed();
   }
   cancel() {
+    if(this.proceduralGesture){this.document.set(this.proceduralGesture.before);this.selectedId.set(this.proceduralGesture.selectedId);this.selectedIds.set(this.proceduralGesture.selectedIds);this.proceduralGesture=undefined;}
     this.dimensionDraft.set(null);this.dimensionSnapTarget.set(null);
     if(this.dimensionLabelGesture)this.document.set(this.dimensionLabelGesture.before);this.dimensionLabelGesture=undefined;
     this.cancelGuideDrag();
@@ -1422,7 +1475,7 @@ export class EditorService {
       layers: d.layers.map((l) =>
         ids.has(l.id)
           ? {
-              ...l,
+              ...this.detachUnselectedHost(l,ids),
               rotation: -l.rotation,
               ...(l.skewX !== undefined ? { skewX: -l.skewX } : {}),
               ...(axis === "horizontal"
@@ -1582,7 +1635,7 @@ export class EditorService {
             }
           : undefined,
       ),
-      map = new Map(changed.map((l) => [l.id, l]));
+      map = new Map(changed.map((l) => [l.id, this.detachOpening(l)]));
     this.history.commit(this.document());
     this.document.update((d) => ({
       ...d,
@@ -1591,7 +1644,7 @@ export class EditorService {
     this.changed();
   }
   boolean(operation: Parameters<typeof booleanLayers>[1]) {
-    if(this.selectedLayers().some(layer=>layer.dimension))return;
+    if(this.selectedLayers().some(layer=>layer.dimension || layer.procedural))return;
     const layers = this.selectedLayers().filter((l) => !this.isEffectivelyLocked(l) && !l.guide);
     if (layers.length < 2) return;
     try {
@@ -1618,12 +1671,13 @@ export class EditorService {
     const ids = new Set(g.ids ?? [g.id]);
     if (this.document().layers.some((layer) => ids.has(layer.id) && this.isEffectivelyLocked(layer))) return;
     if (!g.ids || g.ids.length === 1) {
-      const resized = resizeLayer(g.original, target.width, target.height);
+      const resized = resizeLayer(this.detachOpening(g.original), target.width, target.height);
       this.setLayer(g.ids?.[0] ?? g.id, this.reflowText({
         ...target,
         points: resized.points,
         ...(resized.curves ? { curves: resized.curves } : {}),
         ...(resized.dimension ? { dimension: resized.dimension } : {}),
+        ...(resized.procedural ? { procedural: resized.procedural } : {}),
       }));
       return;
     }
@@ -1636,7 +1690,7 @@ export class EditorService {
         g.original,
         target,
         target.rotation - g.original.rotation,
-      ).map((layer) => [layer.id, this.reflowText(layer)]),
+      ).map((layer) => [layer.id, this.reflowText(this.detachUnselectedHost(layer,ids))]),
     );
     this.document.update((d) => ({
       ...d,
@@ -1782,7 +1836,7 @@ export class EditorService {
     if (
       !layer ||
       this.isEffectivelyLocked(layer) ||
-      !layer.visible || layer.dimension ||
+      !layer.visible || layer.dimension || layer.procedural ||
       ["image", "text"].includes(layer.kind)
     ) {
       this.selectedId.set(null);
@@ -1946,7 +2000,7 @@ export class EditorService {
       | "extend",
   ) {
     const layer = this.selected();
-    if (!layer || this.isEffectivelyLocked(layer) || layer.guide || layer.dimension || ["image", "text"].includes(layer.kind))
+    if (!layer || this.isEffectivelyLocked(layer) || layer.guide || layer.dimension || layer.procedural || ["image", "text"].includes(layer.kind))
       return;
     let curves = this.editableCurves(layer);
     if (action === "extend") {
@@ -2008,7 +2062,8 @@ export class EditorService {
     }else{
       next={...before,layers:before.layers.map(l=>{if(!ids.has(l.id))return l;const center=map({x:l.x+l.width/2,y:l.y+l.height/2});return {...l,x:center.x-l.width/2,y:center.y-l.height/2,rotation:l.rotation+rotation};})};
     }
-    try{parseDocument(JSON.stringify(next));}catch{return false;}
+    next={...next,layers:next.layers.map(layer=>ids.has(layer.id)?this.detachUnselectedHost(layer,ids):layer)};
+    try{next=syncProcedurals(next);parseDocument(JSON.stringify(next));}catch{return false;}
     this.history.commit(before);this.expandGeneratedForIds(ids);this.document.set({...next,blends:this.document().blends});this.changed();return true;
   }
   displaceSelection(dx:number,dy:number):boolean {
@@ -2046,7 +2101,7 @@ export class EditorService {
       this.document.update((d) => ({
         ...d,
         layers: d.layers.map((l) =>
-          ids.has(l.id) ? { ...l, x: l.x + dx, y: l.y + dy } : l,
+          ids.has(l.id) ? { ...this.detachUnselectedHost(l,ids), x: l.x + dx, y: l.y + dy } : l,
         ),
       }));
     }
@@ -2063,7 +2118,7 @@ export class EditorService {
     this.setLayer(layer.id, { kind: "path", curves });
   }
   private eraseVector(point: Point) {
-    if(this.document().layers.find(l=>l.id===this.gesture?.id)?.dimension)return;
+    if(this.document().layers.find(l=>l.id===this.gesture?.id)?.dimension || this.document().layers.find(l=>l.id===this.gesture?.id)?.procedural)return;
     const g = this.gesture!,
       layer = this.document().layers.find((l) => l.id === g.id)!;
     const paths = this.editableCurves(layer),
@@ -2087,7 +2142,7 @@ export class EditorService {
 
   defineSymbol() {
     const layer = this.selected();
-    if (!layer || this.isEffectivelyLocked(layer) || layer.guide || layer.dimension) return;
+    if (!layer || this.isEffectivelyLocked(layer) || layer.guide || layer.dimension || layer.procedural) return;
     const symbols = this.document().symbols ?? [];
     if (symbols.length >= 100) return;
     this.history.commit(this.document());
@@ -2144,7 +2199,7 @@ export class EditorService {
   ) {
     const layer = this.selected(),
       id = this.activeSymbol();
-    if (!layer || this.isEffectivelyLocked(layer) || layer.guide || layer.dimension) return;
+    if (!layer || this.isEffectivelyLocked(layer) || layer.guide || layer.dimension || layer.procedural) return;
     const symbol = this.document().symbols?.find((s) => s.id === id);
     if (!symbol && action !== "expand") return;
     this.history.commit(this.document());

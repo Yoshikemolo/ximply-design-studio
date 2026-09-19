@@ -1,3 +1,4 @@
+import { Procedural, materializeProcedural, syncProcedurals, validProcedural, validateProcedurals, resizeProcedural } from "./procedural";
 import { Dimension, dimensionGeometry, validDimension } from "./dimensions";
 import { LineEnds, lineEndGeometry, pathLineEnds, validLineEnds } from "./line-endings";
 import { ObjectBlend, syncBlends, validateBlends } from "./object-blend";
@@ -54,6 +55,7 @@ export interface Layer {
   strokeStyle?: StrokeStyle;
   lineEnds?: LineEnds;
   dimension?: Dimension;
+  procedural?: Procedural;
   points: Point[];
   text: string;
   fontSize: number;
@@ -252,6 +254,7 @@ export function resizeLayer(
     ...layer,
     width,
     height,
+    ...(layer.procedural ? {procedural:resizeProcedural(layer, width, height)} : {}),
     ...(layer.dimension ? { dimension: { ...layer.dimension, anchors: layer.dimension.anchors.map(p => ({ x: p.x * width / layer.width, y: p.y * height / layer.height })), labelPosition: { x: layer.dimension.labelPosition.x * width / layer.width, y: layer.dimension.labelPosition.y * height / layer.height } } } : {}),
     ...(layer.curves
       ? {
@@ -394,7 +397,8 @@ export function parseDocument(text: string): StudioDocument {
       !record(symbol.layer) ||
       symbol.layer["symbolId"] !== undefined ||
       symbol.layer["guide"] !== undefined ||
-      symbol.layer["dimension"] !== undefined
+      symbol.layer["dimension"] !== undefined ||
+      symbol.layer["procedural"] !== undefined
     )
       throw new Error("Invalid symbol definition.");
     symbolIds.add(symbol.id);
@@ -476,6 +480,7 @@ export function parseDocument(text: string): StudioDocument {
         (Array.isArray(layer["groupPath"]) && layer["groupPath"].length > 0))
     )
       throw new Error("Invalid guide layer.");
+    if (layer["procedural"] !== undefined && (value["version"] !== 2 || layer["kind"] !== "path" || layer["dimension"] !== undefined || layer["guide"] !== undefined || layer["symbolId"] !== undefined || !validProcedural(layer["procedural"]))) throw new Error("Invalid procedural layer.");
     if (layer["lineEnds"] !== undefined && (value["version"] !== 2 || !validLineEnds(layer["lineEnds"]))) throw new Error("Invalid line endings.");
     if (layer["dimension"] !== undefined && (value["version"] !== 2 || layer["kind"] !== "path" || layer["guide"] !== undefined || layer["symbolId"] !== undefined || !validDimension(layer["dimension"]))) throw new Error("Invalid dimension.");
     const strokeStyle = layer["strokeStyle"];
@@ -596,7 +601,12 @@ export function parseDocument(text: string): StudioDocument {
       throw new Error("Invalid image adjustment.");
   }
   validateBlends(value as unknown as StudioDocument);
-  return syncBlends({ ...value, version: 2 } as unknown as StudioDocument);
+  validateProcedurals(value as unknown as StudioDocument);
+  const normalized = syncProcedurals(syncBlends({ ...value, version: 2 } as unknown as StudioDocument));
+  for (const layer of normalized.layers.filter(l => l.procedural)) {
+    if (![layer.x, layer.y, layer.rotation].every(n => finite(n, -100000, 100000)) || ![layer.width, layer.height].every(n => finite(n, 1, 16384))) throw new Error("Generated procedural geometry exceeds document bounds.");
+  }
+  return normalized;
 }
 function escapeXml(text: string): string {
   return text.replace(
@@ -632,7 +642,7 @@ function svgAlignedStroke(layer: Layer, shape: (style: string) => string, index:
   return `<defs><mask id="${id}" maskUnits="userSpaceOnUse" x="${bounds.x}" y="${bounds.y}" width="${bounds.width}" height="${bounds.height}" style="mask-type:luminance"><rect x="${bounds.x}" y="${bounds.y}" width="${bounds.width}" height="${bounds.height}" fill="#ffffff"/>${shape('fill="#000000" fill-rule="evenodd" stroke="none"')}</mask></defs><g mask="url(#${id})">${stroke}</g>`;
 }
 export function svgExport(doc: StudioDocument, measure?: TextMeasurement): string {
-  const shapes = doc.layers
+  const shapes = materializeProcedural(doc).layers
     .filter((l) => l.visible && !l.guide)
     .map((l, layerIndex) => {
       if (l.dimension) return dimensionSvg(l, measure, layerIndex);

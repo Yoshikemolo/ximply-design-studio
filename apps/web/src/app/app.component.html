@@ -451,6 +451,31 @@
                 }
               </select></label
             >
+            @if (proceduralProperties(); as procedural) {
+              <fieldset class="procedural-properties" [disabled]="!proceduralTool() && !!editor.selected()?.locked">
+                <legend>{{ t(proceduralTool() ? 'Floor plan tool defaults' : 'Floor plan properties') }} · {{ preferences.distanceUnit() }}</legend>
+                @if (proceduralTool()) {<p class="typography-note">{{ t(proceduralHint()) }}</p>}
+                @if (procedural.type === 'wall') {
+                  <label>{{ t('Wall thickness') }}<input type="number" [min]="displayDistance(1)" [max]="displayDistance(16384)" step="any" [value]="displayDistance(procedural.thickness)" (change)="setProceduralNumber('thickness', $event)" /></label>
+                } @else {
+                  <div class="property-grid"><label>{{ t('Width') }}<input type="number" [min]="displayDistance(1)" [max]="displayDistance(16384)" step="any" [value]="displayDistance(procedural.width)" (change)="setProceduralNumber('width', $event)" /></label><label [title]="t((procedural.type === 'door' || procedural.type === 'window') && procedural.host ? 'Depth follows the host wall.' : 'Depth')">{{ t('Depth') }}<input type="number" [disabled]="(procedural.type === 'door' || procedural.type === 'window') && !!procedural.host" [min]="displayDistance(1)" [max]="displayDistance(16384)" step="any" [value]="displayDistance(procedural.depth)" (change)="setProceduralNumber('depth', $event)" /></label></div>
+                }
+                @if (procedural.type === 'pillar') {
+                  <label>{{ t('Pillar shape') }}<select [value]="procedural.shape" (change)="setPillarShape($event)"><option value="rectangle">{{ t('Rectangular pillar') }}</option><option value="circle">{{ t('Circular pillar') }}</option></select></label>
+                }
+                @if (procedural.type === 'door' || procedural.type === 'window') {
+                  <label>{{ t('Opening mechanism') }}<select [value]="procedural.operation" (change)="patchProcedural({operation: text($event)})"><option value="swing">{{ t('Hinged') }}</option><option value="sliding">{{ t('Sliding') }}</option>@if (procedural.type === 'window') {<option value="fixed">{{ t('Fixed glazing') }}</option>}</select></label>
+                  <label>{{ t('Number of leaves') }}<input type="number" min="1" [max]="procedural.type === 'door' ? 4 : 8" step="1" [value]="procedural.leafWidths.length" (change)="setProceduralLeafCount($event)" /></label>
+                  <div class="property-grid">@for (width of procedural.leafWidths; track $index) {<label>{{ t('Leaf') }} {{ $index + 1 }}<input type="number" [min]="displayDistance(1)" [max]="displayDistance(16384)" step="any" [value]="displayDistance(width)" (change)="setProceduralLeafWidth($index, $event)" /></label>}</div>
+                  <p class="typography-note">{{ t('Changing a leaf width updates the total opening width.') }}</p>
+                  @if (procedural.operation === 'swing') {
+                    <label>{{ t('Opening angle') }} (°)<input type="number" min="0" max="180" step="any" [value]="procedural.openingAngle" (change)="setProceduralNumber('openingAngle', $event)" /></label>
+                    <label>{{ t('Swing direction') }}<select [value]="procedural.swing" (change)="patchProcedural({swing: text($event)})"><option value="left">{{ t('Left') }}</option><option value="right">{{ t('Right') }}</option></select></label>
+                  }
+                  @if (procedural.host) {<p class="typography-note">{{ t('Attached to a wall') }} · {{ t('Move or rotate the opening independently to detach it.') }}</p>} @else {<p class="typography-note">{{ t('Free-standing opening') }}</p>}
+                }
+              </fieldset>
+            }
             @if (editor.tool() === "pen") {
               <p>
                 {{

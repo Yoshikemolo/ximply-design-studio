@@ -32,3 +32,4 @@
 | [Explicit stroke geometry and scoped appearance transfer](ADR-0026.md) |
 | [Editable vector blends with materialized intermediate objects](ADR-0027.md) |
 | [Vector dimensions with independent annotation sizing](ADR-0028.md) |
+| [Declarative procedural floor-plan geometry](ADR-0029.md) |

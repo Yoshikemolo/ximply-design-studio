@@ -789,3 +789,166 @@ class NativeDrawingTests(unittest.TestCase):
         self.assert_invalid(self.document)
         definition['lineEnds']['end'].pop('extra')
         self.assert_round_trip(self.document)
+
+
+class ProceduralTests(unittest.TestCase):
+    """Parameter and reference acceptance; generated geometry is frontend-owned."""
+
+    setUp = NativeDrawingTests.setUp
+    assert_round_trip = NativeDrawingTests.assert_round_trip
+    assert_invalid = NativeDrawingTests.assert_invalid
+    dimension_data = NativeDrawingTests.dimension_data
+    blended_document = NativeDrawingTests.blended_document
+
+    def procedural_data(self, kind):
+        if kind == 'wall':
+            return {'type': 'wall', 'start': {'x': 0, 'y': 0}, 'end': {'x': 400, 'y': 0}, 'thickness': 16}
+        if kind == 'pillar':
+            return {'type': 'pillar', 'shape': 'rectangle', 'width': 40, 'depth': 80}
+        return {'type': kind, 'width': 100, 'depth': 16, 'leafWidths': [40, 60],
+                'operation': 'swing', 'swing': 'left', 'openingAngle': 90}
+
+    def test_procedural_parameters_and_generated_cache_round_trip(self):
+        for kind in ('wall', 'door', 'window', 'pillar'):
+            self.layer['procedural'] = self.procedural_data(kind)
+            self.assert_round_trip(self.document)
+
+    def test_procedural_exact_fields_and_null_types(self):
+        for kind in ('wall', 'door', 'window', 'pillar'):
+            original = self.procedural_data(kind)
+            for field in original:
+                self.layer['procedural'] = copy.deepcopy(original)
+                del self.layer['procedural'][field]
+                self.assert_invalid(self.document)
+            self.layer['procedural'] = {**original, 'script': 'return arbitraryGeometry()'}
+            self.assert_invalid(self.document)
+        for value in (None, [], {}, 'wall', {'type': 'script'}):
+            self.layer['procedural'] = value
+            self.assert_invalid(self.document)
+
+    def test_procedural_length_numeric_bounds_are_strict(self):
+        for kind, fields in {'wall': ['thickness'], 'door': ['width', 'depth'],
+                             'window': ['width', 'depth'], 'pillar': ['width', 'depth']}.items():
+            for field in fields:
+                for value in (0, 0.9, 16385, True, '16', None):
+                    with self.subTest(kind=kind, field=field, value=value):
+                        self.layer['procedural'] = self.procedural_data(kind)
+                        self.layer['procedural'][field] = value
+                        self.assert_invalid(self.document)
+        for length in (0, 0.9, 16385):
+            self.layer['procedural'] = self.procedural_data('wall')
+            self.layer['procedural']['end']['x'] = length
+            self.assert_invalid(self.document)
+        self.layer['procedural'] = self.procedural_data('wall')
+        self.layer['procedural']['start']['x'] = -10000001
+        self.assert_invalid(self.document)
+
+    def test_procedural_leaves_and_operations(self):
+        for kind, maximum in (('door', 4), ('window', 8)):
+            for widths in ([], [0, 100], [50, 49], [True, 99], ['40', 60], [100 / (maximum + 1)] * (maximum + 1)):
+                self.layer['procedural'] = {**self.procedural_data(kind), 'leafWidths': widths}
+                self.assert_invalid(self.document)
+            for field, values in {'operation': ['rotate', None, ['swing']], 'swing': ['top', None, ['left']],
+                                   'openingAngle': [-1, 181, True, '90']}.items():
+                for value in values:
+                    self.layer['procedural'] = {**self.procedural_data(kind), field: value}
+                    self.assert_invalid(self.document)
+        self.layer['procedural'] = {**self.procedural_data('door'), 'operation': 'fixed'}
+        self.assert_invalid(self.document)
+
+    def test_procedural_supported_variants_and_boundary_leaf_counts(self):
+        for kind, operations, count in (('door', ('swing', 'sliding'), 4),
+                                         ('window', ('fixed', 'sliding', 'swing'), 8)):
+            for operation in operations:
+                self.layer['procedural'] = {**self.procedural_data(kind), 'operation': operation,
+                                             'swing': 'right', 'leafWidths': [100 / count] * count,
+                                             'openingAngle': 180}
+                self.assert_round_trip(self.document)
+        self.layer['procedural'] = {'type': 'pillar', 'shape': 'circle', 'width': 16384, 'depth': 16384}
+        self.assert_round_trip(self.document)
+        self.layer['procedural'] = {'type': 'wall', 'start': {'x': 0, 'y': 0},
+                                     'end': {'x': 1, 'y': 0}, 'thickness': 1}
+        self.assert_round_trip(self.document)
+
+    def test_circular_pillars_require_equal_dimensions(self):
+        for value in ({'type': 'pillar', 'shape': 'circle', 'width': 40, 'depth': 80},
+                      {'type': 'pillar', 'shape': 'ellipse', 'width': 40, 'depth': 40},
+                      {'type': 'pillar', 'shape': ['circle'], 'width': 40, 'depth': 40}):
+            self.layer['procedural'] = value
+            self.assert_invalid(self.document)
+
+    def hosted_document(self, kind='door'):
+        wall = copy.deepcopy(self.layer)
+        wall.update(id='wall-one', procedural=self.procedural_data('wall'))
+        opening = copy.deepcopy(self.layer)
+        opening.update(id='opening-one', procedural={**self.procedural_data(kind),
+                                                     'host': {'wallId': 'wall-one', 'offset': 0.5}})
+        return {**DOCUMENT, 'version': 2, 'layers': [wall, opening]}
+
+    def test_hosted_openings_round_trip_and_shear_length(self):
+        for kind in ('door', 'window'):
+            document = self.hosted_document(kind)
+            self.assert_round_trip(document)
+        document = self.hosted_document()
+        document['layers'][0].update(skewX=45, flipY=True, rotation=75)
+        document['layers'][0]['procedural']['end'] = {'x': 0, 'y': 80}
+        self.assert_round_trip(document)
+
+    def test_opening_host_references_types_and_bounds(self):
+        for host in (None, {}, {'wallId': 'missing', 'offset': 0.5},
+                     {'wallId': 'opening-one', 'offset': 0.5},
+                     {'wallId': 'wall-one', 'offset': 0.5, 'extra': 1},
+                     {'wallId': 'wall-one', 'offset': True},
+                     {'wallId': 'wall-one', 'offset': '0.5'},
+                     {'wallId': 'wall-one', 'offset': -0.1},
+                     {'wallId': 'wall-one', 'offset': 1.1},
+                     {'wallId': 'wall-one', 'offset': 0.01}):
+            document = self.hosted_document()
+            document['layers'][1]['procedural']['host'] = host
+            self.assert_invalid(document)
+        document = self.hosted_document()
+        document['layers'][0]['procedural'] = self.procedural_data('pillar')
+        self.assert_invalid(document)
+        document = self.hosted_document()
+        document['layers'][0]['procedural']['end']['x'] = 90
+        self.assert_invalid(document)
+
+    def test_procedural_rejects_incompatible_layers_and_native_version(self):
+        for kind in ('rectangle', 'ellipse', 'text', 'image'):
+            document = copy.deepcopy(self.document)
+            document['layers'][0].pop('curves')
+            document['layers'][0].update(kind=kind, procedural=self.procedural_data('wall'))
+            self.assert_invalid(document)
+        for field, value in (('dimension', self.dimension_data()), ('guide', 'vertical')):
+            document = copy.deepcopy(self.document)
+            document['layers'][0].update(procedural=self.procedural_data('wall'))
+            document['layers'][0][field] = value
+            self.assert_invalid(document)
+        document = copy.deepcopy(self.document)
+        document['layers'][0].pop('curves')
+        document['layers'][0]['procedural'] = self.procedural_data('wall')
+        document['version'] = 1
+        self.assert_invalid(document)
+
+    def test_procedural_objects_cannot_be_symbols_or_blends(self):
+        document = copy.deepcopy(self.document)
+        definition = copy.deepcopy(self.layer)
+        definition['procedural'] = self.procedural_data('wall')
+        document['symbols'] = [{'id': 'wall-symbol', 'name': 'Wall', 'layer': definition}]
+        self.assert_invalid(document)
+        definition.pop('procedural')
+        document['layers'][0].update(symbolId='wall-symbol', procedural=self.procedural_data('wall'))
+        self.assert_invalid(document)
+        for index in range(3):
+            document = self.blended_document()
+            document['layers'][index]['procedural'] = self.procedural_data('wall')
+            self.assert_invalid(document)
+
+    def test_procedural_nonfinite_values_fail_before_storage(self):
+        from pydantic import ValidationError
+        from src.main import Document
+        for value in (float('nan'), float('inf'), -float('inf')):
+            for kind, field in (('wall', 'thickness'), ('door', 'openingAngle'), ('pillar', 'width')):
+                self.layer['procedural'] = {**self.procedural_data(kind), field: value}
+                with self.assertRaises(ValidationError):
+                    Document.model_validate(self.document)

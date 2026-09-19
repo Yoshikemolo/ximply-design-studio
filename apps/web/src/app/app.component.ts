@@ -1,3 +1,4 @@
+import { Procedural, ProceduralKind } from "../../../../packages/domain/src/procedural";
 import { Dimension, DimensionFormat, dimensionGeometry } from "../../../../packages/domain/src/dimensions";
 import { defaultLineEnds, LineEnd, LineEnds } from "../../../../packages/domain/src/line-endings";
 import { BlendEasing } from "../../../../packages/domain/src/object-blend";
@@ -126,7 +127,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     {
       id: "drawing",
       label: "Drawing and paths",
-      families: ["pen", "pencil", "shape", "line", "text", "scissors", "dimensions"],
+      families: ["pen", "pencil", "shape", "line", "text", "scissors", "dimensions", "architecture"],
     },
     {
       id: "paint",
@@ -379,6 +380,36 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   }
   inlineMetrics(layer: Layer) { return this.editor.textMetrics(layer); }
   usesStyleDefaults() { return ["eyedropper", "paintBucket"].includes(this.editor.tool()); }
+  proceduralTool(): ProceduralKind | null { const tool = this.editor.tool(); return ["wall", "door", "window", "pillar"].includes(tool) ? tool as ProceduralKind : null; }
+  proceduralProperties(): Procedural | undefined { const tool = this.proceduralTool(); return tool ? this.editor.proceduralDefaults()[tool] : this.editor.selected()?.procedural; }
+  patchProcedural(patch: Record<string, unknown>) {
+    const tool = this.proceduralTool();
+    const applied = tool ? this.editor.updateProceduralDefaults(tool, patch) : this.editor.updateProcedural(patch);
+    if (applied === false) this.notify(new Error("The floor plan parameters cannot be applied."));
+  }
+  setProceduralNumber(key: "width" | "depth" | "thickness" | "openingAngle", event: Event) {
+    const p = this.proceduralProperties(); if (!p) return;
+    const value = key === "openingAngle" ? this.number(event) : this.distanceInput(event);
+    if (!Number.isFinite(value) || value < (key === "openingAngle" ? 0 : 1) || value > (key === "openingAngle" ? 180 : 16384)) return;
+    const patch: Record<string, unknown> = { [key]: value };
+    if (key === "width" && (p.type === "door" || p.type === "window")) patch['leafWidths'] = p.leafWidths.map(width => width * value / p.width);
+    if (p.type === "pillar" && p.shape === "circle" && (key === "width" || key === "depth")) { patch['width'] = value; patch['depth'] = value; }
+    this.patchProcedural(patch);
+  }
+  setProceduralLeafCount(event: Event) {
+    const p = this.proceduralProperties(); if (!p || (p.type !== "door" && p.type !== "window")) return;
+    const count = this.number(event); if (!Number.isInteger(count) || count < 1 || count > (p.type === "door" ? 4 : 8)) return;
+    this.patchProcedural({ leafWidths: Array.from({length: count}, () => p.width / count) });
+  }
+  setProceduralLeafWidth(index: number, event: Event) {
+    const p = this.proceduralProperties(); if (!p || (p.type !== "door" && p.type !== "window")) return;
+    const width = this.distanceInput(event); if (!Number.isFinite(width) || width < 1 || width > 16384) return;
+    const leafWidths = p.leafWidths.map((value, i) => i === index ? width : value);
+    const total = leafWidths.reduce((a, b) => a + b, 0); if (total > 16384) return;
+    this.patchProcedural({ leafWidths, width: total });
+  }
+  setPillarShape(event: Event) { const p = this.proceduralProperties(); if (p?.type !== "pillar") return; const shape = this.text(event); if (shape === "rectangle" || shape === "circle") this.patchProcedural({shape, ...(shape === "circle" ? {depth: p.width} : {})}); }
+  proceduralHint() { const tool = this.proceduralTool(); return tool === "wall" ? "Drag the wall centerline. Set its thickness before drawing." : tool === "pillar" ? "Drag to size the pillar footprint." : "Click near a wall to attach the opening, or click empty space for free placement."; }
   readonly transformDialog = signal<"displacement" | "rotation" | null>(null);
   transformX = 0; transformY = 0; numericAngle = 0; transformCenterX = 0; transformCenterY = 0;
   openTransformDialog(kind: "displacement" | "rotation") {
