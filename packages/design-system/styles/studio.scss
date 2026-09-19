@@ -374,15 +374,59 @@ hr {
 }
 .document-tab {
   height: 39px;
-  min-width: 240px;
-  max-width: 70%;
+  min-width: 150px;
+  max-width: 260px;
   display: flex;
   align-items: center;
   gap: 9px;
   border-right: 1px solid var(--border);
-  border-top: 2px solid var(--accent);
+  border-top: 2px solid transparent;
+  background: var(--bg);
+  padding: 0 6px 0 15px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.document-tab.active {
+  min-width: 240px;
+  border-top-color: var(--accent);
   background: var(--panel);
-  padding: 0 15px;
+  cursor: default;
+}
+.document-tab-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+  color: var(--muted);
+}
+.document-tab-close {
+  width: 22px;
+  min-height: 22px;
+  padding: 0;
+  margin-left: auto;
+  color: var(--muted);
+  font-size: 14px;
+}
+.document-tabs {
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+.confirm-dialog {
+  max-width: 460px;
+}
+.dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 18px;
+}
+.dialog-actions .danger {
+  background: #c2413b;
+  border-color: #c2413b;
+  color: #fff;
+  font-weight: 600;
 }
 .document-tab img {
   width: 13px;

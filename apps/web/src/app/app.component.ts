@@ -1189,7 +1189,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
       const file = input.files?.[0];
       if (file) {
         if (file.size > 35_000_000) throw new Error("Project exceeds 35 MB.");
-        this.editor.open(await file.text());
+        this.editor.openDocument(await file.text());
         this.fit();
       }
     } catch (error) {
@@ -1197,14 +1197,28 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     }
     input.value = "";
   }
+  /** In-app confirmation for destructive document actions; replaces native browser dialogs. */
+  readonly confirmation = signal<{ title: string; message: string; action: string; run: () => void } | null>(null);
+  confirm() { const pending = this.confirmation(); this.confirmation.set(null); pending?.run(); }
   newDocument() {
-    if (
-      this.editor.document().layers.length &&
-      !confirm("Create a new document? Save your current project first.")
-    )
-      return;
-    this.editor.reset();
+    this.commitText();
+    if (this.editor.newDocument()) this.fit();
+  }
+  clearDocument() {
+    this.dismissMenus();
+    const clear = () => { this.commitText(); this.editor.reset(); this.fit(); };
+    if (!this.editor.dirty()) { clear(); return; }
+    this.confirmation.set({ title: "Unsaved changes", message: "The current document has unsaved changes. Clearing it removes all of its content.", action: "Clear anyway", run: clear });
+  }
+  switchDocument(id: string) {
+    this.commitText();
+    this.editor.switchDocument(id);
     this.fit();
+  }
+  closeDocument(id: string) {
+    const close = () => { this.commitText(); this.editor.closeDocument(id); this.fit(); };
+    if (!this.editor.isDocumentDirty(id)) { close(); return; }
+    this.confirmation.set({ title: "Unsaved changes", message: "This document has unsaved changes. Closing it discards them.", action: "Close without saving", run: close });
   }
   sample() {
     this.commitText();
@@ -1264,6 +1278,10 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     );
   }
   @HostListener("window:keydown", ["$event"]) key(event: KeyboardEvent) {
+    if (this.confirmation?.()) {
+      if (event.key === "Escape") { this.confirmation.set(null); event.preventDefault(); }
+      return;
+    }
     if (this.transformDialog?.()) {
       if (event.key === "Escape") { this.transformDialog.set(null); event.preventDefault(); }
       return;
@@ -1513,6 +1531,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   async saveServer() {
     try {
       await this.serverRequest("projects", "POST", this.editor.document());
+      this.editor.markSaved();
       await this.refreshProjects();
       this.editor.status.set("Project saved to local server");
     } catch (error) {
@@ -1524,7 +1543,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
       const doc = await this.serverRequest(
         "projects/" + encodeURIComponent(id),
       );
-      this.editor.open(JSON.stringify(doc));
+      this.editor.openDocument(JSON.stringify(doc));
       this.dialog.set(false);
       this.fit();
     } catch (error) {

@@ -11,6 +11,7 @@
         <div class="menu-popover">
           <button (click)="newDocument()">
             {{ t("New document") }}<kbd>{{ shortcut("new") }}</kbd></button
+          ><button (click)="clearDocument()">{{ t("Clear") }}</button
           ><button (click)="projectFile.click()">
             {{ t("Open project") }}<kbd>{{ shortcut("open") }}</kbd></button
           ><button (click)="editor.save()">
@@ -256,15 +257,20 @@
       </div>
     </aside>
     <section class="canvas-area">
-      <div class="document-tabs">
-        <div class="document-tab">
-          <img src="/assets/icons/document.svg" alt="" /><input
-            aria-label="Document name"
-            [value]="editor.document().name"
-            (change)="editor.rename(text($event))"
-          /><span class="modified-dot"></span>
-        </div>
-        <button (click)="newDocument()" [attr.aria-label]="t('New document')">
+      <div class="document-tabs" role="tablist" [attr.aria-label]="t('Documents')">
+        @for (tab of editor.tabs(); track tab.id) {
+          <div class="document-tab" role="tab" [class.active]="tab.active" [attr.aria-selected]="tab.active" (click)="switchDocument(tab.id)">
+            <img src="/assets/icons/document.svg" alt="" />
+            @if (tab.active) {
+              <input [attr.aria-label]="t('Document name')" [value]="tab.name" (change)="editor.rename(text($event))" />
+            } @else {
+              <span class="document-tab-name">{{ tab.name }}</span>
+            }
+            @if (tab.dirty) {<span class="modified-dot" [title]="t('Unsaved changes')"></span>}
+            <button class="document-tab-close" [title]="t('Close document')" [attr.aria-label]="t('Close document') + ': ' + tab.name" (click)="$event.stopPropagation(); closeDocument(tab.id)">×</button>
+          </div>
+        }
+        <button (click)="newDocument()" [title]="t('New document')" [attr.aria-label]="t('New document')">
           +
         </button>
         <div class="header-spacer"></div>
@@ -1358,6 +1364,14 @@
 
 @if (contextMenu(); as context) {
   <xds-context-menu [entries]="contextEntries()" [label]="t(context.target.kind === 'node' ? 'Anchor actions' : 'Object actions')" [x]="context.x" [y]="context.y" (action)="executeContext($event)" (dismiss)="dismissContext()" />
+}
+
+@if (confirmation(); as pending) {
+  <div class="modal-backdrop"><section class="server-dialog confirm-dialog" role="alertdialog" aria-modal="true" aria-labelledby="confirm-title" aria-describedby="confirm-message" (keydown.escape)="confirmation.set(null); $event.stopPropagation()">
+    <h2 id="confirm-title">{{ t(pending.title) }}</h2>
+    <p id="confirm-message">{{ t(pending.message) }}</p>
+    <div class="dialog-actions"><button type="button" autofocus (click)="confirmation.set(null)">{{ t("Cancel") }}</button><button type="button" class="danger" (click)="confirm()">{{ t(pending.action) }}</button></div>
+  </section></div>
 }
 
 @if (transformDialog(); as mode) {

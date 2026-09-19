@@ -75,6 +75,10 @@ export type ContextTarget = { revision: number; layerId: string } & (
   { kind: "object"; groupPath?: string[]; selectionIds?: string[] } |
   { kind: "node"; path: number; index: number }
 );
+const WORKSPACE_KEY = "xds-workspace";
+const MAX_TABS = 12;
+interface WorkspaceTab { document: StudioDocument; history: DocumentHistory; dirty: boolean; selectedId: string | null; selectedIds: string[] }
+
 @Injectable({ providedIn: "root" })
 export class EditorService {
   contextAt(point: Point): ContextTarget | null {
@@ -532,7 +536,7 @@ export class EditorService {
     () =>
       this.document().layers.find((l) => l.id === this.selectedId()) ?? null,
   );
-  readonly history = new DocumentHistory();
+  history = new DocumentHistory();
   readonly renderer = new CanvasRenderer();
   painting?: { id: string; canvas: HTMLCanvasElement };
   private guideGesture?: { before: StudioDocument; id: string; selectedId: string | null; selectedIds: string[] };
@@ -720,33 +724,154 @@ export class EditorService {
     ids?: string[];
     deselectNodeOnClick?: string;
   };
+  // Open documents. The active one lives in `document`, `history` and the selection signals;
+  // inactive tabs keep their own snapshot so switching never mixes undo history or selection.
+  private readonly inactiveTabs = signal<Record<string, WorkspaceTab>>({});
+  readonly tabOrder = signal<string[]>([crypto.randomUUID()]);
+  readonly activeTabId = signal<string>(this.tabOrder()[0]);
+  /** Counts document edits only; `revision` also advances for redraw-only events such as cancel. */
+  private readonly edits = signal(0);
+  /** Edit count of the active document at its last save, open or creation; -1 means unsaved. */
+  private readonly savedEdits = signal(0);
+  readonly dirty = computed(() => this.edits() !== this.savedEdits());
+  readonly tabs = computed(() => this.tabOrder().map((id) => {
+    if (id === this.activeTabId()) return { id, name: this.document().name, dirty: this.dirty(), active: true };
+    const tab = this.inactiveTabs()[id];
+    return { id, name: tab?.document.name ?? "", dirty: !!tab?.dirty, active: false };
+  }));
   constructor() {
     try {
-      const draft = localStorage.getItem("xds-draft");
-      if (draft) this.document.set(parseDocument(draft));
+      this.restoreWorkspace();
     } catch {
       this.status.set(
         "Previous draft could not be restored. Open a saved project.",
       );
     }
   }
-  private changed() {
-    this.document.set(syncProcedurals(this.document()));
-    this.synchronizeBlends();
-    this.revision.update((x) => x + 1);
-    this.renderer.prune(this.document().layers);
-    try {
-      const text = JSON.stringify(this.document());
-      if (text.length < 4_000_000) localStorage.setItem("xds-draft", text);
-      else {
+  private restoreWorkspace() {
+    const index = localStorage.getItem(WORKSPACE_KEY);
+    if (!index) {
+      // Migrate the single-document autosave written by earlier previews.
+      const legacy = localStorage.getItem("xds-draft");
+      if (legacy) {
+        this.document.set(parseDocument(legacy));
+        if (this.document().layers.length) this.savedEdits.set(-1);
         localStorage.removeItem("xds-draft");
+        this.persistWorkspace();
+      }
+      return;
+    }
+    const saved = JSON.parse(index) as { version: number; active: string; tabs: { id: string; dirty: boolean }[] };
+    if (saved.version !== 1 || !Array.isArray(saved.tabs)) throw new Error("Invalid workspace");
+    const restored: { id: string; dirty: boolean; document: StudioDocument }[] = [];
+    for (const tab of saved.tabs.slice(0, MAX_TABS)) {
+      if (typeof tab?.id !== "string" || !/^[0-9a-f-]{36}$/.test(tab.id)) continue;
+      const text = localStorage.getItem(WORKSPACE_KEY + ":" + tab.id);
+      try { if (text) restored.push({ id: tab.id, dirty: tab.dirty === true, document: parseDocument(text) }); } catch { /* Skip an unreadable tab; the others still open. */ }
+    }
+    if (!restored.length) return;
+    const active = restored.find((tab) => tab.id === saved.active) ?? restored[0];
+    this.inactiveTabs.set(Object.fromEntries(restored.filter((tab) => tab !== active).map((tab) => [tab.id, { document: tab.document, history: new DocumentHistory(), dirty: tab.dirty, selectedId: null, selectedIds: [] }])));
+    this.tabOrder.set(restored.map((tab) => tab.id));
+    this.activeTabId.set(active.id);
+    this.document.set(active.document);
+    this.savedEdits.set(active.dirty ? -1 : this.edits());
+  }
+  private persistWorkspace() {
+    try {
+      const tabs = this.tabs().map(({ id, dirty }) => ({ id, dirty }));
+      const text = JSON.stringify(this.document());
+      if (text.length < 4_000_000) localStorage.setItem(WORKSPACE_KEY + ":" + this.activeTabId(), text);
+      else {
+        localStorage.removeItem(WORKSPACE_KEY + ":" + this.activeTabId());
         this.status.set(
           "Large project: save a project file to preserve your work.",
         );
       }
+      localStorage.setItem(WORKSPACE_KEY, JSON.stringify({ version: 1, active: this.activeTabId(), tabs }));
     } catch {
       this.status.set("Browser storage is full. Save a project file.");
     }
+  }
+  /** Marks the active document as matching its last save or open. */
+  markSaved() { this.savedEdits.set(this.edits()); this.persistWorkspace(); }
+  private stashActive(): WorkspaceTab {
+    this.finishPath();
+    this.cancel();
+    return { document: this.document(), history: this.history, dirty: this.dirty(), selectedId: this.selectedId(), selectedIds: this.selectedIds() };
+  }
+  private activate(id: string, tab: WorkspaceTab) {
+    this.activeTabId.set(id);
+    this.history = tab.history;
+    this.document.set(tab.document);
+    this.selectedId.set(tab.selectedId);
+    this.selectedIds.set(tab.selectedIds);
+    this.activeNodes.set([]);
+    this.penId.set(null);
+    this.renderer.prune(tab.document.layers);
+    this.revision.update((x) => x + 1);
+    this.savedEdits.set(tab.dirty ? -1 : this.edits());
+    this.persistWorkspace();
+  }
+  /** Opens a blank document in a new tab and makes it active. */
+  newDocument(): boolean {
+    if (this.tabOrder().length >= MAX_TABS) { this.status.set("Close a document before opening another."); return false; }
+    const previous = this.activeTabId(), id = crypto.randomUUID();
+    const names = new Set(this.tabs().map((tab) => tab.name));
+    this.inactiveTabs.update((tabs) => ({ ...tabs, [previous]: this.stashActive() }));
+    let name = "Untitled exploration", n = 2;
+    while (names.has(name)) name = `Untitled exploration ${n++}`;
+    this.tabOrder.update((order) => [...order.slice(0, order.indexOf(previous) + 1), id, ...order.slice(order.indexOf(previous) + 1)]);
+    this.activate(id, { document: { ...blankDocument(), name }, history: new DocumentHistory(), dirty: false, selectedId: null, selectedIds: [] });
+    this.status.set("New document");
+    return true;
+  }
+  switchDocument(id: string) {
+    const target = this.inactiveTabs()[id];
+    if (id === this.activeTabId() || !target) return;
+    const previous = this.activeTabId(), stash = this.stashActive();
+    this.inactiveTabs.update((tabs) => { const next = { ...tabs, [previous]: stash }; delete next[id]; return next; });
+    this.activate(id, target);
+  }
+  /** Closes a tab without asking; callers confirm unsaved changes first. The last tab is replaced by a blank one. */
+  closeDocument(id: string) {
+    const order = this.tabOrder();
+    if (!order.includes(id)) return;
+    localStorage.removeItem(WORKSPACE_KEY + ":" + id);
+    if (id !== this.activeTabId()) {
+      this.inactiveTabs.update((tabs) => { const next = { ...tabs }; delete next[id]; return next; });
+      this.tabOrder.set(order.filter((x) => x !== id));
+      this.persistWorkspace();
+      return;
+    }
+    this.finishPath();
+    this.cancel();
+    const remaining = order.filter((x) => x !== id);
+    if (!remaining.length) {
+      const fresh = crypto.randomUUID();
+      this.tabOrder.set([fresh]);
+      this.activate(fresh, { document: blankDocument(), history: new DocumentHistory(), dirty: false, selectedId: null, selectedIds: [] });
+      return;
+    }
+    const next = remaining[Math.min(order.indexOf(id), remaining.length - 1)], target = this.inactiveTabs()[next];
+    this.inactiveTabs.update((tabs) => { const copy = { ...tabs }; delete copy[next]; return copy; });
+    this.tabOrder.set(remaining);
+    this.activate(next, target);
+  }
+  isDocumentDirty(id: string) { return id === this.activeTabId() ? this.dirty() : !!this.inactiveTabs()[id]?.dirty; }
+  /** Opens a project in the active tab when that tab is an untouched blank document, otherwise in a new tab. */
+  openDocument(text: string) {
+    const doc = parseDocument(text);
+    if ((this.document().layers.length || this.dirty()) && !this.newDocument()) return;
+    this.open(JSON.stringify(doc));
+  }
+  private changed() {
+    this.document.set(syncProcedurals(this.document()));
+    this.synchronizeBlends();
+    this.revision.update((x) => x + 1);
+    this.edits.update((x) => x + 1);
+    this.renderer.prune(this.document().layers);
+    this.persistWorkspace();
   }
   previewDocument(): StudioDocument {
     try { return syncBlends(syncProcedurals(this.document())); } catch { return this.document(); }
@@ -936,13 +1061,18 @@ export class EditorService {
     this.document.set(this.history.redo(this.document()));
     this.changed();
   }
+  /** Clears the active document to a blank one; undoable, and the result counts as unmodified. */
   reset() {
     this.finishPath();
+    this.cancel();
     this.history.commit(this.document());
-    this.document.set(blankDocument());
+    this.document.set({ ...blankDocument(), name: this.document().name });
     this.activeNodes.set([]);
     this.selectedId.set(null);
+    this.selectedIds.set([]);
     this.changed();
+    this.markSaved();
+    this.status.set("Document cleared");
   }
   open(text: string) {
     this.finishPath();
@@ -952,6 +1082,7 @@ export class EditorService {
     this.activeNodes.set([]);
     this.selectedId.set(null);
     this.changed();
+    this.markSaved();
     this.status.set("Project opened");
   }
   start(
@@ -2526,6 +2657,7 @@ export class EditorService {
       new Blob([JSON.stringify(this.document())], { type: "application/json" }),
       this.document().name + ".ximply",
     );
+    this.markSaved();
     this.status.set("Project file saved");
   }
   exportSvg() {
