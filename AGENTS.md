@@ -58,3 +58,15 @@ Explicitly state breaking changes; include migration steps when present. Release
 notes describe delivered behavior, not promises. Never edit generated changelog data
 or bundled copies. Regenerate and check them before committing. Preserve published
 version history; a version bump does not imply the editor or quality gate is complete.
+
+## Mandatory PR preflight
+
+Before every checkpoint or promotion, follow the checklist in
+[GitFlow integration preflight](doc/engineering/gitflow.md#integration-preflight).
+Fetch both actual PR refs, check their exact SHAs and prospective merge, validate
+Conventional Commit PR title/body and all introduced commit identities, regenerate
+navigation and release artifacts, then run all applicable checks. Recheck after
+any base/head change. Record evidence against the checked SHA; never pre-tick
+quality/review boxes. Resolve shared-branch conflicts through a fix branch and PR.
+Do not use the default web merge message, add new historical exemptions, force-push
+shared history or interpret a missing/skipped Sonar check as success.
