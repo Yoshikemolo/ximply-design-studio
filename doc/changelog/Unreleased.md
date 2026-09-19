@@ -50,3 +50,7 @@ None.
 - Record incremental product checkpoints and explicit branch/version feedback as permanent project instructions.
 - Retry temporary connection resets while the disposable server starts; sanitize transport errors before writing diagnostic output.
 - Add native-v2 absent/alpha paints and nonprinting guide metadata with matching API validation, renderer tests and measurement preferences; interface integration is in progress.
+- Retain only dev, release, main and active work branches; close pending PRs and remove retired branches without promoting unverified code.
+- Validate proposed commit and PR wording before publication and identify failing commit revisions in contribution diagnostics; retain all existing policy restrictions.
+- Record the PR integration preflight and distinguish passing build checks from the required product quality gate.
+- The contribution check accepts two pinned historical GitHub merge commits on dev by exact SHA and reason, without rewriting history; all other commits remain fully checked.

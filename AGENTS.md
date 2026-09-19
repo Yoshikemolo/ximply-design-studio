@@ -105,3 +105,23 @@ exception suspends that automated check; it does not change quality thresholds,
 prove analysis success, authorize merging, or waive other checks and review.
 Do not treat the skipped result as quality evidence or claim Verified status.
 See `doc/testing/sonarqube.md` for restoration instructions.
+
+## Contribution preflight
+
+Before creating a commit or PR, run the proposed-text mode of
+harness/check_contribution.py for the exact message, title and body. Before moving
+any branch reference, verify the returned GitHub commit has author login Yoshikemolo
+and committer Yoshikemolo, or GitHub's verified web-flow committer for merge button
+commits whose message is the Conventional Commit PR title. Local hooks do not protect
+connector or web commits. Do not repair historical metadata failures by adding
+exemptions without an explicit owner decision.
+
+## Current branch cleanup decision — 2026-09-19
+
+The owner supersedes the earlier permanent qa/demo branch requirement: retain only
+dev, release, main and branches with active work. PRs 8, 10 and 11 were closed
+without merging at the owner's request; do not reopen them. The owner later asked
+to consolidate feat/drawing-preview and fix/contribution-preflight into dev as
+squashed commits, after which both branches were retired. Preserve required quality checks;
+branch cleanup is not quality certification. QA/demo remain environment concepts,
+not permanent remote branches. Do not recreate retired branches automatically.
