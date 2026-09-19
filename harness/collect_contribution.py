@@ -19,7 +19,7 @@ def fetch(path: str) -> Any:
         return json.load(response)
 
 def normalize_commit(item: dict[str, Any]) -> dict[str, Any]:
-    return {"sha":item["sha"], "authorLogin":(item.get("author") or {}).get("login"), "committerLogin":(item.get("committer") or {}).get("login"), "message":item["commit"]["message"]}
+    return {"sha":item["sha"], "authorLogin":(item.get("author") or {}).get("login"), "committerLogin":(item.get("committer") or {}).get("login"), "verified":((item["commit"].get("verification") or {}).get("verified") is True), "message":item["commit"]["message"]}
 
 def collect(repository: str, pr_number: int, head: str) -> dict[str, Any]:
     if not re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", repository):

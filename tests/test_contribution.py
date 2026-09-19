@@ -38,3 +38,15 @@ class ContributionTests(unittest.TestCase):
             with self.subTest(entry=entry):
                 with self.assertRaises(ValueError):
                     check_metadata(self.report,"abc",{**self.policy,"legacyCommitExemptions":[entry]})
+    def test_verified_web_merge_with_conventional_title_passes(self):
+        merge={"sha":"b"*40,"authorLogin":"Yoshikemolo","committerLogin":"web-flow","verified":True,"message":"feat(editor): add the drawing preview (#17)"}
+        self.report["commits"].append(merge)
+        self.assertEqual([],check_metadata(self.report,"abc",self.policy))
+    def test_web_merge_requires_verification_owner_and_conventional_text(self):
+        base={"sha":"b"*40,"authorLogin":"Yoshikemolo","committerLogin":"web-flow","verified":True,"message":"feat(editor): add the drawing preview"}
+        for change in ({"verified":False},{"verified":"true"},{"authorLogin":"someone-else"},{"committerLogin":"someone-else"},{"message":"Merge pull request #17 from Yoshikemolo/feat/x"}):
+            with self.subTest(change=change):
+                report={**self.report,"commits":[{k:v for k,v in {**base,**change}.items()}]}
+                self.assertTrue(check_metadata(report,"abc",self.policy))
+        report={**self.report,"commits":[{k:v for k,v in base.items() if k!="verified"}]}
+        self.assertTrue(check_metadata(report,"abc",self.policy))
