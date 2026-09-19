@@ -1,0 +1,46 @@
+# Application image contract: requires implemented, tested images from ITER-0001.
+services:
+  web:
+    image: ${WEB_IMAGE:?Set a verified web image digest}
+    labels: {com.ximply.component: web}
+  api:
+    image: ${API_IMAGE:?Set a verified API image digest}
+    environment:
+      PERSISTENCE_URL: http://persistence:3000
+      REDIS_URL: redis://redis:6379
+      OIDC_ISSUER: ${OIDC_ISSUER:?Set the browser-visible realm issuer}
+      OIDC_AUDIENCE: studio-api
+      ALLOWED_ORIGINS: ${APP_ORIGIN:?Set the exact application origin}
+    depends_on:
+      postgres: {condition: service_healthy}
+      redis: {condition: service_healthy}
+  persistence:
+    image: ${PERSISTENCE_IMAGE:?Set a verified persistence image digest}
+    environment:
+      DB_HOST: postgres
+      DB_NAME: studio
+      DB_USER: studio
+      DB_PASSWORD: ${APP_DB_PASSWORD:?Set database password}
+      DB_SYNCHRONIZE: "false"
+      OIDC_ISSUER: ${OIDC_ISSUER:?Set issuer}
+      OIDC_AUDIENCE: studio-persistence
+  realtime:
+    image: ${REALTIME_IMAGE:?Set a verified realtime image digest}
+    environment:
+      ASPNETCORE_URLS: http://+:8080
+      OIDC_ISSUER: ${OIDC_ISSUER:?Set issuer}
+      OIDC_AUDIENCE: studio-realtime
+      REDIS_URL: redis://redis:6379
+  worker:
+    image: ${WORKER_IMAGE:?Set a verified worker image digest}
+    environment:
+      REDIS_URL: redis://redis:6379
+      PERSISTENCE_URL: http://persistence:3000
+    volumes: ["assets:/data/assets"]
+  edge:
+    image: ${EDGE_IMAGE:?Set a reviewed nginx image}
+    ports: ["127.0.0.1:4200:80"]
+    volumes: ["./nginx/local.conf:/etc/nginx/conf.d/default.conf:ro"]
+    depends_on: [web, api, realtime]
+volumes:
+  assets:

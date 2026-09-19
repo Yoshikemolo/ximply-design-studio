@@ -1,0 +1,44 @@
+name: Design and contribution checks
+on:
+  pull_request:
+    branches: [dev, qa, demo, release, main]
+    types: [opened, synchronize, reopened, edited]
+  push:
+    branches: ['feat/**', 'fix/**']
+permissions:
+  contents: read
+  pull-requests: read
+jobs:
+  design:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Check documentation and contracts
+        run: |
+          python harness/context.py --check
+          python harness/knowledge.py
+          python harness/check_docs.py
+      - name: Test engineering harnesses
+        run: python -m unittest discover -s tests -v
+  contribution:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Collect trusted contribution metadata
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: python harness/collect_contribution.py --repository "$REPOSITORY" --pr "$PR_NUMBER" --head "$HEAD_SHA" --output reports/contribution.json
+      - name: Enforce contribution policy
+        env:
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: python harness/check_contribution.py reports/contribution.json --head "$HEAD_SHA"

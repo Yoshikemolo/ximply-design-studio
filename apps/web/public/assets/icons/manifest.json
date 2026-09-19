@@ -1,0 +1,14 @@
+{
+  "assets": [
+    {
+      "id": "ximplicity-x",
+      "path": "/assets/icons/ximplicity-x.svg",
+      "source": "https://ximplicity.es/assets/branding/dark-color-x-icon.svg",
+      "sha256": "4fcbb6b24406139b60460c4aaebd9cca9ab9f014f0f70edb783ce49cce48a170",
+      "owner": "Ximplicity",
+      "retrievedAt": "2026-09-19",
+      "geometryModified": false,
+      "usage": "User-authorized brand resource; not a blanket third-party trademark licence"
+    }
+  ]
+}
