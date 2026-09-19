@@ -42,6 +42,13 @@ def legacy_exemptions(policy: dict[str, Any]) -> set[str]:
         exemptions.add(sha)
     return exemptions
 
+def committer_allowed(commit: dict[str, Any], policy: dict[str, Any]) -> bool:
+    """Accept the owner, or GitHub's own committer when GitHub verified the signature."""
+    committer = commit.get("committerLogin")
+    if committer == policy["owner"]:
+        return True
+    return committer == policy["trustedWebCommitter"] and commit.get("verified") is True
+
 def check_metadata(report: dict[str, Any], expected_head: str, policy: dict[str, Any]) -> list[str]:
     errors: list[str] = []
     exempt = legacy_exemptions(policy)
@@ -57,9 +64,10 @@ def check_metadata(report: dict[str, Any], expected_head: str, policy: dict[str,
                 continue
             if commit.get("sha") in exempt:
                 continue
-            for identity in ("authorLogin", "committerLogin"):
-                if commit.get(identity) != policy["owner"]:
-                    errors.append(f"Commit {identity} must be {policy['owner']}")
+            if commit.get("authorLogin") != policy["owner"]:
+                errors.append(f"Commit authorLogin must be {policy['owner']}")
+            if not committer_allowed(commit, policy):
+                errors.append(f"Commit committerLogin must be {policy['owner']} or a verified {policy['trustedWebCommitter']} merge")
             errors += check_text(str(commit.get("message", "")), "Commit", policy)
     pr = report.get("pullRequest")
     if pr is not None:

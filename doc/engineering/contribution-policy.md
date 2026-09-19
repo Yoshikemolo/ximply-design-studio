@@ -47,16 +47,22 @@ initial commit. The policy applies to new contribution commits after that baseli
 no history is silently rewritten. Agent handoffs must carry this file's path rather
 than relying on conversation memory. No cross-session memory service is assumed.
 
-Later merge commits into dev, 310daca1c44d942b10a882552dbe8f5166a0ec78,
-c948cdfeeeba73fd9c32380a7c22ec111989094b, 18f571807639daa73d64ce8b7238069dcbc79f28 and
-174c5471381e06b2db92fb9eb78801eee520e444,
-were created by the GitHub web merge button
-with its default message and GitHub as committer. They are listed with a reason under
-`legacyCommitExemptions` in `harness/contribution-policy.json` instead of rewriting
-shared history. Exemptions match exact full SHAs only; a malformed entry fails closed.
-Adding an entry is an owner decision recorded in review, never a way to pass a new
-commit. Server-side merges always record GitHub as committer, so feature branches
-reach dev by fast-forward after their checks pass rather than by the merge button.
+Web merges and squashes made with the GitHub merge button are committed by GitHub
+(`web-flow`) and signed by GitHub. The check accepts that committer only when GitHub
+reports the signature as verified, the author is still the owner, and the message
+passes the same Conventional Commit and wording rules as any other commit. The
+repository is configured so merge and squash commits use the pull request title and
+body as their message; the title is validated by the same check. Any other committer,
+an unverified signature or GitHub's default `Merge pull request ...` message fails.
+
+Five earlier web merges into dev used that default message before the repository
+setting existed: 310daca1c44d942b10a882552dbe8f5166a0ec78,
+c948cdfeeeba73fd9c32380a7c22ec111989094b, 18f571807639daa73d64ce8b7238069dcbc79f28,
+174c5471381e06b2db92fb9eb78801eee520e444 and e05fbf4ae2756d61c3934122d1ec9244bfbd2ba8.
+They are listed with a reason under `legacyCommitExemptions` in
+`harness/contribution-policy.json` instead of rewriting shared history. Exemptions match
+exact full SHAs only; a malformed entry fails closed. Adding an entry is an owner
+decision recorded in review, never a way to pass a new commit.
 
 ## Authorization scope
 

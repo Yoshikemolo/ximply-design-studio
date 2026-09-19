@@ -1,6 +1,7 @@
 {
   "schemaVersion": 1,
   "owner": "Yoshikemolo",
+  "trustedWebCommitter": "web-flow",
   "language": "en",
   "allowEmoji": false,
   "allowAttributionTrailers": false,
@@ -58,6 +59,10 @@
     {
       "sha": "174c5471381e06b2db92fb9eb78801eee520e444",
       "reason": "GitHub web merge of PR #15 into dev with the default message; history is preserved, not rewritten."
+    },
+    {
+      "sha": "e05fbf4ae2756d61c3934122d1ec9244bfbd2ba8",
+      "reason": "GitHub web merge of PR #16 into dev with the default message, before merge titles used the pull request title; history is preserved, not rewritten."
     }
   ]
 }
