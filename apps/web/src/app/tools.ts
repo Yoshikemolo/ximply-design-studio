@@ -1,5 +1,8 @@
 /** Trusted built-in descriptors; shortcut assignments belong to the command registry. */
 export type ToolId =
+  | "dimensionSmart"
+  | "dimensionLinear"
+  | "dimensionAngular"
   | "eyedropper"
   | "paintBucket"
   | "mirror"
@@ -49,6 +52,9 @@ export interface ToolPlugin {
   group: "Select" | "Draw" | "Paths" | "Paint" | "Symbols";
 }
 export const TOOLS: ToolPlugin[] = [
+  { id: "dimensionSmart", label: "Smart dimension", icon: "dimension-smart", group: "Draw" },
+  { id: "dimensionLinear", label: "Linear dimension", icon: "dimension-linear", group: "Draw" },
+  { id: "dimensionAngular", label: "Angular dimension", icon: "dimension-angular", group: "Draw" },
   { id: "eyedropper", label: "Eyedropper", icon: "eyedropper", group: "Paint" },
   { id: "paintBucket", label: "Paint bucket", icon: "paintBucket", group: "Paint" },
   { id: "mirror", label: "Reflect", icon: "mirror", group: "Select" },
@@ -156,6 +162,7 @@ export interface ToolFamily {
   tools: ToolId[];
 }
 export const TOOL_FAMILIES: ToolFamily[] = [
+  { id: "dimensions", label: "Dimensions", tools: ["dimensionSmart", "dimensionLinear", "dimensionAngular"] },
   { id: "selection", label: "Select", tools: ["select", "selectRectangle", "selectEllipse", "selectLasso"] },
   { id: "direct", label: "Direct selection", tools: ["direct"] },
   {

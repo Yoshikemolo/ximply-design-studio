@@ -1,7 +1,10 @@
+import { Dimension, DimensionFormat, defaultDimensionFormat, dimensionGeometry } from "../../../../packages/domain/src/dimensions";
+import { LineEnds, defaultLineEnds, validLineEnds } from "../../../../packages/domain/src/line-endings";
+import { snapDimensionPoint, DimensionSnap } from "./dimension-snapping";
 import { AreaSelectionKind, SelectionArea, layerIntersectsArea } from "../../../../packages/domain/src/selection-area";
 import { blendCompatible, blendProgress, interpolateBlendLayer, syncBlends, ObjectBlend, BlendEasing } from "../../../../packages/domain/src/object-blend";
 import { defaultTypography, defaultTextLayout, FONT_FAMILIES, layoutText, TextLayoutOptions, TextTypography } from "../../../../packages/domain/src/text-layout";
-import { snapPoint, SnapConfig } from "../../../../packages/domain/src/measurements";
+import { snapPoint, SnapConfig, rulerSnapSteps } from "../../../../packages/domain/src/measurements";
 import { transformLayers } from "../../../../packages/domain/src/affine";
 import {
   alignLayers,
@@ -65,23 +68,23 @@ import {
 import { CanvasRenderer } from "../../../../packages/renderer/src/canvas-renderer";
 import { ToolId } from "./tools";
 export type StyleScope = "fill" | "stroke" | "both";
-export type ContextAction = "hide" | "show" | "delete" | "backward" | "forward" | "toBack" | "toFront" | "corner" | "smooth" | "collapseIncoming" | "collapseOutgoing" | "expandIncoming" | "expandOutgoing" | "deleteNode";
+export type ContextAction = "displacement" | "rotation" | "group" | "ungroup" | "regroup" | "hide" | "show" | "delete" | "backward" | "forward" | "toBack" | "toFront" | "corner" | "smooth" | "collapseIncoming" | "collapseOutgoing" | "expandIncoming" | "expandOutgoing" | "deleteNode";
 export type ContextTarget = { revision: number; layerId: string } & (
-  { kind: "object"; groupPath?: string[] } |
+  { kind: "object"; groupPath?: string[]; selectionIds?: string[] } |
   { kind: "node"; path: number; index: number }
 );
 @Injectable({ providedIn: "root" })
 export class EditorService {
   contextAt(point: Point): ContextTarget | null {
     const selected = this.selected();
-    if (selected && this.selectedLayers().length === 1 && selected.visible && !selected.guide && selected.curves) {
+    if (selected && this.selectedLayers().length === 1 && selected.visible && !selected.guide && !selected.dimension && selected.curves) {
       const hit = this.findCurveNode(selected, point);
       if (hit) {
-        this.activeNodes.set([hit.path + ":" + hit.index]);
+        if(!this.activeNodes().includes(hit.path + ":" + hit.index))this.activeNodes.set([hit.path + ":" + hit.index]);
         return { kind: "node", layerId: selected.id, path: hit.path, index: hit.index, revision: this.revision() };
       }
     }
-    const hit = pick(this.document().layers.map((layer) => ({ ...layer, locked: false })), point);
+    const hit = pick(this.document().layers.filter(layer=>!layer.dimension || this.dimensionsVisible()).map((layer) => ({ ...layer, locked: false })), point);
     return hit ? this.contextForLayer(hit.id) : null;
   }
   contextForLayer(id: string, selectGroup = true): ContextTarget | null {
@@ -97,7 +100,12 @@ export class EditorService {
         if (members.length > 1 && members.length === selectedIds.size && members.every((item) => selectedIds.has(item.id))) groupPath = prefix;
       }
     }
-    const target: ContextTarget = { kind: "object", layerId: id, revision: this.revision(), ...(groupPath ? { groupPath } : {}) };
+    const selection = this.selectedLayers();
+    const preserve = selectGroup && selection.length > 1 && selection.some((item) => item.id === id);
+    const groupedMembers = groupPath ? this.document().layers.filter((item) => this.inGroup(item, groupPath!)) : [];
+    const exactGroup = groupedMembers.length === selection.length && groupedMembers.every((item) => selection.some((selected) => selected.id === item.id));
+    const target: ContextTarget = { kind: "object", layerId: id, revision: this.revision(),
+      ...(preserve && !exactGroup ? { selectionIds: selection.map((item) => item.id) } : groupPath ? { groupPath } : {}) };
     const members = this.contextMembers(target);
     this.selectedIds.set(members.map((item) => item.id));
     this.selectedId.set(id);
@@ -111,6 +119,7 @@ export class EditorService {
     if (target.revision !== this.revision()) return [];
     const layer = this.document().layers.find((item) => item.id === target.layerId);
     if (!layer) return [];
+    if (target.kind === "object" && target.selectionIds) return this.document().layers.filter((item) => target.selectionIds!.includes(item.id));
     return target.kind === "object" && target.groupPath?.length
       ? this.document().layers.filter((item) => this.inGroup(item, target.groupPath!)) : [layer];
   }
@@ -140,6 +149,7 @@ export class EditorService {
       if (!node || layer.guide) return [];
       const collapsed = (part: "incoming" | "outgoing") => Math.hypot(node[part].x - node.point.x, node[part].y - node.point.y) < 1e-8;
       return [
+        {id:"displacement",enabled:editable}, {id:"rotation",enabled:editable},
         { id: "corner", enabled: editable && node.smooth },
         { id: "smooth", enabled: editable && (!node.smooth || collapsed("incoming") || collapsed("outgoing")) },
         { id: "collapseIncoming", enabled: editable && !collapsed("incoming") },
@@ -150,18 +160,33 @@ export class EditorService {
       ];
     }
     const siblings = this.contextSiblings(target);
+    const groupable = members.every((layer) => !layer.guide && !this.isEffectivelyLocked(layer));
+    const groups = target.groupPath ? this.document().layers.filter((layer) => this.inGroup(layer, target.groupPath!)) : this.groupingMembers(members, true);
+    const canOrder = !target.selectionIds;
+    const grouping: { id: ContextAction; enabled: boolean }[] = [];
+    if (members.length > 1) grouping.push({ id: "group", enabled: groupable && members.every((layer) => (layer.groupPath?.length ?? 0) < 16) });
+    if (members.some((layer) => layer.groupPath?.length)) grouping.push({ id: "ungroup", enabled: groups.length > 0 && groups.every((layer) => !this.isEffectivelyLocked(layer)) });
+    if (members.some((layer) => layer.regroupPath?.length)) grouping.push({ id: "regroup", enabled: this.regroupMembers(members).length > 0 });
     return [
+      ...grouping,
+      {id:"displacement",enabled:editable && members.every(l=>!l.guide)}, {id:"rotation",enabled:editable && members.every(l=>!l.guide)},
       { id: members.some((layer) => layer.visible) ? "hide" : "show", enabled: true },
       { id: "delete", enabled: editable },
-      { id: "backward", enabled: editable && siblings.index > 0 },
-      { id: "forward", enabled: editable && siblings.index >= 0 && siblings.index < siblings.blocks.length - 1 },
-      { id: "toBack", enabled: editable && siblings.index > 0 },
-      { id: "toFront", enabled: editable && siblings.index >= 0 && siblings.index < siblings.blocks.length - 1 },
+      { id: "backward", enabled: editable && canOrder && siblings.index > 0 },
+      { id: "forward", enabled: editable && canOrder && siblings.index >= 0 && siblings.index < siblings.blocks.length - 1 },
+      { id: "toBack", enabled: editable && canOrder && siblings.index > 0 },
+      { id: "toFront", enabled: editable && canOrder && siblings.index >= 0 && siblings.index < siblings.blocks.length - 1 },
     ];
   }
   runContextAction(target: ContextTarget, action: ContextAction): boolean {
+    if(action === "displacement" || action === "rotation")return false;
     if (!this.contextActions(target).some((entry) => entry.id === action && entry.enabled)) return false;
     const members = this.contextMembers(target), ids = new Set(members.map((layer) => layer.id));
+    if (action === "group" || action === "ungroup" || action === "regroup") {
+      this.selectedIds.set([...ids]); this.selectedId.set(target.layerId);
+      if (action === "regroup") this.regroup(); else this.group(action === "ungroup", target.kind === "object" ? target.groupPath : undefined);
+      return true;
+    }
     const before = structuredClone(this.document());
     if (target.kind === "node") this.contextNodeAction(target, action);
     else if (action === "hide" || action === "show") this.document.update((doc) => ({ ...doc, layers: doc.layers.map((layer) => ids.has(layer.id) ? { ...layer, visible: action === "show" } : layer) }));
@@ -237,7 +262,7 @@ export class EditorService {
     return this.document().layers.filter((layer) => ids.has(layer.id));
   }
   private isEffectivelyLocked(layer: Layer): boolean {
-    if (layer.locked) return true;
+    if (layer.locked || (layer.dimension && (this.dimensionsLocked() || !this.dimensionsVisible()))) return true;
     return this.document().blends?.some((blend) => {
       const ids = [...blend.backIds, ...blend.frontIds, ...blend.stepIds.flat()];
       return ids.includes(layer.id) && this.document().layers.some((member) => ids.includes(member.id) && member.locked);
@@ -249,7 +274,7 @@ export class EditorService {
     const existing = add ? this.selectedLayers().map((item) => item.id) : [];
     const ids = existing.includes(id) ? existing.filter((item) => item !== id) : [...existing, id];
     this.selectedIds.set(ids); this.selectedId.set(ids.at(-1) ?? null); this.activeNodes.set([]);
-    if (!layer.guide) { this.fill.set(layer.fill); this.stroke.set(layer.stroke); this.size.set(layer.strokeWidth); this.strokeStyle.set({ ...defaultStrokeStyle, ...layer.strokeStyle }); }
+    if (!layer.guide) { this.lineEnds.set(structuredClone(layer.lineEnds ?? defaultLineEnds)); this.fill.set(layer.fill); this.stroke.set(layer.stroke); this.size.set(layer.strokeWidth); this.strokeStyle.set({ ...defaultStrokeStyle, ...layer.strokeStyle }); }
   }
   selectBlendEndpoint(side: "back" | "front") {
     const blend = this.selectedBlend();
@@ -259,7 +284,7 @@ export class EditorService {
   }
   private blendCandidates(): { back: Layer[]; front: Layer[]; parent: string[] } | null {
     const selected = this.selectedLayers();
-    if (selected.length < 2 || selected.some((layer) => this.isEffectivelyLocked(layer) || layer.guide || !layer.visible)) return null;
+    if (selected.length < 2 || selected.some((layer) => this.isEffectivelyLocked(layer) || layer.guide || layer.dimension || !layer.visible)) return null;
     const existing = new Set(this.document().blends?.flatMap((blend) => [...blend.backIds, ...blend.frontIds, ...blend.stepIds.flat()]) ?? []);
     if (selected.some((layer) => existing.has(layer.id))) return null;
     const parent = [...(selected[0].groupPath ?? [])];
@@ -338,6 +363,50 @@ export class EditorService {
     this.changed(); return true;
   }
 
+  readonly dimensionsVisible = signal(true);
+  readonly dimensionsLocked = signal(false);
+  readonly dimensionsSnap = signal(true);
+  readonly dimensionSnapRadius = signal(10);
+  readonly dimensionDefaults = signal<DimensionFormat>({ ...defaultDimensionFormat });
+  readonly lineEnds = signal<LineEnds>(structuredClone(defaultLineEnds));
+  readonly dimensionDraft = signal<{kind:'linear'|'angular';points:Point[];cursor:Point} | null>(null);
+  readonly dimensionSnapTarget = signal<DimensionSnap | null>(null);
+  private dimensionLabelGesture?: {before:StudioDocument;id:string};
+  setDimensionsLocked(value:boolean) { this.dimensionsLocked.set(value); if(value&&this.dimensionLabelGesture)this.cancel(); }
+  private dimensionPoint(point:Point,finalAnchor:boolean):Point {
+    const target=this.dimensionsSnap()?snapDimensionPoint(this.document().layers,point,this.dimensionSnapRadius()/this.zoom(),finalAnchor):null;
+    this.dimensionSnapTarget.set(target);return target?.point??this.snap(point);
+  }
+  private startDimension(point:Point,kind:'linear'|'angular') {
+    let draft=this.dimensionDraft();if(draft&&draft.kind!==kind)draft=null;
+    const count=kind==='angular'?3:2;
+    if(!draft){const p=this.dimensionPoint(point,false);this.dimensionDraft.set({kind,points:[p],cursor:p});return;}
+    if(draft.points.length<count){const p=this.dimensionPoint(point,draft.points.length===count-1);if(draft.points.some(previous=>Math.hypot(p.x-previous.x,p.y-previous.y)<1e-6))return;this.dimensionDraft.set({...draft,points:[...draft.points,p],cursor:p});return;}
+    this.createDimension(kind,draft.points,point);this.dimensionDraft.set(null);this.dimensionSnapTarget.set(null);
+  }
+  createDimension(kind:'linear'|'angular',anchors:Point[],labelPosition:Point):boolean {
+    if(anchors.length!==(kind==='angular'?3:2)||this.document().layers.length>=150||[...anchors,labelPosition].some(p=>!Number.isFinite(p.x)||!Number.isFinite(p.y)))return false;
+    if(Math.hypot(anchors[1].x-anchors[0].x,anchors[1].y-anchors[0].y)<1e-6)return false;
+    const points=[...anchors,labelPosition],x=Math.min(...points.map(p=>p.x)),y=Math.min(...points.map(p=>p.y));
+    const local=(p:Point)=>({x:p.x-x,y:p.y-y});
+    const layer:Layer={...newLayer('path',crypto.randomUUID(),{x,y},this.stroke(),this.stroke(),Math.min(this.size(),2)),name:kind==='linear'?'Linear dimension':'Angular dimension',width:Math.max(1,...points.map(p=>p.x-x)),height:Math.max(1,...points.map(p=>p.y-y)),fontSize:14,points:anchors.map(local),lineEnds:{start:{kind:'triangle',placement:'tip',size:10},end:{kind:'triangle',placement:'tip',size:10},linked:true},dimension:{kind,anchors:anchors.map(local),labelPosition:local(labelPosition),text:'',labelSize:{width:160,height:40},format:{...this.dimensionDefaults()},extension:{stroke:this.stroke(),strokeWidth:1,gap:4,overshoot:6}}};
+    try{parseDocument(JSON.stringify({...this.document(),layers:[...this.document().layers,layer]}));}catch{return false;}
+    this.history.commit(this.document());this.document.update(d=>({...d,layers:[...d.layers,layer]}));this.selectedId.set(layer.id);this.selectedIds.set([layer.id]);this.changed();return true;
+  }
+  updateDimension(patch:Partial<Dimension>) {
+    const selected=this.selected();if(!selected?.dimension||this.isEffectivelyLocked(selected))return;
+    const dimension={...selected.dimension,...patch};
+    try{parseDocument(JSON.stringify({...this.document(),layers:this.document().layers.map(l=>l.id===selected.id?{...l,dimension}:l)}));}catch{return;}
+    if(JSON.stringify(dimension)===JSON.stringify(selected.dimension))return;
+    this.history.commit(this.document());this.setLayer(selected.id,{dimension});this.dimensionDefaults.set({...dimension.format});this.changed();
+  }
+  setLineEnds(patch:Partial<LineEnds>) {
+    const value={...this.lineEnds(),...patch};
+    if(value.linked){if(patch.end&&!patch.start)value.start={...value.end};else value.end={...value.start};}
+    try{if(!validLineEnds(value))return;}catch{return;}
+    this.lineEnds.set(structuredClone(value));this.applyAppearance({lineEnds:value});
+  }
+
   readonly guidesLocked = signal(false);
   setGuidesLocked(locked: boolean) {
     this.guidesLocked.set(locked);
@@ -365,7 +434,8 @@ export class EditorService {
     const config = this.snapConfig();
     if (!config) return false;
     if (config.guides.enabled && config.guides.visible && config.guides.items.some((guide) => guide.axis === axis && Math.abs(guide.position - value) < 1e-8)) return true;
-    return [config.rulers, config.grid].some((scale) => scale.enabled && scale.visible && scale.step > 0 && Math.abs(Math.round(value / scale.step) * scale.step - value) < 1e-8);
+    const steps = [...rulerSnapSteps(config.rulers), ...(config.grid.enabled && config.grid.visible ? [config.grid.step] : [])];
+    return steps.some((step) => Number.isFinite(step) && step > 0 && Math.abs(Math.round(value / step) * step - value) < 1e-8);
   }
   readonly shapeOptions = signal<ShapeOptions>({ ...DEFAULT_SHAPE });
   readonly activeNodes = signal<string[]>([]);
@@ -433,9 +503,9 @@ export class EditorService {
     if (JSON.stringify(layers) === JSON.stringify(before.layers)) return;
     this.history.commit(before); this.expandGeneratedForIds(ids); this.document.set({ ...this.document(), layers }); this.changed();
   }
-  private scopedStyle(fill: string, stroke: string, strokeWidth: number, strokeStyle: StrokeStyle): Partial<Layer> {
+  private scopedStyle(fill: string, stroke: string, strokeWidth: number, strokeStyle: StrokeStyle, lineEnds: LineEnds = this.lineEnds()): Partial<Layer> {
     const scope = this.styleScope();
-    return { ...(scope !== "stroke" ? { fill } : {}), ...(scope !== "fill" ? { stroke, strokeWidth, strokeStyle: { ...strokeStyle } } : {}) };
+    return { ...(scope !== "stroke" ? { fill } : {}), ...(scope !== "fill" ? { stroke, strokeWidth, strokeStyle: { ...strokeStyle }, lineEnds: structuredClone(lineEnds) } : {}) };
   }
   private applyStyleTo(ids: Set<string>, patch: Partial<Layer>): boolean {
     const before = this.document();
@@ -448,19 +518,19 @@ export class EditorService {
     return true;
   }
   sampleStyle(point: Point): boolean {
-    const source = pick(this.document().layers.map((layer) => ({ ...layer, locked: false })), point);
+    const source = pick(this.document().layers.filter(layer=>!layer.dimension || this.dimensionsVisible()).map((layer) => ({ ...layer, locked: false })), point);
     if (!source || source.guide || source.kind === "image") return false;
-    const patch = this.scopedStyle(source.fill, source.stroke, source.strokeWidth, { ...defaultStrokeStyle, ...source.strokeStyle });
+    const patch = this.scopedStyle(source.fill, source.stroke, source.strokeWidth, { ...defaultStrokeStyle, ...source.strokeStyle }, source.lineEnds ?? defaultLineEnds);
     if (patch.fill !== undefined) this.fill.set(patch.fill);
     if (patch.stroke !== undefined) {
-      this.stroke.set(patch.stroke); this.size.set(patch.strokeWidth!); this.strokeStyle.set({ ...patch.strokeStyle! });
+      this.stroke.set(patch.stroke); this.size.set(patch.strokeWidth!); this.strokeStyle.set({ ...patch.strokeStyle! }); this.lineEnds.set(structuredClone(patch.lineEnds!));
     }
     const targets = new Set(this.selectedLayers().filter((layer) => layer.id !== source.id && !layer.guide && !this.isEffectivelyLocked(layer) && layer.kind !== "image").map((layer) => layer.id));
     this.applyStyleTo(targets, patch);
     return true;
   }
   applyStyleAt(point: Point): boolean {
-    const target = pick(this.document().layers.map((layer) => ({ ...layer, locked: false })), point);
+    const target = pick(this.document().layers.filter(layer=>!layer.dimension || this.dimensionsVisible()).map((layer) => ({ ...layer, locked: false })), point);
     if (!target || target.locked || target.guide || target.kind === "image") return false;
     const root = target.groupPath?.[0];
     const members = this.document().layers.filter((layer) => root ? layer.groupPath?.[0] === root : layer.id === target.id);
@@ -663,7 +733,7 @@ export class EditorService {
     return { ...layer, width: Math.max(1, Math.min(16384, layout.width)), height: Math.max(1, Math.min(16384, layout.height)) };
   }
   private applyTextUpdate(update: (layer: Layer) => Layer) {
-    const ids = new Set(this.selectedLayers().filter((layer) => layer.kind === "text" && !this.isEffectivelyLocked(layer)).map((layer) => layer.id));
+    const ids = new Set(this.selectedLayers().filter((layer) => (layer.kind === "text" || !!layer.dimension) && !this.isEffectivelyLocked(layer)).map((layer) => layer.id));
     if (!ids.size) return;
     const before = this.document();
     const layers = before.layers.map((layer) => ids.has(layer.id) ? this.reflowText(update(layer)) : layer);
@@ -680,7 +750,7 @@ export class EditorService {
       if (patch.fit === true) textLayout.sizing = "fixed";
       if (textLayout.sizing !== "fixed") textLayout.fit = false;
       if (["content", "width"].includes(textLayout.sizing)) textLayout.wrap = false;
-      return { ...layer, textLayout, typography: { ...defaultTypography, ...layer.typography } };
+      return { ...layer, ...(layer.dimension ? {dimension:{...layer.dimension,labelSize:layer.dimension.labelSize ?? {width:160,height:40}}} : {}), textLayout, typography: { ...defaultTypography, ...layer.typography } };
     });
   }
   updateTypography(patch: Partial<TextTypography>) {
@@ -772,6 +842,7 @@ export class EditorService {
       ...structuredClone(layer),
       id: crypto.randomUUID(),
       name: layer.name + " copy",
+      regroupPath: undefined,
       x: layer.x + 20,
       y: layer.y + 20,
       ...(layer.groupPath
@@ -831,6 +902,12 @@ export class EditorService {
     override?: ToolId,
   ) {
     const tool = override ?? this.tool();
+    if (["dimensionSmart", "dimensionLinear", "dimensionAngular"].includes(tool)) { this.startDimension(point, tool === "dimensionAngular" ? "angular" : "linear"); return; }
+    const dimensionLayer=this.selected();
+    if(tool === "select" && dimensionLayer?.dimension && !this.isEffectivelyLocked(dimensionLayer) && this.selectedLayers().length===1) {
+      const label=dimensionGeometry(dimensionLayer).labelPosition;
+      if(Math.hypot(point.x-label.x,point.y-label.y)<10/this.zoom()){this.dimensionLabelGesture={before:structuredClone(this.document()),id:dimensionLayer.id};return;}
+    }
     const areaTools: Partial<Record<ToolId, AreaSelectionKind>> = { selectRectangle: "rectangle", selectEllipse: "ellipse", selectLasso: "lasso" };
     if (areaTools[tool]) { this.startAreaSelection(point, areaTools[tool]!, !!modifiers.shift); return; }
     if (tool === "eyedropper") { this.sampleStyle(point); return; }
@@ -883,7 +960,7 @@ export class EditorService {
     }
     if (tool === "path") {
       const active = this.selected();
-      if (active?.kind === "path" && !this.isEffectivelyLocked(active) && active.visible && !active.guide) {
+      if (active?.kind === "path" && !active.dimension && !this.isEffectivelyLocked(active) && active.visible && !active.guide) {
         const curves = this.editableCurves(active),
           path = curves[0],
           p = localPoint(active, point);
@@ -908,7 +985,7 @@ export class EditorService {
       }
     }
     if (tool === "text") {
-      const existing = pick(this.document().layers, point);
+      const existing = pick(this.document().layers.filter(layer=>!layer.dimension || this.dimensionsVisible()), point);
       if (existing?.kind === "text") {
         this.selectedId.set(existing.id);
         return;
@@ -918,7 +995,7 @@ export class EditorService {
     if (
       tool === "select" &&
       this.selectedLayers().length === 1 &&
-      selectedPath?.curves &&
+      selectedPath?.curves && !selectedPath.dimension &&
       !this.isEffectivelyLocked(selectedPath) &&
       selectedPath.visible &&
       this.findCurveNode(selectedPath, point)
@@ -974,7 +1051,7 @@ export class EditorService {
           return;
         }
       }
-      const layer = pick(this.document().layers, point);
+      const layer = pick(this.document().layers.filter(layer=>!layer.dimension || this.dimensionsVisible()), point);
       if (layer && this.isEffectivelyLocked(layer)) return;
       if (layer) {
         if (
@@ -1010,7 +1087,7 @@ export class EditorService {
       if (
         active &&
         !this.isEffectivelyLocked(active) &&
-        !active.guide &&
+        !active.guide && !active.dimension &&
         active.visible &&
         ["path", "rectangle", "ellipse"].includes(active.kind)
       ) {
@@ -1091,6 +1168,7 @@ export class EditorService {
       this.size(),
     );
     layer.strokeStyle = { ...this.strokeStyle() };
+    if(layer.kind === "path") layer.lineEnds=structuredClone(this.lineEnds());
     if (construct) {
       layer.name = tool[0].toUpperCase() + tool.slice(1);
       layer.curves = construction(
@@ -1118,6 +1196,8 @@ export class EditorService {
     };
   }
   move(point: Point, modifiers: { shift?: boolean; alt?: boolean; ctrl?: boolean } = {}) {
+    if(this.dimensionLabelGesture){const layer=this.document().layers.find(l=>l.id===this.dimensionLabelGesture!.id)!;this.setLayer(layer.id,{dimension:{...layer.dimension!,labelPosition:localPoint(layer,point)}});return;}
+    const draft=this.dimensionDraft();if(draft){const count=draft.kind=== "angular"?3:2;this.dimensionDraft.set({...draft,cursor:draft.points.length<count?this.dimensionPoint(point,draft.points.length===count-1):point});return;}
     if (this.areaGesture) { this.moveAreaSelection(point); return; }
     const g = this.gesture;
     if (!g) return;
@@ -1291,6 +1371,7 @@ export class EditorService {
     );
   }
   end() {
+    if(this.dimensionLabelGesture){this.history.commit(this.dimensionLabelGesture.before);this.dimensionLabelGesture=undefined;this.changed();return;}
     if (this.areaGesture) {
       if (!this.areaGesture.moved && !this.areaGesture.shift) { this.selectedId.set(null); this.selectedIds.set([]); this.activeNodes.set([]); }
       this.areaGesture = undefined; this.areaSelection.set(null); return;
@@ -1317,6 +1398,8 @@ export class EditorService {
     this.changed();
   }
   cancel() {
+    this.dimensionDraft.set(null);this.dimensionSnapTarget.set(null);
+    if(this.dimensionLabelGesture)this.document.set(this.dimensionLabelGesture.before);this.dimensionLabelGesture=undefined;
     this.cancelGuideDrag();
     if (this.areaGesture) {
       this.selectedIds.set(this.areaGesture.ids); this.selectedId.set(this.areaGesture.primary); this.activeNodes.set(this.areaGesture.nodes);
@@ -1417,6 +1500,7 @@ export class EditorService {
       this.stroke.set(layer.stroke);
       this.size.set(layer.strokeWidth);
       this.strokeStyle.set({ ...defaultStrokeStyle, ...layer.strokeStyle });
+      this.lineEnds.set(structuredClone(layer.lineEnds ?? defaultLineEnds));
     }
   }
   selectAll() {
@@ -1427,27 +1511,59 @@ export class EditorService {
     this.selectedIds.set(ids);
     this.selectedId.set(ids.at(-1) ?? null);
   }
-  group(ungroup = false) {
-    const layers = this.selectedLayers().filter((l) => !this.isEffectivelyLocked(l) && !l.guide);
-    if (!layers.length || (!ungroup && layers.length < 2)) return;
-    if (!ungroup && layers.some((l) => (l.groupPath?.length ?? 0) >= 16))
-      return;
+  private groupingMembers(selection: Layer[], ungroup: boolean): Layer[] {
+    const roots = new Set(selection.flatMap((layer) => layer.groupPath?.[0] ? [layer.groupPath[0]] : []));
+    const ids = new Set(selection.filter((layer) => !layer.guide && (!ungroup || layer.groupPath?.length)).map((layer) => layer.id));
+    return this.document().layers.filter((layer) => !layer.guide && (ids.has(layer.id) || !!layer.groupPath?.[0] && roots.has(layer.groupPath[0])));
+  }
+  private regroupKey(layer: Layer): string | undefined {
+    const prior = layer.regroupPath, current = layer.groupPath ?? [];
+    if (!prior || prior.length !== current.length + 1) return undefined;
+    const removed = prior.findIndex((_, index) => JSON.stringify(prior.filter((_, position) => position !== index)) === JSON.stringify(current));
+    return removed < 0 ? undefined : JSON.stringify(prior.slice(0, removed + 1));
+  }
+  private regroupMembers(selection: Layer[]): Layer[] {
+    const keys = new Set(selection.map((layer) => this.regroupKey(layer)).filter(Boolean));
+    if (!keys.size) return [];
+    const members = this.document().layers.filter((layer) => {
+      const key = this.regroupKey(layer);
+      return key && keys.has(key);
+    });
+    // A moved or locked remembered member must not be silently omitted.
+    const remembered = this.document().layers.filter((layer) => layer.regroupPath && [...keys].some((key) => {
+      const prefix = JSON.parse(key!); return prefix.every((id: string, index: number) => layer.regroupPath![index] === id);
+    }));
+    if (members.length < 2 || remembered.length !== members.length || members.some((layer) => layer.guide || this.isEffectivelyLocked(layer))) return [];
+    return members;
+  }
+  regroup() {
+    const layers = this.regroupMembers(this.selectedLayers());
+    if (!layers.length) return;
+    const ids = new Set(layers.map((layer) => layer.id));
     this.history.commit(this.document());
-    const ids = new Set(layers.map((l) => l.id)),
-      group = crypto.randomUUID();
-    if (ungroup) this.document.update((doc) => ({ ...doc, blends: doc.blends?.filter((blend) => !layers.some((layer) => layer.groupPath?.[0] === blend.groupId)) }));
-    this.document.update((d) => ({
-      ...d,
-      layers: d.layers.map((l) =>
-        ids.has(l.id)
-          ? {
-              ...l,
-              groupPath: ungroup
-                ? (l.groupPath ?? []).slice(1)
-                : [group, ...(l.groupPath ?? [])],
-            }
-          : l,
-      ),
+    this.document.update((doc) => ({ ...doc, layers: doc.layers.map((layer) => {
+      if (!ids.has(layer.id)) return layer;
+      const { regroupPath, ...rest } = layer;
+      return { ...rest, groupPath: regroupPath };
+    }) }));
+    this.selectedIds.set([...ids]); this.selectedId.set(layers.at(-1)!.id);
+    this.changed();
+  }
+  group(ungroup = false, prefix?: string[]) {
+    const depth = prefix?.length ? prefix.length - 1 : 0;
+    const layers = prefix?.length ? this.document().layers.filter((layer) => this.inGroup(layer, prefix) && !layer.guide) : this.groupingMembers(this.selectedLayers(), ungroup);
+    if (!layers.length || layers.some((layer) => this.isEffectivelyLocked(layer)) || (!ungroup && layers.length < 2)) return;
+    if (!ungroup && layers.some((layer) => (layer.groupPath?.length ?? 0) >= 16)) return;
+    this.history.commit(this.document());
+    const ids = new Set(layers.map((layer) => layer.id)), group = crypto.randomUUID();
+    this.document.update((doc) => ({
+      ...doc,
+      blends: ungroup ? doc.blends?.filter((blend) => !layers.some((layer) => layer.groupPath?.[depth] === blend.groupId)) : doc.blends,
+      layers: doc.layers.map((layer) => ids.has(layer.id) ? {
+        ...layer,
+        regroupPath: ungroup ? [...layer.groupPath!] : undefined,
+        groupPath: ungroup ? layer.groupPath!.filter((_, index) => index !== depth) : [...(layer.groupPath ?? []).slice(0, depth), group, ...(layer.groupPath ?? []).slice(depth)],
+      } : layer),
     }));
     this.changed();
   }
@@ -1475,6 +1591,7 @@ export class EditorService {
     this.changed();
   }
   boolean(operation: Parameters<typeof booleanLayers>[1]) {
+    if(this.selectedLayers().some(layer=>layer.dimension))return;
     const layers = this.selectedLayers().filter((l) => !this.isEffectivelyLocked(l) && !l.guide);
     if (layers.length < 2) return;
     try {
@@ -1506,6 +1623,7 @@ export class EditorService {
         ...target,
         points: resized.points,
         ...(resized.curves ? { curves: resized.curves } : {}),
+        ...(resized.dimension ? { dimension: resized.dimension } : {}),
       }));
       return;
     }
@@ -1527,7 +1645,7 @@ export class EditorService {
   }
 
   setTool(tool: ToolId) {
-    if (tool !== this.tool()) this.finishPath();
+    if (tool !== this.tool()) { this.finishPath(); this.dimensionDraft.set(null); this.dimensionSnapTarget.set(null); }
     this.activeNodes.set([]);
     this.tool.set(tool);
   }
@@ -1550,6 +1668,7 @@ export class EditorService {
         this.size(),
       );
       layer.strokeStyle = { ...this.strokeStyle() };
+    if(layer.kind === "path") layer.lineEnds=structuredClone(this.lineEnds());
       layer.name = "Bézier path";
       layer.curves = [{ nodes: [], closed: false }];
       this.document.update((d) => ({ ...d, layers: [...d.layers, layer!] }));
@@ -1646,7 +1765,7 @@ export class EditorService {
       hit = this.findCurveNode(layer, point);
     }
     if (!hit) {
-      layer = pick(this.document().layers, point) ?? null;
+      layer = pick(this.document().layers.filter(layer=>!layer.dimension || this.dimensionsVisible()), point) ?? null;
       if (layer) {
         if (
           !layer.curves &&
@@ -1663,7 +1782,7 @@ export class EditorService {
     if (
       !layer ||
       this.isEffectivelyLocked(layer) ||
-      !layer.visible ||
+      !layer.visible || layer.dimension ||
       ["image", "text"].includes(layer.kind)
     ) {
       this.selectedId.set(null);
@@ -1827,7 +1946,7 @@ export class EditorService {
       | "extend",
   ) {
     const layer = this.selected();
-    if (!layer || this.isEffectivelyLocked(layer) || layer.guide || ["image", "text"].includes(layer.kind))
+    if (!layer || this.isEffectivelyLocked(layer) || layer.guide || layer.dimension || ["image", "text"].includes(layer.kind))
       return;
     let curves = this.editableCurves(layer);
     if (action === "extend") {
@@ -1872,6 +1991,36 @@ export class EditorService {
     this.activeNodes.set([]);
     this.changed();
   }
+  transformationCenter(): Point {
+    const layer=this.selected(),keys=new Set(this.activeNodes());
+    const points=layer?.curves?.flatMap((p,i)=>p.nodes.filter((_,j)=>keys.has(i+':'+j)).map(n=>worldPoint(layer,n.point)))??[];
+    if(points.length)return {x:points.reduce((s,p)=>s+p.x,0)/points.length,y:points.reduce((s,p)=>s+p.y,0)/points.length};
+    const box=selectionBounds(this.selectedLayers());return {x:box.x+box.width/2,y:box.y+box.height/2};
+  }
+  private numericTransform(map:(point:Point)=>Point,rotation=0):boolean {
+    const layers=this.selectedLayers();if(!layers.length||layers.some(l=>this.isEffectivelyLocked(l)||l.guide))return false;
+    const primary=this.selected(),keys=new Set(this.activeNodes()),ids=new Set(layers.map(l=>l.id));
+    const before=this.document();let next:StudioDocument;
+    if(primary?.curves&&keys.size&&layers.length===1){
+      const curves=structuredClone(primary.curves);let changed=false;
+      curves.forEach((p,i)=>p.nodes.forEach((node,j)=>{if(!keys.has(i+':'+j))return;changed=true;for(const part of ['point','incoming','outgoing'] as const)node[part]=localPoint(primary,map(worldPoint(primary,node[part])));}));
+      if(!changed)return false;const layer=fitCurves(primary,curves);next={...before,layers:before.layers.map(l=>l.id===primary.id?layer:l)};
+    }else{
+      next={...before,layers:before.layers.map(l=>{if(!ids.has(l.id))return l;const center=map({x:l.x+l.width/2,y:l.y+l.height/2});return {...l,x:center.x-l.width/2,y:center.y-l.height/2,rotation:l.rotation+rotation};})};
+    }
+    try{parseDocument(JSON.stringify(next));}catch{return false;}
+    this.history.commit(before);this.expandGeneratedForIds(ids);this.document.set({...next,blends:this.document().blends});this.changed();return true;
+  }
+  displaceSelection(dx:number,dy:number):boolean {
+    if(!Number.isFinite(dx)||!Number.isFinite(dy)||Math.abs(dx)>1e6||Math.abs(dy)>1e6||(!dx&&!dy))return false;
+    return this.numericTransform(p=>({x:p.x+dx,y:p.y+dy}));
+  }
+  rotateSelection(angle:number,center:Point=this.transformationCenter()):boolean {
+    if(!Number.isFinite(angle)||!Number.isFinite(center.x)||!Number.isFinite(center.y)||Math.abs(angle)>36000||angle===0)return false;
+    const radians=angle*Math.PI/180,c=Math.cos(radians),s=Math.sin(radians);
+    return this.numericTransform(p=>({x:center.x+(p.x-center.x)*c-(p.y-center.y)*s,y:center.y+(p.x-center.x)*s+(p.y-center.y)*c}),angle);
+  }
+
   nudge(dx: number, dy: number) {
     const layer = this.selected();
     if (!layer || this.isEffectivelyLocked(layer) || layer.guide) return;
@@ -1914,6 +2063,7 @@ export class EditorService {
     this.setLayer(layer.id, { kind: "path", curves });
   }
   private eraseVector(point: Point) {
+    if(this.document().layers.find(l=>l.id===this.gesture?.id)?.dimension)return;
     const g = this.gesture!,
       layer = this.document().layers.find((l) => l.id === g.id)!;
     const paths = this.editableCurves(layer),
@@ -1937,7 +2087,7 @@ export class EditorService {
 
   defineSymbol() {
     const layer = this.selected();
-    if (!layer || this.isEffectivelyLocked(layer) || layer.guide) return;
+    if (!layer || this.isEffectivelyLocked(layer) || layer.guide || layer.dimension) return;
     const symbols = this.document().symbols ?? [];
     if (symbols.length >= 100) return;
     this.history.commit(this.document());
@@ -1994,7 +2144,7 @@ export class EditorService {
   ) {
     const layer = this.selected(),
       id = this.activeSymbol();
-    if (!layer || this.isEffectivelyLocked(layer) || layer.guide) return;
+    if (!layer || this.isEffectivelyLocked(layer) || layer.guide || layer.dimension) return;
     const symbol = this.document().symbols?.find((s) => s.id === id);
     if (!symbol && action !== "expand") return;
     this.history.commit(this.document());

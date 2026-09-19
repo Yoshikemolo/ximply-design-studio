@@ -173,7 +173,8 @@
       ],
       "adrs": [
         "ADR-0004",
-        "ADR-0007"
+        "ADR-0007",
+        "ADR-0028"
       ],
       "scenarios": [
         "SC-0019",
@@ -186,10 +187,12 @@
       ],
       "tests": [
         "packages/domain/tests/document.test.ts",
-        "apps/web/tests/editor.test.ts"
+        "apps/web/tests/editor.test.ts",
+        "apps/web/tests/context-grouping.test.ts"
       ],
       "evidence": [
-        "doc/implementation/PLAN-0002-0001.md"
+        "doc/implementation/PLAN-0002-0001.md",
+        "doc/implementation/PLAN-0008-0003.md"
       ]
     },
     {
@@ -205,7 +208,8 @@
         "ADR-0004",
         "ADR-0007",
         "ADR-0023",
-        "ADR-0024"
+        "ADR-0024",
+        "ADR-0028"
       ],
       "scenarios": [
         "SC-0022",
@@ -222,7 +226,10 @@
         "packages/domain/src/symbols.ts",
         "packages/domain/src/tracing.ts",
         "packages/domain/src/measurements.ts",
-        "apps/web/src/app/preferences.service.ts"
+        "apps/web/src/app/preferences.service.ts",
+        "packages/domain/src/dimensions.ts",
+        "packages/domain/src/line-endings.ts",
+        "apps/web/src/app/dimension-snapping.ts"
       ],
       "tests": [
         "packages/domain/tests/document.test.ts",
@@ -232,10 +239,13 @@
         "packages/domain/tests/measurements.test.ts",
         "packages/domain/tests/appearance-guides.test.ts",
         "packages/renderer/tests/appearance-guides.test.ts",
-        "apps/web/tests/appearance-guides.test.ts"
+        "apps/web/tests/appearance-guides.test.ts",
+        "packages/domain/tests/dimensions.test.ts",
+        "apps/web/tests/dimensions-editor.test.ts"
       ],
       "evidence": [
-        "doc/implementation/PLAN-0002-0001.md"
+        "doc/implementation/PLAN-0002-0001.md",
+        "doc/implementation/PLAN-0008-0003.md"
       ]
     },
     {

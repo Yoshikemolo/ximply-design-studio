@@ -1,6 +1,67 @@
 {
-  "currentVersion": "0.3.12-alpha.1",
+  "currentVersion": "0.3.13-alpha.1",
   "entries": [
+    {
+      "version": "0.3.13-alpha.1",
+      "date": "2026-09-19",
+      "summary": "Vector dimension annotations, line endpoints, contextual grouping and ruler subdivisions",
+      "breakingChanges": [
+        "New native-v2 dimension, line-end and regroup metadata requires compatible readers. Migration: preserve original files and use this version or newer for new saves; SVG/PNG exports preserve visible annotations but not editable dimension semantics or regroup history."
+      ],
+      "changes": [
+        {
+          "type": "Feature",
+          "description": "Add linear and angular dimension tools with singular-point placement assistance, editable measurement formatting and a movable label handle."
+        },
+        {
+          "type": "Feature",
+          "description": "Configure dimension scale, display units, decimal count and separator per annotation, carrying formatting defaults to subsequent dimensions."
+        },
+        {
+          "type": "Feature",
+          "description": "Add independent start/end markers: arrow, open arrow, triangle, dot, slash, cross or none, with size, tip/base placement and linked editing."
+        },
+        {
+          "type": "Feature",
+          "description": "Add Group, Ungroup and Regroup to contextual menus according to selection membership; retain edits and nested parent groups when restoring prior membership."
+        },
+        {
+          "type": "Feature",
+          "description": "Add numeric displacement and rotation entry for selected objects, groups and Bezier anchors with an explicit rotation center."
+        },
+        {
+          "type": "Improvement",
+          "description": "Add dimension visibility, lock and snapping controls beside the existing measurement aids."
+        },
+        {
+          "type": "Improvement",
+          "description": "Preserve annotation glyph and marker shapes during object transforms; customize dimension lines, extension lines and label typography."
+        },
+        {
+          "type": "Improvement",
+          "description": "Configure major/minor ruler intervals and their snapping independently, while retaining the global ruler magnet and screen-space tolerance."
+        },
+        {
+          "type": "Fix",
+          "description": "Preserve multiple selection when opening its context menu and leave independent objects unchanged when ungrouping selected groups."
+        },
+        {
+          "type": "Engineering",
+          "description": "Validate dimension, endpoint and regroup extensions in native documents and API contracts; share annotation geometry between Canvas and SVG."
+        },
+        {
+          "type": "Engineering",
+          "description": "Keep dimensions as independent captured annotations rather than persistent CAD constraints. Radius/diameter, tolerances and chain/baseline dimensions remain outside this preview."
+        },
+        {
+          "type": "Engineering",
+          "description": "Migrate missing minor ruler preferences from the existing major interval without changing native artwork coordinates."
+        }
+      ],
+      "capabilityStatus": "local-preview",
+      "markdown": "0.3.13-alpha.1.md",
+      "source": "doc/changelog/0.3.13-alpha.1.md"
+    },
     {
       "version": "0.3.12-alpha.1",
       "date": "2026-09-19",

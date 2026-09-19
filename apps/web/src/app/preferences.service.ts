@@ -17,15 +17,24 @@ export interface MeasurementSettings {
   snapGuides: boolean;
   snapGrid: boolean;
   rulerStep: number;
+  rulerMinorStep: number;
+  snapRulerMajor: boolean;
+  snapRulerMinor: boolean;
+  dimensionsVisible: boolean;
+  dimensionsLocked: boolean;
+  dimensionsSnap: boolean;
+  dimensionSnapRadius: number;
   gridSize: number;
   rulerSnapRadius: number;
   guideSnapRadius: number;
   gridSnapRadius: number;
 }
-export type LayoutBlock = "appearance" | "workspace" | "measurement";
+export type LayoutBlock = "appearance" | "workspace" | "measurement" | "dimensions";
 const measurementDefaults: MeasurementSettings = {
   distanceUnit: "px", fontUnit: "px", rulersVisible: false, guidesVisible: true, guidesLocked: false,
   gridVisible: false, snapRulers: false, snapGuides: false, snapGrid: false,
+  dimensionsVisible: true, dimensionsLocked: false, dimensionsSnap: true, dimensionSnapRadius: 8,
+  rulerMinorStep: 10, snapRulerMajor: true, snapRulerMinor: false,
   rulerStep: 100, gridSize: 20, rulerSnapRadius: 8, guideSnapRadius: 8, gridSnapRadius: 8,
 };
 function validateMeasurement<K extends keyof MeasurementSettings>(key: K, value: unknown): void {
@@ -55,12 +64,19 @@ export class PreferencesService {
   readonly snapRulers = signal(measurementDefaults.snapRulers);
   readonly snapGuides = signal(measurementDefaults.snapGuides);
   readonly snapGrid = signal(measurementDefaults.snapGrid);
+  readonly rulerMinorStep = signal(measurementDefaults.rulerMinorStep);
+  readonly snapRulerMajor = signal(measurementDefaults.snapRulerMajor);
+  readonly snapRulerMinor = signal(measurementDefaults.snapRulerMinor);
+  readonly dimensionsVisible = signal(measurementDefaults.dimensionsVisible);
+  readonly dimensionsLocked = signal(measurementDefaults.dimensionsLocked);
+  readonly dimensionsSnap = signal(measurementDefaults.dimensionsSnap);
+  readonly dimensionSnapRadius = signal(measurementDefaults.dimensionSnapRadius);
   readonly rulerStep = signal(measurementDefaults.rulerStep);
   readonly gridSize = signal(measurementDefaults.gridSize);
   readonly rulerSnapRadius = signal(measurementDefaults.rulerSnapRadius);
   readonly guideSnapRadius = signal(measurementDefaults.guideSnapRadius);
   readonly gridSnapRadius = signal(measurementDefaults.gridSnapRadius);
-  readonly layoutBlocks = signal<Record<LayoutBlock, boolean>>({ appearance: true, workspace: true, measurement: true });
+  readonly layoutBlocks = signal<Record<LayoutBlock, boolean>>({ appearance: true, workspace: true, measurement: true, dimensions: true });
   constructor() {
     try {
       const raw = localStorage.getItem("xds-input-settings");
@@ -71,9 +87,10 @@ export class PreferencesService {
         if (saved.lastAreaSelection !== undefined && !["rectangle", "ellipse", "lasso"].includes(saved.lastAreaSelection)) throw new Error("Invalid selection mode");
         this.lastAreaSelection.set(saved.lastAreaSelection ?? "rectangle");
         const measurements = { ...measurementDefaults, ...saved.measurements };
+        if (saved.measurements?.rulerMinorStep === undefined) measurements.rulerMinorStep = Math.max(0.01, measurements.rulerStep / 10);
         for (const key of Object.keys(measurements) as (keyof MeasurementSettings)[]) validateMeasurement(key, measurements[key]);
-        const layout = saved.layoutBlocks ?? this.layoutBlocks();
-        for (const key of ["appearance", "workspace", "measurement"] as const)
+        const layout = { ...this.layoutBlocks(), ...saved.layoutBlocks };
+        for (const key of ["appearance", "workspace", "measurement", "dimensions"] as const)
           if (typeof layout[key] !== "boolean") throw new Error("Invalid layout settings");
         this.bindings.set(validateShortcuts(saved.bindings));
         this.cursorIcon.set(saved.cursorIcon);
@@ -192,7 +209,7 @@ export class PreferencesService {
     }
   }
   toggleLayoutBlock(key: LayoutBlock): boolean {
-    if (!["appearance", "workspace", "measurement"].includes(key)) return false;
+    if (!["appearance", "workspace", "measurement", "dimensions"].includes(key)) return false;
     try {
       const next = { ...this.layoutBlocks(), [key]: !this.layoutBlocks()[key] };
       this.persistExtended(this.measurements(), next);

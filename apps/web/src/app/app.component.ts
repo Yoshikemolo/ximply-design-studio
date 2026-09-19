@@ -1,3 +1,5 @@
+import { Dimension, DimensionFormat, dimensionGeometry } from "../../../../packages/domain/src/dimensions";
+import { defaultLineEnds, LineEnd, LineEnds } from "../../../../packages/domain/src/line-endings";
 import { BlendEasing } from "../../../../packages/domain/src/object-blend";
 import { FONT_FAMILIES, defaultTypography, defaultTextLayout, TextTypography, TextLayoutOptions } from "../../../../packages/domain/src/text-layout";
 import { measurementUnits, isUnit, snapPoint, fromPixels, toPixels, formatMeasurement, rulerTicks as makeRulerTicks, SnapConfig } from "../../../../packages/domain/src/measurements";
@@ -110,7 +112,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   readonly quickColors = [{ value: "#000000", label: "Black" }, { value: "#ffffff", label: "White" }, { value: "none", label: "No color" }];
   readonly paintTarget = signal<"fill" | "stroke">("fill");
   readonly paintPicker = signal<{ x: number; y: number } | null>(null);
-  readonly contextBlocks = [{ id: "appearance", label: "Appearance" }, { id: "workspace", label: "Workspace" }, { id: "measurement", label: "Measurement" }] as const;
+  readonly contextBlocks = [{ id: "appearance", label: "Appearance" }, { id: "workspace", label: "Workspace" }, { id: "measurement", label: "Measurement" }, { id: "dimensions", label: "Dimensions" }] as const;
   readonly measurementAids = [{ id: "rulers", label: "Rulers" }, { id: "guides", label: "Guides" }, { id: "grid", label: "Grid" }] as const;
   readonly draggingGuideId = signal<string | null>(null);
   private guideDrag?: { axis: "vertical" | "horizontal"; pointerId: number; element: HTMLElement };
@@ -124,7 +126,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     {
       id: "drawing",
       label: "Drawing and paths",
-      families: ["pen", "pencil", "shape", "line", "text", "scissors"],
+      families: ["pen", "pencil", "shape", "line", "text", "scissors", "dimensions"],
     },
     {
       id: "paint",
@@ -247,13 +249,14 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     effect(() => {
       const config: SnapConfig = {
         zoom: editor.zoom(),
-        rulers: { enabled: preferences.snapRulers(), visible: preferences.rulersVisible(), step: preferences.rulerStep(), radius: preferences.rulerSnapRadius() },
+        rulers: { enabled: preferences.snapRulers(), visible: preferences.rulersVisible(), step: preferences.rulerStep(), radius: preferences.rulerSnapRadius(), minorStep: preferences.rulerMinorStep(), majorEnabled: preferences.snapRulerMajor(), minorEnabled: preferences.snapRulerMinor() },
         grid: { enabled: preferences.snapGrid(), visible: preferences.gridVisible(), step: preferences.gridSize(), radius: preferences.gridSnapRadius() },
         guides: { enabled: preferences.snapGuides(), visible: preferences.guidesVisible(), radius: preferences.guideSnapRadius(), items: editor.document().layers.filter(layer => layer.guide && layer.visible && layer.id !== this.draggingGuideId()).map(layer => ({ axis: layer.guide === "vertical" ? "x" as const : "y" as const, position: layer.guide === "vertical" ? layer.x : layer.y })) },
       };
       editor.snapConfig.set(config);
     });
     effect(() => { editor.lastAreaSelection.set(preferences.lastAreaSelection()); });
+    effect(() => { editor.dimensionsVisible.set(preferences.dimensionsVisible()); editor.setDimensionsLocked(preferences.dimensionsLocked()); editor.dimensionsSnap.set(preferences.dimensionsSnap()); editor.dimensionSnapRadius.set(preferences.dimensionSnapRadius()); this.schedule(); });
     effect(() => { editor.setGuidesLocked(preferences.guidesLocked()); });
     effect(() => {
       editor.snapAngle.set(preferences.snapAngle());
@@ -264,6 +267,8 @@ export class AppComponent implements AfterViewInit, OnDestroy {
       editor.selectedIds();
       editor.revision();
       editor.areaSelection();
+      editor.dimensionDraft();
+      editor.dimensionSnapTarget();
       editor.zoom();
       editor.tool();
       this.temporarySelect();
@@ -308,6 +313,11 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     const context = this.contextMenu();
     if (!context) return [];
     const definitions: Record<ContextAction, { label: string; section: string; command?: string }> = {
+      displacement: { label: "Enter displacement", section: "transform", command: "displacement" },
+      rotation: { label: "Enter rotation", section: "transform", command: "rotation" },
+      group: { label: "Group", section: "group", command: "group" },
+      ungroup: { label: "Ungroup", section: "group", command: "ungroup" },
+      regroup: { label: "Regroup", section: "group", command: "regroup" },
       hide: { label: "Hide", section: "visibility" },
       show: { label: "Show", section: "visibility" },
       backward: { label: "Send backward", section: "order" },
@@ -332,6 +342,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     const context = this.contextMenu();
     const enabled = context && this.contextEntries().some(entry => entry.id === action && !entry.disabled);
     this.dismissContext();
+    if (context && enabled && (action === "displacement" || action === "rotation")) { this.openTransformDialog(action); return; }
     if (context && enabled) this.editor.runContextAction(context.target, action as ContextAction);
   }
   dismissContext() { this.contextMenu?.set(null); }
@@ -339,11 +350,11 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   textLayout(layer: Layer): TextLayoutOptions { return { ...defaultTextLayout, ...layer.textLayout }; }
   setTextSizing(mode: TextLayoutOptions["sizing"]) {
     const layer = this.editor.selected();
-    if (layer?.kind === "text") this.editor.updateTextLayout({ sizing: this.textLayout(layer).sizing === mode ? "fixed" : mode });
+    if (layer && (layer.kind === "text" || layer.dimension)) this.editor.updateTextLayout({ sizing: this.textLayout(layer).sizing === mode ? "fixed" : mode });
   }
   toggleTextOption(key: "wrap" | "hyphenate" | "fit") {
     const layer = this.editor.selected();
-    if (layer?.kind !== "text") return;
+    if (!layer || (layer.kind !== "text" && !layer.dimension)) return;
     const layout = this.textLayout(layer), enabled = !layout[key];
     this.editor.updateTextLayout(key === "wrap" && enabled && ["width", "content"].includes(layout.sizing) ? { wrap: true, sizing: "fixed" } : { [key]: enabled });
   }
@@ -357,7 +368,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   }
   toggleTextStyle(key: "fontStyle" | "decoration", value: "italic" | "underline" | "line-through") {
     const layer = this.editor.selected();
-    if (layer?.kind !== "text") return;
+    if (!layer || (layer.kind !== "text" && !layer.dimension)) return;
     const current = this.typography(layer);
     if (key === "fontStyle") this.editor.updateTypography({ fontStyle: current.fontStyle === "italic" ? "normal" : "italic" });
     else this.editor.updateTypography({ decoration: current.decoration === value ? "none" : value as "underline" | "line-through" });
@@ -368,6 +379,45 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   }
   inlineMetrics(layer: Layer) { return this.editor.textMetrics(layer); }
   usesStyleDefaults() { return ["eyedropper", "paintBucket"].includes(this.editor.tool()); }
+  readonly transformDialog = signal<"displacement" | "rotation" | null>(null);
+  transformX = 0; transformY = 0; numericAngle = 0; transformCenterX = 0; transformCenterY = 0;
+  openTransformDialog(kind: "displacement" | "rotation") {
+    if (!this.editor.selectedLayers().length) return;
+    const center = this.editor.transformationCenter();
+    this.transformX = 0; this.transformY = 0; this.numericAngle = 0;
+    this.transformCenterX = this.displayDistance(center.x); this.transformCenterY = this.displayDistance(center.y);
+    this.transformDialog.set(kind);
+    setTimeout(() => window.document.querySelector<HTMLInputElement>(".transform-dialog input")?.focus());
+  }
+  applyNumericTransform() {
+    const unit = this.preferences.distanceUnit();
+    const applied = this.transformDialog() === "displacement" ? this.editor.displaceSelection(toPixels(this.transformX, unit), toPixels(this.transformY, unit)) : this.editor.rotateSelection(this.numericAngle, { x: toPixels(this.transformCenterX, unit), y: toPixels(this.transformCenterY, unit) });
+    if (applied) this.transformDialog.set(null);
+    else this.notify(new Error("The transformation cannot be applied to this selection."));
+  }
+  setDimensionLabelSize(key: "width" | "height", event: Event) {
+    const layer = this.editor.selected(); if (!layer?.dimension) return;
+    const value = this.distanceInput(event); if (!Number.isFinite(value) || value < 1 || value > 1000000) return;
+    this.editor.updateDimension({labelSize: { width: layer.dimension.labelSize?.width ?? layer.width, height: layer.dimension.labelSize?.height ?? layer.height, [key]: value }});
+  }
+  readonly lineEndSides = ["start", "end"] as const;
+  readonly lineEndKinds = ["none", "arrow", "openArrow", "triangle", "dot", "slash", "cross"] as const;
+  readonly lineEndLabels = { none: "No ending", arrow: "Arrow", openArrow: "Open arrow", triangle: "Triangle", dot: "Round dot", slash: "Diagonal tick", cross: "Cross" };
+  paintLineEnds(): LineEnds { const layer = this.editor.selected(); return !this.usesStyleDefaults() && layer ? layer.lineEnds ?? defaultLineEnds : this.editor.lineEnds(); }
+  setLineEnd(side: "start" | "end", patch: Partial<LineEnd>) { this.editor.setLineEnds({ [side]: { ...this.paintLineEnds()[side], ...patch } }); }
+  setLineEndSize(side: "start" | "end", event: Event) { const size = this.distanceInput(event); if (Number.isFinite(size) && size > 0 && size <= 1000) this.setLineEnd(side, { size }); }
+  setDimensionFormat(key: keyof DimensionFormat, event: Event) {
+    const dimension = this.editor.selected()?.dimension; if (!dimension) return;
+    const value = key === "unit" || key === "separator" ? this.text(event) : this.number(event);
+    this.editor.updateDimension({ format: { ...dimension.format, [key]: value } });
+  }
+  setDimensionExtension(key: "stroke" | "strokeWidth" | "gap" | "overshoot", event: Event) {
+    const dimension = this.editor.selected()?.dimension; if (!dimension) return;
+    this.editor.updateDimension({ extension: { ...dimension.extension, [key]: key === "stroke" ? this.text(event) : this.distanceInput(event) } });
+  }
+  setLabelText(event: Event) { if (this.editor.selected()?.dimension) this.editor.updateDimension({ text: this.text(event) }); else this.editor.updateLayer({ text: this.text(event) }); }
+  dimensionLabelPosition(layer: Layer) { return dimensionGeometry(layer).labelPosition; }
+  dimensionDraftPath() { const draft = this.editor.dimensionDraft(); return draft ? [...draft.points, draft.cursor].map((p, i) => `${i ? "L" : "M"}${p.x},${p.y}`).join(" ") : ""; }
   paintStrokeStyle(): StrokeStyle {
     const layer = this.editor.selected();
     return !this.usesStyleDefaults() && layer && !layer.guide && layer.kind !== "image" ? { ...defaultStrokeStyle, ...layer.strokeStyle } : this.editor.strokeStyle();
@@ -428,7 +478,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   toggleSnap(id: "rulers" | "guides" | "grid") { this.preferences.setMeasurement(id === "rulers" ? "snapRulers" : id === "guides" ? "snapGuides" : "snapGrid", !this.aidSnaps(id)); }
   snapRadius(id: "rulers" | "guides" | "grid") { return id === "rulers" ? this.preferences.rulerSnapRadius() : id === "guides" ? this.preferences.guideSnapRadius() : this.preferences.gridSnapRadius(); }
   setSnapRadius(id: "rulers" | "guides" | "grid", value: number) { this.preferences.setMeasurement(id === "rulers" ? "rulerSnapRadius" : id === "guides" ? "guideSnapRadius" : "gridSnapRadius", value); }
-  rulerTicks(axis: "vertical" | "horizontal") { return makeRulerTicks(axis === "vertical" ? this.editor.document().height : this.editor.document().width, this.editor.zoom(), this.preferences.distanceUnit(), this.preferences.rulerStep()); }
+  rulerTicks(axis: "vertical" | "horizontal") { return makeRulerTicks(axis === "vertical" ? this.editor.document().height : this.editor.document().width, this.editor.zoom(), this.preferences.distanceUnit(), this.preferences.rulerStep(), this.preferences.rulerMinorStep()); }
   gridSpacing() { return this.preferences.gridSize() * this.editor.zoom(); }
   visibleGuides() { return this.editor.document().layers.filter((layer) => layer.guide && layer.visible); }
   startGuide(event: PointerEvent, axis: "vertical" | "horizontal", id?: string) {
@@ -608,8 +658,9 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     this.editor.cancel();
   }
   private renderDocument() {
-    const doc = this.editor.previewDocument(),
-      id = this.textEditing();
+    const preview = this.editor.previewDocument();
+    const doc = this.preferences.dimensionsVisible() ? preview : { ...preview, layers: preview.layers.filter(layer => !layer.dimension) };
+    const id = this.textEditing();
     return id
       ? {
           ...doc,
@@ -759,9 +810,11 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   runCommand(id: string) {
     this.flyout.set(null);
     if (!this.commandEnabled(id)) return;
+    if (id === "displacement" || id === "rotation") { this.openTransformDialog(id); return; }
     if (id === "makeBlend") { this.editor.createBlend(this.blendStepCount(), this.currentBlendEasing()); return; }
     if (id === "expandBlend") { this.editor.expandBlend(); return; }
     if (id === "releaseBlend") { this.editor.releaseBlend(); return; }
+    if (id === "regroup") { this.editor.regroup(); return; }
     if (id === "group" || id === "ungroup") {
       this.editor.group(id === "ungroup");
       return;
@@ -1170,6 +1223,10 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     );
   }
   @HostListener("window:keydown", ["$event"]) key(event: KeyboardEvent) {
+    if (this.transformDialog?.()) {
+      if (event.key === "Escape") { this.transformDialog.set(null); event.preventDefault(); }
+      return;
+    }
     if (this.contextMenu?.()) {
       if (event.key === "Escape") { this.dismissContext(); event.preventDefault(); }
       return;

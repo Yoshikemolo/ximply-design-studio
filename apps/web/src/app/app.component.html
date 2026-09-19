@@ -149,6 +149,12 @@
         }
       </section>
     }
+    @if (preferences.layoutBlocks().dimensions) {
+      <section class="context-block measurement-controls" [attr.aria-label]="t('Dimensions')">
+        <button [class.active]="preferences.dimensionsLocked()" [attr.aria-pressed]="preferences.dimensionsLocked()" [title]="t(preferences.dimensionsLocked() ? 'Unlock dimensions' : 'Lock dimensions')" [attr.aria-label]="t(preferences.dimensionsLocked() ? 'Unlock dimensions' : 'Lock dimensions')" (click)="preferences.setMeasurement('dimensionsLocked', !preferences.dimensionsLocked())"><img [src]="'/assets/icons/' + (preferences.dimensionsLocked() ? 'lock' : 'unlock') + '.svg'" alt="" /></button>
+        <div class="aid-pair"><button [class.active]="preferences.dimensionsVisible()" [attr.aria-pressed]="preferences.dimensionsVisible()" [title]="t('Show dimensions')" [attr.aria-label]="t('Show dimensions')" (click)="preferences.setMeasurement('dimensionsVisible', !preferences.dimensionsVisible())"><img src="/assets/icons/dimension-linear.svg" alt="" /></button><button class="magnet-toggle" [class.active]="preferences.dimensionsSnap()" [attr.aria-pressed]="preferences.dimensionsSnap()" [title]="t('Snap dimension points')" [attr.aria-label]="t('Snap dimension points')" (click)="preferences.setMeasurement('dimensionsSnap', !preferences.dimensionsSnap())"><img src="/assets/icons/magnet.svg" alt="" /></button></div>
+      </section>
+    }
   </div>
   <main class="workspace" [class.no-panels]="!panels()">
     <aside class="toolrail" [attr.aria-label]="t('Drawing tools')">
@@ -287,11 +293,11 @@
             @if (preferences.rulersVisible()) {
               @let marker = rulerCursorPoint();
               <div class="canvas-ruler horizontal-ruler" [attr.aria-label]="t('Drag to create horizontal guide')" (pointerdown)="startGuide($event, 'horizontal')" (pointermove)="moveGuide($event)" (pointerup)="finishGuide($event)" (pointercancel)="cancelGuide()" (lostpointercapture)="cancelGuide()">
-                @for (tick of rulerTicks('horizontal'); track tick.position) {<span class="ruler-tick" [style.left.px]="tick.position * editor.zoom()">{{ tick.label }}</span>}
+                @for (tick of rulerTicks('horizontal'); track tick.position) {<span class="ruler-tick" [class.minor]="!tick.major" [style.left.px]="tick.position * editor.zoom()">{{ tick.label }}</span>}
                 @if (marker) {<span class="ruler-cursor-marker" [style.left.px]="marker.x" aria-hidden="true"></span>}
               </div>
               <div class="canvas-ruler vertical-ruler" [attr.aria-label]="t('Drag to create vertical guide')" (pointerdown)="startGuide($event, 'vertical')" (pointermove)="moveGuide($event)" (pointerup)="finishGuide($event)" (pointercancel)="cancelGuide()" (lostpointercapture)="cancelGuide()">
-                @for (tick of rulerTicks('vertical'); track tick.position) {<span class="ruler-tick" [style.top.px]="tick.position * editor.zoom()">{{ tick.label }}</span>}
+                @for (tick of rulerTicks('vertical'); track tick.position) {<span class="ruler-tick" [class.minor]="!tick.major" [style.top.px]="tick.position * editor.zoom()">{{ tick.label }}</span>}
                 @if (marker) {<span class="ruler-cursor-marker" [style.top.px]="marker.y" aria-hidden="true"></span>}
               </div>
               <span class="ruler-origin">{{ preferences.distanceUnit() }}</span>
@@ -314,6 +320,13 @@
               (pointercancel)="pointerCancel()"
               (lostpointercapture)="pointerCancel()"
             ></canvas>
+            @if (editor.dimensionDraft() || editor.dimensionSnapTarget() || (editor.selected()?.dimension && preferences.dimensionsVisible())) {
+              <svg class="dimension-overlay" [attr.viewBox]="'0 0 ' + editor.document().width + ' ' + editor.document().height" aria-hidden="true">
+                @if (editor.dimensionDraft()) {<path [attr.d]="dimensionDraftPath()" vector-effect="non-scaling-stroke"></path>}
+                @if (editor.dimensionSnapTarget(); as target) {<circle [attr.cx]="target.point.x" [attr.cy]="target.point.y" [attr.r]="5 / editor.zoom()" vector-effect="non-scaling-stroke"></circle>}
+                @if (editor.selected(); as selected) {@if (selected.dimension && preferences.dimensionsVisible() && !preferences.dimensionsLocked()) {@let position = dimensionLabelPosition(selected);<rect [attr.x]="position.x - 4 / editor.zoom()" [attr.y]="position.y - 4 / editor.zoom()" [attr.width]="8 / editor.zoom()" [attr.height]="8 / editor.zoom()" vector-effect="non-scaling-stroke"></rect>}}
+              </svg>
+            }
             @if (editor.areaSelection()) {
               <svg class="area-selection-overlay" [attr.viewBox]="'0 0 ' + editor.document().width + ' ' + editor.document().height" aria-hidden="true"><path [attr.d]="areaSelectionPath()" vector-effect="non-scaling-stroke"></path></svg>
             }
@@ -740,11 +753,26 @@
                       }
                     </select></label
                   >
-                  @if (layer.kind === "text") {
+                  @if (layer.dimension; as dimension) {
+                    <div class="section-label">{{ t('Dimensions') }}</div>
+                    <p class="typography-note">{{ t('Drag the label handle to reposition the dimension text.') }}</p>
+                    <div class="property-grid">
+                      <label>{{ t('Measurement scale') }}<input type="number" min="0.000001" max="1000000" step="any" [value]="dimension.format.scale" (change)="setDimensionFormat('scale', $event)" /></label>
+                      <label>{{ t('Units') }}<select [disabled]="dimension.kind === 'angular'" [value]="dimension.format.unit" (change)="setDimensionFormat('unit', $event)">@for (unit of units; track unit) {<option [value]="unit">{{ unit }}</option>}</select></label>
+                      <label>{{ t('Decimal places') }}<input type="number" min="0" max="8" step="1" [value]="dimension.format.decimals" (change)="setDimensionFormat('decimals', $event)" /></label>
+                      <label>{{ t('Decimal separator') }}<select [value]="dimension.format.separator" (change)="setDimensionFormat('separator', $event)"><option value=".">.</option><option value=",">,</option></select></label>
+                    </div>
+                    <div class="property-grid"><label>{{ t('Label frame width') }}<input type="number" [min]="displayDistance(1)" step="any" [value]="displayDistance(dimension.labelSize?.width ?? layer.width)" (change)="setDimensionLabelSize('width', $event)" /></label><label>{{ t('Label frame height') }}<input type="number" [min]="displayDistance(1)" step="any" [value]="displayDistance(dimension.labelSize?.height ?? layer.height)" (change)="setDimensionLabelSize('height', $event)" /></label></div>
+                    <div class="section-label">{{ t('Extension lines') }}</div>
+                    <label class="wide-label">{{ t('Color') }}<input type="text" maxlength="9" [value]="dimension.extension.stroke" (change)="setDimensionExtension('stroke', $event)" [title]="t('Use a hex color with optional alpha, or none.')" /></label>
+                    <div class="property-grid">@for (field of ['strokeWidth', 'gap', 'overshoot']; track field) {<label>{{ t(field === 'strokeWidth' ? 'Width' : field === 'gap' ? 'Extension gap' : 'Extension overshoot') }}<input type="number" min="0" [max]="displayDistance(1000)" step="any" [value]="displayDistance($any(dimension.extension)[field])" (change)="setDimensionExtension($any(field), $event)" /></label>}</div>
+                    <p class="typography-note">{{ t('Leave text empty to display the measured value. Angular dimensions use degrees.') }}</p>
+                  }
+                  @if (layer.kind === "text" || layer.dimension) {
                     @let type = typography(layer);
                     @let layout = textLayout(layer);
                     <div class="section-label">{{ t("Text") }} · {{ preferences.fontUnit() }}</div>
-                    <textarea maxlength="2000" [value]="layer.text" (change)="editor.updateLayer({ text: text($event) })" [attr.aria-label]="t('Text content')"></textarea>
+                    <textarea maxlength="2000" [value]="layer.dimension ? layer.dimension.text : layer.text" (change)="setLabelText($event)" [attr.aria-label]="t('Text content')"></textarea>
                     <div class="typography-actions" role="group" [attr.aria-label]="t('Text frame')">
                       @for (action of textSizingActions; track action.id) {
                         <button [class.active]="layout.sizing === action.id" [attr.aria-pressed]="layout.sizing === action.id" [title]="t(action.label) + ' · ' + t(action.hint)" [attr.aria-label]="t(action.label)" (click)="setTextSizing(action.id)"><img [src]="'/assets/icons/' + action.icon + '.svg'" alt="" /></button>
@@ -1176,7 +1204,11 @@
       <div class="measurement-settings">
         <label>{{ t("Distance units") }}<select [value]="preferences.distanceUnit()" (change)="setUnit('distanceUnit', $event)">@for (unit of units; track unit) {<option [value]="unit">{{ unit }}</option>}</select></label>
         <label>{{ t("Font units") }}<select [value]="preferences.fontUnit()" (change)="setUnit('fontUnit', $event)">@for (unit of fontUnits; track unit) {<option [value]="unit">{{ unit }}</option>}</select></label>
-        <label>{{ t("Ruler interval") }} ({{ preferences.distanceUnit() }})<input type="number" [min]="displayDistance(0.01)" step="any" [value]="displayDistance(preferences.rulerStep())" (change)="preferences.setMeasurement('rulerStep', distanceInput($event))" /></label>
+        <label>{{ t("Major ruler interval") }} ({{ preferences.distanceUnit() }})<input type="number" [min]="displayDistance(0.01)" step="any" [value]="displayDistance(preferences.rulerStep())" (change)="preferences.setMeasurement('rulerStep', distanceInput($event))" /></label>
+        <label>{{ t('Minor ruler interval') }} ({{ preferences.distanceUnit() }})<input type="number" [min]="displayDistance(0.01)" step="any" [value]="displayDistance(preferences.rulerMinorStep())" (change)="preferences.setMeasurement('rulerMinorStep', distanceInput($event))" /></label>
+        <label>{{ t('Snap major ruler ticks') }}<input type="checkbox" [checked]="preferences.snapRulerMajor()" (change)="preferences.setMeasurement('snapRulerMajor', !preferences.snapRulerMajor())" /></label>
+        <label>{{ t('Snap minor ruler ticks') }}<input type="checkbox" [checked]="preferences.snapRulerMinor()" (change)="preferences.setMeasurement('snapRulerMinor', !preferences.snapRulerMinor())" /></label>
+        <label>{{ t('Snap radius') }} · {{ t('Dimensions') }} (px)<input type="number" min="0" max="100" [value]="preferences.dimensionSnapRadius()" (change)="preferences.setMeasurement('dimensionSnapRadius', number($event))" /></label>
         <label>{{ t("Grid spacing") }} ({{ preferences.distanceUnit() }})<input type="number" [min]="displayDistance(0.01)" step="any" [value]="displayDistance(preferences.gridSize())" (change)="preferences.setMeasurement('gridSize', distanceInput($event))" /></label>
         @for (aid of measurementAids; track aid.id) {<label>{{ t('Snap radius') }} · {{ t(aid.label) }} (px)<input type="number" min="0" max="100" [value]="snapRadius(aid.id)" (change)="setSnapRadius(aid.id, number($event))" /></label>}
       </div>
@@ -1283,6 +1315,16 @@
           }
         </div></fieldset>
       }
+      <fieldset class="line-ending-control"><legend>{{ t('Line endings') }}</legend>
+        <div class="ending-columns">
+          @for (side of lineEndSides; track side) {
+            @if (side === 'end') {<button class="ending-link" [class.active]="paintLineEnds().linked" [attr.aria-pressed]="paintLineEnds().linked" [title]="t('Link line endings')" [attr.aria-label]="t('Link line endings')" (click)="editor.setLineEnds({linked: !paintLineEnds().linked})"><img src="/assets/icons/chain.svg" alt="" /></button>}
+            <div><span>{{ t(side === 'start' ? 'Start' : 'End') }}</span><div class="ending-kinds">
+              @for (kind of lineEndKinds; track kind) {<button [class.active]="paintLineEnds()[side].kind === kind" [attr.aria-pressed]="paintLineEnds()[side].kind === kind" [title]="t(lineEndLabels[kind])" [attr.aria-label]="t(lineEndLabels[kind])" (click)="setLineEnd(side, {kind})"><img [src]="'/assets/icons/ending-' + kind + '.svg'" alt="" /></button>}
+            </div><label>{{ t('Size') }}<input type="number" [min]="displayDistance(0.01)" [max]="displayDistance(1000)" step="any" [value]="displayDistance(paintLineEnds()[side].size)" (change)="setLineEndSize(side, $event)" /></label><label>{{ t('Placement') }}<select [value]="paintLineEnds()[side].placement" (change)="setLineEnd(side, {placement: $any(text($event))})"><option value="tip">{{ t('Tip at endpoint') }}</option><option value="base">{{ t('Base at endpoint') }}</option></select></label></div>
+          }
+        </div>
+      </fieldset>
       <p class="stroke-style-hint">{{ t('Inside and outside alignment apply to closed outlines; open paths and text use centered strokes.') }}</p>
     }
   </section>
@@ -1290,4 +1332,17 @@
 
 @if (contextMenu(); as context) {
   <xds-context-menu [entries]="contextEntries()" [label]="t(context.target.kind === 'node' ? 'Anchor actions' : 'Object actions')" [x]="context.x" [y]="context.y" (action)="executeContext($event)" (dismiss)="dismissContext()" />
+}
+
+@if (transformDialog(); as mode) {
+  <div class="modal-backdrop"><form class="server-dialog transform-dialog" role="dialog" aria-modal="true" [attr.aria-label]="t(mode === 'displacement' ? 'Enter displacement' : 'Enter rotation')" (submit)="$event.preventDefault(); applyNumericTransform()" (keydown.escape)="transformDialog.set(null); $event.stopPropagation()">
+    <h2>{{ t(mode === 'displacement' ? 'Enter displacement' : 'Enter rotation') }}</h2>
+    @if (mode === 'displacement') {
+      <div class="property-grid"><label>X ({{ preferences.distanceUnit() }})<input type="number" step="any" name="dx" [(ngModel)]="transformX" required /></label><label>Y ({{ preferences.distanceUnit() }})<input type="number" step="any" name="dy" [(ngModel)]="transformY" required /></label></div>
+    } @else {
+      <label>{{ t('Angle') }} (°)<input type="number" step="any" name="angle" [(ngModel)]="numericAngle" required /></label>
+      <div class="property-grid"><label>{{ t('Rotation center') }} X ({{ preferences.distanceUnit() }})<input type="number" step="any" name="cx" [(ngModel)]="transformCenterX" required /></label><label>{{ t('Rotation center') }} Y ({{ preferences.distanceUnit() }})<input type="number" step="any" name="cy" [(ngModel)]="transformCenterY" required /></label></div>
+    }
+    <div class="dialog-actions"><button type="button" (click)="transformDialog.set(null)">{{ t('Cancel') }}</button><button type="submit">{{ t('Apply') }}</button></div>
+  </form></div>
 }
