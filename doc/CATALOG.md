@@ -47,6 +47,7 @@ Generated titles and paths only; authoritative content remains in each linked do
 - [REL-0006 — Drawing workbench preview](changelog/0.3.0-alpha.1.md)
 - [REL-0007 — Preview identification and menu focus fix](changelog/0.3.1-alpha.1.md)
 - [REL-0016 — Editable object blends](changelog/0.3.10-alpha.1.md)
+- [REL-0017 — Blue cursor projections on rulers](changelog/0.3.11-alpha.1.md)
 - [REL-0008 — Two-column tool rail](changelog/0.3.2-alpha.1.md)
 - [REL-0009 — Canvas cursor axes](changelog/0.3.3-alpha.1.md)
 - [REL-0010 — Bezier selection and constrained handles](changelog/0.3.4-alpha.1.md)

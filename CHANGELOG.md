@@ -5,6 +5,7 @@ Application data and bundled Markdown are generated; do not edit them.
 
 [Unreleased](doc/changelog/Unreleased.md)
 
+- [0.3.11-alpha.1 — Blue ruler markers follow the canvas cursor](doc/changelog/0.3.11-alpha.1.md)
 - [0.3.10-alpha.1 — Editable vector blends with intermediate steps, easing and expansion](doc/changelog/0.3.10-alpha.1.md)
 - [0.3.9-alpha.1 — Stroke alignment, joins, caps and scoped eyedropper/bucket tools](doc/changelog/0.3.9-alpha.1.md)
 - [0.3.8-alpha.1 — Settings category navigation with one active form panel](doc/changelog/0.3.8-alpha.1.md)

@@ -823,10 +823,15 @@ export class AppComponent implements AfterViewInit, OnDestroy {
       : (this.tools.find((t) => t.id === this.activeTool())?.icon ?? "select");
   }
   cursorAxesPoint() {
+    return this.preferences.cursorAxes() ? this.canvasCursorPosition() : null;
+  }
+  rulerCursorPoint() {
+    return this.preferences.rulersVisible() ? this.canvasCursorPosition() : null;
+  }
+  private canvasCursorPosition() {
     const cursor = this.cursorPoint();
     if (
       !cursor ||
-      !this.preferences.cursorAxes() ||
       !this.canvas ||
       this.textEditing() ||
       this.settings() ||

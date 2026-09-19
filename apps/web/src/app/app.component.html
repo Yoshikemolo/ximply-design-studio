@@ -285,11 +285,14 @@
             [style.height.px]="editor.document().height * editor.zoom()"
           >
             @if (preferences.rulersVisible()) {
+              @let marker = rulerCursorPoint();
               <div class="canvas-ruler horizontal-ruler" [attr.aria-label]="t('Drag to create horizontal guide')" (pointerdown)="startGuide($event, 'horizontal')" (pointermove)="moveGuide($event)" (pointerup)="finishGuide($event)" (pointercancel)="cancelGuide()" (lostpointercapture)="cancelGuide()">
                 @for (tick of rulerTicks('horizontal'); track tick.position) {<span class="ruler-tick" [style.left.px]="tick.position * editor.zoom()">{{ tick.label }}</span>}
+                @if (marker) {<span class="ruler-cursor-marker" [style.left.px]="marker.x" aria-hidden="true"></span>}
               </div>
               <div class="canvas-ruler vertical-ruler" [attr.aria-label]="t('Drag to create vertical guide')" (pointerdown)="startGuide($event, 'vertical')" (pointermove)="moveGuide($event)" (pointerup)="finishGuide($event)" (pointercancel)="cancelGuide()" (lostpointercapture)="cancelGuide()">
                 @for (tick of rulerTicks('vertical'); track tick.position) {<span class="ruler-tick" [style.top.px]="tick.position * editor.zoom()">{{ tick.label }}</span>}
+                @if (marker) {<span class="ruler-cursor-marker" [style.top.px]="marker.y" aria-hidden="true"></span>}
               </div>
               <span class="ruler-origin">{{ preferences.distanceUnit() }}</span>
             }

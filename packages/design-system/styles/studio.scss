@@ -1465,3 +1465,8 @@ textarea,
 .blend-hint { color: var(--muted); font-size: 10px; line-height: 1.5; }
 .layer-exact-select { width: 24px; flex-shrink: 0; padding: 4px; }
 .layer-exact-select img { width: 15px; height: 15px; }
+
+/* Cursor projections stay in the same displayed coordinate space as ruler ticks. */
+.ruler-cursor-marker { position: absolute; z-index: 1; background: #258bff; pointer-events: none; }
+.horizontal-ruler .ruler-cursor-marker { top: 0; bottom: 0; width: 2px; transform: translateX(-1px); }
+.vertical-ruler .ruler-cursor-marker { left: 0; right: 0; height: 2px; transform: translateY(-1px); }

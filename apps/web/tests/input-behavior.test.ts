@@ -270,6 +270,25 @@ describe("inline editing and canvas-only zoom", () => {
     expect(app.textTransform(e.selected()!)).toBe("rotate(30deg) skewX(20deg) scale(-1, 1)");
   });
 
+  it("projects the cursor onto visible rulers independently of canvas axes", () => {
+    const app = component();
+    let rect = { left: 100, top: 60, width: 600, height: 400 };
+    Object.assign(app, { canvas: { nativeElement: { getBoundingClientRect: () => rect } } });
+    app.preferences.toggleCursorAxes(false);
+    app.preferences.setMeasurement("rulersVisible", true);
+    app.cursorPoint.set({ x: 250, y: 160 });
+    expect(app.cursorAxesPoint()).toBeNull();
+    expect(app.rulerCursorPoint()).toEqual({ x: 150, y: 100 });
+    app.editor.zoom.set(2);
+    rect = { left: 40, top: 20, width: 2400, height: 1600 };
+    expect(app.rulerCursorPoint()).toEqual({ x: 210, y: 140 });
+    app.preferences.setMeasurement("rulersVisible", false);
+    expect(app.rulerCursorPoint()).toBeNull();
+    app.preferences.setMeasurement("rulersVisible", true);
+    app.cursorPoint.set(null);
+    expect(app.rulerCursorPoint()).toBeNull();
+  });
+
   it("positions canvas axes in displayed pixels across zoom and scroll offsets", () => {
     const app = component();
     let rect = { left: 100, top: 60, width: 600, height: 400 };
