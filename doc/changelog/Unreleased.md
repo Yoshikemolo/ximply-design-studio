@@ -32,7 +32,7 @@ None.
 
 ## Fixes
 
-None.
+- Generated documentation navigation is identical on Windows and POSIX hosts, with forward-slash links and case-sensitive document order.
 
 ## Security
 

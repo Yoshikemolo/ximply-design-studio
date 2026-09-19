@@ -29,7 +29,7 @@ def read_document(path: Path) -> tuple[dict, str]:
 
 def documents(root: Path) -> dict:
     result = {}
-    for path in sorted((root / 'doc').rglob('*.md')):
+    for path in sorted((root / 'doc').rglob('*.md'), key=Path.as_posix):
         if is_source(path, root):
             metadata, body = read_document(path)
             identifier = metadata['id']
