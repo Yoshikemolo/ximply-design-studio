@@ -257,7 +257,8 @@
         "packages/domain/tests/procedural-independent.test.ts",
         "apps/web/tests/procedural-independent.test.ts",
         "packages/renderer/tests/procedural.test.ts",
-        "packages/renderer/tests/dimensions.test.ts"
+        "packages/renderer/tests/dimensions.test.ts",
+        "apps/web/tests/dimension-pointer.test.ts"
       ],
       "evidence": [
         "doc/implementation/PLAN-0002-0001.md",

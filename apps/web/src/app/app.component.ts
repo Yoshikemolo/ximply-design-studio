@@ -641,10 +641,13 @@ export class AppComponent implements AfterViewInit, OnDestroy {
         rect.height,
     };
   }
+  /** True between a canvas press and its release; a capture lost afterwards is not a cancellation. */
+  private pointerActive = false;
   pointerDown(event: PointerEvent) {
     if (event.button !== 0) return;
     event.preventDefault();
     this.canvas!.nativeElement.setPointerCapture(event.pointerId);
+    this.pointerActive = true;
     this.commitText();
     this.temporarySelect.set(event.ctrlKey);
     const tool = this.activeTool();
@@ -690,10 +693,16 @@ export class AppComponent implements AfterViewInit, OnDestroy {
       });
   }
   pointerUp() {
+    this.pointerActive = false;
     this.pan = undefined;
     this.editor.end();
   }
+  /** Browsers release capture after every pointerup; only an interrupted press cancels the gesture. */
+  pointerLost() {
+    if (this.pointerActive) this.pointerCancel();
+  }
   pointerCancel() {
+    this.pointerActive = false;
     if (this.guideDrag) this.cancelGuide();
     this.pan = undefined;
     this.editor.cancel();

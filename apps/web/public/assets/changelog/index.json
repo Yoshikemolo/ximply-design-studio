@@ -53,6 +53,10 @@
         },
         {
           "type": "Fix",
+          "description": "Keep each fixed dimension point after a click: the canvas no longer treats the pointer capture released after every click as a cancellation, so the third click creates the dimension."
+        },
+        {
+          "type": "Fix",
           "description": "Replace the native browser confirmation used by New document."
         },
         {
