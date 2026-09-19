@@ -205,4 +205,62 @@ describe("inline editing and canvas-only zoom", () => {
     expect(app.textTransform(e.selected()!)).toBe("rotate(30deg) skewX(20deg) scale(-1, 1)");
   });
 
+  it("positions canvas axes in displayed pixels across zoom and scroll offsets", () => {
+    const app = component();
+    let rect = { left: 100, top: 60, width: 600, height: 400 };
+    Object.assign(app, { canvas: { nativeElement: { getBoundingClientRect: () => rect } } });
+    app.editor.zoom.set(0.5);
+    app.cursorPoint.set({ x: 250, y: 160 });
+    expect(app.cursorAxesPoint()).toEqual({ x: 150, y: 100 });
+    app.editor.zoom.set(2);
+    rect = { left: 40, top: 20, width: 2400, height: 1600 };
+    app.refreshCursorPosition();
+    expect(app.cursorAxesPoint()).toEqual({ x: 210, y: 140 });
+    expect(app.cursorPoint()).toEqual({ x: 250, y: 160 });
+  });
+  it("hides canvas axes outside its bounds, during editing and when disabled", () => {
+    const app = component();
+    Object.assign(app, { canvas: { nativeElement: {
+      getBoundingClientRect: () => ({ left: 100, top: 60, width: 600, height: 400 }),
+    } } });
+    for (const point of [{ x: 99, y: 80 }, { x: 150, y: 59 }, { x: 700, y: 80 }, { x: 150, y: 460 }]) {
+      app.cursorPoint.set(point);
+      expect(app.cursorAxesPoint()).toBeNull();
+    }
+    app.cursorPoint.set({ x: 100, y: 60 });
+    expect(app.cursorAxesPoint()).toEqual({ x: 0, y: 0 });
+    app.textEditing.set("text");
+    expect(app.cursorAxesPoint()).toBeNull();
+    app.textEditing.set(null);
+    app.settings.set(true);
+    expect(app.cursorAxesPoint()).toBeNull();
+    app.settings.set(false);
+    app.preferences.toggleCursorAxes(false);
+    expect(app.cursorAxesPoint()).toBeNull();
+    expect(app.preferences.cursorIcon()).toBe(true);
+    app.preferences.toggleCursorAxes(true);
+    expect(app.toolCursor()).toBe("crosshair");
+    app.cursorPoint.set(null);
+    expect(app.cursorAxesPoint()).toBeNull();
+  });
+
+  it("hides captured-pointer axes outside the visible viewport and over scrollbars", () => {
+    const app = component();
+    Object.assign(app, {
+      canvas: { nativeElement: {
+        getBoundingClientRect: () => ({ left: -400, top: -200, width: 2400, height: 1600 }),
+      } },
+      viewport: { nativeElement: {
+        getBoundingClientRect: () => ({ left: 100, top: 60, width: 815, height: 615 }),
+        clientLeft: 0, clientTop: 0, clientWidth: 800, clientHeight: 600,
+      } },
+    });
+    for (const point of [{ x: 80, y: 100 }, { x: 400, y: 50 }, { x: 905, y: 100 }, { x: 400, y: 665 }]) {
+      app.cursorPoint.set(point);
+      expect(app.cursorAxesPoint()).toBeNull();
+    }
+    app.cursorPoint.set({ x: 400, y: 200 });
+    expect(app.cursorAxesPoint()).toEqual({ x: 800, y: 400 });
+  });
+
 });

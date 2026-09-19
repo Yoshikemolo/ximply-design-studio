@@ -8,6 +8,7 @@ import {
 export class PreferencesService {
   readonly bindings = signal<ShortcutMap>(defaultShortcuts());
   readonly cursorIcon = signal(true);
+  readonly cursorAxes = signal(true);
   readonly snapAngle = signal(45);
   readonly error = signal("");
   constructor() {
@@ -19,6 +20,12 @@ export class PreferencesService {
           throw new Error("Invalid shortcut settings");
         this.bindings.set(validateShortcuts(saved.bindings));
         this.cursorIcon.set(saved.cursorIcon);
+        if (
+          saved.cursorAxes !== undefined &&
+          typeof saved.cursorAxes !== "boolean"
+        )
+          throw new Error("Invalid cursor axes setting");
+        this.cursorAxes.set(saved.cursorAxes ?? true);
         if (saved.snapAngle !== undefined) {
           if (
             !Number.isFinite(saved.snapAngle) ||
@@ -32,6 +39,7 @@ export class PreferencesService {
     } catch {
       this.bindings.set(defaultShortcuts());
       this.cursorIcon.set(true);
+      this.cursorAxes.set(true);
       this.snapAngle.set(45);
       this.error.set("Invalid saved settings. Defaults restored.");
     }
@@ -54,6 +62,15 @@ export class PreferencesService {
     try {
       this.persist(this.bindings(), enabled);
       this.cursorIcon.set(enabled);
+      this.error.set("");
+    } catch {
+      this.error.set("Settings could not be saved.");
+    }
+  }
+  toggleCursorAxes(enabled: boolean) {
+    try {
+      this.persist(this.bindings(), this.cursorIcon(), this.snapAngle(), enabled);
+      this.cursorAxes.set(enabled);
       this.error.set("");
     } catch {
       this.error.set("Settings could not be saved.");
@@ -86,10 +103,11 @@ export class PreferencesService {
     bindings: ShortcutMap,
     cursorIcon: boolean,
     snapAngle = this.snapAngle(),
+    cursorAxes = this.cursorAxes(),
   ) {
     localStorage.setItem(
       "xds-input-settings",
-      JSON.stringify({ version: 1, bindings, cursorIcon, snapAngle }),
+      JSON.stringify({ version: 1, bindings, cursorIcon, snapAngle, cursorAxes }),
     );
   }
 }

@@ -496,7 +496,44 @@ export class AppComponent implements AfterViewInit, OnDestroy {
       ? "hand"
       : (this.tools.find((t) => t.id === this.activeTool())?.icon ?? "select");
   }
+  cursorAxesPoint() {
+    const cursor = this.cursorPoint();
+    if (
+      !cursor ||
+      !this.preferences.cursorAxes() ||
+      !this.canvas ||
+      this.textEditing() ||
+      this.settings() ||
+      this.about() ||
+      this.dialog() ||
+      this.spatial()
+    )
+      return null;
+    const viewport = this.viewport?.nativeElement;
+    if (viewport) {
+      const bounds = viewport.getBoundingClientRect();
+      const left = bounds.left + viewport.clientLeft;
+      const top = bounds.top + viewport.clientTop;
+      if (
+        cursor.x < left ||
+        cursor.y < top ||
+        cursor.x >= left + viewport.clientWidth ||
+        cursor.y >= top + viewport.clientHeight
+      )
+        return null;
+    }
+    const rect = this.canvas.nativeElement.getBoundingClientRect();
+    const x = cursor.x - rect.left;
+    const y = cursor.y - rect.top;
+    return x >= 0 && y >= 0 && x < rect.width && y < rect.height
+      ? { x, y }
+      : null;
+  }
+  refreshCursorPosition() {
+    this.cursorPoint.update((cursor) => (cursor ? { ...cursor } : null));
+  }
   toolCursor() {
+    if (this.preferences.cursorAxes()) return "crosshair";
     return this.temporaryPan() || this.activeTool() === "hand"
       ? "grab"
       : this.activeTool() === "text"

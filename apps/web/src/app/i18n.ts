@@ -243,6 +243,7 @@ const ES: Record<string, string> = {
   "Painting and symbols": "Pintura y símbolos",
   "Transform and arrange": "Transformar y organizar",
   "Canvas navigation": "Navegación del lienzo",
+  "Show full canvas cursor axes": "Mostrar los ejes del cursor en todo el lienzo",
 };
 export function translate(key: string, locale: string) {
   return locale === "es" ? (ES[key] ?? key) : key;

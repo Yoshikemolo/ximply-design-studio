@@ -43,6 +43,7 @@ Generated titles and paths only; authoritative content remains in each linked do
 - [REL-0006 — Drawing workbench preview](changelog/0.3.0-alpha.1.md)
 - [REL-0007 — Preview identification and menu focus fix](changelog/0.3.1-alpha.1.md)
 - [REL-0008 — Two-column tool rail](changelog/0.3.2-alpha.1.md)
+- [REL-0009 — Canvas cursor axes](changelog/0.3.3-alpha.1.md)
 - [REL-0003 — Pending changes](changelog/Unreleased.md)
 - [DOC-ROOT-0002 — Code and contract map](code-map.md)
 - [DOC-ENGINEERING-0001 — Documentation navigation migration](engineering/context-migration.md)

@@ -5,6 +5,7 @@ Application data and bundled Markdown are generated; do not edit them.
 
 [Unreleased](doc/changelog/Unreleased.md)
 
+- [0.3.3-alpha.1 — Follow the canvas cursor with optional horizontal and vertical guides](doc/changelog/0.3.3-alpha.1.md)
 - [0.3.2-alpha.1 — Organize drawing controls in a grouped two-column toolbar](doc/changelog/0.3.2-alpha.1.md)
 - [0.3.1-alpha.1 — Identify the local preview and dismiss menus on window blur](doc/changelog/0.3.1-alpha.1.md)
 - [0.3.0-alpha.1 — Editable cubic paths, drawing tools and configurable input](doc/changelog/0.3.0-alpha.1.md)

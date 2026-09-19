@@ -290,6 +290,7 @@
         class="canvas-viewport"
         #viewport
         (pointerleave)="cursorPoint.set(null)"
+        (scroll)="refreshCursorPosition()"
       >
         <div
           class="artboard-surround"
@@ -308,9 +309,16 @@
               [style.cursor]="toolCursor()"
               (pointerdown)="pointerDown($event)"
               (pointermove)="pointerMove($event)"
+              (pointerleave)="cursorPoint.set(null)"
               (pointerup)="pointerUp()"
               (pointercancel)="pointerCancel()"
             ></canvas>
+            @if (cursorAxesPoint(); as axes) {
+              <div class="canvas-cursor-axes" aria-hidden="true">
+                <span class="cursor-axis-horizontal" [style.top.px]="axes.y"></span>
+                <span class="cursor-axis-vertical" [style.left.px]="axes.x"></span>
+              </div>
+            }
             @if (editor.selected(); as textLayer) {
               @if (textEditing() === textLayer.id) {
                 <textarea
@@ -1073,6 +1081,16 @@
           ×
         </button>
       </header>
+      <button
+        class="setting-switch"
+        type="button"
+        role="switch"
+        [attr.aria-checked]="preferences.cursorAxes()"
+        (click)="preferences.toggleCursorAxes(!preferences.cursorAxes())"
+      >
+        <span>{{ t("Show full canvas cursor axes") }}</span>
+        <span class="setting-switch-track" aria-hidden="true"></span>
+      </button>
       <label class="setting-toggle"
         ><input
           type="checkbox"
