@@ -32,7 +32,7 @@ None.
 
 ## Fixes
 
-None.
+- Generated documentation navigation is identical on Windows and POSIX hosts, with forward-slash links and case-sensitive document order.
 
 ## Security
 
@@ -40,4 +40,4 @@ None.
 
 ## Engineering
 
-None.
+- The contribution check accepts two pinned historical GitHub merge commits on dev by exact SHA and reason, without rewriting history; all other commits remain fully checked.

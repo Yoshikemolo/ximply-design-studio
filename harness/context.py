@@ -2,7 +2,7 @@
 from __future__ import annotations
 import argparse
 import json
-import os
+import posixpath
 try:
     from harness.knowledge import read_document, documents
 except ModuleNotFoundError:
@@ -18,7 +18,7 @@ def graph(root: Path) -> dict:
     registry = json.loads((root / 'doc/planning/traceability.json').read_text())
     nodes = {}
     for category in ('adr', 'feat', 'sc', 'sec', 'po'):
-        for path in sorted((root / 'doc' / category).glob('*.md')):
+        for path in sorted((root / 'doc' / category).glob('*.md'), key=Path.as_posix):
             if path.name in ('INDEX.md', 'README.md'):
                 continue
             metadata, content = read_document(path)
@@ -49,7 +49,7 @@ def graph(root: Path) -> dict:
 
 
 def relative_link(source: str, target: str, label: str) -> str:
-    return f'[{label}]({os.path.relpath(target, Path(source).parent)})'
+    return f'[{label}]({posixpath.relpath(target, Path(source).parent.as_posix())})'
 
 
 def generated(root: Path) -> dict[str, str]:

@@ -25,3 +25,16 @@ class ContributionTests(unittest.TestCase):
         self.assertTrue(check_metadata(self.report,"abc",self.policy))
     def test_conventional_scopes(self):
         self.assertEqual([],check_text("feat(renderer)!: change the transform contract","Commit",self.policy))
+    def test_legacy_exemption_is_exact(self):
+        legacy={"sha":"310daca1c44d942b10a882552dbe8f5166a0ec78","authorLogin":"Yoshikemolo","committerLogin":"web-flow","message":"Merge pull request #2 from Yoshikemolo/feat/FEAT-0023-quality-evidence"}
+        self.report["commits"].append(legacy)
+        self.assertEqual([],check_metadata(self.report,"abc",self.policy))
+        legacy["sha"]="0"*40
+        self.assertTrue(check_metadata(self.report,"abc",self.policy))
+        del legacy["sha"]
+        self.assertTrue(check_metadata(self.report,"abc",self.policy))
+    def test_malformed_exemption_fails_closed(self):
+        for entry in ({"sha":"310daca","reason":"short"},{"sha":"a"*40,"reason":" "},"a"*40):
+            with self.subTest(entry=entry):
+                with self.assertRaises(ValueError):
+                    check_metadata(self.report,"abc",{**self.policy,"legacyCommitExemptions":[entry]})
