@@ -89,6 +89,15 @@ class StrokeStyle(BaseModel):
     alignment: Literal['center', 'inside', 'outside']
     join: Literal['round', 'bevel', 'miter']
     cap: Literal['butt', 'square', 'round']
+    dash: Annotated[list[Annotated[Number, Field(ge=0, le=1000)]], Field(min_length=1, max_length=6)] | None = None
+
+    @model_validator(mode='after')
+    def dash_contract(self):
+        if 'dash' in self.model_fields_set and self.dash is None:
+            raise ValueError('Dash pattern cannot be null')
+        if self.dash is not None and not any(value > 0 for index, value in enumerate(self.dash) if index % 2 == 0):
+            raise ValueError('Dash pattern needs at least one dash longer than zero')
+        return self
 
 
 class LineEnd(BaseModel):

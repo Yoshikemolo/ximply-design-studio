@@ -34,6 +34,8 @@ export interface StrokeStyle {
   alignment: "center" | "inside" | "outside";
   join: "round" | "bevel" | "miter";
   cap: "butt" | "square" | "round";
+  /** Dash and gap lengths, repeated in sequence as in a drawing program; absent or empty is a solid line. */
+  dash?: number[];
 }
 export const defaultStrokeStyle: Readonly<StrokeStyle> = { alignment: "center", join: "round", cap: "round" };
 export interface Layer {
@@ -179,6 +181,12 @@ function segmentDistance(p: Point, a: Point, b: Point): number {
     ? Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / len))
     : 0;
   return Math.hypot(p.x - a.x - t * dx, p.y - a.y - t * dy);
+}
+/** Up to six alternating lengths, none negative and at least one dash longer than zero. */
+export function validDashPattern(value: unknown): value is number[] {
+  return Array.isArray(value) && value.length >= 1 && value.length <= 6
+    && value.every((n) => typeof n === "number" && Number.isFinite(n) && n >= 0 && n <= 1000)
+    && value.some((n, index) => index % 2 === 0 && n > 0);
 }
 export function hitTest(layer: Layer, point: Point): boolean {
   if (!layer.visible || layer.locked || layer.guide) return false;
@@ -485,7 +493,8 @@ export function parseDocument(text: string): StudioDocument {
     if (layer["dimension"] !== undefined && (value["version"] !== 2 || layer["kind"] !== "path" || layer["guide"] !== undefined || layer["symbolId"] !== undefined || !validDimension(layer["dimension"]))) throw new Error("Invalid dimension.");
     const strokeStyle = layer["strokeStyle"];
     if (strokeStyle !== undefined && (value["version"] !== 2 || !record(strokeStyle) ||
-      Object.keys(strokeStyle).length !== 3 ||
+      Object.keys(strokeStyle).length !== (strokeStyle["dash"] === undefined ? 3 : 4) ||
+      (strokeStyle["dash"] !== undefined && !validDashPattern(strokeStyle["dash"])) ||
       (typeof strokeStyle["alignment"] !== "string" || !["center", "inside", "outside"].includes(strokeStyle["alignment"])) ||
       (typeof strokeStyle["join"] !== "string" || !["round", "bevel", "miter"].includes(strokeStyle["join"])) ||
       (typeof strokeStyle["cap"] !== "string" || !["butt", "square", "round"].includes(strokeStyle["cap"]))))
@@ -628,7 +637,8 @@ function svgPaint(property: "fill" | "stroke", value: string): string {
 }
 function svgStroke(layer: Layer, width = layer.strokeWidth) {
   const style = layer.strokeStyle ?? defaultStrokeStyle;
-  return `${svgPaint("stroke", layer.stroke)} stroke-width="${width}" stroke-linecap="${style.cap}" stroke-linejoin="${style.join}" stroke-miterlimit="10"`;
+  const dash = style.dash?.length ? ` stroke-dasharray="${style.dash.join(" ")}"` : "";
+  return `${svgPaint("stroke", layer.stroke)} stroke-width="${width}" stroke-linecap="${style.cap}" stroke-linejoin="${style.join}" stroke-miterlimit="10"${dash}`;
 }
 function svgAlignedStroke(layer: Layer, shape: (style: string) => string, index: number): string {
   if (layer.stroke === "none" || layer.strokeWidth <= 0) return "";

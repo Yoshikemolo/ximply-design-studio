@@ -211,6 +211,7 @@ export class CanvasRenderer {
     const strokeStyle = l.strokeStyle ?? defaultStrokeStyle;
     ctx.lineCap = strokeStyle.cap;
     ctx.lineJoin = strokeStyle.join;
+    ctx.setLineDash(strokeStyle.dash?.length ? strokeStyle.dash : []);
     ctx.miterLimit = 10;
     if (l.kind === "rectangle") {
       if (hasFill) ctx.fillRect(0, 0, l.width, l.height);

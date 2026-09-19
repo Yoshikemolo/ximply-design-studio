@@ -53,6 +53,7 @@ import {
   blankDocument,
   defaultStrokeStyle,
   StrokeStyle,
+  validDashPattern,
   bounds,
   DocumentHistory,
   Layer,
@@ -551,6 +552,7 @@ export class EditorService {
     this.changed();
   }
   setStrokeStyle(patch: Partial<StrokeStyle>) {
+    if (patch.dash !== undefined && patch.dash.length && !validDashPattern(patch.dash)) return;
     if (patch.alignment !== undefined && !["center", "inside", "outside"].includes(patch.alignment)) return;
     if (patch.join !== undefined && !["round", "bevel", "miter"].includes(patch.join)) return;
     if (patch.cap !== undefined && !["butt", "square", "round"].includes(patch.cap)) return;

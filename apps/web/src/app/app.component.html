@@ -1343,6 +1343,16 @@
           }
         </div></fieldset>
       }
+      <fieldset class="dash-control"><legend>{{ t('Line type') }}</legend>
+        <div class="dash-row">
+          <select [attr.aria-label]="t('Line type')" [value]="dashPreset()" (change)="setDashPreset(text($event))">
+            @for (preset of dashPresets; track preset.id) {<option [value]="preset.id">{{ t(preset.label) }}</option>}
+          </select>
+          @for (field of dashFields; track field) {
+            <input type="number" min="0" max="1000" step="any" [value]="dashPattern()[field] ?? ''" [placeholder]="dashPlaceholder(field)" [attr.aria-label]="t(field % 2 === 0 ? 'Dash length' : 'Gap length') + ' ' + (field - (field % 2)) / 2" (change)="setDashValue(field, $event)" />
+          }
+        </div>
+      </fieldset>
       <fieldset class="line-ending-control"><legend>{{ t('Line endings') }}</legend>
         <div class="ending-columns">
           @for (side of lineEndSides; track side) {

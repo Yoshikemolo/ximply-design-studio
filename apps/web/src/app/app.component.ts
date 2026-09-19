@@ -40,6 +40,16 @@ interface Release {
   markdown: string;
   breakingChanges: string[];
 }
+/** Dash presets offered beside the six dash and gap fields; the last choice is a custom sequence. */
+const DASH_PRESETS: { id: string; label: string; dash: number[] }[] = [
+  { id: "solid", label: "Solid line", dash: [] },
+  { id: "dashed", label: "Dashed line", dash: [12, 6] },
+  { id: "dotted", label: "Dotted line", dash: [1, 4] },
+  { id: "axis", label: "Axis line", dash: [24, 6, 4, 6] },
+  { id: "custom", label: "Custom sequence", dash: [] },
+];
+const DASH_FIELDS = [0, 1, 2, 3, 4, 5];
+
 @Component({
   selector: "xds-root",
   standalone: true,
@@ -92,6 +102,33 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     { id: "stroke", label: "Stroke only", icon: "style-stroke" },
     { id: "both", label: "Fill and stroke", icon: "style-both" },
   ] as const;
+  get dashPresets() { return DASH_PRESETS; }
+  get dashFields() { return DASH_FIELDS; }
+  dashPattern() { return this.paintStrokeStyle().dash ?? []; }
+  dashPreset() {
+    const dash = this.dashPattern();
+    if (!dash.length) return "solid";
+    return this.dashPresets.find((preset) => preset.id !== "custom" && preset.dash.length === dash.length && preset.dash.every((value, index) => value === dash[index]))?.id ?? "custom";
+  }
+  /** Preset values are shown as placeholders so empty fields read as the pattern they produce. */
+  dashPlaceholder(index: number) {
+    const preset = this.dashPresets.find((item) => item.id === this.dashPreset());
+    return preset && preset.id !== "custom" ? (preset.dash[index] ?? "") : "";
+  }
+  setDashPreset(id: string) {
+    const preset = this.dashPresets.find((item) => item.id === id);
+    if (!preset) return;
+    this.editor.setStrokeStyle({ dash: preset.id === "custom" ? (this.dashPattern().length ? this.dashPattern() : [12, 6]) : preset.dash });
+  }
+  setDashValue(index: number, event: Event) {
+    const raw = (event.target as HTMLInputElement).value.trim(), value = Number(raw);
+    const dash = [...this.dashPattern()];
+    while (dash.length <= index) dash.push(0);
+    if (raw === "") dash.splice(index);
+    else if (Number.isFinite(value) && value >= 0 && value <= 1000) dash[index] = value;
+    else return;
+    this.editor.setStrokeStyle({ dash: dash.some((n, i) => i % 2 === 0 && n > 0) ? dash : [] });
+  }
   readonly strokeControls = [
     { key: "alignment", label: "Stroke alignment", choices: [
       { value: "center", label: "Centered stroke", hint: "Place half the stroke on each side of the path.", icon: "stroke-center" },

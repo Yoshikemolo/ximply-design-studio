@@ -1,4 +1,12 @@
 const ES: Record<string, string> = {
+  "Line type": "Tipo de línea",
+  "Solid line": "Línea continua",
+  "Dashed line": "Línea discontinua",
+  "Dotted line": "Línea de puntos",
+  "Axis line": "Línea de eje",
+  "Custom sequence": "Secuencia personalizada",
+  "Dash length": "Longitud del trazo",
+  "Gap length": "Longitud del hueco",
   "Documents": "Documentos",
   "Document name": "Nombre del documento",
   "Close document": "Cerrar documento",

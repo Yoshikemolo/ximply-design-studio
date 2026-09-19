@@ -413,6 +413,22 @@ hr {
   overflow-x: auto;
   scrollbar-width: thin;
 }
+.dash-row {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 4px;
+}
+.dash-row select {
+  grid-column: 1 / -1;
+  font-size: 10px;
+}
+.dash-row input {
+  width: 100%;
+  min-width: 0;
+  padding: 4px;
+  font-size: 10px;
+  text-align: right;
+}
 .confirm-dialog {
   max-width: 460px;
 }

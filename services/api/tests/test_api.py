@@ -504,6 +504,18 @@ class NativeDrawingTests(unittest.TestCase):
                     document['layers'][0]['strokeStyle'] = {'alignment': 'center', 'join': 'round', 'cap': 'butt', field: value}
                     self.assert_invalid(document)
 
+    def test_dash_patterns_round_trip(self):
+        document = copy.deepcopy(self.document)
+        document['layers'][0]['strokeStyle'] = {'alignment': 'center', 'join': 'round', 'cap': 'butt', 'dash': [24, 6, 4, 6]}
+        self.assert_round_trip(document)
+
+    def test_dash_patterns_reject_unusable_sequences(self):
+        for dash in ([], [0], [0, 4], [-1, 4], [1001, 2], [1, 2, 3, 4, 5, 6, 7], ['4', 2], None):
+            with self.subTest(dash=dash):
+                document = copy.deepcopy(self.document)
+                document['layers'][0]['strokeStyle'] = {'alignment': 'center', 'join': 'round', 'cap': 'butt', 'dash': dash}
+                self.assert_invalid(document)
+
     def test_stroke_style_is_native_v2_only_and_validated_inside_symbols(self):
         self.layer['strokeStyle'] = {'alignment': 'center', 'join': 'round', 'cap': 'butt'}
         del self.layer['curves']
