@@ -46,3 +46,10 @@ Initial repository creation preceded this policy and produced one GitHub-generat
 initial commit. The policy applies to new contribution commits after that baseline;
 no history is silently rewritten. Agent handoffs must carry this file's path rather
 than relying on conversation memory. No cross-session memory service is assumed.
+
+## Authorization scope
+
+The owner's permission and persistent preferences apply only to ximply-design-studio.
+No write authorization is extended to other projects. ximply-ai-devflow is a read-only
+reference. Changelog discipline is recorded in AGENTS.md and the product footer and
+changelog contract; it is a repository rule, not an asserted account-wide memory.

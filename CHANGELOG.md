@@ -1,9 +1,9 @@
 # Changelog
 
-The structured source is [release/changelog.json](release/changelog.json).
-Current version is [release/version.json](release/version.json).
+Authoritative notes are versioned Markdown under doc/changelog.
+Application data and bundled Markdown are generated; do not edit them.
 
-## 0.1.0-design.1 — 2026-09-19
+[Unreleased](doc/changelog/Unreleased.md)
 
-Engineering: initial architecture, product scope, contracts and development controls.
-No breaking changes. The application editor is not implemented.
+- [0.1.0-design.2 — Navigable documentation and quality evidence](doc/changelog/0.1.0-design.2.md)
+- [0.1.0-design.1 — Initial design foundation](doc/changelog/0.1.0-design.1.md)

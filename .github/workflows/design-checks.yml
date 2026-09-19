@@ -13,6 +13,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
@@ -20,7 +22,14 @@ jobs:
         run: |
           python harness/context.py --check
           python harness/knowledge.py
+          python harness/changelog.py --check
           python harness/check_docs.py
+      - name: Require release notes for implementation changes
+        if: github.event_name == 'pull_request'
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: python harness/changelog.py --check --base "$BASE_SHA" --head "$HEAD_SHA"
       - name: Test engineering harnesses
         run: python -m unittest discover -s tests -v
   contribution:

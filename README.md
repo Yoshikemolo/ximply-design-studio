@@ -2,7 +2,7 @@
 
 Professional, extensible vector, raster, 3D and animation design studio.
 
-**Status: architecture and engineering bootstrap, v0.1.0-design.1. The editor is not implemented.**
+**Status: architecture and engineering bootstrap, v0.1.0-design.2. The editor is not implemented.**
 This repository contains the functional and technical design, proposed ADRs,
 traceable features and scenarios, contracts, local infrastructure definitions,
 and executable documentation/quality-policy harnesses. It does not claim an
@@ -23,6 +23,7 @@ Product owner and architectural reviewer: Yoshikemolo.
 - [Local setup](doc/operations/local-development.md)
 - [Agent workflow](AGENTS.md)
 - [Contribution rules](CONTRIBUTING.md)
+- [Versioned changelog](CHANGELOG.md)
 - [Methodology audit](doc/testing/methodology-audit.md)
 - [Verification evidence](doc/testing/bootstrap-evidence.md)
 - [Research and version evidence](doc/research/sources.md)
@@ -75,11 +76,13 @@ this bootstrap.
 ## Quick Start
 
 The public repository is [Yoshikemolo/ximply-design-studio](https://github.com/Yoshikemolo/ximply-design-studio).
-The design is on `feat/initial-design`, based on `dev`, for review. Product services
+The foundation is reviewed in PR #1. This continuation is on
+`feat/FEAT-0023-quality-evidence`, created from `dev` with the pending foundation
+explicitly included as a dependency. Product services
 are planned; the current executable entry point validates the engineering package.
 
 ```bash
-git clone --branch feat/initial-design https://github.com/Yoshikemolo/ximply-design-studio.git
+git clone --branch feat/FEAT-0023-quality-evidence https://github.com/Yoshikemolo/ximply-design-studio.git
 cd ximply-design-studio
 python3 harness/check_docs.py
 python3 -m unittest discover -s tests -v

@@ -641,9 +641,15 @@
         "SC-0083",
         "SC-0084"
       ],
-      "implementation": [],
-      "tests": [],
-      "evidence": []
+      "implementation": [
+        "harness/changelog.py"
+      ],
+      "tests": [
+        "tests/test_changelog.py"
+      ],
+      "evidence": [
+        "doc/product/footer-and-changelog.md"
+      ]
     }
   ]
 }

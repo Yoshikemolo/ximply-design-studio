@@ -32,25 +32,66 @@ screenshot/export. Keep this requirement explicitly open until that evidence exi
 
 ## Version and changelog design
 
-`release/version.json` is the single version source for About, footer, health/version,
-scanner projectVersion, image metadata and release packaging. `release/changelog.json`
-contains typed entries linked to versions. A build validates the current version
-exists, versions are unique, dates parse and breakingChanges is explicitly an array
-(including empty). The initial version is a design prerelease, not an editor release.
+`release/version.json` remains the single current-version source. Authoritative
+release notes are Markdown files under `/doc/changelog/<version>.md`; pending work
+uses [Unreleased](../changelog/Unreleased.md). `release/changelog.json`, root
+CHANGELOG.md and `apps/web/public/assets/changelog/` are derived outputs generated
+by `python3 harness/changelog.py --write`. Never edit them independently.
 
-Footer: a restrained, single compact status/legal line; version link opens About at
-its matching entry. Longer legal/reference links can wrap responsively, preserving
-order, keyboard access and labels. Put content/navigation in a central footer manifest
-rather than repeating literals in components. Locale catalogs translate labels when
-other interface languages are enabled. Core copyright owner is Ximplicity Software
-Solutions; do not import Evident's data-governance-specific disclaimer into a design tool.
+The owner-supplied screenshot and `/about?version=3.7.1` reference confirm the intended
+information hierarchy: About identity, release selector, dated summary, prominent
+breaking-change notice and categorized entries. This establishes the layout pattern,
+not the exact footer destinations or another product's release claims.
 
-The full changelog ships with the application and works offline. A public page can
-render the latest five entries from the same file. Types are Feature, Usability,
-Security and Fix; add Engineering for bootstrap-only changes without pretending they
-are new editor capabilities. Show explicit migration/compatibility instructions for
-breaking releases. Conventional Commits assist classification, but a human writes
-user-facing release notes; do not expose raw commit messages as the whole changelog.
+The future Angular About route is `/about?version=<exact-version>`. The footer links
+to the running version; changing the selector updates that parameter. Read versions
+from the bundled index, newest semantic version first; load only the selected
+Markdown asset named by the index. Resolve versions by exact manifest membership,
+never interpolate an unchecked query parameter into a file path. A missing parameter
+selects the current version. An unknown version displays an accessible not-found
+message and a current-version action; do not silently show a different release.
+Browser back/forward restores the selected release. These UI behaviors remain Planned.
+
+All published notes ship with the application and work offline. Labels belong to EN/ES
+catalogs; authored release prose starts in English with explicit English fallback for
+untranslated releases. The selector is labelled, keyboard-operable and responsive;
+selected version and heading changes are announced without taking keyboard focus.
+Markdown rendering must disable raw HTML and embedded scripts, allow only safe link
+schemes and use the application's sanitization boundary. Do not insert raw Markdown
+or raw HTML using an unchecked innerHTML path. Never fetch remote changelog content
+or execute Markdown. Bundled assets are data, not a plugin execution surface.
+
+## Maintenance contract
+
+Every note includes date, summary, explicit breaking_changes boolean and capability
+status. Required sections: Breaking changes, New features, Improvements, Fixes,
+Security and Engineering. Empty sections say `None.`. Entries use one Markdown bullet
+per change. A breaking release must include explicit `Migration:` instructions.
+The boolean and breaking entries must agree; no breaking change means an explicit
+empty list in generated data and a no-breaking-changes message in the future UI.
+
+For each implementation PR, edit Unreleased.md or add a version note. At a release
+checkpoint, transfer relevant pending notes into a new version file, update the
+current-version source, regenerate assets and validate. Preserve existing published
+notes; correct material errors through a documented correction rather than silently
+rewriting history. Conventional Commits help classification but do not replace
+reviewed user-facing descriptions. A design prerelease must not claim editor features.
+
+```bash
+python3 harness/changelog.py --write
+python3 harness/changelog.py --check
+```
+
+Use the [release-note template](../templates/release-note.md) for a new version.
+
+CI also compares PR base/head changes and rejects implementation changes without a
+Markdown note update. This proves a note was changed, not that its prose is accurate;
+human review still checks completeness, classification and compatibility impact.
+Current local implementation provides source files, generator, assets and checks.
+The Angular version-selector screen has not yet been implemented.
+
+Footer layout and exact links remain governed by the reference-confirmation section
+above. The screenshot does not establish destination URLs for the small bottom row.
 
 ## Acceptance
 

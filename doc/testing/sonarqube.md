@@ -5,7 +5,7 @@ status: "proposed"
 domain: "testing"
 owners: ["Yoshikemolo"]
 applies_to: ["ximply-design-studio"]
-related: []
+related: ["PLAN-0023-0001"]
 source: ["Project owner requirements and design foundation; methodology application recorded in AUDIT-0001"]
 ---
 

@@ -45,3 +45,15 @@ resolve conflicting normative requirements. Follow doc/engineering/documentation
 Run metadata, reachability and generated-navigation checks before committing.
 Checkpoint reviewable changes to GitHub; do not call a checkpoint completed product
 work while quality gates or human review are missing.
+
+## Project scope and changelog discipline
+
+These permissions and persistent preferences apply only to ximply-design-studio.
+They do not authorize changes to other repositories; ximply-ai-devflow stays read-only.
+For every implementation change, update doc/changelog/Unreleased.md or the Markdown
+notes for a new version in the same PR. Follow doc/product/footer-and-changelog.md.
+Record new features, improvements, fixes, security and engineering changes honestly.
+Explicitly state breaking changes; include migration steps when present. Release
+notes describe delivered behavior, not promises. Never edit generated changelog data
+or bundled copies. Regenerate and check them before committing. Preserve published
+version history; a version bump does not imply the editor or quality gate is complete.
