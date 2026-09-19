@@ -1,0 +1,28 @@
+{
+  "id": "studio.basic-tools",
+  "version": "0.1.0",
+  "hostApi": "1",
+  "nameKey": "plugins.basic.name",
+  "entryPoint": "basic-tools.js",
+  "permissions": [
+    "document.write"
+  ],
+  "commands": [
+    {
+      "id": "studio.basic-tools.opacity",
+      "titleKey": "commands.opacity",
+      "menuSlots": [
+        "object",
+        "plugins"
+      ],
+      "permission": "document.write"
+    }
+  ],
+  "panels": [
+    {
+      "id": "studio.basic-tools.properties",
+      "titleKey": "panels.properties",
+      "iconPath": "/assets/icons/properties.svg"
+    }
+  ]
+}
