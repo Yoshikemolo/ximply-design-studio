@@ -70,3 +70,11 @@ any base/head change. Record evidence against the checked SHA; never pre-tick
 quality/review boxes. Resolve shared-branch conflicts through a fix branch and PR.
 Do not use the default web merge message, add new historical exemptions, force-push
 shared history or interpret a missing/skipped Sonar check as success.
+
+Before creating a commit or PR, run the proposed-text mode of
+harness/check_contribution.py for the exact message, title and body. Before moving
+any branch reference, verify the returned GitHub commit has both author and
+committer logins Yoshikemolo. Local hooks do not protect connector or web commits.
+Never use a default web merge as the integration mechanism: its web-flow identity
+fails policy even if the PR checks passed beforehand. Do not repair historical
+metadata failures by adding exemptions without an explicit owner decision.

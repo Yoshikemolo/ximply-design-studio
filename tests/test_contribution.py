@@ -38,3 +38,38 @@ class ContributionTests(unittest.TestCase):
             with self.subTest(entry=entry):
                 with self.assertRaises(ValueError):
                     check_metadata(self.report,"abc",{**self.policy,"legacyCommitExemptions":[entry]})
+
+    def test_diagnostics_identify_each_historical_merge_without_exempting_it(self):
+        commits = [
+            {"sha": "7c2af886570ded96107934cd2822f4665e3448e4", "authorLogin": "Yoshikemolo", "committerLogin": "web-flow", "message": "Merge pull request #5"},
+            {"sha": "aa92505cd29dedcb6d13e414db875679543e390e", "authorLogin": "Yoshikemolo", "committerLogin": "web-flow", "message": "Merge pull request #9"},
+        ]
+        errors = check_metadata({**self.report, "commits": commits}, "abc", self.policy)
+        self.assertEqual(4, len(errors))
+        for commit in commits:
+            self.assertEqual(2, sum(commit["sha"] in error for error in errors))
+        self.assertTrue(any("web-flow" in error for error in errors))
+
+    def test_proposed_text_preflight_and_metadata_are_both_enforced(self):
+        from contextlib import redirect_stdout
+        from io import StringIO
+        from tempfile import TemporaryDirectory
+        from unittest.mock import patch
+        from harness.check_contribution import main
+        with TemporaryDirectory() as directory:
+            folder = Path(directory)
+            message, title, body, report = [folder/name for name in ("message", "title", "body", "report")]
+            message.write_text("fix(ci): check contribution before publication", encoding="utf-8")
+            title.write_text("fix(ci): check contribution before publication", encoding="utf-8")
+            body.write_text("Validate proposed text before publication.", encoding="utf-8")
+            command = ["check", "--message-file", str(message), "--pr-title-file", str(title), "--pr-body-file", str(body)]
+            with patch("sys.argv", command), redirect_stdout(StringIO()):
+                self.assertEqual(0, main())
+            title.write_text("Dev", encoding="utf-8")
+            with patch("sys.argv", command), redirect_stdout(StringIO()):
+                self.assertEqual(1, main())
+            title.write_text("fix(ci): valid title", encoding="utf-8")
+            bad = {**self.report, "headSha": "different"}
+            report.write_text(json.dumps(bad), encoding="utf-8")
+            with patch("sys.argv", command+[str(report), "--head", "abc"]), redirect_stdout(StringIO()):
+                self.assertEqual(1, main())

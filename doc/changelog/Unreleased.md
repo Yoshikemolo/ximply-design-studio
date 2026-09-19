@@ -43,5 +43,6 @@ None.
 
 ## Engineering
 
+- Validate proposed commit and PR wording before publication and identify failing commit revisions in contribution diagnostics; retain all existing policy restrictions.
 - Record the PR integration preflight and distinguish passing build checks from the required product quality gate.
 - The contribution check accepts two pinned historical GitHub merge commits on dev by exact SHA and reason, without rewriting history; all other commits remain fully checked.
