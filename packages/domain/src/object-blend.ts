@@ -26,7 +26,7 @@ export function blendProgress(t: number, easing: BlendEasing): number {
 }
 
 function curvesFor(layer: Layer): CurvePath[] {
-  if (layer.guide || layer.symbolId || !["rectangle", "ellipse", "path"].includes(layer.kind))
+  if (layer.guide || layer.symbolId || layer.dimension || layer.procedural || !["rectangle", "ellipse", "path"].includes(layer.kind))
     throw new Error("Object blends require ordinary vector objects.");
   let paths: CurvePath[];
   if (layer.kind === "rectangle") paths = [polyline([{x:0,y:0},{x:layer.width,y:0},{x:layer.width,y:layer.height},{x:0,y:layer.height}], true)];
@@ -139,7 +139,7 @@ export function validateBlends(document: StudioDocument): void {
     if (ordered.some((id,index) => document.layers[start+index]?.id !== id)) throw new Error("Blend members must remain contiguous.");
     blend.stepIds.forEach((row) => row.forEach((id) => {
       const layer = layerMap.get(id)!;
-      if (layer.kind !== "path" || layer.guide || layer.symbolId || layer.groupPath?.length !== prefix.length + 1 || layer.groupPath[prefix.length] !== row[0])
+      if (layer.kind !== "path" || layer.guide || layer.symbolId || layer.dimension || layer.procedural || layer.groupPath?.length !== prefix.length + 1 || layer.groupPath[prefix.length] !== row[0])
         throw new Error("Invalid generated blend subgroup.");
       pairCurves(layerMap.get(blend.backIds[row.indexOf(id)])!, layer);
     }));

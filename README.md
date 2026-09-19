@@ -2,7 +2,7 @@
 
 A layered vector and image editor by Ximplicity.
 
-**0.3.12-alpha.1 — single-user drawing workbench preview.** Draw editable cubic paths
+**0.3.14-alpha.1 — single-user drawing workbench preview.** Draw editable cubic paths
 and construction shapes, refine paths, trace images, reuse symbols, edit text inline,
 transform layers, retouch images and save editable projects or PNG/SVG exports. The architecture for the broader professional platform
 remains documented; this alpha implements a bounded first slice.
@@ -28,7 +28,9 @@ keyboard shortcuts, cleanup and development commands.
 ## Included in the alpha
 
 - Cubic Pen, direct anchor editing, construction primitives and path refinement.
-- Multiple selection, nested groups, alignment/distribution and vector boolean operations.
+- Multiple selection, contextual grouping/regrouping, alignment/distribution and vector boolean operations.
+- Linear/angular dimension annotations with editable units, labels and endpoint markers.
+- Parametric 2D walls, hosted doors/windows and rectangular or circular pillars.
 - Bounded scanline image tracing and local linked symbols with painting tools.
 - Freehand vector paths and inline editable text.
 - Layer selection, movement, corner/edge resizing, rotation handles, ordering, visibility, locks,
@@ -49,6 +51,9 @@ cannot open new saves. Tracing is capped at 64 pixels per side; curved vector er
 is sampled. Nonuniform group scaling preserves rotated child geometry through centered shear.
 Nine-slice insets are fixed; registration/slice-guide editing and full
 graphic styles remain pending. See the [drawing roadmap](doc/planning/drawing-roadmap.md).
+
+Dimension anchors are independent annotations, not persistent CAD constraints.
+Procedural floor plans are bounded 2D vector geometry, without BIM or structural validation.
 
 The preview does not implement production Keycloak integration, PostgreSQL/TypeORM
 transactions, multiuser collaboration, desktop windows, third-party plugin loading,

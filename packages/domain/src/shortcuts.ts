@@ -50,6 +50,9 @@ export const COMMANDS: Command[] = [
   { id: "makeBlend", label: "Make blend", keys: [] },
   { id: "expandBlend", label: "Expand blend", keys: [] },
   { id: "releaseBlend", label: "Release blend", keys: [] },
+  { id: "displacement", label: "Displacement", keys: ["Mod+Shift+M"] },
+  { id: "rotation", label: "Rotation", keys: ["Mod+Shift+R"] },
+  { id: "regroup", label: "Regroup", keys: [] },
   { id: "group", label: "Group", keys: ["Mod+G"] },
   { id: "ungroup", label: "Ungroup", keys: ["Mod+Shift+G"] },
   { id: "selectAll", label: "Select all", keys: ["Mod+A"] },
@@ -185,7 +188,7 @@ export function validateShortcuts(value: unknown): ShortcutMap {
   if (Object.keys(input).some((id) => !COMMANDS.some((c) => c.id === id)))
     throw new Error("Unknown command");
   for (const command of COMMANDS) {
-    const introduced = ["tool.eyedropper", "tool.paintBucket", "makeBlend", "expandBlend", "releaseBlend"].includes(command.id);
+    const introduced = ["tool.eyedropper", "tool.paintBucket", "makeBlend", "expandBlend", "releaseBlend", "displacement", "rotation", "regroup"].includes(command.id);
     const keys = input[command.id] ?? (introduced ? command.keys.filter((chord) => !Object.values(input).some((value) => Array.isArray(value) && value.some((key) => typeof key === "string" && normalizeChord(key) === chord))) : undefined);
     if (
       !Array.isArray(keys) ||

@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 import hmac
 import json
+import math
 import os
 from pathlib import Path
 import re
@@ -90,6 +91,138 @@ class StrokeStyle(BaseModel):
     cap: Literal['butt', 'square', 'round']
 
 
+class LineEnd(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    kind: Literal['none', 'arrow', 'openArrow', 'triangle', 'dot', 'slash', 'cross']
+    placement: Literal['tip', 'base']
+    size: Annotated[Number, Field(gt=0, le=1000)]
+
+
+class LineEnds(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    start: LineEnd
+    end: LineEnd
+    linked: Annotated[bool, Field(strict=True)]
+
+
+class DimensionPoint(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    x: Annotated[Number, Field(ge=-10000000, le=10000000)]
+    y: Annotated[Number, Field(ge=-10000000, le=10000000)]
+
+
+class DimensionFormat(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    scale: Annotated[Number, Field(gt=0, le=1000000)]
+    unit: Literal['px', 'pt', 'mm', 'cm', 'in', 'ft']
+    decimals: Annotated[Number, Field(ge=0, le=8, multiple_of=1)]
+    separator: Literal['.', ',']
+
+
+class DimensionExtension(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    stroke: Paint
+    strokeWidth: Annotated[Number, Field(ge=0, le=1000)]
+    gap: Annotated[Number, Field(ge=0, le=1000)]
+    overshoot: Annotated[Number, Field(ge=0, le=1000)]
+
+
+class DimensionLabelSize(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    width: Annotated[Number, Field(ge=1, le=1000000)]
+    height: Annotated[Number, Field(ge=1, le=1000000)]
+
+
+class Dimension(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    kind: Literal['linear', 'angular']
+    anchors: Annotated[list[DimensionPoint], Field(min_length=2, max_length=3)]
+    labelPosition: DimensionPoint
+    labelSize: DimensionLabelSize | None = None
+    text: Annotated[str, Field(max_length=10000)]
+    format: DimensionFormat
+    extension: DimensionExtension
+
+    @model_validator(mode='after')
+    def anchor_cardinality(self):
+        if 'labelSize' in self.model_fields_set and self.labelSize is None:
+            raise ValueError('Dimension label size cannot be null')
+        if len(self.anchors) != (2 if self.kind == 'linear' else 3):
+            raise ValueError('Dimension anchors must match its kind')
+        return self
+
+
+ProceduralLength = Annotated[Number, Field(ge=1, le=16384)]
+
+
+class ProceduralHost(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    wallId: Annotated[str, Field(min_length=1, max_length=100)]
+    offset: Annotated[Number, Field(ge=0, le=1)]
+
+
+class ProceduralWall(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    type: Literal['wall']
+    start: DimensionPoint
+    end: DimensionPoint
+    thickness: ProceduralLength
+
+    @model_validator(mode='after')
+    def nonzero_wall(self):
+        if not 1 <= math.hypot(self.end.x - self.start.x, self.end.y - self.start.y) <= 16384:
+            raise ValueError('Wall length must be between 1 and 16384')
+        return self
+
+
+class ProceduralOpening(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    width: ProceduralLength
+    depth: ProceduralLength
+    leafWidths: Annotated[list[ProceduralLength], Field(min_length=1, max_length=8)]
+    openingAngle: Annotated[Number, Field(ge=0, le=180)]
+    host: ProceduralHost | None = None
+
+    @model_validator(mode='after')
+    def opening_contract(self):
+        if 'host' in self.model_fields_set and self.host is None:
+            raise ValueError('Opening host cannot be null')
+        if abs(sum(self.leafWidths) - self.width) > 0.000001:
+            raise ValueError('Opening leaves must sum to its width')
+        return self
+
+
+class ProceduralDoor(ProceduralOpening):
+    type: Literal['door']
+    leafWidths: Annotated[list[ProceduralLength], Field(min_length=1, max_length=4)]
+    operation: Literal['swing', 'sliding']
+    swing: Literal['left', 'right']
+
+
+class ProceduralWindow(ProceduralOpening):
+    type: Literal['window']
+    operation: Literal['fixed', 'sliding', 'swing']
+    swing: Literal['left', 'right']
+
+
+class ProceduralPillar(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    type: Literal['pillar']
+    shape: Literal['rectangle', 'circle']
+    width: ProceduralLength
+    depth: ProceduralLength
+
+    @model_validator(mode='after')
+    def circular_pillar(self):
+        if self.shape == 'circle' and abs(self.width - self.depth) > 0.000001:
+            raise ValueError('Circular pillars require equal width and depth')
+        return self
+
+
+Procedural = Annotated[ProceduralWall | ProceduralDoor | ProceduralWindow | ProceduralPillar,
+                       Field(discriminator='type')]
+
+
 class Layer(Point):
     id: Annotated[str, Field(min_length=1, max_length=100)]
     name: Annotated[str, Field(max_length=150)]
@@ -110,6 +243,10 @@ class Layer(Point):
     source: str
     adjustments: Adjustments
     strokeStyle: StrokeStyle | None = None
+    lineEnds: LineEnds | None = None
+    dimension: Dimension | None = None
+    procedural: Procedural | None = None
+    regroupPath: Annotated[list[Annotated[str, Field(min_length=1, max_length=100)]], Field(max_length=16)] | None = None
     textLayout: TextLayout | None = None
     typography: Typography | None = None
     guide: Literal['vertical', 'horizontal'] | None = None
@@ -124,7 +261,7 @@ class Layer(Point):
     @model_validator(mode='before')
     @classmethod
     def non_nullable_extensions(cls, value):
-        if isinstance(value, dict) and any(key in value and value[key] is None for key in ('curves', 'symbolId', 'traceSourceId', 'groupPath', 'flipX', 'flipY', 'skewX', 'guide', 'textLayout', 'typography', 'strokeStyle')):
+        if isinstance(value, dict) and any(key in value and value[key] is None for key in ('curves', 'symbolId', 'traceSourceId', 'groupPath', 'flipX', 'flipY', 'skewX', 'guide', 'textLayout', 'typography', 'strokeStyle', 'lineEnds', 'dimension', 'regroupPath', 'procedural')):
             raise ValueError('Drawing extensions cannot be null')
         return value
 
@@ -134,7 +271,13 @@ class Layer(Point):
             raise ValueError('Invalid curve layer or node budget')
         if self.groupPath is not None and len(set(self.groupPath)) != len(self.groupPath):
             raise ValueError('Group path identities must be unique')
-        if self.kind != 'text' and (self.textLayout is not None or self.typography is not None):
+        if self.regroupPath is not None and len(set(self.regroupPath)) != len(self.regroupPath):
+            raise ValueError('Regroup path identities must be unique')
+        if self.procedural is not None and (self.kind != 'path' or self.dimension is not None or self.guide is not None or self.symbolId is not None):
+            raise ValueError('Procedural objects must be standalone paths')
+        if self.dimension is not None and (self.kind != 'path' or self.guide is not None or self.symbolId is not None):
+            raise ValueError('Dimensions must be paths without guides or symbol references')
+        if self.kind != 'text' and self.dimension is None and (self.textLayout is not None or self.typography is not None):
             raise ValueError('Text layout and typography require a text layer')
         if self.guide is not None and (self.kind != 'path' or self.symbolId is not None or self.groupPath):
             raise ValueError('Guides must be ungrouped paths without symbol references')
@@ -193,19 +336,38 @@ class Document(BaseModel):
     def symbol_and_version_contract(self):
         symbols = self.symbols or []
         ids = {symbol.id for symbol in symbols}
-        if len(ids) != len(symbols) or any(symbol.layer.symbolId is not None or symbol.layer.guide is not None for symbol in symbols):
+        if len(ids) != len(symbols) or any(symbol.layer.symbolId is not None or symbol.layer.guide is not None or symbol.layer.dimension is not None or symbol.layer.procedural is not None for symbol in symbols):
             raise ValueError('Invalid symbol definitions')
         if any(layer.symbolId is not None and layer.symbolId not in ids for layer in self.layers):
             raise ValueError('Unknown symbol reference')
         if self.version == 1 and ('symbols' in self.model_fields_set or 'blends' in self.model_fields_set or any(
                 layer.curves is not None or layer.symbolId is not None or layer.traceSourceId is not None
                 or layer.guide is not None or layer.fill == 'none' or layer.stroke == 'none'
-                or layer.strokeStyle is not None
+                or layer.strokeStyle is not None or layer.lineEnds is not None
+                or layer.dimension is not None or layer.regroupPath is not None or layer.procedural is not None
                 or layer.textLayout is not None or layer.typography is not None
                 or len(layer.fill) == 9 or len(layer.stroke) == 9
                 or layer.skewX is not None or layer.groupPath is not None or layer.flipX is not None or layer.flipY is not None
                 for layer in self.layers)):
             raise ValueError('Drawing extensions require native format 2')
+        return self
+
+    @model_validator(mode='after')
+    def procedural_reference_contract(self):
+        layers = {layer.id: layer for layer in self.layers}
+        for layer in self.layers:
+            item = layer.procedural
+            if not isinstance(item, (ProceduralDoor, ProceduralWindow)) or item.host is None:
+                continue
+            wall = layers.get(item.host.wallId)
+            if wall is None or wall.id == layer.id or not isinstance(wall.procedural, ProceduralWall):
+                raise ValueError('Opening hosts must reference a wall in the document')
+            dx = (wall.procedural.end.x - wall.procedural.start.x) * (-1 if wall.flipX else 1)
+            dy = (wall.procedural.end.y - wall.procedural.start.y) * (-1 if wall.flipY else 1)
+            length = math.hypot(dx + math.tan(math.radians(wall.skewX or 0)) * dy, dy)
+            center = item.host.offset * length
+            if center - item.width / 2 < -0.000001 or center + item.width / 2 > length + 0.000001:
+                raise ValueError('Hosted openings must fit inside their wall segment')
         return self
 
     @model_validator(mode='after')
@@ -237,7 +399,7 @@ class Document(BaseModel):
                 raise ValueError('Blend group must contain exactly its referenced layers under a shared parent')
             for identifier in ordered:
                 layer = layer_map[identifier]
-                if layer.kind not in ('rectangle', 'ellipse', 'path') or layer.guide is not None or layer.symbolId is not None:
+                if layer.kind not in ('rectangle', 'ellipse', 'path') or layer.guide is not None or layer.symbolId is not None or layer.dimension is not None or layer.procedural is not None:
                     raise ValueError('Blend layers must be standalone vectors')
             for row in blend.stepIds:
                 if any(layer_map[identifier].groupPath != prefix + [row[0]] for identifier in row):

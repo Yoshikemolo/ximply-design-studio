@@ -12,6 +12,14 @@ function fixture(): StudioDocument {
 }
 
 describe("editable object blend geometry", () => {
+  it("rejects procedural and dimension metadata in source and generated blend members", () => {
+    for (const position of [0,1,2]) for (const key of ["dimension","procedural"] as const) {
+      const document=fixture(),layer=document.layers[position];layer.kind="path";
+      if(key==="procedural")layer.procedural={type:"pillar",shape:"rectangle",width:20,depth:30};
+      else layer.dimension={kind:"linear",anchors:[{x:0,y:0},{x:20,y:0}],labelPosition:{x:10,y:10},text:"",format:{scale:1,unit:"px",decimals:0,separator:"."},extension:{stroke:"#000000",strokeWidth:1,gap:2,overshoot:4}};
+      expect(()=>validateBlends(document)).toThrow();expect(()=>parseDocument(JSON.stringify(document))).toThrow();
+    }
+  });
   it("interpolates geometry, styles, transforms and real nested derived layers", () => {
     const doc=fixture(), middle=doc.layers[1];
     expect(middle).toMatchObject({id:"middle",kind:"path",x:60,y:120,width:30,height:40,fill:"#800080",stroke:"#808080",strokeWidth:4,opacity:0.5,groupPath:["parent","blend","middle"]});

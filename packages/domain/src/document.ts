@@ -1,3 +1,6 @@
+import { Procedural, materializeProcedural, syncProcedurals, validProcedural, validateProcedurals, resizeProcedural } from "./procedural";
+import { Dimension, dimensionGeometry, validDimension } from "./dimensions";
+import { LineEnds, lineEndGeometry, pathLineEnds, validLineEnds } from "./line-endings";
 import { ObjectBlend, syncBlends, validateBlends } from "./object-blend";
 import { FONT_FAMILIES, layoutText, TextLayoutOptions, TextTypography, TextMeasurement } from "./text-layout";
 import {
@@ -50,6 +53,9 @@ export interface Layer {
   stroke: string;
   strokeWidth: number;
   strokeStyle?: StrokeStyle;
+  lineEnds?: LineEnds;
+  dimension?: Dimension;
+  procedural?: Procedural;
   points: Point[];
   text: string;
   fontSize: number;
@@ -61,6 +67,7 @@ export interface Layer {
   symbolId?: string;
   traceSourceId?: string;
   groupPath?: string[];
+  regroupPath?: string[];
   guide?: "vertical" | "horizontal";
   skewX?: number;
   flipX?: boolean;
@@ -175,6 +182,14 @@ function segmentDistance(p: Point, a: Point, b: Point): number {
 }
 export function hitTest(layer: Layer, point: Point): boolean {
   if (!layer.visible || layer.locked || layer.guide) return false;
+  if (layer.dimension) {
+    const d = dimensionGeometry(layer), pad = Math.max(5, layer.strokeWidth / 2);
+    const label = layoutText({...layer, ...layer.dimension.labelSize, text:d.text, textLayout:layer.textLayout ?? {sizing:"content",wrap:false,hyphenate:false,fit:false}});
+    if (Math.abs(point.x-d.labelPosition.x)<=label.width/2+pad && Math.abs(point.y-d.labelPosition.y)<=label.height/2+pad) return true;
+    if (d.lines.some(line => segmentDistance(point,line.a,line.b)<=pad)) return true;
+    if(d.arc){const a=d.arc,delta=a.endAngle-a.startAngle,theta=Math.atan2(point.y-a.center.y,point.x-a.center.x);const progress=((theta-a.startAngle)*Math.sign(delta)+Math.PI*2)%(Math.PI*2);return Math.abs(Math.hypot(point.x-a.center.x,point.y-a.center.y)-a.radius)<=pad && progress<=Math.abs(delta);}
+    return false;
+  }
   const p = localPoint(layer, point),
     pad = Math.max(5, layer.strokeWidth * (layer.strokeStyle?.alignment === "outside" ? 1 : 0.5));
   if (layer.kind === "ellipse")
@@ -239,6 +254,8 @@ export function resizeLayer(
     ...layer,
     width,
     height,
+    ...(layer.procedural ? {procedural:resizeProcedural(layer, width, height)} : {}),
+    ...(layer.dimension ? { dimension: { ...layer.dimension, anchors: layer.dimension.anchors.map(p => ({ x: p.x * width / layer.width, y: p.y * height / layer.height })), labelPosition: { x: layer.dimension.labelPosition.x * width / layer.width, y: layer.dimension.labelPosition.y * height / layer.height } } } : {}),
     ...(layer.curves
       ? {
           curves: mapCurves(layer.curves, (p) => ({
@@ -379,7 +396,9 @@ export function parseDocument(text: string): StudioDocument {
       symbol.name.length > 150 ||
       !record(symbol.layer) ||
       symbol.layer["symbolId"] !== undefined ||
-      symbol.layer["guide"] !== undefined
+      symbol.layer["guide"] !== undefined ||
+      symbol.layer["dimension"] !== undefined ||
+      symbol.layer["procedural"] !== undefined
     )
       throw new Error("Invalid symbol definition.");
     symbolIds.add(symbol.id);
@@ -428,6 +447,17 @@ export function parseDocument(text: string): StudioDocument {
     )
       throw new Error("Invalid group path.");
     if (
+      layer["regroupPath"] !== undefined &&
+      (value["version"] !== 2 ||
+        !Array.isArray(layer["regroupPath"]) ||
+        layer["regroupPath"].length > 16 ||
+        new Set(layer["regroupPath"]).size !== layer["regroupPath"].length ||
+        layer["regroupPath"].some(
+          (id) => typeof id !== "string" || id.length < 1 || id.length > 100,
+        ))
+    )
+      throw new Error("Invalid regroup path.");
+    if (
       layer["traceSourceId"] !== undefined &&
       (typeof layer["traceSourceId"] !== "string" ||
         layer["traceSourceId"].length < 1 ||
@@ -450,6 +480,9 @@ export function parseDocument(text: string): StudioDocument {
         (Array.isArray(layer["groupPath"]) && layer["groupPath"].length > 0))
     )
       throw new Error("Invalid guide layer.");
+    if (layer["procedural"] !== undefined && (value["version"] !== 2 || layer["kind"] !== "path" || layer["dimension"] !== undefined || layer["guide"] !== undefined || layer["symbolId"] !== undefined || !validProcedural(layer["procedural"]))) throw new Error("Invalid procedural layer.");
+    if (layer["lineEnds"] !== undefined && (value["version"] !== 2 || !validLineEnds(layer["lineEnds"]))) throw new Error("Invalid line endings.");
+    if (layer["dimension"] !== undefined && (value["version"] !== 2 || layer["kind"] !== "path" || layer["guide"] !== undefined || layer["symbolId"] !== undefined || !validDimension(layer["dimension"]))) throw new Error("Invalid dimension.");
     const strokeStyle = layer["strokeStyle"];
     if (strokeStyle !== undefined && (value["version"] !== 2 || !record(strokeStyle) ||
       Object.keys(strokeStyle).length !== 3 ||
@@ -460,7 +493,7 @@ export function parseDocument(text: string): StudioDocument {
     for (const key of ["textLayout", "typography"]) {
       const settings = layer[key];
       if (settings !== undefined) {
-        if (value["version"] !== 2 || layer["kind"] !== "text" || !record(settings))
+        if (value["version"] !== 2 || (layer["kind"] !== "text" && layer["dimension"] === undefined) || !record(settings))
           throw new Error("Invalid text settings.");
         if (key === "textLayout") {
           if (Object.keys(settings).length !== 4 ||
@@ -568,7 +601,12 @@ export function parseDocument(text: string): StudioDocument {
       throw new Error("Invalid image adjustment.");
   }
   validateBlends(value as unknown as StudioDocument);
-  return syncBlends({ ...value, version: 2 } as unknown as StudioDocument);
+  validateProcedurals(value as unknown as StudioDocument);
+  const normalized = syncProcedurals(syncBlends({ ...value, version: 2 } as unknown as StudioDocument));
+  for (const layer of normalized.layers.filter(l => l.procedural)) {
+    if (![layer.x, layer.y, layer.rotation].every(n => finite(n, -100000, 100000)) || ![layer.width, layer.height].every(n => finite(n, 1, 16384))) throw new Error("Generated procedural geometry exceeds document bounds.");
+  }
+  return normalized;
 }
 function escapeXml(text: string): string {
   return text.replace(
@@ -604,9 +642,10 @@ function svgAlignedStroke(layer: Layer, shape: (style: string) => string, index:
   return `<defs><mask id="${id}" maskUnits="userSpaceOnUse" x="${bounds.x}" y="${bounds.y}" width="${bounds.width}" height="${bounds.height}" style="mask-type:luminance"><rect x="${bounds.x}" y="${bounds.y}" width="${bounds.width}" height="${bounds.height}" fill="#ffffff"/>${shape('fill="#000000" fill-rule="evenodd" stroke="none"')}</mask></defs><g mask="url(#${id})">${stroke}</g>`;
 }
 export function svgExport(doc: StudioDocument, measure?: TextMeasurement): string {
-  const shapes = doc.layers
+  const shapes = materializeProcedural(doc).layers
     .filter((l) => l.visible && !l.guide)
     .map((l, layerIndex) => {
+      if (l.dimension) return dimensionSvg(l, measure, layerIndex);
       const style = `${svgPaint("fill", l.kind === "path" && !l.curves?.some((p) => p.closed) ? "none" : l.fill)} ${svgStroke(l)}`;
       let content = "";
       if (l.kind === "rectangle")
@@ -653,9 +692,32 @@ export function svgExport(doc: StudioDocument, measure?: TextMeasurement): strin
       }
       if (l.kind === "image")
         content = `<image width="${l.width}" height="${l.height}" href="${escapeXml(l.source)}" style="filter:brightness(${l.adjustments.brightness}%) contrast(${l.adjustments.contrast}%) saturate(${l.adjustments.saturation}%) blur(${l.adjustments.blur}px)"/>`;
+      content += pathLineEnds(l).map(end => endingSvg(end.point, end.direction, end.style, l.stroke, l.strokeWidth)).join("");
       const blend = l.blend === "source-over" ? "normal" : l.blend;
       return `<g transform="translate(${l.x} ${l.y}) rotate(${l.rotation} ${l.width / 2} ${l.height / 2})${l.skewX ? ` translate(${l.width / 2} ${l.height / 2}) skewX(${l.skewX}) translate(${-l.width / 2} ${-l.height / 2})` : ""}${l.flipX || l.flipY ? ` translate(${l.flipX ? l.width : 0} ${l.flipY ? l.height : 0}) scale(${l.flipX ? -1 : 1} ${l.flipY ? -1 : 1})` : ""}" opacity="${l.opacity}" style="mix-blend-mode:${blend}">${content}</g>`;
     })
     .join("\n");
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${doc.width}" height="${doc.height}" viewBox="0 0 ${doc.width} ${doc.height}"><rect width="100%" height="100%" fill="${doc.background}"/>${shapes}</svg>`;
+}
+
+function endingSvg(point: Point, direction: Point, style: import("./line-endings").LineEnd, paint: string, width: number): string {
+  if (paint === "none" || width <= 0) return "";
+  const g = lineEndGeometry(point, direction, style);
+  const stroke = `${svgPaint("stroke", paint)} stroke-width="${width}" stroke-linejoin="round"`;
+  if (g.circle) return `<circle cx="${g.circle.center.x}" cy="${g.circle.center.y}" r="${g.circle.radius}" ${svgPaint("fill", paint)}/>`;
+  return (g.segments ?? [g.points]).filter(p => p.length).map(points => `<${g.closed ? "polygon" : "polyline"} points="${points.map(p => `${p.x},${p.y}`).join(" ")}" ${svgPaint("fill", g.closed ? paint : "none")} ${stroke}/>`).join("");
+}
+function dimensionSvg(layer: Layer, measure: TextMeasurement | undefined, index: number): string {
+  const d = dimensionGeometry(layer), meta = layer.dimension!;
+  let content = d.lines.map(line => `<path d="M${line.a.x} ${line.a.y} L${line.b.x} ${line.b.y}" fill="none" ${svgPaint("stroke", line.extension ? meta.extension.stroke : layer.stroke)} stroke-width="${line.extension ? meta.extension.strokeWidth : layer.strokeWidth}"/>`).join("");
+  if (d.arc) { const a = d.arc, start = {x:a.center.x + a.radius*Math.cos(a.startAngle),y:a.center.y+a.radius*Math.sin(a.startAngle)}, end = {x:a.center.x+a.radius*Math.cos(a.endAngle),y:a.center.y+a.radius*Math.sin(a.endAngle)};
+    content += `<path d="M${start.x} ${start.y} A${a.radius} ${a.radius} 0 0 ${a.endAngle > a.startAngle ? 1 : 0} ${end.x} ${end.y}" fill="none" ${svgPaint("stroke",layer.stroke)} stroke-width="${layer.strokeWidth}"/>`; }
+  content += d.ends.map(end => endingSvg(end.point,end.direction,end.style,layer.stroke,layer.strokeWidth)).join("");
+  const layout = layoutText({...layer,...meta.labelSize,text:d.text,textLayout:layer.textLayout ?? {sizing:"content",wrap:false,hyphenate:false,fit:false}},measure), type=layout.typography;
+  const decoration = type.decoration === "none" ? "" : layout.lines.map(line => `<rect x="${line.x/type.horizontalScale}" y="${line.y/type.verticalScale+(type.decoration === "underline" ? layout.fontSize*.12 : -layout.fontSize*.3)}" width="${line.width/type.horizontalScale}" height="${Math.max(1,layout.fontSize/16)}" ${svgPaint("fill",layer.fill)}/>`).join("");
+  const clipId=`dimension-label-${index}`;
+  const clip=layer.textLayout ? `<defs><clipPath id="${clipId}"><rect x="${d.labelPosition.x-layout.width/2}" y="${d.labelPosition.y-layout.height/2}" width="${layout.width}" height="${layout.height}"/></clipPath></defs>` : "";
+  content += `${clip}<g${layer.textLayout ? ` clip-path="url(#${clipId})"` : ""}><g transform="translate(${d.labelPosition.x-layout.width/2} ${d.labelPosition.y-layout.height/2}) scale(${type.horizontalScale} ${type.verticalScale})"><text font-family="${escapeXml(type.fontFamily)}" font-size="${layout.fontSize}" font-weight="${type.fontWeight}" font-style="${type.fontStyle}" ${svgPaint("fill",layer.fill)}>${layout.lines.map(line=>line.glyphs.map(g=>`<tspan x="${g.x/type.horizontalScale}" y="${line.y/type.verticalScale}">${escapeXml(g.text)}</tspan>`).join("")).join("")}</text>${decoration}</g></g>`;
+  content = content.replace(/<(path|polygon|polyline|circle|text|rect)(?=[ >])/g, `<$1 opacity="${layer.opacity}"`);
+  return `<g stroke-linecap="${layer.strokeStyle?.cap ?? "butt"}" stroke-linejoin="${layer.strokeStyle?.join ?? "miter"}" style="mix-blend-mode:${layer.blend === "source-over" ? "normal" : layer.blend}">${content}</g>`;
 }

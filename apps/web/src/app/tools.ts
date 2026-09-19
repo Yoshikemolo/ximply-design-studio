@@ -1,5 +1,12 @@
 /** Trusted built-in descriptors; shortcut assignments belong to the command registry. */
 export type ToolId =
+  | "wall"
+  | "door"
+  | "window"
+  | "pillar"
+  | "dimensionSmart"
+  | "dimensionLinear"
+  | "dimensionAngular"
   | "eyedropper"
   | "paintBucket"
   | "mirror"
@@ -49,6 +56,13 @@ export interface ToolPlugin {
   group: "Select" | "Draw" | "Paths" | "Paint" | "Symbols";
 }
 export const TOOLS: ToolPlugin[] = [
+  { id: "wall", label: "Wall", icon: "wall", group: "Draw" },
+  { id: "door", label: "Door", icon: "door", group: "Draw" },
+  { id: "window", label: "Window", icon: "window", group: "Draw" },
+  { id: "pillar", label: "Pillar", icon: "pillar", group: "Draw" },
+  { id: "dimensionSmart", label: "Smart dimension", icon: "dimension-smart", group: "Draw" },
+  { id: "dimensionLinear", label: "Linear dimension", icon: "dimension-linear", group: "Draw" },
+  { id: "dimensionAngular", label: "Angular dimension", icon: "dimension-angular", group: "Draw" },
   { id: "eyedropper", label: "Eyedropper", icon: "eyedropper", group: "Paint" },
   { id: "paintBucket", label: "Paint bucket", icon: "paintBucket", group: "Paint" },
   { id: "mirror", label: "Reflect", icon: "mirror", group: "Select" },
@@ -156,6 +170,8 @@ export interface ToolFamily {
   tools: ToolId[];
 }
 export const TOOL_FAMILIES: ToolFamily[] = [
+  { id: "architecture", label: "Floor plan tools", tools: ["wall", "door", "window", "pillar"] },
+  { id: "dimensions", label: "Dimensions", tools: ["dimensionSmart", "dimensionLinear", "dimensionAngular"] },
   { id: "selection", label: "Select", tools: ["select", "selectRectangle", "selectEllipse", "selectLasso"] },
   { id: "direct", label: "Direct selection", tools: ["direct"] },
   {

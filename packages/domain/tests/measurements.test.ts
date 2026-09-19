@@ -43,4 +43,42 @@ describe("measurement presentation and magnetic coordinates", () => {
     c.zoom = NaN;
     expect(snapPoint({ x: 2, y: 3 }, c)).toEqual({ x: 2, y: 3 });
   });
+  it("renders independent minor divisions as short unlabelled ticks, preserving major coincidences", () => {
+    const ticks = rulerTicks(200, 1, "px", 100, 10);
+    expect(ticks).toHaveLength(21);
+    expect(ticks.filter(tick => tick.major).map(tick => tick.position)).toEqual([0, 100, 200]);
+    expect(ticks.find(tick => tick.position === 10)).toEqual({ position: 10, label: "", major: false });
+    expect(ticks.find(tick => tick.position === 100)?.label).toBe("100");
+    const independent = rulerTicks(120, 1, "px", 60, 25);
+    expect(independent.map(tick => tick.position)).toEqual([0, 25, 50, 60, 75, 100, 120]);
+    expect(rulerTicks(1e7, 1000, "mm", .01, .001).length).toBeLessThanOrEqual(1000);
+    expect(rulerTicks(Number.MAX_VALUE, Number.MIN_VALUE, "px", Number.MIN_VALUE, Number.MIN_VALUE)).toEqual([{ position: 0, label: "0", major: true }]);
+  });
+  it("selects ruler snap intervals independently under the global magnetic switch", () => {
+    const c = config(); c.grid.enabled = false; c.guides.enabled = false;
+    c.rulers = { enabled: true, visible: true, step: 100, minorStep: 10, radius: 8, majorEnabled: true, minorEnabled: false };
+    expect(snapPoint({ x: 23, y: 96 }, c)).toEqual({ x: 23, y: 100 });
+    c.rulers.majorEnabled = false; c.rulers.minorEnabled = true;
+    expect(snapPoint({ x: 23, y: 96 }, c)).toEqual({ x: 20, y: 100 });
+    c.rulers.majorEnabled = true; c.rulers.minorStep = 30;
+    expect(snapPoint({ x: 94, y: 98 }, c)).toEqual({ x: 90, y: 100 });
+    c.rulers.majorEnabled = false; c.rulers.minorEnabled = false;
+    expect(snapPoint({ x: 94, y: 98 }, c)).toEqual({ x: 94, y: 98 });
+    c.rulers.minorEnabled = true; c.rulers.enabled = false;
+    expect(snapPoint({ x: 94, y: 98 }, c)).toEqual({ x: 94, y: 98 });
+    c.rulers.enabled = true; c.rulers.visible = false;
+    expect(snapPoint({ x: 94, y: 98 }, c)).toEqual({ x: 94, y: 98 });
+  });
+  it("keeps fine interval snapping independent of zoom display thinning and validates minor intervals", () => {
+    const c = config(); c.grid.enabled = false; c.guides.enabled = false;
+    c.rulers = { enabled: true, visible: true, step: 100, minorStep: 1, radius: 8, majorEnabled: false, minorEnabled: true };
+    c.zoom = .01;
+    expect(rulerTicks(1000, c.zoom, "px", 100, 1).some(tick => tick.position === 11)).toBe(false);
+    expect(snapPoint({ x: 10.8, y: -12.4 }, c)).toEqual({ x: 11, y: -12 });
+    for (const minorStep of [0, -1, Infinity, NaN]) {
+      c.rulers.minorStep = minorStep;
+      expect(snapPoint({ x: 10.8, y: -12.4 }, c)).toEqual({ x: 10.8, y: -12.4 });
+    }
+  });
+
 });
