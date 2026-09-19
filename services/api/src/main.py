@@ -176,9 +176,12 @@ class ProceduralWall(BaseModel):
     start: DimensionPoint
     end: DimensionPoint
     thickness: ProceduralLength
+    align: Literal['center', 'left', 'right'] | None = None
 
     @model_validator(mode='after')
     def nonzero_wall(self):
+        if 'align' in self.model_fields_set and self.align is None:
+            raise ValueError('Wall alignment cannot be null')
         if not 1 <= math.hypot(self.end.x - self.start.x, self.end.y - self.start.y) <= 16384:
             raise ValueError('Wall length must be between 1 and 16384')
         return self

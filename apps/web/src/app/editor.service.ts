@@ -1,5 +1,5 @@
 import { Procedural, defaultProcedural, generateProcedural, syncProcedurals, validProcedural } from "../../../../packages/domain/src/procedural";
-import { openingHost } from "./procedural-placement";
+import { openingHost, wallSnapPoint, WallSnap } from "./procedural-placement";
 import { Dimension, DimensionFormat, defaultDimensionFormat, dimensionGeometry } from "../../../../packages/domain/src/dimensions";
 import { LineEnds, defaultLineEnds, validLineEnds } from "../../../../packages/domain/src/line-endings";
 import { snapDimensionPoint, DimensionSnap } from "./dimension-snapping";
@@ -76,6 +76,8 @@ export type ContextTarget = { revision: number; layerId: string } & (
   { kind: "object"; groupPath?: string[]; selectionIds?: string[] } |
   { kind: "node"; path: number; index: number }
 );
+const WALL_POCHE = "#3f4753";
+const WALL_OUTLINE = "#161b22";
 const WORKSPACE_KEY = "xds-workspace";
 const MAX_TABS = 12;
 interface WorkspaceTab { document: StudioDocument; history: DocumentHistory; dirty: boolean; selectedId: string | null; selectedIds: string[] }
@@ -379,7 +381,7 @@ export class EditorService {
   private proceduralPatch(value:Procedural,patch:Record<string,unknown>):Procedural {
     const next={...value,...patch,type:value.type} as Procedural;
     // An explicit undefined clears an optional parameter instead of storing an empty key.
-    for(const key of Object.keys(patch))if(patch[key]===undefined)delete (next as Record<string,unknown>)[key];
+    for(const key of Object.keys(patch))if(patch[key]===undefined)delete (next as unknown as Record<string,unknown>)[key];
     if((next.type==='door'||next.type==='window')&&(value.type==='door'||value.type==='window')&&patch['width']!==undefined&&patch['leafWidths']===undefined)next.leafWidths=value.leafWidths.map(w=>w*next.width/value.width);
     if(next.type==='pillar'&&next.shape==='circle'){if(patch['depth']!==undefined&&patch['width']===undefined)next.width=next.depth;else next.depth=next.width;}
     return next;
@@ -391,9 +393,21 @@ export class EditorService {
     this.history.commit(this.document());this.document.set(next);const defaults=structuredClone(procedural);if(defaults.type==='door'||defaults.type==='window')delete defaults.host;
     this.proceduralDefaults.update(all=>({...all,[procedural.type]:defaults}));this.changed();return true;
   }
+  /** Point where the next wall of a run starts; cleared when the run ends. */
+  readonly wallChain = signal<Point|null>(null);
+  readonly wallSnapTarget = signal<WallSnap|null>(null);
+  /** Wall ends and axes take priority over the ordinary grid snap so runs share exact joints. */
+  wallPoint(point:Point,exclude?:string):Point {
+    const target=wallSnapPoint(this.document().layers,point,12/this.zoom(),exclude);
+    this.wallSnapTarget.set(target);
+    return target?.point??this.snap(point);
+  }
+  hoverWall(point:Point) { if(this.tool()==='wall'&&!this.proceduralGesture)this.wallPoint(point); }
   private proceduralLayer(type:Procedural['type'],start:Point,end?:Point,id:string=crypto.randomUUID()):Layer {
     let procedural=structuredClone(this.proceduralDefaults()[type]);
-    let layer={...newLayer('path',id,start,this.fill(),this.stroke(),this.size()),strokeStyle:{alignment:'center' as const,join:'miter' as const,cap:'butt' as const}};
+    // Architectural defaults: walls read as solid construction, openings as outlines.
+    const paint=type==='door'||type==='window'?{fill:'none',stroke:WALL_OUTLINE}:{fill:WALL_POCHE,stroke:WALL_OUTLINE};
+    let layer={...newLayer('path',id,start,paint.fill,paint.stroke,Math.min(this.size(),2)),strokeStyle:{alignment:'center' as const,join:'miter' as const,cap:'butt' as const}};
     if(type==='wall'&&procedural.type==='wall'){const b=end??{x:start.x+1,y:start.y};procedural={...procedural,start:{x:0,y:0},end:{x:b.x-start.x,y:b.y-start.y}};}
     if(type==='pillar'&&procedural.type==='pillar'&&end){const box=bounds(start,end);layer={...layer,...box};procedural={...procedural,width:Math.max(1,box.width),depth:Math.max(1,box.height)};if(procedural.shape==='circle')procedural.depth=procedural.width;}
     if(procedural.type==='door'||procedural.type==='window'){const host=openingHost(this.document().layers,start,procedural.width,12/this.zoom());if(host)procedural.host=host;else delete procedural.host;layer.x=start.x-procedural.width/2;layer.y=start.y-procedural.depth/2;}
@@ -405,10 +419,23 @@ export class EditorService {
     this.history.commit(this.document());this.document.set(next);this.selectedId.set(layer.id);this.selectedIds.set([layer.id]);this.changed();return true;
   }
   private startProcedural(type:Procedural['type'],point:Point) {
-    point=this.snap(point);if(type==='door'||type==='window'){this.createProcedural(type,point);return;}
+    if(type==='door'||type==='window'){this.createProcedural(type,this.snap(point));return;}
     if(this.document().layers.length>=150)return;
+    if(type==='wall'){
+      const chain=this.wallChain(),target=this.wallPoint(point);
+      if(chain&&Math.hypot(target.x-chain.x,target.y-chain.y)>=1){
+        if(this.createProcedural('wall',chain,target))this.wallChain.set(target);
+        return;
+      }
+      this.wallChain.set(target);
+      this.proceduralGesture={before:structuredClone(this.document()),start:target,type,id:crypto.randomUUID(),selectedId:this.selectedId(),selectedIds:[...this.selectedIds()]};
+      return;
+    }
+    point=this.snap(point);
     this.proceduralGesture={before:structuredClone(this.document()),start:point,type,id:crypto.randomUUID(),selectedId:this.selectedId(),selectedIds:[...this.selectedIds()]};
   }
+  /** Ends an open wall run without removing what it already drew. */
+  finishWallRun() { this.wallChain.set(null); this.wallSnapTarget.set(null); }
   private detachUnselectedHost(layer:Layer,ids:Set<string>):Layer {
     const p=layer.procedural;return (p?.type==='door'||p?.type==='window')&&p.host&&!ids.has(p.host.wallId)?this.detachOpening(layer):layer;
   }
@@ -1390,10 +1417,11 @@ export class EditorService {
     };
   }
   move(point: Point, modifiers: { shift?: boolean; alt?: boolean; ctrl?: boolean } = {}) {
-    if(this.proceduralGesture){const g=this.proceduralGesture;const end=modifiers.shift?snapDirection(g.start,point,this.snapAngle()):this.snap(point);try{const layer=this.proceduralLayer(g.type,g.start,end,g.id);const next=syncProcedurals({...g.before,layers:[...g.before.layers,layer]});parseDocument(JSON.stringify(next));this.document.set(next);this.selectedId.set(layer.id);this.selectedIds.set([layer.id]);}catch{/* Keep the last valid preview. */}return;}
+    if(this.proceduralGesture){const g=this.proceduralGesture;const end=modifiers.shift?snapDirection(g.start,point,this.snapAngle()):(g.type==='wall'?this.wallPoint(point,g.id):this.snap(point));try{const layer=this.proceduralLayer(g.type,g.start,end,g.id);const next=syncProcedurals({...g.before,layers:[...g.before.layers,layer]});parseDocument(JSON.stringify(next));this.document.set(next);this.selectedId.set(layer.id);this.selectedIds.set([layer.id]);}catch{/* Keep the last valid preview. */}return;}
     if(this.dimensionLabelGesture){const layer=this.document().layers.find(l=>l.id===this.dimensionLabelGesture!.id)!;this.setLayer(layer.id,{dimension:{...layer.dimension!,labelPosition:localPoint(layer,point)}});return;}
     const draft=this.dimensionDraft();if(draft){const count=draft.kind=== "angular"?3:2;const placing=draft.points.length>=count;this.dimensionDraft.set({...draft,cursor:placing?point:this.dimensionPoint(point,true)});if(placing)this.dimensionSnapTarget.set(null);return;}
     if(!this.gesture&&["dimensionSmart","dimensionLinear","dimensionAngular"].includes(this.tool())){this.hoverDimension(point);return;}
+    if(!this.gesture&&!this.proceduralGesture&&this.tool()==='wall'){this.hoverWall(modifiers.shift&&this.wallChain()?snapDirection(this.wallChain()!,point,this.snapAngle()):point);return;}
     if (this.areaGesture) { this.moveAreaSelection(point); return; }
     const g = this.gesture;
     if (!g) return;
@@ -1567,7 +1595,7 @@ export class EditorService {
     );
   }
   end() {
-    if(this.proceduralGesture){const g=this.proceduralGesture;this.proceduralGesture=undefined;if(this.document().layers.some(l=>l.id===g.id)){this.history.commit(g.before);this.changed();}return;}
+    if(this.proceduralGesture){const g=this.proceduralGesture;this.proceduralGesture=undefined;const drawn=this.document().layers.find(l=>l.id===g.id);if(drawn){this.history.commit(g.before);this.changed();if(g.type==='wall'&&drawn.procedural?.type==='wall')this.wallChain.set(worldPoint(drawn,drawn.procedural.end));}return;}
     if(this.dimensionLabelGesture){this.history.commit(this.dimensionLabelGesture.before);this.dimensionLabelGesture=undefined;this.changed();return;}
     if (this.areaGesture) {
       if (!this.areaGesture.moved && !this.areaGesture.shift) { this.selectedId.set(null); this.selectedIds.set([]); this.activeNodes.set([]); }
@@ -1596,6 +1624,7 @@ export class EditorService {
   }
   cancel() {
     if(this.proceduralGesture){this.document.set(this.proceduralGesture.before);this.selectedId.set(this.proceduralGesture.selectedId);this.selectedIds.set(this.proceduralGesture.selectedIds);this.proceduralGesture=undefined;}
+    this.finishWallRun();
     this.dimensionDraft.set(null);this.dimensionSnapTarget.set(null);
     if(this.dimensionLabelGesture)this.document.set(this.dimensionLabelGesture.before);this.dimensionLabelGesture=undefined;
     this.cancelGuideDrag();
@@ -1844,7 +1873,7 @@ export class EditorService {
   }
 
   setTool(tool: ToolId) {
-    if (tool !== this.tool()) { this.finishPath(); this.dimensionDraft.set(null); this.dimensionSnapTarget.set(null); }
+    if (tool !== this.tool()) { this.finishPath(); this.dimensionDraft.set(null); this.dimensionSnapTarget.set(null); this.finishWallRun(); }
     this.activeNodes.set([]);
     this.tool.set(tool);
   }

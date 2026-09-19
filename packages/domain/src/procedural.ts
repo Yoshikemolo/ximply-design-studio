@@ -8,6 +8,8 @@ export interface WallProcedure {
     start: Point;
     end: Point;
     thickness: number;
+    /** Which part of the wall the drawn line represents; the default is its axis. */
+    align?: 'center' | 'left' | 'right';
 }
 export interface OpeningHost {
     wallId: string;
@@ -68,7 +70,10 @@ function arc(center: Point, radius: number, start: number, angle: number): Curve
 }
 function wallPath(p: WallProcedure): CurvePath {
     const length = Math.hypot(p.end.x - p.start.x, p.end.y - p.start.y) || 1, n = { x: -(p.end.y - p.start.y) * p.thickness / 2 / length, y: (p.end.x - p.start.x) * p.thickness / 2 / length };
-    return polyline([{ x: p.start.x + n.x, y: p.start.y + n.y }, { x: p.end.x + n.x, y: p.end.y + n.y }, { x: p.end.x - n.x, y: p.end.y - n.y }, { x: p.start.x - n.x, y: p.start.y - n.y }], true);
+    // Left and right follow the walking direction from start to end.
+    const shift = p.align === 'left' ? -1 : p.align === 'right' ? 1 : 0;
+    const a = { x: p.start.x + n.x * shift, y: p.start.y + n.y * shift }, b = { x: p.end.x + n.x * shift, y: p.end.y + n.y * shift };
+    return polyline([{ x: a.x + n.x, y: a.y + n.y }, { x: b.x + n.x, y: b.y + n.y }, { x: b.x - n.x, y: b.y - n.y }, { x: a.x - n.x, y: a.y - n.y }], true);
 }
 /** Keep architectural wall thickness perpendicular in world space, even under shear. */
 function transformedWallPath(layer: Layer, procedure: WallProcedure): CurvePath {
@@ -216,7 +221,9 @@ export function validProcedural(value: unknown): value is Procedural {
         return false;
     const p = value, length = (v: unknown) => typeof v === 'number' && Number.isFinite(v) && v >= 1 && v <= 16384, point = (v: unknown): v is Point => record(v) && Object.keys(v).length === 2 && [v['x'], v['y']].every(n => typeof n === 'number' && Number.isFinite(n) && Math.abs(n) <= 1e7);
     if (p['type'] === 'wall')
-        return Object.keys(p).length === 4 && point(p['start']) && point(p['end']) && length(p['thickness']) && length(Math.hypot(p['end'].x - p['start'].x, p['end'].y - p['start'].y));
+        return Object.keys(p).length === (p['align'] === undefined ? 4 : 5)
+            && (p['align'] === undefined || ['center', 'left', 'right'].includes(p['align'] as string))
+            && point(p['start']) && point(p['end']) && length(p['thickness']) && length(Math.hypot(p['end'].x - p['start'].x, p['end'].y - p['start'].y));
     if (p['type'] === 'pillar')
         return Object.keys(p).length === 4 && typeof p['shape'] === 'string' && ['rectangle', 'circle'].includes(p['shape']) && length(p['width']) && length(p['depth']) && (p['shape'] !== 'circle' || Math.abs(Number(p['width']) - Number(p['depth'])) <= 1e-6);
     if (p['type'] !== 'door' && p['type'] !== 'window')

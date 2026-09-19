@@ -2,8 +2,8 @@ import { describe, it, expect } from 'vitest';
 import { blankDocument, newLayer, parseDocument, svgExport, Layer } from '../src/document';
 import { defaultProcedural, generateProcedural, projectionCurves, projectionDash, leafType, DoorProcedure, WindowProcedure } from '../src/procedural';
 
-function opening(patch: Partial<DoorProcedure & WindowProcedure> & { type?: 'door' | 'window' } = {}): Layer {
-  const type = patch.type ?? 'door';
+function opening(patch: Record<string, unknown> = {}): Layer {
+  const type = (patch['type'] as 'door' | 'window') ?? 'door';
   const procedural = { ...defaultProcedural(type), ...patch, type } as DoorProcedure | WindowProcedure;
   return generateProcedural({ ...newLayer('path', 'opening', { x: 0, y: 0 }, 'none', '#000000', 2), width: 80, height: 16, procedural });
 }

@@ -1,4 +1,9 @@
 const ES: Record<string, string> = {
+  "Wall alignment": "Alineación del muro",
+  "Centred on the line": "Centrado en la línea",
+  "Left face on the line": "Cara izquierda en la línea",
+  "Right face on the line": "Cara derecha en la línea",
+  "Click to continue the wall run; press Escape to end it.": "Haz clic para continuar el muro; pulsa Escape para terminarlo.",
   "Leaf type": "Tipo de hoja",
   "Folding": "Plegable",
   "Pocket": "Corredera empotrada",
