@@ -1,0 +1,8 @@
+# qa environment override; loopback bindings inherited from base.
+services:
+  postgres:
+    labels:
+      com.ximply.environment: qa
+  redis:
+    labels:
+      com.ximply.environment: qa

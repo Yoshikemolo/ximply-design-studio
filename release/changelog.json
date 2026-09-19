@@ -1,0 +1,17 @@
+{
+  "entries": [
+    {
+      "version": "0.1.0-design.1",
+      "date": "2026-09-19",
+      "summary": "Initial studio architecture and engineering specification.",
+      "breakingChanges": [],
+      "changes": [
+        {
+          "type": "Engineering",
+          "description": "Define functional scope, contracts, security, licensing, workspace behavior and delivery controls."
+        }
+      ],
+      "capabilityStatus": "design-only"
+    }
+  ]
+}

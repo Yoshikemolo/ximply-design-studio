@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "requiredScopes": [
+    "overall",
+    "newCode"
+  ],
+  "zeroMetrics": [
+    "bugs",
+    "vulnerabilities",
+    "codeSmells",
+    "securityHotspots"
+  ],
+  "strictMinimumCoverage": 80,
+  "strictMaximumDuplication": 3,
+  "requiredModules": [
+    "web",
+    "desktop",
+    "domain",
+    "renderer",
+    "plugin-sdk",
+    "design-system",
+    "api",
+    "persistence",
+    "realtime",
+    "worker"
+  ],
+  "requireFreshRevision": true
+}

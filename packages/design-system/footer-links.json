@@ -1,0 +1,13 @@
+{
+  "status": "pending-reference-confirmation",
+  "reference": "https://evidentapp.ai/",
+  "bottomRowLinks": [],
+  "observedPublicFooterLabels": [
+    "Ximplicity",
+    "GitHub",
+    "Contact us",
+    "Privacy policy",
+    "Legal notice"
+  ],
+  "note": "Do not treat observed public groups as confirmed application bottom-row mapping."
+}
