@@ -250,10 +250,6 @@
           }
           <button class="swap-paint" (click)="editor.swapPaint()" [title]="t('Swap fill and stroke')" [attr.aria-label]="t('Swap fill and stroke')">⇄</button>
         </div>
-        @for (target of paintTargets; track target) {
-          <div class="quick-paints" [attr.aria-label]="t(target === 'fill' ? 'Fill' : 'Stroke')"><span>{{ t(target === 'fill' ? 'Fill' : 'Stroke') }}</span>@for (color of quickColors; track color.value) {<button [class.no-paint]="color.value === 'none'" [style.background]="color.value === 'none' ? '' : color.value" [title]="t(target === 'fill' ? 'Fill' : 'Stroke') + ': ' + t(color.label)" [attr.aria-label]="t(target === 'fill' ? 'Fill' : 'Stroke') + ': ' + t(color.label)" (click)="editor.setPaint(target, color.value)"></button>}</div>
-        }
-        <label class="rail-width">{{ t("Width") }}<input type="number" min="0" step="any" [value]="displayDistance(paintWidth())" (change)="setPaintWidth($event)" /><small>{{ preferences.distanceUnit() }}</small></label>
       </div>
     </aside>
     <section class="canvas-area">
