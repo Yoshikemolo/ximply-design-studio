@@ -28,3 +28,8 @@ configuration and verification. Tests within a PR can themselves be changed; pro
 harness/workflow paths with required review and validate critical policy using trusted
 base-branch code or an externally controlled reusable workflow before implementation
 merges. The bootstrap workflow alone is not tamper-proof enforcement.
+
+The quality-evidence feature branch provides a tested collector and a required
+engineering module. It depends on foundation PR #1 and does not enable live analysis
+or required-check enforcement. Its API contract must be validated on the selected
+Sonar version before a trusted runner is activated.

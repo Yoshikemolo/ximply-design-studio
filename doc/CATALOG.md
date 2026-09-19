@@ -68,6 +68,7 @@ Generated titles and paths only; authoritative content remains in each linked do
 - [FEAT-0026 — FEAT-0026 — Commercial administration and seat allocation](feat/FEAT-0026.md)
 - [FEAT-0027 — FEAT-0027 — Ximplicity UX and commercial capability states](feat/FEAT-0027.md)
 - [FEAT-0028 — FEAT-0028 — Shared footer and single-source changelog](feat/FEAT-0028.md)
+- [PLAN-0023-0001 — Revision-bound quality evidence collector](implementation/PLAN-0023-0001.md)
 - [DOC-OPERATIONS-0001 — CI/CD status and activation](operations/cicd-status.md)
 - [DOC-OPERATIONS-0002 — Container build and CI/CD implementation contract](operations/container-builds.md)
 - [DOC-OPERATIONS-0003 — Local development](operations/local-development.md)

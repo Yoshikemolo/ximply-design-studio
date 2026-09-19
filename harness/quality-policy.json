@@ -22,7 +22,8 @@
     "api",
     "persistence",
     "realtime",
-    "worker"
+    "worker",
+    "engineering"
   ],
   "requireFreshRevision": true
 }

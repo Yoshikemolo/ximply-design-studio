@@ -503,7 +503,7 @@
       "id": "FEAT-0023",
       "title": "Engineering quality and provenance",
       "path": "doc/feat/FEAT-0023.md",
-      "status": "Planned",
+      "status": "Implementing",
       "iteration": "ITER-0001",
       "dependsOn": [],
       "adrs": [
@@ -515,9 +515,17 @@
         "SC-0068",
         "SC-0069"
       ],
-      "implementation": [],
-      "tests": [],
-      "evidence": []
+      "implementation": [
+        "harness/check_quality.py",
+        "harness/collect_quality.py"
+      ],
+      "tests": [
+        "tests/test_quality.py",
+        "tests/test_quality_collector.py"
+      ],
+      "evidence": [
+        "doc/implementation/PLAN-0023-0001.md"
+      ]
     },
     {
       "id": "FEAT-0024",
