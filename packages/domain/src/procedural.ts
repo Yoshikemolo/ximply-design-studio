@@ -2,7 +2,7 @@ import * as clipping from 'polygon-clipping';
 import type { Layer, Point, StudioDocument } from './document';
 import { anchor, CurvePath, fitCurves, mapCurves, worldPoint } from './curves';
 import { ellipsePath, polyline } from './shapes';
-export type ProceduralKind = 'wall' | 'door' | 'window' | 'pillar';
+export type ProceduralKind = 'wall' | 'door' | 'window' | 'pillar' | 'stair';
 export interface WallProcedure {
     type: 'wall';
     start: Point;
@@ -44,12 +44,23 @@ export interface PillarProcedure {
     width: number;
     depth: number;
 }
-export type Procedural = WallProcedure | DoorProcedure | WindowProcedure | PillarProcedure;
+export interface StairProcedure {
+    type: 'stair';
+    /** Across the flight. */
+    width: number;
+    /** Along the walking direction. */
+    length: number;
+    steps: number;
+    direction: 'up' | 'down';
+}
+export type Procedural = WallProcedure | DoorProcedure | WindowProcedure | PillarProcedure | StairProcedure;
 export function defaultProcedural(type: ProceduralKind): Procedural {
     if (type === 'wall')
         return { type, start: { x: 0, y: 0 }, end: { x: 200, y: 0 }, thickness: 16 };
     if (type === 'pillar')
         return { type, shape: 'rectangle', width: 60, depth: 60 };
+    if (type === 'stair')
+        return { type, width: 100, length: 280, steps: 10, direction: 'up' };
     if (type === 'door')
         return { type, width: 80, depth: 16, leafWidths: [80], operation: 'swing', swing: 'left', side: 'front', openingAngle: 90 };
     return { type, width: 100, depth: 16, leafWidths: [50, 50], operation: 'fixed', swing: 'left', side: 'front', openingAngle: 90 };
@@ -157,11 +168,24 @@ export function projectionCurves(layer: Layer): boolean[] {
     const flags = openingCurves(p).map((curve) => curve.projection);
     return flags.some(Boolean) && flags.length === layer.curves?.length ? flags : [];
 }
+/** Straight flight: outline, treads and the walking line with an arrow towards the exit. */
+function stairPaths(p: StairProcedure): CurvePath[] {
+    const paths: CurvePath[] = [rectangle(0, 0, p.width, p.length)];
+    const tread = p.length / p.steps;
+    for (let step = 1; step < p.steps; step++)
+        paths.push(line({ x: 0, y: tread * step }, { x: p.width, y: tread * step }));
+    const up = p.direction === 'up', from = { x: p.width / 2, y: up ? p.length : 0 }, to = { x: p.width / 2, y: up ? 0 : p.length };
+    const head = Math.min(p.width / 4, tread), sign = up ? 1 : -1;
+    paths.push(line(from, to));
+    paths.push(line(to, { x: to.x - head / 2, y: to.y + head * sign }), line(to, { x: to.x + head / 2, y: to.y + head * sign }));
+    return paths;
+}
 const generators: Record<ProceduralKind, (p: Procedural) => CurvePath[]> = {
     wall: p => [wallPath(p as WallProcedure)],
     door: p => openingPaths(p as DoorProcedure),
     window: p => openingPaths(p as WindowProcedure),
     pillar: p => { const v = p as PillarProcedure; return [v.shape === 'circle' ? ellipsePath(v.width / 2, v.depth / 2, v.width / 2, v.depth / 2) : rectangle(0, 0, v.width, v.depth)]; },
+    stair: p => stairPaths(p as StairProcedure),
 };
 function pathBounds(paths: CurvePath[]) { const points = paths.flatMap(p => p.nodes.flatMap(n => [n.point, n.incoming, n.outgoing])); const x = Math.min(...points.map(p => p.x)), y = Math.min(...points.map(p => p.y)); return { x, y, width: Math.max(1, Math.max(...points.map(p => p.x)) - x), height: Math.max(1, Math.max(...points.map(p => p.y)) - y) }; }
 function nearGeometry(a: unknown, b: unknown): boolean {
@@ -226,6 +250,10 @@ export function validProcedural(value: unknown): value is Procedural {
             && point(p['start']) && point(p['end']) && length(p['thickness']) && length(Math.hypot(p['end'].x - p['start'].x, p['end'].y - p['start'].y));
     if (p['type'] === 'pillar')
         return Object.keys(p).length === 4 && typeof p['shape'] === 'string' && ['rectangle', 'circle'].includes(p['shape']) && length(p['width']) && length(p['depth']) && (p['shape'] !== 'circle' || Math.abs(Number(p['width']) - Number(p['depth'])) <= 1e-6);
+    if (p['type'] === 'stair')
+        return Object.keys(p).length === 5 && length(p['width']) && length(p['length'])
+            && typeof p['steps'] === 'number' && Number.isInteger(p['steps']) && p['steps'] >= 2 && p['steps'] <= 100
+            && typeof p['direction'] === 'string' && ['up', 'down'].includes(p['direction']);
     if (p['type'] !== 'door' && p['type'] !== 'window')
         return false;
     const optional = ['host', 'leafTypes', 'side'].filter(key => p[key] !== undefined).length;
@@ -354,5 +382,7 @@ export function resizeProcedural(layer: Layer, width: number, height: number): P
         return { ...p, start: { x: p.start.x * sx, y: p.start.y * sy }, end: { x: p.end.x * sx, y: p.end.y * sy } };
     if (p.type === 'pillar')
         return { ...p, width: p.width * sx, depth: p.shape === 'circle' ? p.width * sx : p.depth * sy };
+    if (p.type === 'stair')
+        return { ...p, width: p.width * sx, length: p.length * sy };
     return { ...p, width: p.width * sx, leafWidths: p.leafWidths.map(w => w * sx) };
 }

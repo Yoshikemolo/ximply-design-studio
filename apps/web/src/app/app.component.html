@@ -470,6 +470,10 @@
                 } @else {
                   <div class="property-grid"><label>{{ t('Width') }}<input type="number" [min]="displayDistance(1)" [max]="displayDistance(16384)" step="any" [value]="displayDistance(procedural.width)" (change)="setProceduralNumber('width', $event)" /></label><label [title]="t((procedural.type === 'door' || procedural.type === 'window') && procedural.host ? 'Depth follows the host wall.' : 'Depth')">{{ t('Depth') }}<input type="number" [disabled]="(procedural.type === 'door' || procedural.type === 'window') && !!procedural.host" [min]="displayDistance(1)" [max]="displayDistance(16384)" step="any" [value]="displayDistance(procedural.depth)" (change)="setProceduralNumber('depth', $event)" /></label></div>
                 }
+                @if (procedural.type === 'stair') {
+                  <div class="property-grid"><label>{{ t('Flight width') }}<input type="number" [min]="displayDistance(1)" [max]="displayDistance(16384)" step="any" [value]="displayDistance(procedural.width)" (change)="setProceduralNumber('width', $event)" /></label><label>{{ t('Flight length') }}<input type="number" [min]="displayDistance(1)" [max]="displayDistance(16384)" step="any" [value]="displayDistance(procedural.length)" (change)="setProceduralNumber('length', $event)" /></label></div>
+                  <div class="property-grid"><label>{{ t('Number of steps') }}<input type="number" min="2" max="100" step="1" [value]="procedural.steps" (change)="setProceduralSteps($event)" /></label><label>{{ t('Walking direction') }}<select [value]="procedural.direction" (change)="patchProcedural({direction: text($event)})"><option value="up">{{ t('Up') }}</option><option value="down">{{ t('Down') }}</option></select></label></div>
+                }
                 @if (procedural.type === 'pillar') {
                   <label>{{ t('Pillar shape') }}<select [value]="procedural.shape" (change)="setPillarShape($event)"><option value="rectangle">{{ t('Rectangular pillar') }}</option><option value="circle">{{ t('Circular pillar') }}</option></select></label>
                 }

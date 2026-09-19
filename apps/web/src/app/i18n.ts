@@ -1,4 +1,13 @@
 const ES: Record<string, string> = {
+  "Stair": "Escalera",
+  "Chain dimension": "Cota en cadena",
+  "Flight width": "Ancho del tramo",
+  "Flight length": "Longitud del tramo",
+  "Number of steps": "Número de peldaños",
+  "Walking direction": "Sentido de subida",
+  "Up": "Ascendente",
+  "Down": "Descendente",
+  "Click each point, click the last one again, then set the offset.": "Haz clic en cada punto, vuelve a hacer clic en el último y después fija la separación.",
   "Wall alignment": "Alineación del muro",
   "Centred on the line": "Centrado en la línea",
   "Left face on the line": "Cara izquierda en la línea",

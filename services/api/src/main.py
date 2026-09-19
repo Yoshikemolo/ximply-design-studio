@@ -226,6 +226,15 @@ class ProceduralWindow(ProceduralOpening):
     swing: Literal['left', 'right']
 
 
+class ProceduralStair(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    type: Literal['stair']
+    width: ProceduralLength
+    length: ProceduralLength
+    steps: Annotated[int, Field(ge=2, le=100)]
+    direction: Literal['up', 'down']
+
+
 class ProceduralPillar(BaseModel):
     model_config = ConfigDict(extra='forbid')
     type: Literal['pillar']
@@ -240,7 +249,7 @@ class ProceduralPillar(BaseModel):
         return self
 
 
-Procedural = Annotated[ProceduralWall | ProceduralDoor | ProceduralWindow | ProceduralPillar,
+Procedural = Annotated[ProceduralWall | ProceduralDoor | ProceduralWindow | ProceduralPillar | ProceduralStair,
                        Field(discriminator='type')]
 
 

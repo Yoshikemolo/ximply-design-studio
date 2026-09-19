@@ -454,6 +454,10 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     const leafTypes = p.leafWidths.map((_, position) => (position === index ? value : (p.leafTypes?.[position] ?? (p.operation === "opening" ? "fixed" : p.operation)))) as LeafType[];
     this.patchProcedural({ leafTypes: leafTypes.every((leaf) => leaf === leafTypes[0]) && leafTypes[0] === p.operation ? undefined : leafTypes });
   }
+  setProceduralSteps(event: Event) {
+    const steps = Math.round(this.number(event));
+    if (Number.isFinite(steps) && steps >= 2 && steps <= 100) this.patchProcedural({ steps });
+  }
   setProceduralLeafCount(event: Event) {
     const p = this.proceduralProperties(); if (!p || (p.type !== "door" && p.type !== "window")) return;
     const count = this.number(event); if (!Number.isInteger(count) || count < 1 || count > (p.type === "door" ? 4 : 8)) return;

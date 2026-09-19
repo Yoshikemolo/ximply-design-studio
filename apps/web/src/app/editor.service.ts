@@ -372,8 +372,8 @@ export class EditorService {
     this.changed(); return true;
   }
 
-  readonly proceduralDefaults = signal<Record<Procedural['type'],Procedural>>({wall:defaultProcedural('wall'),door:defaultProcedural('door'),window:defaultProcedural('window'),pillar:defaultProcedural('pillar')});
-  private proceduralGesture?: {before:StudioDocument;start:Point;type:'wall'|'pillar';id:string;selectedId:string|null;selectedIds:string[]};
+  readonly proceduralDefaults = signal<Record<Procedural['type'],Procedural>>({wall:defaultProcedural('wall'),door:defaultProcedural('door'),window:defaultProcedural('window'),pillar:defaultProcedural('pillar'),stair:defaultProcedural('stair')});
+  private proceduralGesture?: {before:StudioDocument;start:Point;type:'wall'|'pillar'|'stair';id:string;selectedId:string|null;selectedIds:string[]};
   updateProceduralDefaults(type:Procedural['type'],patch:Record<string,unknown>):boolean {
     const value=this.proceduralPatch(this.proceduralDefaults()[type],patch);if(!validProcedural(value))return false;
     this.proceduralDefaults.update(all=>({...all,[type]:value}));return true;
@@ -410,6 +410,7 @@ export class EditorService {
     let layer={...newLayer('path',id,start,paint.fill,paint.stroke,Math.min(this.size(),2)),strokeStyle:{alignment:'center' as const,join:'miter' as const,cap:'butt' as const}};
     if(type==='wall'&&procedural.type==='wall'){const b=end??{x:start.x+1,y:start.y};procedural={...procedural,start:{x:0,y:0},end:{x:b.x-start.x,y:b.y-start.y}};}
     if(type==='pillar'&&procedural.type==='pillar'&&end){const box=bounds(start,end);layer={...layer,...box};procedural={...procedural,width:Math.max(1,box.width),depth:Math.max(1,box.height)};if(procedural.shape==='circle')procedural.depth=procedural.width;}
+    if(type==='stair'&&procedural.type==='stair'&&end){const box=bounds(start,end);layer={...layer,...box};procedural={...procedural,width:Math.max(1,box.width),length:Math.max(1,box.height)};}
     if(procedural.type==='door'||procedural.type==='window'){const host=openingHost(this.document().layers,start,procedural.width,12/this.zoom());if(host)procedural.host=host;else delete procedural.host;layer.x=start.x-procedural.width/2;layer.y=start.y-procedural.depth/2;}
     layer.name=type[0].toUpperCase()+type.slice(1);layer.procedural=procedural;return generateProcedural(layer,this.document());
   }
@@ -449,13 +450,44 @@ export class EditorService {
   readonly dimensionSnapRadius = signal(10);
   readonly dimensionDefaults = signal<DimensionFormat>({ ...defaultDimensionFormat });
   readonly lineEnds = signal<LineEnds>(structuredClone(defaultLineEnds));
-  readonly dimensionDraft = signal<{kind:'linear'|'angular';points:Point[];cursor:Point} | null>(null);
+  readonly dimensionDraft = signal<{kind:'linear'|'angular'|'chain';points:Point[];cursor:Point;ready?:boolean} | null>(null);
   readonly dimensionSnapTarget = signal<DimensionSnap | null>(null);
   private dimensionLabelGesture?: {before:StudioDocument;id:string};
   setDimensionsLocked(value:boolean) { this.dimensionsLocked.set(value); if(value&&this.dimensionLabelGesture)this.cancel(); }
   private dimensionPoint(point:Point,finalAnchor:boolean):Point {
     const target=this.dimensionsSnap()?snapDimensionPoint(this.document().layers,point,this.dimensionSnapRadius()/this.zoom(),finalAnchor):null;
     this.dimensionSnapTarget.set(target);return target?.point??this.snap(point);
+  }
+  /** One offset line shared by consecutive measurements, committed as a single history entry. */
+  createChainDimension(points:Point[],labelPosition:Point):boolean {
+    if(points.length<3||this.document().layers.length+points.length-1>150)return false;
+    const layers:Layer[]=[];
+    for(let i=0;i<points.length-1;i++){
+      const layer=this.buildDimension('linear',[points[i],points[i+1]],labelPosition,crypto.randomUUID());
+      if(!layer)return false;
+      layers.push(layer);
+    }
+    const before=this.document();
+    let next:StudioDocument;
+    try{next=syncProcedurals({...before,layers:[...before.layers,...layers]});parseDocument(JSON.stringify(next));}catch{return false;}
+    this.history.commit(before);this.document.set(next);
+    this.selectedIds.set(layers.map(l=>l.id));this.selectedId.set(layers.at(-1)!.id);this.changed();return true;
+  }
+  private startChainDimension(point:Point) {
+    const draft=this.dimensionDraft();
+    if(!draft||draft.kind!=='chain'){const p=this.dimensionPoint(point,true);this.dimensionDraft.set({kind:'chain',points:[p],cursor:p});return;}
+    if(draft.ready){
+      if(this.createChainDimension(draft.points,point)){this.dimensionDraft.set(null);this.dimensionSnapTarget.set(null);}
+      return;
+    }
+    const p=this.dimensionPoint(point,true),last=draft.points.at(-1)!;
+    // Clicking the last point again closes the chain and asks for the offset.
+    if(Math.hypot(p.x-last.x,p.y-last.y)<1e-6){
+      if(draft.points.length>=3)this.dimensionDraft.set({...draft,ready:true,cursor:p});
+      return;
+    }
+    if(draft.points.length>=12)return;
+    this.dimensionDraft.set({...draft,points:[...draft.points,p],cursor:p});
   }
   private startDimension(point:Point,kind:'linear'|'angular') {
     let draft=this.dimensionDraft();if(draft&&draft.kind!==kind)draft=null;
@@ -465,9 +497,19 @@ export class EditorService {
     this.createDimension(kind,draft.points,point);this.dimensionDraft.set(null);this.dimensionSnapTarget.set(null);
   }
   /** Snapped hover target while a dimension tool waits for an anchor; placement of the label is free. */
-  hoverDimension(point:Point) { const draft=this.dimensionDraft(),count=draft?.kind==='angular'?3:2; if(draft&&draft.points.length>=count){this.dimensionSnapTarget.set(null);return;} this.dimensionPoint(point,true); }
+  hoverDimension(point:Point) {
+    const draft=this.dimensionDraft(),count=draft?.kind==='chain'?Infinity:(draft?.kind==='angular'?3:2);
+    if(draft&&(draft.ready===true||draft.points.length>=count)){this.dimensionSnapTarget.set(null);return;}
+    this.dimensionPoint(point,true);
+  }
   /** Live annotation shown once every anchor is fixed, so the offset and label side are visible before the last click. */
-  readonly dimensionPreview=computed<Layer|null>(()=>{const draft=this.dimensionDraft();if(!draft||draft.points.length<(draft.kind==='angular'?3:2))return null;return this.buildDimension(draft.kind,draft.points,draft.cursor,'__dimension_preview__');});
+  readonly dimensionPreview=computed<Layer|null>(()=>{
+    const draft=this.dimensionDraft();
+    if(!draft)return null;
+    if(draft.kind==='chain')return draft.ready?this.buildDimension('linear',[draft.points[0],draft.points.at(-1)!],draft.cursor,'__dimension_preview__'):null;
+    if(draft.points.length<(draft.kind==='angular'?3:2))return null;
+    return this.buildDimension(draft.kind,draft.points,draft.cursor,'__dimension_preview__');
+  });
   private buildDimension(kind:'linear'|'angular',anchors:Point[],labelPosition:Point,id:string):Layer|null {
     if(anchors.length!==(kind==='angular'?3:2)||[...anchors,labelPosition].some(p=>!Number.isFinite(p.x)||!Number.isFinite(p.y)))return null;
     if(Math.hypot(anchors[1].x-anchors[0].x,anchors[1].y-anchors[0].y)<1e-6)return null;
@@ -1122,7 +1164,8 @@ export class EditorService {
     override?: ToolId,
   ) {
     const tool = override ?? this.tool();
-    if(["wall","door","window","pillar"].includes(tool)){this.startProcedural(tool as Procedural["type"],point);return;}
+    if(["wall","door","window","pillar","stair"].includes(tool)){this.startProcedural(tool as Procedural["type"],point);return;}
+    if (tool === "dimensionChain") { this.startChainDimension(point); return; }
     if (["dimensionSmart", "dimensionLinear", "dimensionAngular"].includes(tool)) { this.startDimension(point, tool === "dimensionAngular" ? "angular" : "linear"); return; }
     const dimensionLayer=this.selected();
     if(tool === "select" && dimensionLayer?.dimension && !this.isEffectivelyLocked(dimensionLayer) && this.selectedLayers().length===1) {
@@ -1419,8 +1462,8 @@ export class EditorService {
   move(point: Point, modifiers: { shift?: boolean; alt?: boolean; ctrl?: boolean } = {}) {
     if(this.proceduralGesture){const g=this.proceduralGesture;const end=modifiers.shift?snapDirection(g.start,point,this.snapAngle()):(g.type==='wall'?this.wallPoint(point,g.id):this.snap(point));try{const layer=this.proceduralLayer(g.type,g.start,end,g.id);const next=syncProcedurals({...g.before,layers:[...g.before.layers,layer]});parseDocument(JSON.stringify(next));this.document.set(next);this.selectedId.set(layer.id);this.selectedIds.set([layer.id]);}catch{/* Keep the last valid preview. */}return;}
     if(this.dimensionLabelGesture){const layer=this.document().layers.find(l=>l.id===this.dimensionLabelGesture!.id)!;this.setLayer(layer.id,{dimension:{...layer.dimension!,labelPosition:localPoint(layer,point)}});return;}
-    const draft=this.dimensionDraft();if(draft){const count=draft.kind=== "angular"?3:2;const placing=draft.points.length>=count;this.dimensionDraft.set({...draft,cursor:placing?point:this.dimensionPoint(point,true)});if(placing)this.dimensionSnapTarget.set(null);return;}
-    if(!this.gesture&&["dimensionSmart","dimensionLinear","dimensionAngular"].includes(this.tool())){this.hoverDimension(point);return;}
+    const draft=this.dimensionDraft();if(draft){const count=draft.kind==="chain"?Infinity:(draft.kind==="angular"?3:2);const placing=draft.ready===true||draft.points.length>=count;this.dimensionDraft.set({...draft,cursor:placing?point:this.dimensionPoint(point,true)});if(placing)this.dimensionSnapTarget.set(null);return;}
+    if(!this.gesture&&["dimensionSmart","dimensionLinear","dimensionAngular","dimensionChain"].includes(this.tool())){this.hoverDimension(point);return;}
     if(!this.gesture&&!this.proceduralGesture&&this.tool()==='wall'){this.hoverWall(modifiers.shift&&this.wallChain()?snapDirection(this.wallChain()!,point,this.snapAngle()):point);return;}
     if (this.areaGesture) { this.moveAreaSelection(point); return; }
     const g = this.gesture;
