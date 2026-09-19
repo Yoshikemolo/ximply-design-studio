@@ -50,6 +50,7 @@ Generated titles and paths only; authoritative content remains in each linked do
 - [REL-0011 — Appearance palette, units and magnetic layout aids](changelog/0.3.5-alpha.1.md)
 - [REL-0012 — Contextual object and Bezier menus](changelog/0.3.6-alpha.1.md)
 - [REL-0013 — Typography, text frames and localized action icons](changelog/0.3.7-alpha.1.md)
+- [REL-0014 — Category-based settings navigation](changelog/0.3.8-alpha.1.md)
 - [REL-0003 — Pending changes](changelog/Unreleased.md)
 - [DOC-ROOT-0002 — Code and contract map](code-map.md)
 - [DOC-ENGINEERING-0001 — Documentation navigation migration](engineering/context-migration.md)

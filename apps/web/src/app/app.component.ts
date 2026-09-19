@@ -43,6 +43,10 @@ interface Release {
   templateUrl: "./app.component.html",
 })
 export class AppComponent implements AfterViewInit, OnDestroy {
+  @ViewChild("settingsNav") set settingsNavHost(element: ElementRef<HTMLElement> | undefined) {
+    if (element && this.settings())
+      element.nativeElement.querySelector<HTMLElement>("#settings-tab-" + this.settingsCategory())?.focus();
+  }
   @ViewChild("canvas") canvas?: ElementRef<HTMLCanvasElement>;
   @ViewChild("viewport") viewport?: ElementRef<HTMLDivElement>;
   @ViewChild("spatialHost") spatialHost?: ElementRef<HTMLDivElement>;
@@ -143,6 +147,13 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     },
   ];
   readonly settings = signal(false);
+  readonly settingsCategories = [
+    { id: "cursor", label: "Cursor", icon: "select" },
+    { id: "selection", label: "Selection and transforms", icon: "direct" },
+    { id: "measurement", label: "Units and snapping", icon: "rulers" },
+    { id: "shortcuts", label: "Keyboard shortcuts", icon: "keyboard" },
+  ] as const;
+  readonly settingsCategory = signal<"cursor" | "selection" | "measurement" | "shortcuts">("cursor");
   readonly commandList = COMMANDS;
   readonly recording = signal<string | null>(null);
   readonly toolGroup = signal("Draw");
@@ -806,6 +817,43 @@ export class AppComponent implements AfterViewInit, OnDestroy {
         [key]: Math.max(0.05, Math.min(200, key === "radius" ? toPixels(value, this.preferences.distanceUnit()) : value)),
       }));
   }
+  openSettings() {
+    this.settings.set(true);
+    this.recording.set(null);
+
+  }
+  activeSettingsCategory() {
+    return this.settingsCategories.find(category => category.id === this.settingsCategory())!;
+  }
+  selectSettingsCategory(id: "cursor" | "selection" | "measurement" | "shortcuts") {
+    this.recording.set(null);
+    this.settingsCategory.set(id);
+    const panel = document.getElementById("settings-panel");
+    if (panel) panel.scrollTop = 0;
+  }
+  settingsNavKey(event: KeyboardEvent, index: number) {
+    const count = this.settingsCategories.length;
+    let next: number;
+    if (event.key === "ArrowRight") {
+      event.preventDefault();
+      document.getElementById("settings-panel")?.focus();
+      return;
+    }
+    if (event.key === "ArrowDown") next = (index + 1) % count;
+    else if (event.key === "ArrowUp") next = (index + count - 1) % count;
+    else if (event.key === "Home") next = 0;
+    else if (event.key === "End") next = count - 1;
+    else return;
+    event.preventDefault();
+    const category = this.settingsCategories[next];
+    this.selectSettingsCategory(category.id);
+    document.getElementById("settings-tab-" + category.id)?.focus();
+  }
+  settingsPanelKey(event: KeyboardEvent) {
+    if (event.key !== "ArrowLeft" || event.target !== event.currentTarget) return;
+    event.preventDefault();
+    document.getElementById("settings-tab-" + this.settingsCategory())?.focus();
+  }
   captureKey(event: KeyboardEvent, id: string) {
     if (this.recording() !== id) return;
     event.preventDefault();
@@ -1096,7 +1144,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
         this.editor.finishPath();
       },
       fit: () => this.fit(),
-      settings: () => this.settings.set(true),
+      settings: () => this.openSettings(),
     };
     if (action[command]) action[command]();
     else if (

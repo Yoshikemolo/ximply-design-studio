@@ -42,7 +42,7 @@
             {{ t("Delete") }}<kbd>{{ shortcut("remove") }}</kbd>
           </button>
           <hr />
-          <button (click)="settings.set(true)">
+          <button (click)="openSettings()">
             {{ t("Settings") }}<kbd>{{ shortcut("settings") }}</kbd>
           </button>
         </div>
@@ -1072,6 +1072,21 @@
           ×
         </button>
       </header>
+      <div class="settings-layout">
+        <nav #settingsNav class="settings-nav" role="tablist" aria-orientation="vertical" [attr.aria-label]="t('Settings categories')">
+          @for (category of settingsCategories; track category.id; let index = $index) {
+            <button type="button" role="tab" [id]="'settings-tab-' + category.id" aria-controls="settings-panel" [attr.aria-selected]="settingsCategory() === category.id" [tabIndex]="settingsCategory() === category.id ? 0 : -1" [class.active]="settingsCategory() === category.id" [title]="t(category.label)" [attr.aria-label]="t(category.label)" (click)="selectSettingsCategory(category.id)" (keydown)="settingsNavKey($event, index)">
+              <img [src]="'/assets/icons/' + category.icon + '.svg'" alt="" /><span>{{ t(category.label) }}</span>
+            </button>
+          }
+        </nav>
+        <section class="settings-content" role="tabpanel" tabindex="0" id="settings-panel" [attr.aria-labelledby]="'settings-tab-' + settingsCategory()" (keydown)="settingsPanelKey($event)">
+          <h3>{{ t(activeSettingsCategory().label) }}</h3>
+      @if (preferences.error()) {
+        <p role="alert" class="settings-error">{{ t(preferences.error()) }}</p>
+      }
+          @switch (settingsCategory()) {
+            @case ('cursor') {
       <button
         class="setting-switch"
         type="button"
@@ -1089,6 +1104,8 @@
           (change)="preferences.toggleCursor($any($event.target).checked)"
         />{{ t("Show tool icon beside cursor") }}</label
       >
+            }
+            @case ('selection') {
       <label class="setting-toggle"
         ><input
           type="checkbox"
@@ -1115,7 +1132,8 @@
           (change)="preferences.setSnapAngle(number($event))"
         />°</label
       >
-      <h3>{{ t("Measurement") }}</h3>
+            }
+            @case ('measurement') {
       <div class="measurement-settings">
         <label>{{ t("Distance units") }}<select [value]="preferences.distanceUnit()" (change)="setUnit('distanceUnit', $event)">@for (unit of units; track unit) {<option [value]="unit">{{ unit }}</option>}</select></label>
         <label>{{ t("Font units") }}<select [value]="preferences.fontUnit()" (change)="setUnit('fontUnit', $event)">@for (unit of fontUnits; track unit) {<option [value]="unit">{{ unit }}</option>}</select></label>
@@ -1123,7 +1141,8 @@
         <label>{{ t("Grid spacing") }} ({{ preferences.distanceUnit() }})<input type="number" [min]="displayDistance(0.01)" step="any" [value]="displayDistance(preferences.gridSize())" (change)="preferences.setMeasurement('gridSize', distanceInput($event))" /></label>
         @for (aid of measurementAids; track aid.id) {<label>{{ t('Snap radius') }} · {{ t(aid.label) }} (px)<input type="number" min="0" max="100" [value]="snapRadius(aid.id)" (change)="setSnapRadius(aid.id, number($event))" /></label>}
       </div>
-      <h3>{{ t("Keyboard shortcuts") }}</h3>
+            }
+            @case ('shortcuts') {
       <p>
         {{
           t(
@@ -1138,9 +1157,6 @@
           )
         }}
       </p>
-      @if (preferences.error()) {
-        <p role="alert" class="settings-error">{{ t(preferences.error()) }}</p>
-      }
       <button (click)="preferences.reset(); recording.set(null)">
         {{ t("Restore default shortcuts") }}
       </button>
@@ -1167,6 +1183,10 @@
             </button>
           </div>
         }
+      </div>
+            }
+          }
+        </section>
       </div>
     </section>
   </div>

@@ -87,3 +87,11 @@ published checkpoint, report its branch, commit, visible behavior, checks and ex
 local update commands. Clearly distinguish published preview work from dev/main
 integration; never describe a subtask as available there until it is integrated.
 Keep the owner informed during active work; inspect workflow results after publishing.
+
+## Persistent settings layout preference
+
+The owner requires Settings to use category navigation in the left column and the
+selected form in the right column. Preserve this pattern for new settings blocks;
+see doc/product/ux-direction.md. Future memory/history and storage/directory options
+belong in dedicated categories, not one growing combined scrolling form. Record
+future requirements without exposing controls whose behavior is not implemented.

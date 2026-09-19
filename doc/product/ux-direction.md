@@ -46,6 +46,24 @@ are stable, supplemented by initials and accessible labels. Do not place global
 administration/licence controls in the main drawing workflow; they belong in settings.
 A licensing limitation gives a precise reason and a nonblocking route to resolve it.
 
+## Settings navigation — owner requirement
+
+Settings uses two columns: a category menu on the left and only the selected
+category's form on the right. Keep navigation visible while long forms scroll,
+use localized category names and explanatory icon tooltips, and preserve keyboard
+navigation and visible focus. On narrow screens adapt the navigation without
+restoring one long form containing every category.
+
+Apply this structure whenever adding settings. Register each category centrally;
+do not append unrelated controls to the end of a shared scrolling form. Switching
+categories must cancel transient shortcut recording without resetting saved values.
+
+Future memory and storage categories should follow this same structure. Candidate
+settings include maximum undo count, maximum undo-memory size, clearing undo history,
+temporary directory and default work directory. These are recorded future needs,
+not implemented capabilities; directory controls require an appropriate filesystem
+capability and undo-memory controls require defined history accounting semantics.
+
 ## Core interactions
 
 - Selecting an object updates Properties without moving panel positions.

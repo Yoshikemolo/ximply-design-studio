@@ -1,4 +1,9 @@
 const ES: Record<string, string> = {
+  "Settings categories": "Categorías de configuración",
+  "Cursor": "Cursor",
+  "Selection and transforms": "Selección y transformaciones",
+  "Units and snapping": "Unidades y ajuste magnético",
+
   "Lock layer": "Bloquear capa",
   "Unlock layer": "Desbloquear capa",
   "Hide layer": "Ocultar capa",

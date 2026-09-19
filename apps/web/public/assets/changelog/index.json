@@ -1,6 +1,37 @@
 {
-  "currentVersion": "0.3.7-alpha.1",
+  "currentVersion": "0.3.8-alpha.1",
   "entries": [
+    {
+      "version": "0.3.8-alpha.1",
+      "date": "2026-09-19",
+      "summary": "Settings category navigation with one active form panel",
+      "breakingChanges": [],
+      "changes": [
+        {
+          "type": "Feature",
+          "description": "Navigate settings through a left-hand category menu and edit only the selected category in the right-hand panel."
+        },
+        {
+          "type": "Improvement",
+          "description": "Preserve all existing settings and their values, with localized category navigation, keyboard access and responsive layout."
+        },
+        {
+          "type": "Improvement",
+          "description": "Keep long forms separately scrollable and cancel unfinished shortcut recording when changing categories."
+        },
+        {
+          "type": "Engineering",
+          "description": "Record the owner's settings layout requirement in repository instructions and UX guidance for future categories."
+        },
+        {
+          "type": "Engineering",
+          "description": "Record undo-memory limits, clearing history, temporary directory and default work directory as future requirements, without exposing unimplemented controls."
+        }
+      ],
+      "capabilityStatus": "local-preview",
+      "markdown": "0.3.8-alpha.1.md",
+      "source": "doc/changelog/0.3.8-alpha.1.md"
+    },
     {
       "version": "0.3.7-alpha.1",
       "date": "2026-09-19",
