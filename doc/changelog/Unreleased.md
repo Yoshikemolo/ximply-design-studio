@@ -32,7 +32,9 @@ None.
 
 ## Fixes
 
-None.
+- Generated documentation navigation is identical on Windows and POSIX hosts, with forward-slash links and case-sensitive document order.
+- Load the full editor stylesheet directly in production so the Content Security Policy does not leave the interface unstyled. Rebuild the local containers to apply the correction.
+- Use localhost:8090 by default for the local editor to avoid conflicts with port 8080. Existing installations should set XDS_PORT=8090 in .env.local and restart; credentials and saved projects are preserved.
 
 ## Security
 
