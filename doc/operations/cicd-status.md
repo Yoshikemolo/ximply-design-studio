@@ -12,7 +12,8 @@ source: ["Project owner requirements and design foundation; methodology applicat
 # CI/CD status and activation
 
 The design workflow executes documentation and harness tests plus PR metadata checks.
-It does not build or analyze application code because none exists. The deployment
+The editor workflow additionally builds the Angular preview and tests domain, renderer,
+editor-state and local API behavior. It does not establish a passing Sonar analysis. The deployment
 workflow is a deliberately blocking activation contract: destination, candidate,
 image/provenance checks and target adapter must be implemented before it can deploy.
 A successful design workflow is not a successful Sonar/app build or deploy pipeline.

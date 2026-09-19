@@ -1,0 +1,96 @@
+/** Editable local-preview document model. FEAT-0006: geometry and history invariants. */
+export type LayerKind = 'rectangle' | 'ellipse' | 'path' | 'text' | 'image';
+export type Blend = 'source-over' | 'multiply' | 'screen' | 'overlay' | 'darken' | 'lighten';
+export interface Point { x: number; y: number }
+export interface Adjustments { brightness: number; contrast: number; saturation: number; blur: number }
+export interface Layer {
+  id: string; name: string; kind: LayerKind; x: number; y: number; width: number; height: number;
+  rotation: number; opacity: number; visible: boolean; locked: boolean; blend: Blend;
+  fill: string; stroke: string; strokeWidth: number; points: Point[]; text: string; fontSize: number;
+  source: string; adjustments: Adjustments;
+}
+export interface StudioDocument { format: 'ximply-document'; version: 1; name: string; width: number; height: number; background: string; layers: Layer[] }
+export const BLENDS: Blend[] = ['source-over','multiply','screen','overlay','darken','lighten'];
+export function blankDocument(): StudioDocument {
+  return {format:'ximply-document',version:1,name:'Untitled exploration',width:1200,height:800,background:'#ffffff',layers:[]};
+}
+export function newLayer(kind: LayerKind, id: string, point: Point, fill = '#0d59f2', stroke = '#163363', strokeWidth = 2): Layer {
+  return {id,name:kind[0].toUpperCase()+kind.slice(1),kind,x:point.x,y:point.y,width:1,height:1,rotation:0,opacity:1,visible:true,locked:false,blend:'source-over',fill,stroke,strokeWidth,points:[],text:'Your words',fontSize:48,source:'',adjustments:{brightness:100,contrast:100,saturation:100,blur:0}};
+}
+export function bounds(a: Point, b: Point) { return {x:Math.min(a.x,b.x),y:Math.min(a.y,b.y),width:Math.max(1,Math.abs(b.x-a.x)),height:Math.max(1,Math.abs(b.y-a.y))}; }
+export function localPoint(layer: Layer, point: Point): Point {
+  const a=-layer.rotation*Math.PI/180, x=point.x-layer.x-layer.width/2, y=point.y-layer.y-layer.height/2;
+  return {x:x*Math.cos(a)-y*Math.sin(a)+layer.width/2,y:x*Math.sin(a)+y*Math.cos(a)+layer.height/2};
+}
+function segmentDistance(p: Point, a: Point, b: Point): number {
+  const dx=b.x-a.x,dy=b.y-a.y,len=dx*dx+dy*dy;
+  const t=len?Math.max(0,Math.min(1,((p.x-a.x)*dx+(p.y-a.y)*dy)/len)):0;
+  return Math.hypot(p.x-a.x-t*dx,p.y-a.y-t*dy);
+}
+export function hitTest(layer: Layer, point: Point): boolean {
+  if (!layer.visible || layer.locked) return false;
+  const p=localPoint(layer,point),pad=Math.max(5,layer.strokeWidth/2);
+  if(layer.kind==='ellipse') return ((p.x-layer.width/2)/(layer.width/2+pad))**2+((p.y-layer.height/2)/(layer.height/2+pad))**2<=1;
+  if(layer.kind==='path') return layer.points.some((b,i)=>i>0&&segmentDistance(p,layer.points[i-1],b)<=pad);
+  return p.x>=-pad&&p.y>=-pad&&p.x<=layer.width+pad&&p.y<=layer.height+pad;
+}
+export function pick(layers: Layer[], point: Point): Layer | undefined { return [...layers].reverse().find(layer=>hitTest(layer,point)); }
+export function normalizePath(layer: Layer, points: Point[]): Layer {
+  const xs=points.map(p=>p.x),ys=points.map(p=>p.y),x=Math.min(...xs),y=Math.min(...ys);
+  return {...layer,x,y,width:Math.max(1,Math.max(...xs)-x),height:Math.max(1,Math.max(...ys)-y),points:points.map(p=>({x:p.x-x,y:p.y-y}))};
+}
+export function resizeLayer(layer: Layer, width: number, height: number): Layer {
+  return {...layer,width,height,points:layer.points.map(p=>({x:p.x*width/layer.width,y:p.y*height/layer.height}))};
+}
+export function resizeFromCorner(layer: Layer, point: Point, corner: 'tl'|'tr'|'bl'|'br'): Layer {
+  const p=localPoint(layer,point),left=corner.endsWith('l')?Math.min(p.x,layer.width-1):0,top=corner.startsWith('t')?Math.min(p.y,layer.height-1):0;
+  const right=corner.endsWith('r')?Math.max(p.x,1):layer.width,bottom=corner.startsWith('b')?Math.max(p.y,1):layer.height;
+  const width=right-left,height=bottom-top,dx=(left+right-layer.width)/2,dy=(top+bottom-layer.height)/2,a=layer.rotation*Math.PI/180;
+  return {...resizeLayer(layer,width,height),x:layer.x+layer.width/2+dx*Math.cos(a)-dy*Math.sin(a)-width/2,y:layer.y+layer.height/2+dx*Math.sin(a)+dy*Math.cos(a)-height/2};
+}
+export class DocumentHistory {
+  private past: StudioDocument[]=[]; private future: StudioDocument[]=[];
+  constructor(private limit=24) {}
+  get canUndo(){return this.past.length>0;} get canRedo(){return this.future.length>0;}
+  commit(before: StudioDocument) { this.past.push(structuredClone(before)); if(this.past.length>this.limit)this.past.shift(); this.future=[]; }
+  undo(current: StudioDocument): StudioDocument { const next=this.past.pop();if(!next)return current;this.future.push(structuredClone(current));return next; }
+  redo(current: StudioDocument): StudioDocument { const next=this.future.pop();if(!next)return current;this.past.push(structuredClone(current));return next; }
+  clear(){this.past=[];this.future=[];}
+}
+function record(value: unknown): value is Record<string, unknown> { return typeof value==='object'&&value!==null&&!Array.isArray(value); }
+function finite(value: unknown, min: number, max: number): value is number {return typeof value==='number'&&Number.isFinite(value)&&value>=min&&value<=max;}
+const color=(value: unknown)=>typeof value==='string'&&/^#[0-9a-f]{6}$/i.test(value);
+export function parseDocument(text: string): StudioDocument {
+  if(text.length>35_000_000)throw new Error('Project exceeds the 35 MB preview limit.');
+  const value: unknown=JSON.parse(text);
+  if(!record(value)||value['format']!=='ximply-document'||value['version']!==1)throw new Error('Unsupported project format.');
+  if(typeof value['name']!=='string'||value['name'].length>150||!finite(value['width'],16,4096)||!finite(value['height'],16,4096)||!color(value['background'])||!Array.isArray(value['layers'])||value['layers'].length>150)throw new Error('Invalid document or preview limits exceeded.');
+  const ids=new Set<string>();
+  for(const layer of value['layers']) {
+    if(!record(layer)||typeof layer['id']!=='string'||ids.has(layer['id'])||typeof layer['name']!=='string'||layer['name'].length>150)throw new Error('Invalid layer identity.');
+    ids.add(layer['id']);
+    if(!['rectangle','ellipse','path','text','image'].includes(String(layer['kind']))||!BLENDS.includes(layer['blend'] as Blend)||typeof layer['visible']!=='boolean'||typeof layer['locked']!=='boolean')throw new Error('Unsupported layer.');
+    for(const key of ['x','y','rotation'])if(!finite(layer[key],-100000,100000))throw new Error('Invalid layer transform.');
+    for(const key of ['width','height'])if(!finite(layer[key],1,16384))throw new Error('Invalid layer size.');
+    if(!finite(layer['opacity'],0,1)||!finite(layer['strokeWidth'],0,200)||!finite(layer['fontSize'],1,500)||!color(layer['fill'])||!color(layer['stroke']))throw new Error('Invalid layer style.');
+    if(typeof layer['text']!=='string'||layer['text'].length>2000||typeof layer['source']!=='string'||(layer['source']!==''&&!/^data:image\/(png|jpeg|webp);base64,[a-z0-9+/=]+$/i.test(layer['source'])))throw new Error('Invalid layer content.');
+    if(!Array.isArray(layer['points'])||layer['points'].length>20000||!layer['points'].every(p=>record(p)&&finite(p['x'],-100000,100000)&&finite(p['y'],-100000,100000)))throw new Error('Invalid path.');
+    const a=layer['adjustments'];if(!record(a)||!finite(a['brightness'],0,200)||!finite(a['contrast'],0,200)||!finite(a['saturation'],0,200)||!finite(a['blur'],0,30))throw new Error('Invalid image adjustment.');
+  }
+  return value as unknown as StudioDocument;
+}
+function escapeXml(text: string): string {return text.replace(/[<>&"']/g,c=>({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;',"'":'&apos;'}[c]!));}
+export function svgExport(doc: StudioDocument): string {
+  const shapes=doc.layers.filter(l=>l.visible).map(l=>{
+    const style=`fill="${l.kind==='path'?'none':l.fill}" stroke="${l.stroke}" stroke-width="${l.strokeWidth}" stroke-linecap="round" stroke-linejoin="round"`;
+    let content='';
+    if(l.kind==='rectangle')content=`<rect width="${l.width}" height="${l.height}" ${style}/>`;
+    if(l.kind==='ellipse')content=`<ellipse cx="${l.width/2}" cy="${l.height/2}" rx="${l.width/2}" ry="${l.height/2}" ${style}/>`;
+    if(l.kind==='path')content=`<polyline points="${l.points.map(p=>`${p.x},${p.y}`).join(' ')}" ${style}/>`;
+    if(l.kind==='text')content=`<text y="${l.fontSize}" font-size="${l.fontSize}" font-family="sans-serif" fill="${l.fill}">${escapeXml(l.text)}</text>`;
+    if(l.kind==='image')content=`<image width="${l.width}" height="${l.height}" href="${escapeXml(l.source)}" style="filter:brightness(${l.adjustments.brightness}%) contrast(${l.adjustments.contrast}%) saturate(${l.adjustments.saturation}%) blur(${l.adjustments.blur}px)"/>`;
+    const blend=l.blend==='source-over'?'normal':l.blend;
+    return `<g transform="translate(${l.x} ${l.y}) rotate(${l.rotation} ${l.width/2} ${l.height/2})" opacity="${l.opacity}" style="mix-blend-mode:${blend}">${content}</g>`;
+  }).join('\n');
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${doc.width}" height="${doc.height}" viewBox="0 0 ${doc.width} ${doc.height}"><rect width="100%" height="100%" fill="${doc.background}"/>${shapes}</svg>`;
+}
