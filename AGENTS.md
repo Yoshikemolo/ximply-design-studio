@@ -58,3 +58,50 @@ Explicitly state breaking changes; include migration steps when present. Release
 notes describe delivered behavior, not promises. Never edit generated changelog data
 or bundled copies. Regenerate and check them before committing. Preserve published
 version history; a version bump does not imply the editor or quality gate is complete.
+
+## Mandatory PR preflight
+
+Before every checkpoint or promotion, follow the checklist in
+[GitFlow integration preflight](doc/engineering/gitflow.md#integration-preflight).
+Fetch both actual PR refs, check their exact SHAs and prospective merge, validate
+Conventional Commit PR title/body and all introduced commit identities, regenerate
+navigation and release artifacts, then run all applicable checks. Recheck after
+any base/head change. Record evidence against the checked SHA; never pre-tick
+quality/review boxes. Resolve shared-branch conflicts through a fix branch and PR.
+Do not use the default web merge message, add new historical exemptions, force-push
+shared history or interpret a missing/skipped Sonar check as success.
+
+## Preview feedback versions
+
+The owner requests frequent, testable drawing-tool checkpoints. Publish coherent
+small batches with unique preview versions and updated Markdown release notes,
+including test evidence and limitations. After the native-v2 drawing baseline
+0.3.0-alpha.1, compatible feedback patches increment the patch version. A preview
+publish does not authorize merging or bypassing the strict product quality gate.
+
+## Incremental preview delivery
+
+Publish small tested product checkpoints with Conventional Commits and no attribution.
+Each user-facing patch gets a unique version and Markdown release notes. After every
+published checkpoint, report its branch, commit, visible behavior, checks and exact
+local update commands. Clearly distinguish published preview work from dev/main
+integration; never describe a subtask as available there until it is integrated.
+Keep the owner informed during active work; inspect workflow results after publishing.
+
+## Persistent settings layout preference
+
+The owner requires Settings to use category navigation in the left column and the
+selected form in the right column. Preserve this pattern for new settings blocks;
+see doc/product/ux-direction.md. Future memory/history and storage/directory options
+belong in dedicated categories, not one growing combined scrolling form. Record
+future requirements without exposing controls whose behavior is not implemented.
+
+## Temporary owner-authorized Sonar pause
+
+The owner explicitly requested a temporary pause of the Sonar PR check on 2026-09-19.
+The `quality` job in `.github/workflows/quality-evidence.yml` is intentionally skipped,
+with its original analysis steps preserved as comments for restoration. This narrow
+exception suspends that automated check; it does not change quality thresholds,
+prove analysis success, authorize merging, or waive other checks and review.
+Do not treat the skipped result as quality evidence or claim Verified status.
+See `doc/testing/sonarqube.md` for restoration instructions.

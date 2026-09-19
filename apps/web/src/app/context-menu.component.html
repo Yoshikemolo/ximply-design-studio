@@ -1,0 +1,13 @@
+<div class="context-menu" role="menu" [attr.aria-label]="label" tabindex="-1"
+  [style.left.px]="position().x" [style.top.px]="position().y">
+  @for (entry of entries; track entry.id; let index = $index) {
+    @if (index > 0 && entries[index - 1].section !== entry.section) {
+      <div class="context-menu-separator" role="separator"></div>
+    }
+    <button type="button" role="menuitem" tabindex="-1" [disabled]="entry.disabled"
+      [attr.aria-disabled]="entry.disabled ? 'true' : null" (click)="activate(entry)">
+      <span>{{ entry.label }}</span>
+      @if (entry.shortcut) { <span class="context-menu-shortcut">{{ entry.shortcut }}</span> }
+    </button>
+  }
+</div>
