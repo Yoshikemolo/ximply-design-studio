@@ -1,9 +1,3 @@
-# services/api
+# api
 
-Status: Planned implementation boundary.
-
-FastAPI public application API and use-case orchestration.
-
-Read the applicable ADR and FEAT before adding source. Every implementation requires
-module tests, contracts and strict quality evidence. No executable service is included
-in this directory yet. Resolve dependencies and lockfiles in SPIKE-0001.
+FastAPI local artifact API with bearer authentication, validated native documents and an atomic file repository adapter. It is single-user and loopback-deployed. It does not implement production Keycloak or PostgreSQL/TypeORM. See quick-install.md at repository root for execution and API token setup.

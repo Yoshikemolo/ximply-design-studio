@@ -3,13 +3,17 @@ from __future__ import annotations
 import json
 from pathlib import Path
 import re
+try:
+    from harness.files import source_files
+except ModuleNotFoundError:
+    from files import source_files
 
 ROOT = Path(__file__).resolve().parents[1]
 
 def check(root: Path) -> list[str]:
     errors: list[str] = []
     parsed: dict[Path, object] = {}
-    for path in root.rglob("*.json"):
+    for path in source_files(root, ".json"):
         if ".git" in path.parts or "reports" in path.parts:
             continue
         try:
@@ -54,7 +58,7 @@ def check(root: Path) -> list[str]:
     done: set[str] = set()
     for node in graph:
         visit(node, set(), done)
-    for path in root.rglob("*.md"):
+    for path in source_files(root, ".md"):
         if ".git" in path.parts:
             continue
         for link in re.findall(r"\[[^\]]*\]\(([^)]+)\)", path.read_text()):

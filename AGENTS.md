@@ -2,7 +2,8 @@
 
 Read README.md and doc/INDEX.md first, then only the FEAT, SC, SEC, ADR, contracts,
 source and tests relevant to the task. Follow doc/engineering/documentation-protocol.md
-and use `python3 harness/context.py ID` for bounded retrieval. All product implementation is currently Planned.
+and use `python3 harness/context.py ID` for bounded retrieval. A bounded local editor preview exists; use doc/implementation/PLAN-0002-0001.md
+for implemented scope and remaining gates. Never infer full feature completion from it.
 
 - Start each new work block from current dev in feat/* or fix/* with owner Yoshikemolo. Do not overwrite
   another agent's files. Parallel agents receive nonoverlapping scopes and return

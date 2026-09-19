@@ -1,6 +1,116 @@
 {
-  "currentVersion": "0.1.0-design.2",
+  "currentVersion": "0.2.0-alpha.2",
   "entries": [
+    {
+      "version": "0.2.0-alpha.2",
+      "date": "2026-09-19",
+      "summary": "Validated local container preview",
+      "breakingChanges": [],
+      "changes": [
+        {
+          "type": "Improvement",
+          "description": "Validate all four resize handles and preserve the opposite anchor for rotated layers."
+        },
+        {
+          "type": "Fix",
+          "description": "Honor the configured version-file path in containers without assuming the repository directory depth."
+        },
+        {
+          "type": "Fix",
+          "description": "Render zero-width vector strokes consistently in the canvas and SVG export."
+        },
+        {
+          "type": "Engineering",
+          "description": "Verify packaged frontend delivery, bearer-token rejection, artifact save/open and the About deep link in disposable Docker services."
+        },
+        {
+          "type": "Engineering",
+          "description": "Record the local trial commands and preserve the strict pre-merge quality requirements."
+        }
+      ],
+      "capabilityStatus": "local-preview",
+      "markdown": "0.2.0-alpha.2.md",
+      "source": "doc/changelog/0.2.0-alpha.2.md"
+    },
+    {
+      "version": "0.2.0-alpha.1",
+      "date": "2026-09-19",
+      "summary": "First local drawing and image-retouching preview",
+      "breakingChanges": [],
+      "changes": [
+        {
+          "type": "Feature",
+          "description": "Draw editable rectangles, ellipses, freehand vector paths and text."
+        },
+        {
+          "type": "Feature",
+          "description": "Select, move, resize and rotate layers; control visibility, locking, opacity, order and blending."
+        },
+        {
+          "type": "Feature",
+          "description": "Import PNG, JPEG and WebP images; paint and erase raster pixels with undo and redo."
+        },
+        {
+          "type": "Feature",
+          "description": "Adjust image brightness, contrast, saturation and blur without discarding the source image."
+        },
+        {
+          "type": "Feature",
+          "description": "Save and reopen editable .ximply files; export flattened PNG or SVG with embedded raster layers."
+        },
+        {
+          "type": "Feature",
+          "description": "Inspect separated document planes in a Three.js spatial view with orbit, pan and zoom."
+        },
+        {
+          "type": "Feature",
+          "description": "View bundled Markdown release notes in About and select versions with a shareable version URL."
+        },
+        {
+          "type": "Improvement",
+          "description": "Add a responsive workspace, collapsible and reorderable side panels, centralized themes and English/Spanish interface labels."
+        },
+        {
+          "type": "Improvement",
+          "description": "Keep small drafts in browser storage and provide explicit project-file downloads for larger documents."
+        },
+        {
+          "type": "Fix",
+          "description": "Resolve the API authentication dependency and preserve source-version identity in API health and OpenAPI metadata."
+        },
+        {
+          "type": "Fix",
+          "description": "Preserve transparent backgrounds when rendering separate spatial layers."
+        },
+        {
+          "type": "Security",
+          "description": "Protect server artifact save/open with a bearer token configured locally and kept out of the frontend bundle."
+        },
+        {
+          "type": "Security",
+          "description": "Bind the Docker preview to loopback, validate native documents and restrict artifact identifiers to generated UUIDs."
+        },
+        {
+          "type": "Security",
+          "description": "Limit project size, layer counts and local artifact storage; reject remote image URLs in native project data."
+        },
+        {
+          "type": "Engineering",
+          "description": "Pin Angular 22.1.7 and its compatible build/test toolchain; record package lockfiles and container image digests."
+        },
+        {
+          "type": "Engineering",
+          "description": "Add domain, renderer pixel, editor-state and API tests plus local Bash/PowerShell launchers."
+        },
+        {
+          "type": "Engineering",
+          "description": "This preview does not implement production Keycloak integration, PostgreSQL/TypeORM transactions, collaboration, desktop windows, third-party plugin installation or full Illustrator/Photoshop format compatibility."
+        }
+      ],
+      "capabilityStatus": "local-preview",
+      "markdown": "0.2.0-alpha.1.md",
+      "source": "doc/changelog/0.2.0-alpha.1.md"
+    },
     {
       "version": "0.1.0-design.2",
       "date": "2026-09-19",
