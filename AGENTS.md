@@ -95,3 +95,13 @@ selected form in the right column. Preserve this pattern for new settings blocks
 see doc/product/ux-direction.md. Future memory/history and storage/directory options
 belong in dedicated categories, not one growing combined scrolling form. Record
 future requirements without exposing controls whose behavior is not implemented.
+
+## Temporary owner-authorized Sonar pause
+
+The owner explicitly requested a temporary pause of the Sonar PR check on 2026-09-19.
+The `quality` job in `.github/workflows/quality-evidence.yml` is intentionally skipped,
+with its original analysis steps preserved as comments for restoration. This narrow
+exception suspends that automated check; it does not change quality thresholds,
+prove analysis success, authorize merging, or waive other checks and review.
+Do not treat the skipped result as quality evidence or claim Verified status.
+See `doc/testing/sonarqube.md` for restoration instructions.
