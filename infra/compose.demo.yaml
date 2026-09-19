@@ -1,0 +1,8 @@
+# demo environment override; loopback bindings inherited from base.
+services:
+  postgres:
+    labels:
+      com.ximply.environment: demo
+  redis:
+    labels:
+      com.ximply.environment: demo

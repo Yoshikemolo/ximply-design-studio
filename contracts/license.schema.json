@@ -1,0 +1,118 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Licence claims v1",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schemaVersion": {
+      "const": 1
+    },
+    "iss": {
+      "type": "string"
+    },
+    "aud": {
+      "const": "ximply-design-studio"
+    },
+    "jti": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "serial": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "installationId": {
+      "type": "string"
+    },
+    "planId": {
+      "type": "string"
+    },
+    "planVersion": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "iat": {
+      "type": "integer"
+    },
+    "nbf": {
+      "type": "integer"
+    },
+    "exp": {
+      "type": "integer"
+    },
+    "seatModel": {
+      "enum": [
+        "named",
+        "concurrent"
+      ]
+    },
+    "maxUsers": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "offlineSeconds": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "grants": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "pluginId": {
+            "type": "string"
+          },
+          "bundleId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "bundleVersion": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 1
+          },
+          "capabilities": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "uniqueItems": true
+          },
+          "maxUsers": {
+            "type": "integer",
+            "minimum": 1
+          }
+        },
+        "required": [
+          "pluginId",
+          "bundleId",
+          "bundleVersion",
+          "capabilities",
+          "maxUsers"
+        ]
+      }
+    }
+  },
+  "required": [
+    "schemaVersion",
+    "iss",
+    "aud",
+    "jti",
+    "serial",
+    "installationId",
+    "planId",
+    "planVersion",
+    "iat",
+    "nbf",
+    "exp",
+    "seatModel",
+    "maxUsers",
+    "offlineSeconds",
+    "grants"
+  ]
+}

@@ -1,0 +1,70 @@
+# Deployment contract. External stateful endpoints/secrets must be provisioned first.
+version: "3.9"
+services:
+  web:
+    image: ${WEB_IMAGE}
+    networks: [application]
+    deploy:
+      replicas: 1
+      restart_policy: {condition: on-failure}
+  api:
+    image: ${API_IMAGE}
+    networks: [application]
+    environment:
+      OIDC_ISSUER: ${OIDC_ISSUER}
+      OIDC_AUDIENCE: studio-api
+      ALLOWED_ORIGINS: ${APP_ORIGIN}
+      PERSISTENCE_URL: http://persistence:3000
+      REDIS_URL_FILE: /run/secrets/redis-url
+    secrets: [redis-url]
+    deploy:
+      replicas: 2
+      update_config: {parallelism: 1, order: start-first, failure_action: rollback}
+      rollback_config: {parallelism: 1}
+      resources:
+        limits: {cpus: "2", memory: 1G}
+  persistence:
+    image: ${PERSISTENCE_IMAGE}
+    networks: [application]
+    environment:
+      DB_CONNECTION_FILE: /run/secrets/database-url
+      OIDC_ISSUER: ${OIDC_ISSUER}
+      OIDC_AUDIENCE: studio-persistence
+      DB_SYNCHRONIZE: "false"
+    secrets: [database-url]
+    deploy:
+      replicas: 1
+      resources:
+        limits: {cpus: "1", memory: 512M}
+  realtime:
+    image: ${REALTIME_IMAGE}
+    networks: [application]
+    environment:
+      ASPNETCORE_URLS: http://+:8080
+      OIDC_ISSUER: ${OIDC_ISSUER}
+      OIDC_AUDIENCE: studio-realtime
+      REDIS_URL_FILE: /run/secrets/redis-url
+    secrets: [redis-url]
+    deploy:
+      replicas: 1
+  worker:
+    image: ${WORKER_IMAGE}
+    networks: [application]
+    environment:
+      REDIS_URL_FILE: /run/secrets/redis-url
+      OBJECT_STORE_CONFIG_FILE: /run/secrets/object-store-config
+    secrets: [redis-url, object-store-config]
+    deploy:
+      replicas: 1
+      resources:
+        limits: {cpus: "4", memory: 4G}
+networks:
+  application:
+    driver: overlay
+secrets:
+  database-url:
+    external: true
+  redis-url:
+    external: true
+  object-store-config:
+    external: true

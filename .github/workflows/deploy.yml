@@ -1,0 +1,32 @@
+name: Deploy verified candidate
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        type: choice
+        options: [qa, demo, release, production]
+        required: true
+      source_sha:
+        description: Exact verified source commit
+        type: string
+        required: true
+permissions:
+  contents: read
+jobs:
+  preflight:
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    steps:
+      - name: Require configured deployment and verified candidate
+        env:
+          TARGET: ${{ vars.DEPLOYMENT_TARGET }}
+          CANDIDATE_SHA: ${{ vars.VERIFIED_CANDIDATE_SHA }}
+          REQUESTED_SHA: ${{ inputs.source_sha }}
+        run: |
+          test -n "$TARGET" || { echo 'Deployment target is not configured'; exit 1; }
+          test -n "$CANDIDATE_SHA" || { echo 'No verified candidate is recorded'; exit 1; }
+          test "$CANDIDATE_SHA" = "$REQUESTED_SHA" || { echo 'Candidate mismatch'; exit 1; }
+      - name: Require target-specific deployment implementation
+        run: |
+          echo 'Deployment adapter, immutable image manifest and fresh Sonar verification must be implemented before deployment.'
+          exit 1

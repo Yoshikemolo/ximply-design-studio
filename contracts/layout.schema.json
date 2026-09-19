@@ -1,0 +1,127 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Workspace layout core v1",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schemaVersion": {
+      "const": 1
+    },
+    "layoutId": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1
+    },
+    "root": {
+      "$ref": "#/$defs/node"
+    }
+  },
+  "required": [
+    "schemaVersion",
+    "layoutId",
+    "name",
+    "root"
+  ],
+  "$defs": {
+    "node": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "split"
+            },
+            "id": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "direction": {
+              "enum": [
+                "horizontal",
+                "vertical"
+              ]
+            },
+            "children": {
+              "type": "array",
+              "minItems": 2,
+              "items": {
+                "$ref": "#/$defs/node"
+              }
+            },
+            "weights": {
+              "type": "array",
+              "minItems": 2,
+              "items": {
+                "type": "number",
+                "exclusiveMinimum": 0
+              }
+            }
+          },
+          "required": [
+            "kind",
+            "id",
+            "direction",
+            "children",
+            "weights"
+          ]
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "tabs"
+            },
+            "id": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "panelIds": {
+              "type": "array",
+              "minItems": 1,
+              "uniqueItems": true,
+              "items": {
+                "type": "string"
+              }
+            },
+            "activePanelId": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind",
+            "id",
+            "panelIds",
+            "activePanelId"
+          ]
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "view"
+            },
+            "id": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "viewId": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          "required": [
+            "kind",
+            "id",
+            "viewId"
+          ]
+        }
+      ]
+    }
+  }
+}

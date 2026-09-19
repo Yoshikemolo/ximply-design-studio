@@ -1,0 +1,655 @@
+{
+  "schemaVersion": 1,
+  "features": [
+    {
+      "id": "FEAT-0001",
+      "title": "Secure sessions and project membership",
+      "path": "doc/feat/FEAT-0001.md",
+      "status": "Planned",
+      "iteration": "ITER-0001",
+      "dependsOn": [],
+      "adrs": [
+        "ADR-0002",
+        "ADR-0003",
+        "ADR-0012"
+      ],
+      "scenarios": [
+        "SC-0001",
+        "SC-0002",
+        "SC-0003"
+      ],
+      "implementation": [],
+      "tests": [],
+      "evidence": []
+    },
+    {
+      "id": "FEAT-0002",
+      "title": "Command-driven extensible shell",
+      "path": "doc/feat/FEAT-0002.md",
+      "status": "Planned",
+      "iteration": "ITER-0001",
+      "dependsOn": [
+        "FEAT-0001"
+      ],
+      "adrs": [
+        "ADR-0001",
+        "ADR-0005"
+      ],
+      "scenarios": [
+        "SC-0004",
+        "SC-0005",
+        "SC-0006"
+      ],
+      "implementation": [],
+      "tests": [],
+      "evidence": []
+    },
+    {
+      "id": "FEAT-0003",
+      "title": "Docking and tabbed panel groups",
+      "path": "doc/feat/FEAT-0003.md",
+      "status": "Planned",
+      "iteration": "ITER-0001",
+      "dependsOn": [
+        "FEAT-0002"
+      ],
+      "adrs": [
+        "ADR-0006"
+      ],
+      "scenarios": [
+        "SC-0007",
+        "SC-0008",
+        "SC-0009"
+      ],
+      "implementation": [],
+      "tests": [],
+      "evidence": []
+    },
+    {
+      "id": "FEAT-0004",
+      "title": "Personal layouts and responsive shell",
+      "path": "doc/feat/FEAT-0004.md",
+      "status": "Planned",
+      "iteration": "ITER-0001",
+      "dependsOn": [
+        "FEAT-0003"
+      ],
+      "adrs": [
+        "ADR-0006",
+        "ADR-0014"
+      ],
+      "scenarios": [
+        "SC-0010",
+        "SC-0011",
+        "SC-0012"
+      ],
+      "implementation": [],
+      "tests": [],
+      "evidence": []
+    },
+    {
+      "id": "FEAT-0005",
+      "title": "Plugin lifecycle and contributions",
+      "path": "doc/feat/FEAT-0005.md",
+      "status": "Planned",
+      "iteration": "ITER-0001",
+      "dependsOn": [
+        "FEAT-0002"
+      ],
+      "adrs": [
+        "ADR-0005",
+        "ADR-0012"
+      ],
+      "scenarios": [
+        "SC-0013",
+        "SC-0014",
+        "SC-0015"
+      ],
+      "implementation": [],
+      "tests": [],
+      "evidence": []
+    },
+    {
+      "id": "FEAT-0006",
+      "title": "Document graph and native persistence",
+      "path": "doc/feat/FEAT-0006.md",
+      "status": "Planned",
+      "iteration": "ITER-0002",
+      "dependsOn": [
+        "FEAT-0001",
+        "FEAT-0002"
+      ],
+      "adrs": [
+        "ADR-0002",
+        "ADR-0004",
+        "ADR-0009"
+      ],
+      "scenarios": [
+        "SC-0016",
+        "SC-0017",
+        "SC-0018"
+      ],
+      "implementation": [],
+      "tests": [],
+      "evidence": []
+    },
+    {
+      "id": "FEAT-0007",
+      "title": "Layer management and editable transforms",
+      "path": "doc/feat/FEAT-0007.md",
+      "status": "Planned",
+      "iteration": "ITER-0002",
+      "dependsOn": [
+        "FEAT-0006"
+      ],
+      "adrs": [
+        "ADR-0004",
+        "ADR-0007"
+      ],
+      "scenarios": [
+        "SC-0019",
+        "SC-0020",
+        "SC-0021"
+      ],
+      "implementation": [],
+      "tests": [],
+      "evidence": []
+    },
+    {
+      "id": "FEAT-0008",
+      "title": "Vector drawing and path editing",
+      "path": "doc/feat/FEAT-0008.md",
+      "status": "Planned",
+      "iteration": "ITER-0003",
+      "dependsOn": [
+        "FEAT-0007"
+      ],
+      "adrs": [
+        "ADR-0004",
+        "ADR-0007"
+      ],
+      "scenarios": [
+        "SC-0022",
+        "SC-0023",
+        "SC-0024"
+      ],
+      "implementation": [],
+      "tests": [],
+      "evidence": []
+    },
+    {
+      "id": "FEAT-0009",
+      "title": "Text and typography",
+      "path": "doc/feat/FEAT-0009.md",
+      "status": "Planned",
+      "iteration": "ITER-0003",
+      "dependsOn": [
+        "FEAT-0008"
+      ],
+      "adrs": [
+        "ADR-0004",
+        "ADR-0014"
+      ],
+      "scenarios": [
+        "SC-0025",
+        "SC-0026",
+        "SC-0027"
+      ],
+      "implementation": [],
+      "tests": [],
+      "evidence": []
+    },
+    {
+      "id": "FEAT-0010",
+      "title": "Tiled raster and brush engine",
+      "path": "doc/feat/FEAT-0010.md",
+      "status": "Planned",
+      "iteration": "ITER-0004",
+      "dependsOn": [
+        "FEAT-0007"
+      ],
+      "adrs": [
+        "ADR-0007",
+        "ADR-0008"
+      ],
+      "scenarios": [
+        "SC-0028",
+        "SC-0029",
+        "SC-0030"
+      ],
+      "implementation": [],
+      "tests": [],
+      "evidence": []
+    },
+    {
+      "id": "FEAT-0011",
+      "title": "Selections and painted masks",
+      "path": "doc/feat/FEAT-0011.md",
+      "status": "Planned",
+      "iteration": "ITER-0004",
+      "dependsOn": [
+        "FEAT-0010"
+      ],
+      "adrs": [
+        "ADR-0007",
+        "ADR-0008"
+      ],
+      "scenarios": [
+        "SC-0031",
+        "SC-0032",
+        "SC-0033"
+      ],
+      "implementation": [],
+      "tests": [],
+      "evidence": []
+    },
+    {
+      "id": "FEAT-0012",
+      "title": "Blending and non-destructive effects",
+      "path": "doc/feat/FEAT-0012.md",
+      "status": "Planned",
+      "iteration": "ITER-0004",
+      "dependsOn": [
+        "FEAT-0010",
+        "FEAT-0011"
+      ],
+      "adrs": [
+        "ADR-0007",
+        "ADR-0008"
+      ],
+      "scenarios": [
+        "SC-0034",
+        "SC-0035",
+        "SC-0036"
+      ],
+      "implementation": [],
+      "tests": [],
+      "evidence": []
+    },
+    {
+      "id": "FEAT-0013",
+      "title": "Three-dimensional views and orientation",
+      "path": "doc/feat/FEAT-0013.md",
+      "status": "Planned",
+      "iteration": "ITER-0005",
+      "dependsOn": [
+        "FEAT-0007",
+        "FEAT-0012"
+      ],
+      "adrs": [
+        "ADR-0007",
+        "ADR-0010"
+      ],
+      "scenarios": [
+        "SC-0037",
+        "SC-0038",
+        "SC-0039"
+      ],
+      "implementation": [],
+      "tests": [],
+      "evidence": []
+    },
+    {
+      "id": "FEAT-0014",
+      "title": "Mesh modeling and boolean modifiers",
+      "path": "doc/feat/FEAT-0014.md",
+      "status": "Planned",
+      "iteration": "ITER-0005",
+      "dependsOn": [
+        "FEAT-0013"
+      ],
+      "adrs": [
+        "ADR-0010"
+      ],
+      "scenarios": [
+        "SC-0040",
+        "SC-0041",
+        "SC-0042"
+      ],
+      "implementation": [],
+      "tests": [],
+      "evidence": []
+    },
+    {
+      "id": "FEAT-0015",
+      "title": "Outlines materials shaders and lighting",
+      "path": "doc/feat/FEAT-0015.md",
+      "status": "Planned",
+      "iteration": "ITER-0005",
+      "dependsOn": [
+        "FEAT-0013"
+      ],
+      "adrs": [
+        "ADR-0007",
+        "ADR-0010"
+      ],
+      "scenarios": [
+        "SC-0043",
+        "SC-0044",
+        "SC-0045"
+      ],
+      "implementation": [],
+      "tests": [],
+      "evidence": []
+    },
+    {
+      "id": "FEAT-0016",
+      "title": "Asset gallery and project textures",
+      "path": "doc/feat/FEAT-0016.md",
+      "status": "Planned",
+      "iteration": "ITER-0006",
+      "dependsOn": [
+        "FEAT-0006",
+        "FEAT-0012",
+        "FEAT-0015"
+      ],
+      "adrs": [
+        "ADR-0009",
+        "ADR-0011"
+      ],
+      "scenarios": [
+        "SC-0046",
+        "SC-0047",
+        "SC-0048"
+      ],
+      "implementation": [],
+      "tests": [],
+      "evidence": []
+    },
+    {
+      "id": "FEAT-0017",
+      "title": "Realtime collaboration presence and following",
+      "path": "doc/feat/FEAT-0017.md",
+      "status": "Planned",
+      "iteration": "ITER-0006",
+      "dependsOn": [
+        "FEAT-0001",
+        "FEAT-0006",
+        "FEAT-0013"
+      ],
+      "adrs": [
+        "ADR-0003",
+        "ADR-0004",
+        "ADR-0012"
+      ],
+      "scenarios": [
+        "SC-0049",
+        "SC-0050",
+        "SC-0051"
+      ],
+      "implementation": [],
+      "tests": [],
+      "evidence": []
+    },
+    {
+      "id": "FEAT-0018",
+      "title": "Browser and desktop multiwindow",
+      "path": "doc/feat/FEAT-0018.md",
+      "status": "Planned",
+      "iteration": "ITER-0006",
+      "dependsOn": [
+        "FEAT-0003",
+        "FEAT-0004",
+        "FEAT-0017"
+      ],
+      "adrs": [
+        "ADR-0006",
+        "ADR-0013"
+      ],
+      "scenarios": [
+        "SC-0052",
+        "SC-0053",
+        "SC-0054"
+      ],
+      "implementation": [],
+      "tests": [],
+      "evidence": []
+    },
+    {
+      "id": "FEAT-0019",
+      "title": "AI tools and authorized MCP bridge",
+      "path": "doc/feat/FEAT-0019.md",
+      "status": "Planned",
+      "iteration": "ITER-0007",
+      "dependsOn": [
+        "FEAT-0005",
+        "FEAT-0006",
+        "FEAT-0017"
+      ],
+      "adrs": [
+        "ADR-0005",
+        "ADR-0012",
+        "ADR-0015"
+      ],
+      "scenarios": [
+        "SC-0055",
+        "SC-0056",
+        "SC-0057"
+      ],
+      "implementation": [],
+      "tests": [],
+      "evidence": []
+    },
+    {
+      "id": "FEAT-0020",
+      "title": "Themes localization and accessible UI",
+      "path": "doc/feat/FEAT-0020.md",
+      "status": "Planned",
+      "iteration": "ITER-0001",
+      "dependsOn": [
+        "FEAT-0002"
+      ],
+      "adrs": [
+        "ADR-0014"
+      ],
+      "scenarios": [
+        "SC-0058",
+        "SC-0059",
+        "SC-0060"
+      ],
+      "implementation": [],
+      "tests": [],
+      "evidence": []
+    },
+    {
+      "id": "FEAT-0021",
+      "title": "Animation and deterministic frame export",
+      "path": "doc/feat/FEAT-0021.md",
+      "status": "Planned",
+      "iteration": "ITER-0007",
+      "dependsOn": [
+        "FEAT-0012",
+        "FEAT-0013"
+      ],
+      "adrs": [
+        "ADR-0007",
+        "ADR-0016"
+      ],
+      "scenarios": [
+        "SC-0061",
+        "SC-0062",
+        "SC-0063"
+      ],
+      "implementation": [],
+      "tests": [],
+      "evidence": []
+    },
+    {
+      "id": "FEAT-0022",
+      "title": "File interchange and professional output",
+      "path": "doc/feat/FEAT-0022.md",
+      "status": "Planned",
+      "iteration": "ITER-0008",
+      "dependsOn": [
+        "FEAT-0006",
+        "FEAT-0008",
+        "FEAT-0012",
+        "FEAT-0016"
+      ],
+      "adrs": [
+        "ADR-0009",
+        "ADR-0016"
+      ],
+      "scenarios": [
+        "SC-0064",
+        "SC-0065",
+        "SC-0066"
+      ],
+      "implementation": [],
+      "tests": [],
+      "evidence": []
+    },
+    {
+      "id": "FEAT-0023",
+      "title": "Engineering quality and provenance",
+      "path": "doc/feat/FEAT-0023.md",
+      "status": "Implementing",
+      "iteration": "ITER-0001",
+      "dependsOn": [],
+      "adrs": [
+        "ADR-0017",
+        "ADR-0018"
+      ],
+      "scenarios": [
+        "SC-0067",
+        "SC-0068",
+        "SC-0069"
+      ],
+      "implementation": [
+        "harness/check_quality.py",
+        "harness/collect_quality.py"
+      ],
+      "tests": [
+        "tests/test_quality.py",
+        "tests/test_quality_collector.py"
+      ],
+      "evidence": [
+        "doc/implementation/PLAN-0023-0001.md"
+      ]
+    },
+    {
+      "id": "FEAT-0024",
+      "title": "Operations recovery and resource control",
+      "path": "doc/feat/FEAT-0024.md",
+      "status": "Planned",
+      "iteration": "ITER-0008",
+      "dependsOn": [
+        "FEAT-0006",
+        "FEAT-0017",
+        "FEAT-0023"
+      ],
+      "adrs": [
+        "ADR-0002",
+        "ADR-0008",
+        "ADR-0012",
+        "ADR-0021"
+      ],
+      "scenarios": [
+        "SC-0070",
+        "SC-0071",
+        "SC-0072"
+      ],
+      "implementation": [],
+      "tests": [],
+      "evidence": []
+    },
+    {
+      "id": "FEAT-0025",
+      "title": "Signed licences and plugin bundle entitlements",
+      "path": "doc/feat/FEAT-0025.md",
+      "status": "Planned",
+      "iteration": "ITER-0001",
+      "dependsOn": [
+        "FEAT-0001",
+        "FEAT-0005",
+        "FEAT-0023"
+      ],
+      "adrs": [
+        "ADR-0019",
+        "ADR-0020"
+      ],
+      "scenarios": [
+        "SC-0073",
+        "SC-0074",
+        "SC-0075"
+      ],
+      "implementation": [],
+      "tests": [],
+      "evidence": []
+    },
+    {
+      "id": "FEAT-0026",
+      "title": "Commercial administration and seat allocation",
+      "path": "doc/feat/FEAT-0026.md",
+      "status": "Planned",
+      "iteration": "ITER-0002",
+      "dependsOn": [
+        "FEAT-0025"
+      ],
+      "adrs": [
+        "ADR-0019",
+        "ADR-0020"
+      ],
+      "scenarios": [
+        "SC-0076",
+        "SC-0077",
+        "SC-0078"
+      ],
+      "implementation": [],
+      "tests": [],
+      "evidence": []
+    },
+    {
+      "id": "FEAT-0027",
+      "title": "Ximplicity UX and commercial capability states",
+      "path": "doc/feat/FEAT-0027.md",
+      "status": "Planned",
+      "iteration": "ITER-0001",
+      "dependsOn": [
+        "FEAT-0002",
+        "FEAT-0003",
+        "FEAT-0020"
+      ],
+      "adrs": [
+        "ADR-0022"
+      ],
+      "scenarios": [
+        "SC-0079",
+        "SC-0080",
+        "SC-0081"
+      ],
+      "implementation": [],
+      "tests": [],
+      "evidence": []
+    },
+    {
+      "id": "FEAT-0028",
+      "title": "Shared footer and single-source changelog",
+      "path": "doc/feat/FEAT-0028.md",
+      "status": "Planned",
+      "iteration": "ITER-0001",
+      "dependsOn": [
+        "FEAT-0020",
+        "FEAT-0027"
+      ],
+      "adrs": [
+        "ADR-0014",
+        "ADR-0022"
+      ],
+      "scenarios": [
+        "SC-0082",
+        "SC-0083",
+        "SC-0084"
+      ],
+      "implementation": [
+        "harness/changelog.py"
+      ],
+      "tests": [
+        "tests/test_changelog.py"
+      ],
+      "evidence": [
+        "doc/product/footer-and-changelog.md"
+      ]
+    }
+  ]
+}

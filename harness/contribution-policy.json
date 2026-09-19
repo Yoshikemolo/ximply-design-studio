@@ -1,0 +1,45 @@
+{
+  "schemaVersion": 1,
+  "owner": "Yoshikemolo",
+  "language": "en",
+  "allowEmoji": false,
+  "allowAttributionTrailers": false,
+  "blockedTerms": [
+    "chatgpt",
+    "openai",
+    "anthropic",
+    "claude",
+    "copilot",
+    "gemini",
+    "gpt",
+    "llama",
+    "mistral",
+    "deepseek",
+    "qwen",
+    "ai-assisted",
+    "ai-generated",
+    "artificial intelligence",
+    "language model"
+  ],
+  "blockedTrailers": [
+    "co-authored-by",
+    "signed-off-by",
+    "generated-by",
+    "assisted-by",
+    "authored-by"
+  ],
+  "requireHumanEnglishReview": true,
+  "conventionalCommitTypes": [
+    "feat",
+    "fix",
+    "docs",
+    "style",
+    "refactor",
+    "perf",
+    "test",
+    "build",
+    "ci",
+    "chore",
+    "revert"
+  ]
+}

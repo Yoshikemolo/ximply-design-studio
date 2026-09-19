@@ -1,0 +1,49 @@
+{
+  "status": "proposed-not-official-brand-values",
+  "spacing": [
+    4,
+    8,
+    12,
+    16,
+    24,
+    32
+  ],
+  "radius": {
+    "panel": 6,
+    "floating": 8
+  },
+  "typography": {
+    "fontFamily": "system-ui, -apple-system, Segoe UI, sans-serif",
+    "bodyPx": 14,
+    "labelPx": 12
+  },
+  "themes": {
+    "dark": {
+      "canvas": "#101318",
+      "surface": "#191E26",
+      "raised": "#232A35",
+      "text": "#EDF2F8",
+      "muted": "#A9B6C7",
+      "accent": "#54ADFF",
+      "focus": "#93D2FF"
+    },
+    "light": {
+      "canvas": "#E8ECF1",
+      "surface": "#FFFFFF",
+      "raised": "#F4F7FA",
+      "text": "#172130",
+      "muted": "#526277",
+      "accent": "#005AB8",
+      "focus": "#005AB8"
+    }
+  },
+  "observedBrand": {
+    "source": "https://ximplicity.es/",
+    "accent": "#0D59F2",
+    "lightBackground": "#F5F6F8",
+    "lightText": "#0F1115",
+    "bodyFont": "Space Grotesk",
+    "displayFont": "Kodchasan",
+    "fontDistributionVerified": false
+  }
+}

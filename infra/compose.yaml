@@ -1,0 +1,82 @@
+name: ximply-design-studio
+services:
+  postgres:
+    image: ${POSTGRES_IMAGE:?Set a reviewed PostgreSQL image}
+    environment:
+      POSTGRES_DB: studio
+      POSTGRES_USER: studio
+      POSTGRES_PASSWORD: ${APP_DB_PASSWORD:?Set a local application password}
+    ports: ["127.0.0.1:5432:5432"]
+    volumes: ["app-db:/var/lib/postgresql/data"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U studio -d studio"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+  redis:
+    image: ${REDIS_IMAGE:?Set a reviewed Redis image}
+    command: ["redis-server", "--appendonly", "yes", "--maxmemory", "256mb", "--maxmemory-policy", "noeviction"]
+    ports: ["127.0.0.1:6379:6379"]
+    volumes: ["redis-data:/data"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+  keycloak-db:
+    image: ${POSTGRES_IMAGE:?Set a reviewed PostgreSQL image}
+    environment:
+      POSTGRES_DB: keycloak
+      POSTGRES_USER: keycloak
+      POSTGRES_PASSWORD: ${IAM_DB_PASSWORD:?Set a local IAM database password}
+    volumes: ["iam-db:/var/lib/postgresql/data"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U keycloak -d keycloak"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+  keycloak:
+    image: ${KEYCLOAK_IMAGE:?Set a reviewed Keycloak image}
+    command: ["start-dev"]
+    environment:
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://keycloak-db:5432/keycloak
+      KC_DB_USERNAME: keycloak
+      KC_DB_PASSWORD: ${IAM_DB_PASSWORD:?Set a local IAM database password}
+      KC_BOOTSTRAP_ADMIN_USERNAME: studio-admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:?Set a local admin password}
+    depends_on:
+      keycloak-db: {condition: service_healthy}
+    ports: ["127.0.0.1:8080:8080"]
+  sonar-db:
+    profiles: [quality]
+    image: ${POSTGRES_IMAGE:?Set a reviewed PostgreSQL image}
+    environment:
+      POSTGRES_DB: sonar
+      POSTGRES_USER: sonar
+      POSTGRES_PASSWORD: ${SONAR_DB_PASSWORD:?Set a local analysis database password}
+    volumes: ["sonar-db:/var/lib/postgresql/data"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sonar -d sonar"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+  sonarqube:
+    profiles: [quality]
+    image: ${SONARQUBE_IMAGE:?Set a reviewed SonarQube image}
+    environment:
+      SONAR_JDBC_URL: jdbc:postgresql://sonar-db:5432/sonar
+      SONAR_JDBC_USERNAME: sonar
+      SONAR_JDBC_PASSWORD: ${SONAR_DB_PASSWORD:?Set a local analysis database password}
+    depends_on:
+      sonar-db: {condition: service_healthy}
+    ports: ["127.0.0.1:9000:9000"]
+    volumes: ["sonar-data:/opt/sonarqube/data", "sonar-extensions:/opt/sonarqube/extensions", "sonar-logs:/opt/sonarqube/logs"]
+volumes:
+  app-db:
+  iam-db:
+  redis-data:
+  sonar-db:
+  sonar-data:
+  sonar-extensions:
+  sonar-logs:
