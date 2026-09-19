@@ -1,3 +1,14 @@
+---
+id: "DOC-ENGINEERING-0003"
+title: "Documentation and context protocol"
+status: "proposed"
+domain: "engineering"
+owners: ["Yoshikemolo"]
+applies_to: ["ximply-design-studio"]
+related: ["DOC-ROOT-0001", "AI-ENG-0001"]
+source: ["Project owner requirements and design foundation; methodology application recorded in AUDIT-0001"]
+---
+
 # Documentation and context protocol
 
 [Context entry](../INDEX.md) | [Methodology profile](../ai/methodology-adoption.md)
@@ -46,3 +57,24 @@ implementations. Implementation and tests fields contain repository-relative fil
 paths; evidence records identify revision, command, result and artifact. Status
 Verified still requires the full quality policy. Index checks prove navigation
 consistency, not specification truth, coverage or architecture acceptance.
+
+## Metadata profile and source authority
+
+Every authored document under `/doc`, except templates, has YAML front matter.
+For dependency-free validation, each field value uses JSON syntax (a YAML subset):
+`id`, `title`, `status`, `domain`, `owners`, `applies_to`, `related`, `source`.
+Generated category indexes and the generated catalog derive from source metadata.
+Keep IDs stable even when paths move; never imply an ID is assigned by upstream.
+The domain is the parent directory relative to `/doc`; `.` denotes the entry map.
+
+ADRs use proposed/accepted/deprecated/superseded/rejected. Product delivery records
+also use planned/implementing/verified/released/blocked. This is a project profile,
+not a claim that upstream settled its open identifier and relationship questions.
+Feature dependency and acceptance edges remain authoritative in traceability.json;
+metadata `related` adds context links. Generated reverse navigation is derived.
+Run `python3 harness/knowledge.py` as well as the existing checks after every edit.
+
+Before each work block, consult the pinned methodology profile and retrieve only
+relevant upstream domain documents. Compare a newer upstream revision explicitly;
+record adopted changes and unresolved conflicts before updating the pin. Do not
+copy the upstream corpus into this project or treat its summary as authority.

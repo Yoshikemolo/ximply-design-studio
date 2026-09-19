@@ -1,3 +1,14 @@
+---
+id: "DOC-ARCHITECTURE-0005"
+title: "System architecture"
+status: "proposed"
+domain: "architecture"
+owners: ["Yoshikemolo"]
+applies_to: ["ximply-design-studio"]
+related: []
+source: ["Project owner requirements and design foundation; methodology application recorded in AUDIT-0001"]
+---
+
 # System architecture
 
 Status: Proposed. Constraints: Angular + TypeScript, FastAPI + Python, PostgreSQL +

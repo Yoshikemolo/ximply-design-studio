@@ -22,6 +22,8 @@ Product owner and architectural reviewer: Yoshikemolo.
 - [Features and scenarios](doc/planning/backlog.md)
 - [Local setup](doc/operations/local-development.md)
 - [Agent workflow](AGENTS.md)
+- [Contribution rules](CONTRIBUTING.md)
+- [Methodology audit](doc/testing/methodology-audit.md)
 - [Verification evidence](doc/testing/bootstrap-evidence.md)
 - [Research and version evidence](doc/research/sources.md)
 

@@ -1,3 +1,14 @@
+---
+id: "DOC-ENGINEERING-0004"
+title: "GitFlow profile"
+status: "proposed"
+domain: "engineering"
+owners: ["Yoshikemolo"]
+applies_to: ["ximply-design-studio"]
+related: []
+source: ["Project owner requirements and design foundation; methodology application recorded in AUDIT-0001"]
+---
+
 # GitFlow profile
 
 This is the owner's GitFlow variant, using the exact branch families requested.

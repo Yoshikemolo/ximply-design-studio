@@ -1,3 +1,14 @@
+---
+id: "DOC-RESEARCH-0001"
+title: "Research register — 2026-09-19"
+status: "proposed"
+domain: "research"
+owners: ["Yoshikemolo"]
+applies_to: ["ximply-design-studio"]
+related: []
+source: ["Project owner requirements and design foundation; methodology application recorded in AUDIT-0001"]
+---
+
 # Research register — 2026-09-19
 
 Primary product documentation and upstream projects were inspected. The following
@@ -15,16 +26,16 @@ No benchmark, dependency installation or Adobe compatibility test was performed.
 | [TypeORM](https://typeorm.io/) | TypeScript/JavaScript ORM ecosystem | Private Node persistence service when TypeORM is retained |
 | [FastAPI concurrency](https://fastapi.tiangolo.com/async/) | Async I/O and parallel CPU work solve different problems | Bounded I/O on API; compute in workers |
 | [SignalR overview](https://learn.microsoft.com/en-us/aspnet/core/signalr/introduction?view=aspnetcore-10.0) | ASP.NET Core hubs support real-time client delivery | Small .NET gateway, not a Python hub claim |
-| [Redis Pub/Sub](https://redis.io/doc/latest/develop/pubsub/) | Pub/Sub has at-most-once delivery | Presence only; durable outbox/replay for edits |
-| [Three.js WebGPURenderer](https://threejs.org/doc/pages/WebGPURenderer.html) | Dedicated renderer with backend behavior to inspect | Separate backend compatibility spike |
-| [Three.js OutlinePass](https://threejs.org/doc/pages/OutlinePass.html) | Postprocessing selected-object outlines is available | WebGL adapter; no automatic WebGPU parity assumption |
+| [Redis Pub/Sub](https://redis.io/docs/latest/develop/pubsub/) | Pub/Sub has at-most-once delivery | Presence only; durable outbox/replay for edits |
+| [Three.js WebGPURenderer](https://threejs.org/docs/pages/WebGPURenderer.html) | Dedicated renderer with backend behavior to inspect | Separate backend compatibility spike |
+| [Three.js OutlinePass](https://threejs.org/docs/pages/OutlinePass.html) | Postprocessing selected-object outlines is available | WebGL adapter; no automatic WebGPU parity assumption |
 | [three-bvh-csg](https://github.com/gkjohnson/three-bvh-csg) | CSG on mesh BVH, with documented constraints | Preview candidate; test topology and failure behavior |
 | [Manifold](https://github.com/elalish/manifold) | Geometry library targets topological robustness | Compare as validated boolean kernel |
 | [Golden Layout](https://github.com/golden-layout/golden-layout) | Multi-window layout manager | Evaluate behind an adapter, not assumed Angular compatibility |
-| [Electron security](https://www.electronjs.org/doc/latest/tutorial/security) | Isolation and narrow privileged access matter | Sandboxed renderer and validated IPC |
+| [Electron security](https://www.electronjs.org/docs/latest/tutorial/security) | Isolation and narrow privileged access matter | Sandboxed renderer and validated IPC |
 | [Keycloak JS adapter](https://www.keycloak.org/securing-apps/javascript-adapter) | Public clients and in-memory bearer tokens | Code + PKCE; no client secret or persistent browser tokens |
 | [MCP authorization](https://modelcontextprotocol.io/specification/2025-06-18/basic/authorization) | Authorization is a protocol boundary | Pin SDK/protocol and enforce resource-scoped delegated access |
-| [BroadcastChannel](https://developer.mozilla.org/en-US/doc/Web/API/Broadcast_Channel_API) | Same-origin browsing contexts exchange messages | Window coordination capability, not cross-origin token transport |
+| [BroadcastChannel](https://developer.mozilla.org/en-US/docs/Web/API/Broadcast_Channel_API) | Same-origin browsing contexts exchange messages | Window coordination capability, not cross-origin token transport |
 | [SonarQube gates](https://docs.sonarsource.com/sonarqube-server/quality-standards-administration/managing-quality-gates/introduction-to-quality-gates) | Quality gates evaluate analysis conditions | Strict project policy plus explicit metrics checks |
 | [GitHub CLI create](https://cli.github.com/manual/gh_repo_create) | CLI can create a repository from local source | Optional local publication workflow |
 

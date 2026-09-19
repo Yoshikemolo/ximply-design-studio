@@ -1,3 +1,14 @@
+---
+id: "DOC-PLANNING-0002"
+title: "Delivery plan"
+status: "proposed"
+domain: "planning"
+owners: ["Yoshikemolo"]
+applies_to: ["ximply-design-studio"]
+related: []
+source: ["Project owner requirements and design foundation; methodology application recorded in AUDIT-0001"]
+---
+
 # Delivery plan
 
 Scope is a professional product programme, not a one-iteration editor. No calendar

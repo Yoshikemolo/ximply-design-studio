@@ -1,3 +1,14 @@
+---
+id: "DOC-OPERATIONS-0005"
+title: "Container runbooks"
+status: "proposed"
+domain: "operations"
+owners: ["Yoshikemolo"]
+applies_to: ["ximply-design-studio"]
+related: []
+source: ["Project owner requirements and design foundation; methodology application recorded in AUDIT-0001"]
+---
+
 # Container runbooks
 
 `studio.sh` and `studio.ps1` call the same reviewed Python controller so platform

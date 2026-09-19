@@ -1,3 +1,14 @@
+---
+id: "DOC-ROOT-0002"
+title: "Code and contract map"
+status: "proposed"
+domain: "."
+owners: ["Yoshikemolo"]
+applies_to: ["ximply-design-studio"]
+related: ["DOC-ROOT-0001"]
+source: ["Project owner requirements and design foundation; methodology application recorded in AUDIT-0001"]
+---
+
 # Code and contract map
 
 [Context entry](INDEX.md). Product modules below are planned boundaries, not working

@@ -1,3 +1,14 @@
+---
+id: "DOC-ARCHITECTURE-0004"
+title: "Plugin architecture and MCP"
+status: "proposed"
+domain: "architecture"
+owners: ["Yoshikemolo"]
+applies_to: ["ximply-design-studio"]
+related: []
+source: ["Project owner requirements and design foundation; methodology application recorded in AUDIT-0001"]
+---
+
 # Plugin architecture and MCP
 
 ## Extension contract

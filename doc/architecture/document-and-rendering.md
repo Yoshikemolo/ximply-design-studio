@@ -1,3 +1,14 @@
+---
+id: "DOC-ARCHITECTURE-0001"
+title: "Document model, rendering and performance"
+status: "proposed"
+domain: "architecture"
+owners: ["Yoshikemolo"]
+applies_to: ["ximply-design-studio"]
+related: []
+source: ["Project owner requirements and design foundation; methodology application recorded in AUDIT-0001"]
+---
+
 # Document model, rendering and performance
 
 ## Canonical document

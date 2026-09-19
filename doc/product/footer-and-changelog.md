@@ -1,3 +1,14 @@
+---
+id: "DOC-PRODUCT-0002"
+title: "Footer and changelog contract"
+status: "proposed"
+domain: "product"
+owners: ["Yoshikemolo"]
+applies_to: ["ximply-design-studio"]
+related: []
+source: ["Project owner requirements and design foundation; methodology application recorded in AUDIT-0001"]
+---
+
 # Footer and changelog contract
 
 Status: Proposed; exact application bottom-row mapping requires confirmation.

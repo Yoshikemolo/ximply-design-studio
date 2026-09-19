@@ -1,7 +1,20 @@
+---
+id: "DOC-ROOT-0001"
+title: "Documentation entry map"
+status: "proposed"
+domain: "."
+owners: ["Yoshikemolo"]
+applies_to: ["ximply-design-studio"]
+related: ["AUDIT-0001", "DOC-ROOT-0002", "DOC-ENGINEERING-0003", "DOC-ARCHITECTURE-0005", "DOC-PLANNING-0001", "DOC-PLANNING-0002", "DOC-OPERATIONS-0003", "DOC-TESTING-0001", "AI-ENG-0001"]
+source: ["Project owner requirements and design foundation; methodology application recorded in AUDIT-0001"]
+---
+
 # Documentation entry map
 
 Read this map first. Retrieve one requirement and its immediate links; do not load
 all indexes or the complete specification into every working context.
+
+[Complete generated catalog](CATALOG.md) | [Methodology audit](testing/methodology-audit.md)
 
 | Task | Entry point |
 | --- | --- |

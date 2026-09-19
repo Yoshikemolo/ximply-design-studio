@@ -1,3 +1,14 @@
+---
+id: "DOC-TESTING-0003"
+title: "SonarQube installation and gate design"
+status: "proposed"
+domain: "testing"
+owners: ["Yoshikemolo"]
+applies_to: ["ximply-design-studio"]
+related: []
+source: ["Project owner requirements and design foundation; methodology application recorded in AUDIT-0001"]
+---
+
 # SonarQube installation and gate design
 
 A local SonarQube service plus a dedicated PostgreSQL database is defined in the

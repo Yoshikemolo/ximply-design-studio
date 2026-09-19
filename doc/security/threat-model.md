@@ -1,3 +1,14 @@
+---
+id: "DOC-SECURITY-0002"
+title: "Threat model"
+status: "proposed"
+domain: "security"
+owners: ["Yoshikemolo"]
+applies_to: ["ximply-design-studio"]
+related: []
+source: ["Project owner requirements and design foundation; methodology application recorded in AUDIT-0001"]
+---
+
 # Threat model
 
 Status: Proposed. Assets: editable work, licensed resources, identity/session data,

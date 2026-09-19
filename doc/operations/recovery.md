@@ -1,3 +1,14 @@
+---
+id: "DOC-OPERATIONS-0004"
+title: "Operations and recovery design"
+status: "planned"
+domain: "operations"
+owners: ["Yoshikemolo"]
+applies_to: ["ximply-design-studio"]
+related: []
+source: ["Project owner requirements and design foundation; methodology application recorded in AUDIT-0001"]
+---
+
 # Operations and recovery design
 
 Status: Planned runbook to validate before release.

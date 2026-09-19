@@ -1,3 +1,14 @@
+---
+id: "DOC-TESTING-0001"
+title: "Bootstrap verification evidence"
+status: "proposed"
+domain: "testing"
+owners: ["Yoshikemolo"]
+applies_to: ["ximply-design-studio"]
+related: []
+source: ["Project owner requirements and design foundation; methodology application recorded in AUDIT-0001"]
+---
+
 # Bootstrap verification evidence
 
 Date: 2026-09-19. Scope: design package and engineering harness behavior.

@@ -35,3 +35,13 @@ Read doc/engineering/contribution-policy.md on every contribution. English prose
 emojis, Conventional Commits, no attribution/provider/model mentions in commit or PR
 text; author and committer accounts must be Yoshikemolo. Run the general metadata
 harness. Do not reintroduce attribution declarations from methodology templates.
+
+## Methodology discipline
+
+Before each work block, read doc/ai/methodology-adoption.md and retrieve the relevant
+upstream domain documents by stable ID. ximply-ai-devflow is read-only. Record
+documentation impact before editing, preserve owner overrides and never silently
+resolve conflicting normative requirements. Follow doc/engineering/documentation-protocol.md.
+Run metadata, reachability and generated-navigation checks before committing.
+Checkpoint reviewable changes to GitHub; do not call a checkpoint completed product
+work while quality gates or human review are missing.

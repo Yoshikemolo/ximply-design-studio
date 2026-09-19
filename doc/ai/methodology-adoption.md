@@ -1,11 +1,26 @@
+---
+id: "AI-ENG-0001"
+title: "AI-ENG-0001 — Project implementation profile"
+status: "proposed"
+domain: "ai"
+owners: ["Yoshikemolo"]
+applies_to: ["ximply-design-studio"]
+related: ["AUDIT-0001"]
+source: ["https://github.com/Yoshikemolo/ximply-ai-devflow/tree/7d6e2a6644fdf33d7dd2729b13abf59da633251c"]
+---
+
 # AI-ENG-0001 — Project implementation profile
 
-Source: user-supplied *AI-Assisted Software Engineering Framework*,
-SOP-ENG-2026 draft v0.1, filename ending EN202608161000.md. The source itself says
-it is a proposal, not a ratified organizational standard. Jorge explicitly requested
-using its methodology for this project. This profile operationalizes that request
-without claiming organization-wide ratification. The original is not included in
-public source because it contains organizational examples irrelevant to this product.
+Authoritative reference: [ximply-ai-devflow](https://github.com/Yoshikemolo/ximply-ai-devflow),
+reviewed at revision `7d6e2a6644fdf33d7dd2729b13abf59da633251c`.
+Read-only: never create commits, branches, issues or pull requests in that repository.
+Its domain documents are authoritative; the original attached draft and upstream
+compiled snapshot are historical references only, following upstream AI-DEC-003.
+The owner requests application to this project; that does not ratify the upstream
+framework globally or accept this project's proposed ADRs.
+
+See the [audit](../testing/methodology-audit.md) for exact source links, impact,
+corrections, owner overrides and outstanding enforcement gaps.
 
 | Source principle | Repository implementation |
 | --- | --- |

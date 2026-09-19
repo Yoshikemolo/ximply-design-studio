@@ -1,3 +1,14 @@
+---
+id: "DOC-PRODUCT-0005"
+title: "UX direction — Ximplicity studio"
+status: "proposed"
+domain: "product"
+owners: ["Yoshikemolo"]
+applies_to: ["ximply-design-studio"]
+related: []
+source: ["Project owner requirements and design foundation; methodology application recorded in AUDIT-0001"]
+---
+
 # UX direction — Ximplicity studio
 
 Status: Proposed design direction, based on the live public website inspected on

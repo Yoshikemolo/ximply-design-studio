@@ -1,3 +1,14 @@
+---
+id: "DOC-PRODUCT-0003"
+title: "Functional specification"
+status: "proposed"
+domain: "product"
+owners: ["Yoshikemolo"]
+applies_to: ["ximply-design-studio"]
+related: ["DOC-PRODUCT-0001", "DOC-PRODUCT-0005", "DOC-SECURITY-0001"]
+source: ["Project owner requirements and design foundation; methodology application recorded in AUDIT-0001"]
+---
+
 # Functional specification
 
 Status: Proposed target. Every capability below is planned unless evidence explicitly states otherwise.

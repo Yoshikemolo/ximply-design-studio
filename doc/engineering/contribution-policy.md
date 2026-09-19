@@ -1,3 +1,14 @@
+---
+id: "DOC-ENGINEERING-0002"
+title: "Contribution policy — permanent repository instruction"
+status: "proposed"
+domain: "engineering"
+owners: ["Yoshikemolo"]
+applies_to: ["ximply-design-studio"]
+related: []
+source: ["Project owner requirements and design foundation; methodology application recorded in AUDIT-0001"]
+---
+
 # Contribution policy — permanent repository instruction
 
 Owner: Yoshikemolo. Applies to every subsequent commit and PR in this repository.

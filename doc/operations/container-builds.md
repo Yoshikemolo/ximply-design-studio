@@ -1,3 +1,14 @@
+---
+id: "DOC-OPERATIONS-0002"
+title: "Container build and CI/CD implementation contract"
+status: "proposed"
+domain: "operations"
+owners: ["Yoshikemolo"]
+applies_to: ["ximply-design-studio"]
+related: []
+source: ["Project owner requirements and design foundation; methodology application recorded in AUDIT-0001"]
+---
+
 # Container build and CI/CD implementation contract
 
 | Image | Build stages | Runtime contract |

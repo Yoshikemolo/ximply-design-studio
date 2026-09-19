@@ -3,6 +3,10 @@ from __future__ import annotations
 import argparse
 import json
 import os
+try:
+    from harness.knowledge import read_document, documents
+except ModuleNotFoundError:
+    from knowledge import read_document, documents
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -17,8 +21,8 @@ def graph(root: Path) -> dict:
         for path in sorted((root / 'doc' / category).glob('*.md')):
             if path.name in ('INDEX.md', 'README.md'):
                 continue
-            content = path.read_text().split(MARKER)[0]
-            title = content.splitlines()[0].removeprefix('# ')
+            metadata, content = read_document(path)
+            title = metadata['title']
             identifier = path.stem
             nodes[identifier] = {'id': identifier, 'title': title, 'path': path.relative_to(root).as_posix(), 'links': [], 'implementation': [], 'tests': []}
     def connect(left, right):
@@ -36,11 +40,11 @@ def graph(root: Path) -> dict:
                     raise ValueError(f'Missing {key} path: {path}')
         for target in feature['adrs'] + feature['scenarios'] + feature['dependsOn']:
             connect(feature['id'], target)
-        connect('PO-0001', feature['id'])
-    for identifier in nodes:
-        if identifier.startswith('SEC-'):
-            connect('PO-0002', identifier)
-    connect('PO-0001', 'PO-0002')
+    for identifier, node in list(nodes.items()):
+        metadata, _ = read_document(root/node['path'])
+        for target in metadata['related']:
+            if target in nodes:
+                connect(identifier, target)
     return nodes
 
 
@@ -66,13 +70,21 @@ def generated(root: Path) -> dict[str, str]:
         for key in ('implementation', 'tests'):
             links.extend(relative_link(path, x, f'{key}: {x}') for x in node[key])
         outputs[path] = base + MARKER + '\n## Navigation\n\n' + ' | '.join(links) + '\n'
+    catalog = ['# Documentation catalog', '', '[Context entry](INDEX.md)', '', 'Generated titles and paths only; authoritative content remains in each linked document.', '']
+    for identifier, document in documents(root).items():
+        catalog.append('- ' + relative_link('doc/CATALOG.md', document['path'], identifier + ' — ' + document['metadata']['title']))
+    outputs['doc/CATALOG.md'] = '\n'.join(catalog) + '\n'
     return outputs
 
 
 def packet(root: Path, identifier: str) -> dict:
     nodes = graph(root)
     if identifier not in nodes:
-        raise ValueError(f'Unknown context ID: {identifier}')
+        corpus = documents(root)
+        if identifier not in corpus:
+            raise ValueError(f'Unknown context ID: {identifier}')
+        for key, document in corpus.items():
+            nodes[key] = {'id': key, 'title': document['metadata']['title'], 'path': document['path'], 'links': document['metadata']['related'], 'implementation': [], 'tests': []}
     node = nodes[identifier]
     return {'entry': node, 'related': [{'id': x, 'path': nodes[x]['path'], 'title': nodes[x]['title']} for x in sorted(node['links'])], 'rule': 'Read entry first, then only relevant linked documents. Empty implementation/tests means not implemented; use doc/code-map.md for planned boundaries.'}
 

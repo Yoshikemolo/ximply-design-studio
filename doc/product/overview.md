@@ -1,3 +1,14 @@
+---
+id: "DOC-PRODUCT-0004"
+title: "Product overview"
+status: "proposed"
+domain: "product"
+owners: ["Yoshikemolo"]
+applies_to: ["ximply-design-studio"]
+related: []
+source: ["Project owner requirements and design foundation; methodology application recorded in AUDIT-0001"]
+---
+
 # Product overview
 
 ximply-design-studio is a professional design application combining editable vector,

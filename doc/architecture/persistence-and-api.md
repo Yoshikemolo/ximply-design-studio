@@ -1,3 +1,14 @@
+---
+id: "DOC-ARCHITECTURE-0003"
+title: "Persistence and REST API"
+status: "proposed"
+domain: "architecture"
+owners: ["Yoshikemolo"]
+applies_to: ["ximply-design-studio"]
+related: []
+source: ["Project owner requirements and design foundation; methodology application recorded in AUDIT-0001"]
+---
+
 # Persistence and REST API
 
 ## Logical schema

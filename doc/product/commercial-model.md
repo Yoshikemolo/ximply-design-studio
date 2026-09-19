@@ -1,3 +1,14 @@
+---
+id: "DOC-PRODUCT-0001"
+title: "Commercial product and entitlement model"
+status: "proposed"
+domain: "product"
+owners: ["Yoshikemolo"]
+applies_to: ["ximply-design-studio"]
+related: []
+source: ["Project owner requirements and design foundation; methodology application recorded in AUDIT-0001"]
+---
+
 # Commercial product and entitlement model
 
 Status: Proposed. Initial edition: Community / Free. No price, paid-plan contract,

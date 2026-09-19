@@ -1,3 +1,14 @@
+---
+id: "DOC-ENGINEERING-0001"
+title: "Documentation navigation migration"
+status: "proposed"
+domain: "engineering"
+owners: ["Yoshikemolo"]
+applies_to: ["ximply-design-studio"]
+related: []
+source: ["Project owner requirements and design foundation; methodology application recorded in AUDIT-0001"]
+---
+
 # Documentation navigation migration
 
 Requirement: consolidate documentation under `/doc` and enable selective linked

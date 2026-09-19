@@ -1,3 +1,14 @@
+---
+id: "DOC-ADR-0023"
+title: "Architecture Decision Records"
+status: "proposed"
+domain: "adr"
+owners: ["Yoshikemolo"]
+applies_to: ["ximply-design-studio"]
+related: ["ADR-0001", "ADR-0002", "ADR-0003", "ADR-0004", "ADR-0005", "ADR-0006", "ADR-0007", "ADR-0008", "ADR-0009", "ADR-0010", "ADR-0011", "ADR-0012", "ADR-0013", "ADR-0014", "ADR-0015", "ADR-0016", "ADR-0017", "ADR-0018", "ADR-0019", "ADR-0020", "ADR-0021", "ADR-0022"]
+source: ["Project owner requirements and design foundation; methodology application recorded in AUDIT-0001"]
+---
+
 # Architecture Decision Records
 
 All records are Proposed and require human acceptance.

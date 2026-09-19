@@ -1,3 +1,14 @@
+---
+id: "TEST-STRATEGY-0001"
+title: "TEST-STRATEGY-0001 — Verification portfolio"
+status: "proposed"
+domain: "testing"
+owners: ["Yoshikemolo"]
+applies_to: ["ximply-design-studio"]
+related: []
+source: ["Project owner requirements and design foundation; methodology application recorded in AUDIT-0001"]
+---
+
 # TEST-STRATEGY-0001 — Verification portfolio
 
 Coverage is execution evidence, not proof. Each FEAT links SC oracles defined before

@@ -1,3 +1,14 @@
+---
+id: "DOC-OPERATIONS-0001"
+title: "CI/CD status and activation"
+status: "proposed"
+domain: "operations"
+owners: ["Yoshikemolo"]
+applies_to: ["ximply-design-studio"]
+related: []
+source: ["Project owner requirements and design foundation; methodology application recorded in AUDIT-0001"]
+---
+
 # CI/CD status and activation
 
 The design workflow executes documentation and harness tests plus PR metadata checks.

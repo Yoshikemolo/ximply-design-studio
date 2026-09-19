@@ -19,6 +19,7 @@ jobs:
       - name: Check documentation and contracts
         run: |
           python harness/context.py --check
+          python harness/knowledge.py
           python harness/check_docs.py
       - name: Test engineering harnesses
         run: python -m unittest discover -s tests -v

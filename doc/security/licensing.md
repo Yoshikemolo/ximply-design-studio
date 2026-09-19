@@ -1,3 +1,14 @@
+---
+id: "DOC-SECURITY-0001"
+title: "Signed licence and entitlement security"
+status: "proposed"
+domain: "security"
+owners: ["Yoshikemolo"]
+applies_to: ["ximply-design-studio"]
+related: []
+source: ["Project owner requirements and design foundation; methodology application recorded in AUDIT-0001"]
+---
+
 # Signed licence and entitlement security
 
 Status: Proposed. Related: ADR-0019, ADR-0020, SEC-0011, FEAT-0025, FEAT-0026.

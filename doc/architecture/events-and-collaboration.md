@@ -1,3 +1,14 @@
+---
+id: "DOC-ARCHITECTURE-0002"
+title: "Events, concurrency and collaboration"
+status: "proposed"
+domain: "architecture"
+owners: ["Yoshikemolo"]
+applies_to: ["ximply-design-studio"]
+related: []
+source: ["Project owner requirements and design foundation; methodology application recorded in AUDIT-0001"]
+---
+
 # Events, concurrency and collaboration
 
 ## Three different channels
