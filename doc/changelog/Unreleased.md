@@ -40,4 +40,4 @@ None.
 
 ## Engineering
 
-None.
+- The contribution check accepts two pinned historical GitHub merge commits on dev by exact SHA and reason, without rewriting history; all other commits remain fully checked.

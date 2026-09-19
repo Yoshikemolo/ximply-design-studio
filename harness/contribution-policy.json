@@ -41,5 +41,15 @@
     "ci",
     "chore",
     "revert"
+  ],
+  "legacyCommitExemptions": [
+    {
+      "sha": "310daca1c44d942b10a882552dbe8f5166a0ec78",
+      "reason": "GitHub web merge created before server-side merges were constrained; history is preserved, not rewritten."
+    },
+    {
+      "sha": "c948cdfeeeba73fd9c32380a7c22ec111989094b",
+      "reason": "GitHub web merge created before server-side merges were constrained; history is preserved, not rewritten."
+    }
   ]
 }
