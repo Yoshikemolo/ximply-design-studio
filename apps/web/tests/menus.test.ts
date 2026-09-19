@@ -23,6 +23,9 @@ describe('transient menu dismissal', () => {
     Object.assign(component, {
       recording: () => null,
       temporarySelect: signal(false),
+      temporaryPan: signal(false),
+      cursorPoint: signal(null),
+      pointerCancel: vi.fn(),
       flyout: signal<string | null>(null),
       about: () => false,
       dialog: () => false,
@@ -31,13 +34,16 @@ describe('transient menu dismissal', () => {
     const click = (event: MouseEvent) => component.closeMenus(event);
     const pointer = (event: PointerEvent) => { component.dismissOutsideMenus(event); component.dismissToolFlyout(event); };
     const key = (event: KeyboardEvent) => component.key(event);
+    const blur = () => component.resetInput();
     document.addEventListener('click', click);
     document.addEventListener('pointerdown', pointer);
     window.addEventListener('keydown', key);
+    window.addEventListener('blur', blur);
     cleanup = [
       () => document.removeEventListener('click', click),
       () => document.removeEventListener('pointerdown', pointer),
       () => window.removeEventListener('keydown', key),
+      () => window.removeEventListener('blur', blur),
     ];
   });
 
@@ -114,6 +120,19 @@ describe('transient menu dismissal', () => {
     expect(second.defaultPrevented).toBe(true);
     expect(menu('file').open).toBe(false);
     expect(menu('inspector').open).toBe(true);
+  });
+
+  it('dismisses transient menus on window blur and restores the tool without collapsing panels', () => {
+    component.flyout.set('draw');
+    component.temporarySelect.set(true);
+    component.temporaryPan.set(true);
+    window.dispatchEvent(new Event('blur'));
+    expect(component.flyout()).toBeNull();
+    expect(menu('file').open).toBe(false);
+    expect(menu('inspector').open).toBe(true);
+    expect(component.temporarySelect()).toBe(false);
+    expect(component.temporaryPan()).toBe(false);
+    expect(component.pointerCancel).toHaveBeenCalledOnce();
   });
 
   it('does not consume composition or shortcut recording Escape events', () => {

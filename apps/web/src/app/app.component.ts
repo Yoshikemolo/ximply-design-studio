@@ -838,6 +838,8 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     }
   }
   @HostListener("window:blur") resetInput() {
+    this.dismissMenus();
+    this.flyout.set(null);
     this.spaceHeld = false;
     this.temporaryPan.set(false);
     this.temporarySelect.set(false);

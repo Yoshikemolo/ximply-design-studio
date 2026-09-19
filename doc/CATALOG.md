@@ -41,6 +41,7 @@ Generated titles and paths only; authoritative content remains in each linked do
 - [REL-0004 — First local drawing and image-retouching preview](changelog/0.2.0-alpha.1.md)
 - [REL-0005 — Validated local container preview](changelog/0.2.0-alpha.2.md)
 - [REL-0006 — Drawing workbench preview](changelog/0.3.0-alpha.1.md)
+- [REL-0007 — Preview identification and menu focus fix](changelog/0.3.1-alpha.1.md)
 - [REL-0003 — Pending changes](changelog/Unreleased.md)
 - [DOC-ROOT-0002 — Code and contract map](code-map.md)
 - [DOC-ENGINEERING-0001 — Documentation navigation migration](engineering/context-migration.md)

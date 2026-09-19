@@ -125,3 +125,12 @@ acceptance, SonarQube and independent review remain pre-merge requirements.
 
 See [trhouble-shooting.md](trhouble-shooting.md) for diagnosis and the
 [drawing roadmap](doc/planning/drawing-roadmap.md) for bounded and pending features.
+
+## Identify a feedback preview
+
+Before starting, run `./scripts/local.ps1 info` on Windows or
+`./scripts/local.sh info` on Linux/macOS. This read-only action prints the checkout
+version, branch and commit without Docker. It identifies source files, not a running
+container. After pulling, restart with `stop` and `start` to rebuild the container;
+confirm version **0.3.1-alpha.1** in the application footer or About.
+The drawing features are on `feat/drawing-preview` until integration gates pass.
