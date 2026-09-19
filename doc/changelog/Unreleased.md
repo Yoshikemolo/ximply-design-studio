@@ -40,4 +40,4 @@ None.
 
 ## Engineering
 
-None.
+- Add a disposable SonarQube trial with pinned images, real coverage inputs, retained findings and automatic container/volume teardown. This diagnostic run does not replace the strict integration gate.
