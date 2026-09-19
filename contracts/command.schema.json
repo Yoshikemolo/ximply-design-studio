@@ -1,0 +1,44 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Document command v1",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "commandId": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "expectedRevision": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "type": {
+      "const": "SetLayerOpacity"
+    },
+    "payload": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "layerId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "opacity": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        }
+      },
+      "required": [
+        "layerId",
+        "opacity"
+      ]
+    }
+  },
+  "required": [
+    "commandId",
+    "expectedRevision",
+    "type",
+    "payload"
+  ]
+}

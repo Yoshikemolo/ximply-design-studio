@@ -1,0 +1,14 @@
+{
+  "generator": "design-bootstrap",
+  "version": "0.1.0",
+  "seed": 0,
+  "createdAt": "2026-09-19",
+  "sourceClassification": "synthetic",
+  "containsRealCustomerData": false,
+  "reviewStatus": "pending-human-review",
+  "fixtures": [
+    "document-minimal.json",
+    "command-opacity.json",
+    "plugin-basic.json"
+  ]
+}

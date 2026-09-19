@@ -1,0 +1,144 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Native document core v1",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schemaVersion": {
+      "const": 1
+    },
+    "documentId": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "projectId": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "revision": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256
+    },
+    "workingColorSpace": {
+      "enum": [
+        "srgb"
+      ]
+    },
+    "layers": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "parentId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 256
+          },
+          "kind": {
+            "enum": [
+              "vector",
+              "raster",
+              "text",
+              "group",
+              "adjustment",
+              "mask",
+              "linked-project",
+              "mesh",
+              "camera",
+              "light",
+              "plugin"
+            ]
+          },
+          "visible": {
+            "type": "boolean"
+          },
+          "locked": {
+            "type": "boolean"
+          },
+          "opacity": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "sourceHash": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "data": {
+            "type": "object"
+          }
+        },
+        "required": [
+          "id",
+          "parentId",
+          "name",
+          "kind",
+          "visible",
+          "locked",
+          "opacity",
+          "sourceHash",
+          "data"
+        ]
+      },
+      "maxItems": 100000
+    },
+    "resources": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "hash": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "path": {
+            "type": "string",
+            "pattern": "^assets/[0-9a-f]{64}$"
+          },
+          "mediaType": {
+            "type": "string"
+          },
+          "sizeBytes": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "hash",
+          "path",
+          "mediaType",
+          "sizeBytes"
+        ]
+      }
+    }
+  },
+  "required": [
+    "schemaVersion",
+    "documentId",
+    "projectId",
+    "revision",
+    "title",
+    "workingColorSpace",
+    "layers",
+    "resources"
+  ]
+}

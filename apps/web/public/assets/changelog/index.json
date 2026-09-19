@@ -1,0 +1,55 @@
+{
+  "currentVersion": "0.1.0-design.2",
+  "entries": [
+    {
+      "version": "0.1.0-design.2",
+      "date": "2026-09-19",
+      "summary": "Navigable documentation and quality evidence",
+      "breakingChanges": [],
+      "changes": [
+        {
+          "type": "Improvement",
+          "description": "Organize the documentation into linked feature, scenario, decision and product-outcome indexes."
+        },
+        {
+          "type": "Improvement",
+          "description": "Add scoped context lookup and validation of document metadata, links and reachability."
+        },
+        {
+          "type": "Fix",
+          "description": "Use the authoritative navigable methodology instead of the frozen draft as the project reference."
+        },
+        {
+          "type": "Engineering",
+          "description": "Add a revision-bound SonarQube evidence collector with stale-analysis and concurrent-update rejection. Live server validation remains pending."
+        },
+        {
+          "type": "Engineering",
+          "description": "Include engineering harness code in the required quality module inventory."
+        },
+        {
+          "type": "Engineering",
+          "description": "Provide versioned Markdown release notes and generated assets for the future application About screen."
+        }
+      ],
+      "capabilityStatus": "design-only",
+      "markdown": "0.1.0-design.2.md",
+      "source": "doc/changelog/0.1.0-design.2.md"
+    },
+    {
+      "version": "0.1.0-design.1",
+      "date": "2026-09-19",
+      "summary": "Initial design foundation",
+      "breakingChanges": [],
+      "changes": [
+        {
+          "type": "Engineering",
+          "description": "Document the proposed architecture, product scope, contracts, security, licensing and delivery controls."
+        }
+      ],
+      "capabilityStatus": "design-only",
+      "markdown": "0.1.0-design.1.md",
+      "source": "doc/changelog/0.1.0-design.1.md"
+    }
+  ]
+}

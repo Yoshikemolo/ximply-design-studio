@@ -1,0 +1,107 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Plugin manifest core v1",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]*(\\.[a-z][a-z0-9-]*)+$"
+    },
+    "version": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+$"
+    },
+    "hostApi": {
+      "type": "string"
+    },
+    "nameKey": {
+      "type": "string"
+    },
+    "entryPoint": {
+      "type": "string"
+    },
+    "permissions": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string"
+      }
+    },
+    "commands": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "titleKey": {
+            "type": "string"
+          },
+          "menuSlots": {
+            "type": "array",
+            "items": {
+              "enum": [
+                "file",
+                "edit",
+                "object",
+                "type",
+                "select",
+                "effect",
+                "view",
+                "window",
+                "plugins",
+                "help"
+              ]
+            }
+          },
+          "permission": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "titleKey",
+          "menuSlots",
+          "permission"
+        ]
+      }
+    },
+    "panels": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "titleKey": {
+            "type": "string"
+          },
+          "iconPath": {
+            "type": "string",
+            "pattern": "^/assets/icons/[a-z0-9-]+\\.svg$"
+          }
+        },
+        "required": [
+          "id",
+          "titleKey",
+          "iconPath"
+        ]
+      }
+    }
+  },
+  "required": [
+    "id",
+    "version",
+    "hostApi",
+    "nameKey",
+    "entryPoint",
+    "permissions",
+    "commands",
+    "panels"
+  ]
+}
