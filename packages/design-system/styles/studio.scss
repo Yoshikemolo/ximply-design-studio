@@ -1491,7 +1491,7 @@ textarea,
   font-size: 11px;
 }
 
-.dimension-overlay { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; overflow: visible; path { fill: none; stroke: #1687ff; stroke-width: 1; stroke-dasharray: 4 3; } circle, rect { fill: white; stroke: #1687ff; stroke-width: 1.5; } }
+.dimension-overlay { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; overflow: visible; path { fill: none; stroke: #1687ff; stroke-width: 1; stroke-dasharray: 4 3; } circle, rect { fill: white; stroke: #1687ff; stroke-width: 1.5; } .snap-marker { fill: none; } .dimension-preview { path { stroke-dasharray: none; } polygon { fill: #1687ff; stroke: none; } text { fill: #1687ff; font-family: sans-serif; } } }
 .ending-columns { display: grid; grid-template-columns: minmax(0, 1fr) 28px minmax(0, 1fr); gap: 4px; align-items: start; input, select { min-width: 0; width: 100%; } }
 .ending-kinds { display: grid; grid-template-columns: repeat(2, 1fr); gap: 3px; button { padding: 3px; } img { width: 20px; height: 20px; } }
 .line-ending-control { border: 0; padding: 0; margin: 12px 0; font-size: 11px; legend { margin-bottom: 6px; } .ending-link { margin-top: 20px; padding: 4px; img { width: 16px; height: 16px; } } }

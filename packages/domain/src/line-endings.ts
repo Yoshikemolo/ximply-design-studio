@@ -4,7 +4,8 @@ export interface LineEnd { kind: LineEndKind; placement: 'tip'|'base'; size: num
 export interface LineEnds { start: LineEnd; end: LineEnd; linked: boolean }
 export const defaultLineEnds: LineEnds = { start:{kind:'none',placement:'tip',size:10},end:{kind:'none',placement:'tip',size:10},linked:true };
 export interface EndGeometry { points:Point[]; closed:boolean; circle?:{center:Point;radius:number}; segments?:Point[][] }
-export function lineEndGeometry(point:Point,direction:Point,style:LineEnd):EndGeometry {
+/** `spread` is the half-width of arrow heads relative to their length. */
+export function lineEndGeometry(point:Point,direction:Point,style:LineEnd,spread=0.4):EndGeometry {
   const n=Math.hypot(direction.x,direction.y)||1,u={x:direction.x/n,y:direction.y/n},s=style.size;
   const tip=style.placement==='base'?{x:point.x+u.x*s,y:point.y+u.y*s}:point;
   const p=(x:number,y:number)=>({x:tip.x+u.x*x-u.y*y,y:tip.y+u.y*x+u.x*y});
@@ -12,7 +13,7 @@ export function lineEndGeometry(point:Point,direction:Point,style:LineEnd):EndGe
   if(style.kind==='dot')return {points:[],closed:true,circle:{center:p(-s/2,0),radius:s/2}};
   if(style.kind==='slash')return {points:[p(-s*.8,-s*.5),p(-s*.2,s*.5)],closed:false};
   if(style.kind==='cross')return {points:[],closed:false,segments:[[p(-s,-s/2),p(0,s/2)],[p(-s,s/2),p(0,-s/2)]]};
-  return {points:style.kind==='arrow'?[p(-s,-s*.4),p(0,0),p(-s,s*.4),p(-s*.7,0)]:[p(-s,-s*.4),p(0,0),p(-s,s*.4)],closed:style.kind!=='openArrow'};
+  return {points:style.kind==='arrow'?[p(-s,-s*spread),p(0,0),p(-s,s*spread),p(-s*.7,0)]:[p(-s,-s*spread),p(0,0),p(-s,s*spread)],closed:style.kind!=='openArrow'};
 }
 export function pathLineEnds(layer:Layer):{point:Point;direction:Point;style:LineEnd}[]{
   if(!layer.lineEnds||layer.kind!=='path')return [];

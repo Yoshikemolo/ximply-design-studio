@@ -323,7 +323,8 @@
             @if (editor.dimensionDraft() || editor.dimensionSnapTarget() || (editor.selected()?.dimension && preferences.dimensionsVisible())) {
               <svg class="dimension-overlay" [attr.viewBox]="'0 0 ' + editor.document().width + ' ' + editor.document().height" aria-hidden="true">
                 @if (editor.dimensionDraft()) {<path [attr.d]="dimensionDraftPath()" vector-effect="non-scaling-stroke"></path>}
-                @if (editor.dimensionSnapTarget(); as target) {<circle [attr.cx]="target.point.x" [attr.cy]="target.point.y" [attr.r]="5 / editor.zoom()" vector-effect="non-scaling-stroke"></circle>}
+                @if (dimensionPreviewShape(); as preview) {<g class="dimension-preview"><path [attr.d]="preview.path" vector-effect="non-scaling-stroke"></path>@for (head of preview.heads; track $index) {<polygon [attr.points]="head"></polygon>}<text [attr.transform]="preview.transform" [attr.font-size]="preview.fontSize" text-anchor="middle" dominant-baseline="central">{{ preview.text }}</text></g>}
+                @if (editor.dimensionSnapTarget(); as target) {<rect class="snap-marker" [attr.x]="target.point.x - 4 / editor.zoom()" [attr.y]="target.point.y - 4 / editor.zoom()" [attr.width]="8 / editor.zoom()" [attr.height]="8 / editor.zoom()" vector-effect="non-scaling-stroke"></rect>}
                 @if (editor.selected(); as selected) {@if (selected.dimension && preferences.dimensionsVisible() && !preferences.dimensionsLocked()) {@let position = dimensionLabelPosition(selected);<rect [attr.x]="position.x - 4 / editor.zoom()" [attr.y]="position.y - 4 / editor.zoom()" [attr.width]="8 / editor.zoom()" [attr.height]="8 / editor.zoom()" vector-effect="non-scaling-stroke"></rect>}}
               </svg>
             }

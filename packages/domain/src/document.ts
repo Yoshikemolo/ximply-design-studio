@@ -1,5 +1,5 @@
 import { Procedural, materializeProcedural, syncProcedurals, validProcedural, validateProcedurals, resizeProcedural } from "./procedural";
-import { Dimension, dimensionGeometry, validDimension } from "./dimensions";
+import { Dimension, dimensionGeometry, dimensionLabelLayout, validDimension } from "./dimensions";
 import { LineEnds, lineEndGeometry, pathLineEnds, validLineEnds } from "./line-endings";
 import { ObjectBlend, syncBlends, validateBlends } from "./object-blend";
 import { FONT_FAMILIES, layoutText, TextLayoutOptions, TextTypography, TextMeasurement } from "./text-layout";
@@ -184,8 +184,8 @@ export function hitTest(layer: Layer, point: Point): boolean {
   if (!layer.visible || layer.locked || layer.guide) return false;
   if (layer.dimension) {
     const d = dimensionGeometry(layer), pad = Math.max(5, layer.strokeWidth / 2);
-    const label = layoutText({...layer, ...layer.dimension.labelSize, text:d.text, textLayout:layer.textLayout ?? {sizing:"content",wrap:false,hyphenate:false,fit:false}});
-    if (Math.abs(point.x-d.labelPosition.x)<=label.width/2+pad && Math.abs(point.y-d.labelPosition.y)<=label.height/2+pad) return true;
+    const dx = point.x-d.labelPosition.x, dy = point.y-d.labelPosition.y, cos = Math.cos(d.labelAngle), sin = Math.sin(d.labelAngle);
+    if (Math.abs(dx*cos+dy*sin)<=d.labelWidth/2+pad && Math.abs(-dx*sin+dy*cos)<=d.labelHeight/2+pad) return true;
     if (d.lines.some(line => segmentDistance(point,line.a,line.b)<=pad)) return true;
     if(d.arc){const a=d.arc,delta=a.endAngle-a.startAngle,theta=Math.atan2(point.y-a.center.y,point.x-a.center.x);const progress=((theta-a.startAngle)*Math.sign(delta)+Math.PI*2)%(Math.PI*2);return Math.abs(Math.hypot(point.x-a.center.x,point.y-a.center.y)-a.radius)<=pad && progress<=Math.abs(delta);}
     return false;
@@ -700,24 +700,24 @@ export function svgExport(doc: StudioDocument, measure?: TextMeasurement): strin
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${doc.width}" height="${doc.height}" viewBox="0 0 ${doc.width} ${doc.height}"><rect width="100%" height="100%" fill="${doc.background}"/>${shapes}</svg>`;
 }
 
-function endingSvg(point: Point, direction: Point, style: import("./line-endings").LineEnd, paint: string, width: number): string {
+function endingSvg(point: Point, direction: Point, style: import("./line-endings").LineEnd, paint: string, width: number, spread?: number): string {
   if (paint === "none" || width <= 0) return "";
-  const g = lineEndGeometry(point, direction, style);
+  const g = lineEndGeometry(point, direction, style, spread);
   const stroke = `${svgPaint("stroke", paint)} stroke-width="${width}" stroke-linejoin="round"`;
   if (g.circle) return `<circle cx="${g.circle.center.x}" cy="${g.circle.center.y}" r="${g.circle.radius}" ${svgPaint("fill", paint)}/>`;
   return (g.segments ?? [g.points]).filter(p => p.length).map(points => `<${g.closed ? "polygon" : "polyline"} points="${points.map(p => `${p.x},${p.y}`).join(" ")}" ${svgPaint("fill", g.closed ? paint : "none")} ${stroke}/>`).join("");
 }
 function dimensionSvg(layer: Layer, measure: TextMeasurement | undefined, index: number): string {
-  const d = dimensionGeometry(layer), meta = layer.dimension!;
+  const d = dimensionGeometry(layer, measure), meta = layer.dimension!;
   let content = d.lines.map(line => `<path d="M${line.a.x} ${line.a.y} L${line.b.x} ${line.b.y}" fill="none" ${svgPaint("stroke", line.extension ? meta.extension.stroke : layer.stroke)} stroke-width="${line.extension ? meta.extension.strokeWidth : layer.strokeWidth}"/>`).join("");
   if (d.arc) { const a = d.arc, start = {x:a.center.x + a.radius*Math.cos(a.startAngle),y:a.center.y+a.radius*Math.sin(a.startAngle)}, end = {x:a.center.x+a.radius*Math.cos(a.endAngle),y:a.center.y+a.radius*Math.sin(a.endAngle)};
     content += `<path d="M${start.x} ${start.y} A${a.radius} ${a.radius} 0 0 ${a.endAngle > a.startAngle ? 1 : 0} ${end.x} ${end.y}" fill="none" ${svgPaint("stroke",layer.stroke)} stroke-width="${layer.strokeWidth}"/>`; }
-  content += d.ends.map(end => endingSvg(end.point,end.direction,end.style,layer.stroke,layer.strokeWidth)).join("");
-  const layout = layoutText({...layer,...meta.labelSize,text:d.text,textLayout:layer.textLayout ?? {sizing:"content",wrap:false,hyphenate:false,fit:false}},measure), type=layout.typography;
+  content += d.ends.map(end => endingSvg(end.point,end.direction,end.style,layer.stroke,layer.strokeWidth,end.spread)).join("");
+  const layout = dimensionLabelLayout(layer,d.text,measure), type=layout.typography;
   const decoration = type.decoration === "none" ? "" : layout.lines.map(line => `<rect x="${line.x/type.horizontalScale}" y="${line.y/type.verticalScale+(type.decoration === "underline" ? layout.fontSize*.12 : -layout.fontSize*.3)}" width="${line.width/type.horizontalScale}" height="${Math.max(1,layout.fontSize/16)}" ${svgPaint("fill",layer.fill)}/>`).join("");
   const clipId=`dimension-label-${index}`;
-  const clip=layer.textLayout ? `<defs><clipPath id="${clipId}"><rect x="${d.labelPosition.x-layout.width/2}" y="${d.labelPosition.y-layout.height/2}" width="${layout.width}" height="${layout.height}"/></clipPath></defs>` : "";
-  content += `${clip}<g${layer.textLayout ? ` clip-path="url(#${clipId})"` : ""}><g transform="translate(${d.labelPosition.x-layout.width/2} ${d.labelPosition.y-layout.height/2}) scale(${type.horizontalScale} ${type.verticalScale})"><text font-family="${escapeXml(type.fontFamily)}" font-size="${layout.fontSize}" font-weight="${type.fontWeight}" font-style="${type.fontStyle}" ${svgPaint("fill",layer.fill)}>${layout.lines.map(line=>line.glyphs.map(g=>`<tspan x="${g.x/type.horizontalScale}" y="${line.y/type.verticalScale}">${escapeXml(g.text)}</tspan>`).join("")).join("")}</text>${decoration}</g></g>`;
+  const clip=layer.textLayout ? `<defs><clipPath id="${clipId}"><rect x="0" y="0" width="${layout.width}" height="${layout.height}"/></clipPath></defs>` : "";
+  content += `<g transform="translate(${d.labelPosition.x} ${d.labelPosition.y}) rotate(${d.labelAngle*180/Math.PI}) translate(${-layout.width/2} ${-layout.height/2})">${clip}<g${layer.textLayout ? ` clip-path="url(#${clipId})"` : ""}><g transform="scale(${type.horizontalScale} ${type.verticalScale})"><text font-family="${escapeXml(type.fontFamily)}" font-size="${layout.fontSize}" font-weight="${type.fontWeight}" font-style="${type.fontStyle}" ${svgPaint("fill",layer.fill)}>${layout.lines.map(line=>line.glyphs.map(g=>`<tspan x="${g.x/type.horizontalScale}" y="${line.y/type.verticalScale}">${escapeXml(g.text)}</tspan>`).join("")).join("")}</text>${decoration}</g></g></g>`;
   content = content.replace(/<(path|polygon|polyline|circle|text|rect)(?=[ >])/g, `<$1 opacity="${layer.opacity}"`);
   return `<g stroke-linecap="${layer.strokeStyle?.cap ?? "butt"}" stroke-linejoin="${layer.strokeStyle?.join ?? "miter"}" style="mix-blend-mode:${layer.blend === "source-over" ? "normal" : layer.blend}">${content}</g>`;
 }

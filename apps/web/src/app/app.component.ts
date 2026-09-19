@@ -1,6 +1,6 @@
 import { Procedural, ProceduralKind } from "../../../../packages/domain/src/procedural";
 import { Dimension, DimensionFormat, dimensionGeometry } from "../../../../packages/domain/src/dimensions";
-import { defaultLineEnds, LineEnd, LineEnds } from "../../../../packages/domain/src/line-endings";
+import { defaultLineEnds, lineEndGeometry, LineEnd, LineEnds } from "../../../../packages/domain/src/line-endings";
 import { BlendEasing } from "../../../../packages/domain/src/object-blend";
 import { FONT_FAMILIES, defaultTypography, defaultTextLayout, TextTypography, TextLayoutOptions } from "../../../../packages/domain/src/text-layout";
 import { measurementUnits, isUnit, snapPoint, fromPixels, toPixels, formatMeasurement, rulerTicks as makeRulerTicks, SnapConfig } from "../../../../packages/domain/src/measurements";
@@ -448,7 +448,17 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   }
   setLabelText(event: Event) { if (this.editor.selected()?.dimension) this.editor.updateDimension({ text: this.text(event) }); else this.editor.updateLayer({ text: this.text(event) }); }
   dimensionLabelPosition(layer: Layer) { return dimensionGeometry(layer).labelPosition; }
-  dimensionDraftPath() { const draft = this.editor.dimensionDraft(); return draft ? [...draft.points, draft.cursor].map((p, i) => `${i ? "L" : "M"}${p.x},${p.y}`).join(" ") : ""; }
+  dimensionDraftPath() { const draft = this.editor.dimensionDraft(); return draft && !this.editor.dimensionPreview() ? [...draft.points, draft.cursor].map((p, i) => `${i ? "L" : "M"}${p.x},${p.y}`).join(" ") : ""; }
+  /** Screen overlay for the annotation being placed: the same geometry as the committed Canvas/SVG output. */
+  dimensionPreviewShape() {
+    const layer = this.editor.dimensionPreview();
+    if (!layer) return null;
+    const g = dimensionGeometry(layer, (text, size, type) => this.editor.renderer.measureText(text, size, type));
+    const lines = g.lines.map((l) => `M${l.a.x},${l.a.y}L${l.b.x},${l.b.y}`).join("");
+    const arc = g.arc ? (() => { const a = g.arc!, s = { x: a.center.x + a.radius * Math.cos(a.startAngle), y: a.center.y + a.radius * Math.sin(a.startAngle) }, e = { x: a.center.x + a.radius * Math.cos(a.endAngle), y: a.center.y + a.radius * Math.sin(a.endAngle) }; return `M${s.x},${s.y}A${a.radius},${a.radius} 0 0 ${a.endAngle > a.startAngle ? 1 : 0} ${e.x},${e.y}`; })() : "";
+    const heads = g.ends.map((end) => lineEndGeometry(end.point, end.direction, end.style, end.spread).points.map((p) => `${p.x},${p.y}`).join(" "));
+    return { path: lines + arc, heads, text: g.text, fontSize: layer.fontSize, transform: `translate(${g.labelPosition.x} ${g.labelPosition.y}) rotate(${(g.labelAngle * 180) / Math.PI})` };
+  }
   paintStrokeStyle(): StrokeStyle {
     const layer = this.editor.selected();
     return !this.usesStyleDefaults() && layer && !layer.guide && layer.kind !== "image" ? { ...defaultStrokeStyle, ...layer.strokeStyle } : this.editor.strokeStyle();

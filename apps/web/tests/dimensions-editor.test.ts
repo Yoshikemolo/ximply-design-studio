@@ -17,7 +17,7 @@ describe('dimension editing',()=>{
   e.start(a);e.cancel();expect(e.dimensionDraft()).toBeNull();expect(e.document().layers).toHaveLength(1);
  });
  it('moves a label independently and rolls the complete gesture back with Escape',()=>{
-  const e=new EditorService();e.createDimension('linear',[a,b],label);const before=structuredClone(e.selected());e.start(label);e.move({x:190,y:40});expect(dimensionGeometry(e.selected()!).labelPosition).toEqual({x:190,y:40});expect(e.selected()?.dimension?.anchors).toEqual(before?.dimension?.anchors);e.cancel();expect(e.selected()).toEqual(before);
+  const e=new EditorService();e.createDimension('linear',[a,b],label);const before=structuredClone(e.selected());e.start(label);e.move({x:190,y:40});expect(dimensionGeometry(e.selected()!).labelPosition).toEqual({x:175,y:40});expect(e.selected()?.dimension?.anchors).toEqual(before?.dimension?.anchors);e.cancel();expect(e.selected()).toEqual(before);
   e.start(label);e.move({x:190,y:40});e.end();e.undo();expect(e.selected()?.dimension).toEqual(before?.dimension);
  });
  it('inherits measurement format while keeping each existing annotation independent',()=>{

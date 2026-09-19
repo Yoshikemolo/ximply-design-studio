@@ -426,16 +426,25 @@ export class EditorService {
   private startDimension(point:Point,kind:'linear'|'angular') {
     let draft=this.dimensionDraft();if(draft&&draft.kind!==kind)draft=null;
     const count=kind==='angular'?3:2;
-    if(!draft){const p=this.dimensionPoint(point,false);this.dimensionDraft.set({kind,points:[p],cursor:p});return;}
-    if(draft.points.length<count){const p=this.dimensionPoint(point,draft.points.length===count-1);if(draft.points.some(previous=>Math.hypot(p.x-previous.x,p.y-previous.y)<1e-6))return;this.dimensionDraft.set({...draft,points:[...draft.points,p],cursor:p});return;}
+    if(!draft){const p=this.dimensionPoint(point,true);this.dimensionDraft.set({kind,points:[p],cursor:p});return;}
+    if(draft.points.length<count){const p=this.dimensionPoint(point,true);if(draft.points.some(previous=>Math.hypot(p.x-previous.x,p.y-previous.y)<1e-6))return;this.dimensionDraft.set({...draft,points:[...draft.points,p],cursor:p});return;}
     this.createDimension(kind,draft.points,point);this.dimensionDraft.set(null);this.dimensionSnapTarget.set(null);
   }
-  createDimension(kind:'linear'|'angular',anchors:Point[],labelPosition:Point):boolean {
-    if(anchors.length!==(kind==='angular'?3:2)||this.document().layers.length>=150||[...anchors,labelPosition].some(p=>!Number.isFinite(p.x)||!Number.isFinite(p.y)))return false;
-    if(Math.hypot(anchors[1].x-anchors[0].x,anchors[1].y-anchors[0].y)<1e-6)return false;
+  /** Snapped hover target while a dimension tool waits for an anchor; placement of the label is free. */
+  hoverDimension(point:Point) { const draft=this.dimensionDraft(),count=draft?.kind==='angular'?3:2; if(draft&&draft.points.length>=count){this.dimensionSnapTarget.set(null);return;} this.dimensionPoint(point,true); }
+  /** Live annotation shown once every anchor is fixed, so the offset and label side are visible before the last click. */
+  readonly dimensionPreview=computed<Layer|null>(()=>{const draft=this.dimensionDraft();if(!draft||draft.points.length<(draft.kind==='angular'?3:2))return null;return this.buildDimension(draft.kind,draft.points,draft.cursor,'__dimension_preview__');});
+  private buildDimension(kind:'linear'|'angular',anchors:Point[],labelPosition:Point,id:string):Layer|null {
+    if(anchors.length!==(kind==='angular'?3:2)||[...anchors,labelPosition].some(p=>!Number.isFinite(p.x)||!Number.isFinite(p.y)))return null;
+    if(Math.hypot(anchors[1].x-anchors[0].x,anchors[1].y-anchors[0].y)<1e-6)return null;
     const points=[...anchors,labelPosition],x=Math.min(...points.map(p=>p.x)),y=Math.min(...points.map(p=>p.y));
     const local=(p:Point)=>({x:p.x-x,y:p.y-y});
-    const layer:Layer={...newLayer('path',crypto.randomUUID(),{x,y},this.stroke(),this.stroke(),Math.min(this.size(),2)),name:kind==='linear'?'Linear dimension':'Angular dimension',width:Math.max(1,...points.map(p=>p.x-x)),height:Math.max(1,...points.map(p=>p.y-y)),fontSize:14,points:anchors.map(local),lineEnds:{start:{kind:'triangle',placement:'tip',size:10},end:{kind:'triangle',placement:'tip',size:10},linked:true},dimension:{kind,anchors:anchors.map(local),labelPosition:local(labelPosition),text:'',labelSize:{width:160,height:40},format:{...this.dimensionDefaults()},extension:{stroke:this.stroke(),strokeWidth:1,gap:4,overshoot:6}}};
+    // Extension gap ~1.5 mm and overshoot ~2 mm at 96 ppi (ASME Y14.2 / ISO 129-1 practice).
+    return {...newLayer('path',id,{x,y},this.stroke(),this.stroke(),Math.min(this.size(),2)),name:kind==='linear'?'Linear dimension':'Angular dimension',width:Math.max(1,...points.map(p=>p.x-x)),height:Math.max(1,...points.map(p=>p.y-y)),fontSize:14,points:anchors.map(local),lineEnds:{start:{kind:'triangle',placement:'tip',size:10},end:{kind:'triangle',placement:'tip',size:10},linked:true},dimension:{kind,anchors:anchors.map(local),labelPosition:local(labelPosition),text:'',labelSize:{width:160,height:40},format:{...this.dimensionDefaults()},extension:{stroke:this.stroke(),strokeWidth:1,gap:6,overshoot:8}}};
+  }
+  createDimension(kind:'linear'|'angular',anchors:Point[],labelPosition:Point):boolean {
+    if(this.document().layers.length>=150)return false;
+    const layer=this.buildDimension(kind,anchors,labelPosition,crypto.randomUUID());if(!layer)return false;
     try{parseDocument(JSON.stringify({...this.document(),layers:[...this.document().layers,layer]}));}catch{return false;}
     this.history.commit(this.document());this.document.update(d=>({...d,layers:[...d.layers,layer]}));this.selectedId.set(layer.id);this.selectedIds.set([layer.id]);this.changed();return true;
   }
@@ -1248,7 +1257,8 @@ export class EditorService {
   move(point: Point, modifiers: { shift?: boolean; alt?: boolean; ctrl?: boolean } = {}) {
     if(this.proceduralGesture){const g=this.proceduralGesture;const end=modifiers.shift?snapDirection(g.start,point,this.snapAngle()):this.snap(point);try{const layer=this.proceduralLayer(g.type,g.start,end,g.id);const next=syncProcedurals({...g.before,layers:[...g.before.layers,layer]});parseDocument(JSON.stringify(next));this.document.set(next);this.selectedId.set(layer.id);this.selectedIds.set([layer.id]);}catch{/* Keep the last valid preview. */}return;}
     if(this.dimensionLabelGesture){const layer=this.document().layers.find(l=>l.id===this.dimensionLabelGesture!.id)!;this.setLayer(layer.id,{dimension:{...layer.dimension!,labelPosition:localPoint(layer,point)}});return;}
-    const draft=this.dimensionDraft();if(draft){const count=draft.kind=== "angular"?3:2;this.dimensionDraft.set({...draft,cursor:draft.points.length<count?this.dimensionPoint(point,draft.points.length===count-1):point});return;}
+    const draft=this.dimensionDraft();if(draft){const count=draft.kind=== "angular"?3:2;const placing=draft.points.length>=count;this.dimensionDraft.set({...draft,cursor:placing?point:this.dimensionPoint(point,true)});if(placing)this.dimensionSnapTarget.set(null);return;}
+    if(!this.gesture&&["dimensionSmart","dimensionLinear","dimensionAngular"].includes(this.tool())){this.hoverDimension(point);return;}
     if (this.areaGesture) { this.moveAreaSelection(point); return; }
     const g = this.gesture;
     if (!g) return;

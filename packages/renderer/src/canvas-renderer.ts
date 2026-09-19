@@ -1,8 +1,8 @@
 import { materializeProcedural } from "../../domain/src/procedural";
-import { dimensionGeometry } from "../../domain/src/dimensions";
+import { dimensionGeometry, dimensionLabelLayout } from "../../domain/src/dimensions";
 import { lineEndGeometry, pathLineEnds, LineEnd } from "../../domain/src/line-endings";
 import { Point } from "../../domain/src/document";
-import { defaultTypography, layoutText, textFont, TextMeasurement } from "../../domain/src/text-layout";
+import { defaultTypography, layoutText, textFont, TextMeasurement, TextTypography } from "../../domain/src/text-layout";
 import { selectionBounds } from "../../domain/src/arrange";
 import { newLayer, defaultStrokeStyle, strokeBounds } from "../../domain/src/document";
 import { CurvePath } from "../../domain/src/curves";
@@ -305,24 +305,25 @@ export class CanvasRenderer {
     }
     ctx.restore();
   }
-  private ending(ctx: CanvasRenderingContext2D, point: Point, direction: Point, style: LineEnd, paint: string, width: number) {
+  private ending(ctx: CanvasRenderingContext2D, point: Point, direction: Point, style: LineEnd, paint: string, width: number, spread?: number) {
     if (paint === "none" || width <= 0) return;
-    const g = lineEndGeometry(point, direction, style);
+    const g = lineEndGeometry(point, direction, style, spread);
     ctx.save(); ctx.fillStyle = paint; ctx.strokeStyle = paint; ctx.lineWidth = width; ctx.lineJoin = "round";
     if (g.circle) { ctx.beginPath();ctx.arc(g.circle.center.x,g.circle.center.y,g.circle.radius,0,Math.PI*2);ctx.fill(); }
     for (const points of g.segments ?? [g.points]) { if (!points.length) continue;ctx.beginPath();ctx.moveTo(points[0].x,points[0].y);for(const p of points.slice(1))ctx.lineTo(p.x,p.y);if(g.closed){ctx.closePath();ctx.fill();}ctx.stroke(); }
     ctx.restore();
   }
   private dimension(ctx: CanvasRenderingContext2D, layer: Layer) {
-    const d = dimensionGeometry(layer), meta = layer.dimension!;
+    const measure = (text: string, size: number, type: TextTypography) => { ctx.font = textFont(size, type); return ctx.measureText(text).width; };
+    const d = dimensionGeometry(layer, measure), meta = layer.dimension!;
     ctx.save();ctx.globalAlpha=layer.opacity;ctx.globalCompositeOperation=layer.blend;
     ctx.lineCap=layer.strokeStyle?.cap??"butt";ctx.lineJoin=layer.strokeStyle?.join??"miter";
     for(const line of d.lines){ const paint=line.extension?meta.extension.stroke:layer.stroke,width=line.extension?meta.extension.strokeWidth:layer.strokeWidth;if(paint==="none"||width<=0)continue;ctx.strokeStyle=paint;ctx.lineWidth=width;ctx.beginPath();ctx.moveTo(line.a.x,line.a.y);ctx.lineTo(line.b.x,line.b.y);ctx.stroke(); }
     if(d.arc && layer.stroke!=="none" && layer.strokeWidth>0){const a=d.arc;ctx.strokeStyle=layer.stroke;ctx.lineWidth=layer.strokeWidth;ctx.beginPath();ctx.arc(a.center.x,a.center.y,a.radius,a.startAngle,a.endAngle,a.endAngle<a.startAngle);ctx.stroke();}
-    for(const end of d.ends)this.ending(ctx,end.point,end.direction,end.style,layer.stroke,layer.strokeWidth);
-    const layout=layoutText({...layer,...meta.labelSize,text:d.text,textLayout:layer.textLayout??{sizing:"content",wrap:false,hyphenate:false,fit:false}},(text,size,type)=>{ctx.font=textFont(size,type);return ctx.measureText(text).width;}),type=layout.typography;
-    if(layer.textLayout){ctx.beginPath();ctx.rect(d.labelPosition.x-layout.width/2,d.labelPosition.y-layout.height/2,layout.width,layout.height);ctx.clip();}
-    ctx.translate(d.labelPosition.x-layout.width/2,d.labelPosition.y-layout.height/2);ctx.scale(type.horizontalScale,type.verticalScale);ctx.font=textFont(layout.fontSize,type);ctx.textBaseline="alphabetic";
+    for(const end of d.ends)this.ending(ctx,end.point,end.direction,end.style,layer.stroke,layer.strokeWidth,end.spread);
+    const layout=dimensionLabelLayout(layer,d.text,measure),type=layout.typography;
+    ctx.translate(d.labelPosition.x,d.labelPosition.y);ctx.rotate(d.labelAngle);ctx.translate(-layout.width/2,-layout.height/2);
+    if(layer.textLayout){ctx.beginPath();ctx.rect(0,0,layout.width,layout.height);ctx.clip();}ctx.scale(type.horizontalScale,type.verticalScale);ctx.font=textFont(layout.fontSize,type);ctx.textBaseline="alphabetic";
     if(layer.fill!=="none"){ctx.fillStyle=layer.fill;for(const line of layout.lines)for(const glyph of line.glyphs)ctx.fillText(glyph.text,glyph.x/type.horizontalScale,line.y/type.verticalScale);}
     if(layer.fill!=="none" && type.decoration!=="none")for(const line of layout.lines)ctx.fillRect(line.x/type.horizontalScale,line.y/type.verticalScale+(type.decoration==="underline"?layout.fontSize*.12:-layout.fontSize*.3),line.width/type.horizontalScale,Math.max(1,layout.fontSize/16));
     ctx.restore();
