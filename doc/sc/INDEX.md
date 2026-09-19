@@ -88,3 +88,5 @@
 | [SC-0082 — Single version source](SC-0082.md) |
 | [SC-0083 — Typed and explicit release notes](SC-0083.md) |
 | [SC-0084 — Exact footer link parity](SC-0084.md) |
+| [SC-0085 — Tabbed documents and unsaved-change protection](SC-0085.md) |
+| [SC-0086 — Drafting-rule linear dimension presentation](SC-0086.md) |

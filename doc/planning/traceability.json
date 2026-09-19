@@ -148,7 +148,8 @@
       "scenarios": [
         "SC-0016",
         "SC-0017",
-        "SC-0018"
+        "SC-0018",
+        "SC-0085"
       ],
       "implementation": [
         "apps/web/src/app/editor.service.ts",
@@ -156,10 +157,13 @@
       ],
       "tests": [
         "packages/domain/tests/document.test.ts",
-        "apps/web/tests/editor.test.ts"
+        "apps/web/tests/editor.test.ts",
+        "apps/web/tests/document-tabs.test.ts",
+        "apps/web/tests/shell-template.test.ts"
       ],
       "evidence": [
-        "doc/implementation/PLAN-0002-0001.md"
+        "doc/implementation/PLAN-0002-0001.md",
+        "doc/implementation/PLAN-0006-0001.md"
       ]
     },
     {
@@ -217,7 +221,8 @@
       "scenarios": [
         "SC-0022",
         "SC-0023",
-        "SC-0024"
+        "SC-0024",
+        "SC-0086"
       ],
       "implementation": [
         "apps/web/src/app/editor.service.ts",
@@ -251,12 +256,14 @@
         "apps/web/tests/procedural-editor.test.ts",
         "packages/domain/tests/procedural-independent.test.ts",
         "apps/web/tests/procedural-independent.test.ts",
-        "packages/renderer/tests/procedural.test.ts"
+        "packages/renderer/tests/procedural.test.ts",
+        "packages/renderer/tests/dimensions.test.ts"
       ],
       "evidence": [
         "doc/implementation/PLAN-0002-0001.md",
         "doc/implementation/PLAN-0008-0003.md",
-        "doc/implementation/PLAN-0008-0004.md"
+        "doc/implementation/PLAN-0008-0004.md",
+        "doc/implementation/PLAN-0008-0005.md"
       ]
     },
     {

@@ -5,6 +5,7 @@ Application data and bundled Markdown are generated; do not edit them.
 
 [Unreleased](doc/changelog/Unreleased.md)
 
+- [0.3.15-alpha.1 — Multiple documents in tabs, File > Clear with unsaved-change protection and professional linear dimensions](doc/changelog/0.3.15-alpha.1.md)
 - [0.3.14-alpha.1 — Editable parametric walls, doors, windows and pillars](doc/changelog/0.3.14-alpha.1.md)
 - [0.3.13-alpha.1 — Vector dimension annotations, line endpoints, contextual grouping and ruler subdivisions](doc/changelog/0.3.13-alpha.1.md)
 - [0.3.12-alpha.1 — Area selection tools with remembered mode and Shift toggling](doc/changelog/0.3.12-alpha.1.md)
