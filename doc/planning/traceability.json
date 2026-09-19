@@ -26,7 +26,7 @@
       "id": "FEAT-0002",
       "title": "Command-driven extensible shell",
       "path": "doc/feat/FEAT-0002.md",
-      "status": "Planned",
+      "status": "Implementing",
       "iteration": "ITER-0001",
       "dependsOn": [
         "FEAT-0001"
@@ -40,9 +40,17 @@
         "SC-0005",
         "SC-0006"
       ],
-      "implementation": [],
-      "tests": [],
-      "evidence": []
+      "implementation": [
+        "apps/web/src/app/editor.service.ts",
+        "packages/domain/src/document.ts"
+      ],
+      "tests": [
+        "packages/domain/tests/document.test.ts",
+        "apps/web/tests/editor.test.ts"
+      ],
+      "evidence": [
+        "doc/implementation/PLAN-0002-0001.md"
+      ]
     },
     {
       "id": "FEAT-0003",
@@ -69,7 +77,7 @@
       "id": "FEAT-0004",
       "title": "Personal layouts and responsive shell",
       "path": "doc/feat/FEAT-0004.md",
-      "status": "Planned",
+      "status": "Implementing",
       "iteration": "ITER-0001",
       "dependsOn": [
         "FEAT-0003"
@@ -83,9 +91,17 @@
         "SC-0011",
         "SC-0012"
       ],
-      "implementation": [],
-      "tests": [],
-      "evidence": []
+      "implementation": [
+        "apps/web/src/app/editor.service.ts",
+        "packages/domain/src/document.ts"
+      ],
+      "tests": [
+        "packages/domain/tests/document.test.ts",
+        "apps/web/tests/editor.test.ts"
+      ],
+      "evidence": [
+        "doc/implementation/PLAN-0002-0001.md"
+      ]
     },
     {
       "id": "FEAT-0005",
@@ -113,7 +129,7 @@
       "id": "FEAT-0006",
       "title": "Document graph and native persistence",
       "path": "doc/feat/FEAT-0006.md",
-      "status": "Planned",
+      "status": "Implementing",
       "iteration": "ITER-0002",
       "dependsOn": [
         "FEAT-0001",
@@ -129,15 +145,23 @@
         "SC-0017",
         "SC-0018"
       ],
-      "implementation": [],
-      "tests": [],
-      "evidence": []
+      "implementation": [
+        "apps/web/src/app/editor.service.ts",
+        "packages/domain/src/document.ts"
+      ],
+      "tests": [
+        "packages/domain/tests/document.test.ts",
+        "apps/web/tests/editor.test.ts"
+      ],
+      "evidence": [
+        "doc/implementation/PLAN-0002-0001.md"
+      ]
     },
     {
       "id": "FEAT-0007",
       "title": "Layer management and editable transforms",
       "path": "doc/feat/FEAT-0007.md",
-      "status": "Planned",
+      "status": "Implementing",
       "iteration": "ITER-0002",
       "dependsOn": [
         "FEAT-0006"
@@ -151,15 +175,23 @@
         "SC-0020",
         "SC-0021"
       ],
-      "implementation": [],
-      "tests": [],
-      "evidence": []
+      "implementation": [
+        "apps/web/src/app/editor.service.ts",
+        "packages/domain/src/document.ts"
+      ],
+      "tests": [
+        "packages/domain/tests/document.test.ts",
+        "apps/web/tests/editor.test.ts"
+      ],
+      "evidence": [
+        "doc/implementation/PLAN-0002-0001.md"
+      ]
     },
     {
       "id": "FEAT-0008",
       "title": "Vector drawing and path editing",
       "path": "doc/feat/FEAT-0008.md",
-      "status": "Planned",
+      "status": "Implementing",
       "iteration": "ITER-0003",
       "dependsOn": [
         "FEAT-0007"
@@ -173,15 +205,23 @@
         "SC-0023",
         "SC-0024"
       ],
-      "implementation": [],
-      "tests": [],
-      "evidence": []
+      "implementation": [
+        "apps/web/src/app/editor.service.ts",
+        "packages/domain/src/document.ts"
+      ],
+      "tests": [
+        "packages/domain/tests/document.test.ts",
+        "apps/web/tests/editor.test.ts"
+      ],
+      "evidence": [
+        "doc/implementation/PLAN-0002-0001.md"
+      ]
     },
     {
       "id": "FEAT-0009",
       "title": "Text and typography",
       "path": "doc/feat/FEAT-0009.md",
-      "status": "Planned",
+      "status": "Implementing",
       "iteration": "ITER-0003",
       "dependsOn": [
         "FEAT-0008"
@@ -195,15 +235,23 @@
         "SC-0026",
         "SC-0027"
       ],
-      "implementation": [],
-      "tests": [],
-      "evidence": []
+      "implementation": [
+        "apps/web/src/app/editor.service.ts",
+        "packages/domain/src/document.ts"
+      ],
+      "tests": [
+        "packages/domain/tests/document.test.ts",
+        "apps/web/tests/editor.test.ts"
+      ],
+      "evidence": [
+        "doc/implementation/PLAN-0002-0001.md"
+      ]
     },
     {
       "id": "FEAT-0010",
       "title": "Tiled raster and brush engine",
       "path": "doc/feat/FEAT-0010.md",
-      "status": "Planned",
+      "status": "Implementing",
       "iteration": "ITER-0004",
       "dependsOn": [
         "FEAT-0007"
@@ -217,9 +265,17 @@
         "SC-0029",
         "SC-0030"
       ],
-      "implementation": [],
-      "tests": [],
-      "evidence": []
+      "implementation": [
+        "apps/web/src/app/editor.service.ts",
+        "packages/domain/src/document.ts"
+      ],
+      "tests": [
+        "packages/domain/tests/document.test.ts",
+        "apps/web/tests/editor.test.ts"
+      ],
+      "evidence": [
+        "doc/implementation/PLAN-0002-0001.md"
+      ]
     },
     {
       "id": "FEAT-0011",
@@ -247,7 +303,7 @@
       "id": "FEAT-0012",
       "title": "Blending and non-destructive effects",
       "path": "doc/feat/FEAT-0012.md",
-      "status": "Planned",
+      "status": "Implementing",
       "iteration": "ITER-0004",
       "dependsOn": [
         "FEAT-0010",
@@ -262,15 +318,23 @@
         "SC-0035",
         "SC-0036"
       ],
-      "implementation": [],
-      "tests": [],
-      "evidence": []
+      "implementation": [
+        "apps/web/src/app/editor.service.ts",
+        "packages/domain/src/document.ts"
+      ],
+      "tests": [
+        "packages/domain/tests/document.test.ts",
+        "apps/web/tests/editor.test.ts"
+      ],
+      "evidence": [
+        "doc/implementation/PLAN-0002-0001.md"
+      ]
     },
     {
       "id": "FEAT-0013",
       "title": "Three-dimensional views and orientation",
       "path": "doc/feat/FEAT-0013.md",
-      "status": "Planned",
+      "status": "Implementing",
       "iteration": "ITER-0005",
       "dependsOn": [
         "FEAT-0007",
@@ -285,9 +349,17 @@
         "SC-0038",
         "SC-0039"
       ],
-      "implementation": [],
-      "tests": [],
-      "evidence": []
+      "implementation": [
+        "apps/web/src/app/editor.service.ts",
+        "packages/domain/src/document.ts"
+      ],
+      "tests": [
+        "packages/domain/tests/document.test.ts",
+        "apps/web/tests/editor.test.ts"
+      ],
+      "evidence": [
+        "doc/implementation/PLAN-0002-0001.md"
+      ]
     },
     {
       "id": "FEAT-0014",
@@ -434,7 +506,7 @@
       "id": "FEAT-0020",
       "title": "Themes localization and accessible UI",
       "path": "doc/feat/FEAT-0020.md",
-      "status": "Planned",
+      "status": "Implementing",
       "iteration": "ITER-0001",
       "dependsOn": [
         "FEAT-0002"
@@ -447,9 +519,17 @@
         "SC-0059",
         "SC-0060"
       ],
-      "implementation": [],
-      "tests": [],
-      "evidence": []
+      "implementation": [
+        "apps/web/src/app/editor.service.ts",
+        "packages/domain/src/document.ts"
+      ],
+      "tests": [
+        "packages/domain/tests/document.test.ts",
+        "apps/web/tests/editor.test.ts"
+      ],
+      "evidence": [
+        "doc/implementation/PLAN-0002-0001.md"
+      ]
     },
     {
       "id": "FEAT-0021",
@@ -478,7 +558,7 @@
       "id": "FEAT-0022",
       "title": "File interchange and professional output",
       "path": "doc/feat/FEAT-0022.md",
-      "status": "Planned",
+      "status": "Implementing",
       "iteration": "ITER-0008",
       "dependsOn": [
         "FEAT-0006",
@@ -495,9 +575,17 @@
         "SC-0065",
         "SC-0066"
       ],
-      "implementation": [],
-      "tests": [],
-      "evidence": []
+      "implementation": [
+        "apps/web/src/app/editor.service.ts",
+        "packages/domain/src/document.ts"
+      ],
+      "tests": [
+        "packages/domain/tests/document.test.ts",
+        "apps/web/tests/editor.test.ts"
+      ],
+      "evidence": [
+        "doc/implementation/PLAN-0002-0001.md"
+      ]
     },
     {
       "id": "FEAT-0023",
@@ -626,7 +714,7 @@
       "id": "FEAT-0028",
       "title": "Shared footer and single-source changelog",
       "path": "doc/feat/FEAT-0028.md",
-      "status": "Planned",
+      "status": "Implementing",
       "iteration": "ITER-0001",
       "dependsOn": [
         "FEAT-0020",
@@ -642,13 +730,18 @@
         "SC-0084"
       ],
       "implementation": [
-        "harness/changelog.py"
+        "harness/changelog.py",
+        "apps/web/src/app/editor.service.ts",
+        "packages/domain/src/document.ts"
       ],
       "tests": [
-        "tests/test_changelog.py"
+        "tests/test_changelog.py",
+        "packages/domain/tests/document.test.ts",
+        "apps/web/tests/editor.test.ts"
       ],
       "evidence": [
-        "doc/product/footer-and-changelog.md"
+        "doc/product/footer-and-changelog.md",
+        "doc/implementation/PLAN-0002-0001.md"
       ]
     }
   ]

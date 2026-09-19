@@ -15,11 +15,11 @@ class ChangelogTests(unittest.TestCase):
         for filename, content in outputs.items():
             self.assertEqual(content, (ROOT/filename).read_text(), filename)
         manifest = json.loads(outputs['release/changelog.json'])
-        self.assertEqual('0.1.0-design.2', manifest['currentVersion'])
-        self.assertEqual(['0.1.0-design.2', '0.1.0-design.1'], [x['version'] for x in manifest['entries']])
+        self.assertEqual('0.2.0-alpha.2', manifest['currentVersion'])
+        self.assertEqual(['0.2.0-alpha.2', '0.2.0-alpha.1', '0.1.0-design.2', '0.1.0-design.1'], [x['version'] for x in manifest['entries']])
         for entry in manifest['entries']:
             self.assertEqual([], entry['breakingChanges'])
-            self.assertEqual('design-only', entry['capabilityStatus'])
+            self.assertIn(entry['capabilityStatus'], ['design-only', 'local-preview'])
             self.assertNotIn('---', outputs['apps/web/public/assets/changelog/'+entry['markdown']])
 
     def test_semantic_version_order_and_invalid_values(self):
@@ -66,4 +66,4 @@ class ChangelogTests(unittest.TestCase):
                 build(root)
             path.write_text(path.read_text().replace('- Incompatible project format.', '- Incompatible project format. Migration: export before upgrading.'))
             result = json.loads(build(root)['release/changelog.json'])
-            self.assertTrue(result['entries'][0]['breakingChanges'])
+            self.assertTrue(next(entry for entry in result['entries'] if entry['version']=='0.1.0-design.2')['breakingChanges'])
