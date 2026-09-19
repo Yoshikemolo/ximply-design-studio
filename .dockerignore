@@ -1,0 +1,11 @@
+.git
+node_modules
+.venv
+reports
+dist
+__pycache__
+**/__pycache__
+.env
+.env.*
+data
+*.zip

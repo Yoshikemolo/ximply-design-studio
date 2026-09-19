@@ -1,0 +1,8 @@
+import { createCanvas } from '@napi-rs/canvas';
+import { describe,it,expect } from 'vitest';
+import { CanvasRenderer } from '../src/canvas-renderer';
+import { blankDocument,newLayer } from '../../domain/src/document';
+describe('Canvas2D pixel oracles',()=>{
+ it('composites opacity and hidden layers over the document background',()=>{const canvas=createCanvas(100,100),doc={...blankDocument(),width:100,height:100};const layer={...newLayer('rectangle','a',{x:10,y:10},'#ff0000','#ff0000',0),width:50,height:50,opacity:.5};doc.layers=[layer];new CanvasRenderer().draw(canvas as unknown as HTMLCanvasElement,doc,null,()=>{});const pixel=canvas.getContext('2d').getImageData(20,20,1,1).data;expect(pixel[0]).toBe(255);expect(pixel[1]).toBeGreaterThanOrEqual(127);expect(pixel[1]).toBeLessThanOrEqual(128);layer.visible=false;new CanvasRenderer().draw(canvas as unknown as HTMLCanvasElement,doc,null,()=>{});expect([...canvas.getContext('2d').getImageData(20,20,1,1).data]).toEqual([255,255,255,255]);});
+ it('renders a transparent layer plane without introducing a white background',()=>{const canvas=createCanvas(100,100),doc={...blankDocument(),width:100,height:100};doc.layers=[{...newLayer('ellipse','a',{x:10,y:10},'#0000ff','#0000ff',0),width:50,height:50}];new CanvasRenderer().draw(canvas as unknown as HTMLCanvasElement,doc,null,()=>{},undefined,true);expect(canvas.getContext('2d').getImageData(0,0,1,1).data[3]).toBe(0);expect([...canvas.getContext('2d').getImageData(35,35,1,1).data]).toEqual([0,0,255,255]);});
+});

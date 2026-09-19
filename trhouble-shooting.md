@@ -1,23 +1,62 @@
 # Troubleshooting
 
-This filename retains the spelling requested for the README link.
+## Local preview does not start
 
-| Symptom | Check and recovery |
-| --- | --- |
-| No editor at localhost | This package is design-stage; application modules/images are not implemented yet. Infrastructure startup is not editor startup. |
-| Compose says a variable is required | Fill every value in infra/.env, including optional quality-profile variables; interpolation happens before profile selection. |
-| Python command not found on Windows | Install Python 3.11+; the PowerShell wrapper tries python then py -3. |
-| PostgreSQL will not start after image change | Verify selected major/data-directory compatibility and migration path; never delete a volume to hide an upgrade failure. |
-| Keycloak redirects incorrectly | Configure exact browser-visible origin and callback path; use a public client and PKCE; distinguish container DNS from browser URLs. |
-| CORS failure in future local app | Use the shared localhost edge origin and /api and /hub proxy paths; do not call container hostnames from browser. Never enable wildcard origins with credentials. |
-| SignalR connects but no updates | Verify JWT audience, project group authorization, hub route, outbox relay and proxy WebSocket upgrade. |
-| Sonar cannot be reached from GitHub | Hosted runners cannot reach your laptop localhost; use the documented secured analysis topology. |
-| Sonar reports missing coverage | Generate reports for the same analyzed commit/module and correct paths; missing reports are failures. |
-| GPU unavailable | Use capability diagnostics and CPU/WebGL fallback; browser GPU differs from server CUDA/Metal. |
-| Popup blocked | Open a companion window through a user click; source panel remains until transfer acknowledgment. |
-| NUKE refuses | Use exact project confirmation and local context; it deliberately refuses unknown scope or Swarm-managed deletion. |
-| Port already used | Identify the process/project; change the environment override, not a global kill/prune. |
+Start Docker Desktop and verify `docker compose version`. The launcher deliberately
+rejects remote Docker contexts. Select your local Docker Desktop/default socket
+context. Run `python3 scripts/local.py logs` (or `python` on Windows) and inspect
+which service failed. Ports bind to 127.0.0.1 only.
 
-Capture command, environment, source revision and redacted logs. Never post tokens,
-.env files or private document contents in public issues. Use `status`, `logs` and
-`--dry-run` before mutation. See doc/operations/runbooks.md for operation scope.
+If port 8080 is in use, change XDS_PORT in `.env.local`, stop and start again.
+First build requires network access to the official npm, Python and container
+registries. Do not resolve installation failures using unverified package mirrors or
+`--force` peer dependency overrides. Node 24.19.0 is the tested local runtime.
+
+## PowerShell or shell launcher fails
+
+Use `python scripts/local.py start` directly if script execution policy blocks the
+PowerShell wrapper. Use `python3 scripts/local.py start` on macOS/Linux if executable
+bits were lost when extracting a ZIP. No system execution-policy change is required.
+
+## API returns 401 or 503
+
+401 means the token entered in File > Server is missing or does not match XDS_API_TOKEN
+in `.env.local`. 503 means the server token is absent or shorter than 32 characters.
+After changing the environment file, stop and start the containers. Do not place the
+token in frontend files, URLs, screenshots or source control. The browser forgets it
+on reload. Drawing and project-file export do not depend on server authentication.
+
+## Project or image rejected
+
+The preview accepts version-1 .ximply native files, up to 35 MB, 150 layers and a
+4096-by-4096 artboard. Image imports accept PNG/JPEG/WebP up to 20 MB, downsampled to a
+2048-pixel maximum side. PSD, Illustrator native files, arbitrary SVG import and
+remote image URLs are not supported. A future migration must be explicit.
+
+## Brush, eraser or selection behaves unexpectedly
+
+Unlock the layer first. Eraser requires an image or paint layer; vector objects remain
+editable through selection and properties. Brush paints the selected image layer or
+creates a new paint layer when a vector is selected. Hidden layers are not selected
+by canvas hit testing. Select a visible layer in the Layers panel to inspect it.
+
+## Draft was not restored
+
+Browser storage is a convenience, not project backup. Large drafts are not persisted
+there; save a .ximply file. Private browsing or storage limits may disable draft saving.
+Undo history is session-local. Stop preserves server files; NUKE removes the preview
+volume and cannot recover projects that were not exported.
+
+## Spatial preview or export differs
+
+Spatial inspection requires WebGL and is not a modeling or CSG implementation. SVG
+filters and blending vary between applications; use PNG for flattened pixel output
+and .ximply for this editor's editable data. Color-managed print and PSD/AI fidelity
+are not part of the alpha. If a graphic operation fails, the status line reports it.
+
+## Quality and integration
+
+A green build or test job does not imply the strict Sonar gate passed. Pending Sonar,
+protection verification and human review are recorded in the PRs and methodology
+audit. Do not bypass them to merge a local preview. Broader infrastructure templates
+remain separate from the runnable `compose.local.yaml` preview.

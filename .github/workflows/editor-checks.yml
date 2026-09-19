@@ -1,0 +1,42 @@
+name: Editor build and tests
+on:
+  pull_request:
+    branches: [dev, qa, demo, release, main]
+  push:
+    branches: [feat/first-editor]
+permissions:
+  contents: read
+jobs:
+  editor:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24.19.0'
+          cache: npm
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - run: npm run build
+      - run: npm test
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install -r services/api/requirements-dev.txt
+      - run: python -m pytest services/api/tests -q
+      - name: Validate local Compose configuration
+        env:
+          XDS_API_TOKEN: ci-configuration-validation-only-not-a-deployed-secret
+        run: docker compose -f compose.local.yaml config --quiet
+      - name: Build and start disposable local preview
+        env:
+          XDS_API_TOKEN: ci-disposable-preview-token-not-for-other-environments
+        run: docker compose -f compose.local.yaml up --build -d --wait
+      - name: Smoke test local preview
+        env:
+          XDS_API_TOKEN: ci-disposable-preview-token-not-for-other-environments
+        run: python scripts/smoke_local.py
+      - name: Stop disposable preview
+        if: always()
+        env:
+          XDS_API_TOKEN: ci-disposable-preview-token-not-for-other-environments
+        run: docker compose -f compose.local.yaml down --volumes --rmi local

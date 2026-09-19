@@ -1,0 +1,46 @@
+name: ximply-design-studio-preview
+services:
+  api:
+    build:
+      context: .
+      dockerfile: infra/local/api.Dockerfile
+    environment:
+      XDS_API_TOKEN: ${XDS_API_TOKEN:?Run the local launcher first}
+      XDS_DATA_DIR: /data
+    volumes:
+      - projects:/data
+    init: true
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    healthcheck:
+      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+    networks: [preview]
+  web:
+    build:
+      context: .
+      dockerfile: infra/local/web.Dockerfile
+    ports:
+      - "127.0.0.1:${XDS_PORT:-8080}:8080"
+    depends_on:
+      api:
+        condition: service_healthy
+    init: true
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: [CMD, wget, -q, -O, /dev/null, "http://127.0.0.1:8080/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+    networks: [preview]
+volumes:
+  projects:
+networks:
+  preview:

@@ -21,3 +21,6 @@ build/
 *.sqlite
 *.xds
 .DS_Store
+.angular/
+.pytest_cache/
+data/

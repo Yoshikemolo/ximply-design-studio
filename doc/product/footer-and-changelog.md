@@ -50,7 +50,8 @@ Markdown asset named by the index. Resolve versions by exact manifest membership
 never interpolate an unchecked query parameter into a file path. A missing parameter
 selects the current version. An unknown version displays an accessible not-found
 message and a current-version action; do not silently show a different release.
-Browser back/forward restores the selected release. These UI behaviors remain Planned.
+Browser back/forward restores the selected release. The local preview implements version selection, exact manifest lookup and browser
+history handling; full accessibility and offline-browser acceptance remain pending.
 
 All published notes ship with the application and work offline. Labels belong to EN/ES
 catalogs; authored release prose starts in English with explicit English fallback for
@@ -88,7 +89,9 @@ CI also compares PR base/head changes and rejects implementation changes without
 Markdown note update. This proves a note was changed, not that its prose is accurate;
 human review still checks completeness, classification and compatibility impact.
 Current local implementation provides source files, generator, assets and checks.
-The Angular version-selector screen has not yet been implemented.
+The Angular version-selector screen is implemented in the local preview. Its
+Markdown sections render as escaped text and lists; rich Markdown is intentionally
+not interpreted. Visual browser acceptance is still pending.
 
 Footer layout and exact links remain governed by the reference-confirmation section
 above. The screenshot does not establish destination URLs for the small bottom row.
