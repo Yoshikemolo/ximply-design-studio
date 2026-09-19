@@ -55,10 +55,11 @@ repository is configured so merge and squash commits use the pull request title 
 body as their message; the title is validated by the same check. Any other committer,
 an unverified signature or GitHub's default `Merge pull request ...` message fails.
 
-Five earlier web merges into dev used that default message before the repository
+Seven earlier web merges into dev used that default message before the repository
 setting existed: 310daca1c44d942b10a882552dbe8f5166a0ec78,
 c948cdfeeeba73fd9c32380a7c22ec111989094b, 18f571807639daa73d64ce8b7238069dcbc79f28,
-174c5471381e06b2db92fb9eb78801eee520e444 and e05fbf4ae2756d61c3934122d1ec9244bfbd2ba8.
+174c5471381e06b2db92fb9eb78801eee520e444, e05fbf4ae2756d61c3934122d1ec9244bfbd2ba8,
+afec8b1530a3193e3807c9e5c5cfc766e00dac35 and 03bf3ba042587a8aa332392b3d2c6c7acaf06e97.
 They are listed with a reason under `legacyCommitExemptions` in
 `harness/contribution-policy.json` instead of rewriting shared history. Exemptions match
 exact full SHAs only; a malformed entry fails closed. Adding an entry is an owner

@@ -63,6 +63,14 @@
     {
       "sha": "e05fbf4ae2756d61c3934122d1ec9244bfbd2ba8",
       "reason": "GitHub web merge of PR #16 into dev with the default message, before merge titles used the pull request title; history is preserved, not rewritten."
+    },
+    {
+      "sha": "afec8b1530a3193e3807c9e5c5cfc766e00dac35",
+      "reason": "GitHub web merge of PR #17 into dev with the default message, before merge titles used the pull request title; history is preserved, not rewritten."
+    },
+    {
+      "sha": "03bf3ba042587a8aa332392b3d2c6c7acaf06e97",
+      "reason": "GitHub web merge of PR #18 into dev with the default message, before merge titles used the pull request title; history is preserved, not rewritten."
     }
   ]
 }
