@@ -41,7 +41,7 @@ class ApiTests(unittest.TestCase):
         self.assertEqual([identifier+'.json'], [x.name for x in Path(self.folder.name).iterdir()])
 
     def test_invalid_documents_and_identifiers(self):
-        for key, value in [('version', 2), ('width', 50000), ('background', 'url(secret)'), ('layers', [{}])]:
+        for key, value in [('version', 3), ('width', 50000), ('background', 'url(secret)'), ('layers', [{}])]:
             document = copy.deepcopy(DOCUMENT)
             document[key] = value
             self.assertEqual(422, self.client.post('/api/projects', json=document, headers=self.headers).status_code)
@@ -91,3 +91,198 @@ class ApiTests(unittest.TestCase):
         with patch('src.main.__file__','/app/src/main.py'), patch.dict('os.environ', {'XDS_VERSION_FILE':str(version)}):
             client = TestClient(create_app(self.repository, TOKEN))
             self.assertEqual('0.2.0-alpha.1', client.get('/api/health').json()['version'])
+
+
+class NativeDrawingTests(unittest.TestCase):
+    """API acceptance cases for editable curves and reusable native symbols."""
+
+    def setUp(self):
+        ApiTests.setUp(self)
+        self.anchor = {'point': {'x': 10, 'y': 20}, 'incoming': {'x': -5, 'y': 15},
+                       'outgoing': {'x': 35, 'y': 40}, 'smooth': True}
+        self.layer = {'id': 'curve-one', 'name': 'Editable curve', 'kind': 'path',
+                      'x': 25, 'y': 40, 'width': 100, 'height': 100, 'rotation': 15,
+                      'opacity': 0.75, 'visible': True, 'locked': False, 'blend': 'multiply',
+                      'fill': '#336699', 'stroke': '#000000', 'strokeWidth': 2, 'points': [],
+                      'text': '', 'fontSize': 48, 'source': '',
+                      'adjustments': {'brightness': 100, 'contrast': 100, 'saturation': 100, 'blur': 0},
+                      'curves': [{'nodes': [self.anchor, {'point': {'x': 90, 'y': 80},
+                                  'incoming': {'x': 60, 'y': 95}, 'outgoing': {'x': 90, 'y': 80},
+                                  'smooth': False}], 'closed': False}]}
+        self.document = {**DOCUMENT, 'version': 2, 'layers': [self.layer]}
+
+    def assert_round_trip(self, document):
+        response = self.client.post('/api/projects', json=document, headers=self.headers)
+        self.assertEqual(201, response.status_code, response.text)
+        saved = self.client.get('/api/projects/' + response.json()['id'], headers=self.headers)
+        self.assertEqual(document, saved.json())
+        artifact = Path(self.folder.name) / (response.json()['id'] + '.json')
+        import json
+        self.assertEqual(document, json.loads(artifact.read_text()))
+
+    def assert_invalid(self, document):
+        response = self.client.post('/api/projects', json=document, headers=self.headers)
+        self.assertEqual(422, response.status_code, response.text)
+        self.assertEqual([], list(Path(self.folder.name).glob('*.json')))
+
+    def test_shear_round_trip_and_omission(self):
+        self.layer['skewX'] = 28.5
+        self.assert_round_trip(self.document)
+        del self.layer['skewX']
+        self.assert_round_trip(self.document)
+
+    def test_shear_contract_rejects_invalid_values_and_legacy_format(self):
+        for value in (None, True, '45', 90, -90):
+            with self.subTest(value=value):
+                self.layer['skewX'] = value
+                self.assert_invalid(self.document)
+        self.layer['skewX'] = 0
+        del self.layer['curves']
+        self.document['version'] = 1
+        self.assert_invalid(self.document)
+
+    def test_cubic_controls_and_tracing_provenance_round_trip(self):
+        self.layer['traceSourceId'] = 'raster-source'
+        self.assert_round_trip(self.document)
+
+    def test_symbol_definition_and_instance_round_trip(self):
+        definition = copy.deepcopy(self.layer)
+        definition['id'] = 'definition-layer'
+        self.document['symbols'] = [{'id': 'symbol-one', 'name': 'Mark', 'layer': definition}]
+        self.layer['symbolId'] = 'symbol-one'
+        self.assert_round_trip(self.document)
+
+    def test_version_one_layer_is_preserved_without_new_fields(self):
+        del self.layer['curves']
+        self.document['version'] = 1
+        self.assert_round_trip(self.document)
+
+    def test_version_one_rejects_drawing_extensions_even_empty(self):
+        del self.layer['curves']
+        self.document['version'] = 1
+        for key, value in [('curves', []), ('traceSourceId', 'image-source')]:
+            with self.subTest(key=key):
+                document = copy.deepcopy(self.document)
+                document['layers'][0][key] = value
+                self.assert_invalid(document)
+        self.assert_invalid({**self.document, 'symbols': []})
+
+    def test_explicit_null_extensions_are_invalid(self):
+        for key in ('curves', 'symbolId', 'traceSourceId'):
+            with self.subTest(key=key):
+                document = copy.deepcopy(self.document)
+                document['layers'][0][key] = None
+                self.assert_invalid(document)
+        self.assert_invalid({**self.document, 'symbols': None})
+
+    def test_malformed_nodes_and_non_boolean_flags_are_invalid(self):
+        for node in [{}, {**self.anchor, 'incoming': None}, {**self.anchor, 'smooth': 'true'},
+                     {**self.anchor, 'smooth': 1}, {**self.anchor, 'unexpected': 1}]:
+            with self.subTest(node=node):
+                document = copy.deepcopy(self.document)
+                document['layers'][0]['curves'][0]['nodes'] = [node]
+                self.assert_invalid(document)
+        self.layer['curves'][0]['closed'] = 'false'
+        self.assert_invalid(self.document)
+
+    def test_control_coordinates_reject_nonfinite_coercion_and_out_of_bounds(self):
+        import json
+        for coordinate in (float('inf'), float('-inf'), float('nan'), 100001, -100001, '3', True):
+            with self.subTest(coordinate=coordinate):
+                document = copy.deepcopy(self.document)
+                document['layers'][0]['curves'][0]['nodes'][0]['incoming']['x'] = coordinate
+                response = self.client.post('/api/projects', content=json.dumps(document), headers=self.headers)
+                self.assertEqual(422, response.status_code, response.text)
+        self.assertEqual([], list(Path(self.folder.name).glob('*.json')))
+
+    def test_curve_node_budget_is_cumulative_across_subpaths(self):
+        self.layer['curves'] = [{'nodes': [self.anchor] * 10001, 'closed': False},
+                                {'nodes': [self.anchor] * 10000, 'closed': False}]
+        self.assert_invalid(self.document)
+
+    def test_curve_budget_allows_exact_limit(self):
+        self.layer['curves'] = [{'nodes': [self.anchor] * 10000, 'closed': False},
+                                {'nodes': [self.anchor] * 10000, 'closed': False}]
+        self.assert_round_trip(self.document)
+
+    def test_curve_path_count_and_non_path_layer_are_invalid(self):
+        self.layer['curves'] = [{'nodes': [], 'closed': False}] * 4097
+        self.assert_invalid(self.document)
+        self.layer['curves'] = []
+        self.layer['kind'] = 'rectangle'
+        self.assert_invalid(self.document)
+
+    def test_unknown_symbol_duplicate_definitions_and_recursive_symbols_are_invalid(self):
+        self.layer['symbolId'] = 'missing'
+        self.assert_invalid(self.document)
+        del self.layer['symbolId']
+        definition = {'id': 'symbol-one', 'name': 'Mark', 'layer': copy.deepcopy(self.layer)}
+        self.document['symbols'] = [definition, copy.deepcopy(definition)]
+        self.assert_invalid(self.document)
+        self.document['symbols'] = [definition]
+        definition['layer']['symbolId'] = 'symbol-one'
+        self.assert_invalid(self.document)
+
+    def test_symbol_definition_has_same_curve_limits_as_document_layer(self):
+        definition = copy.deepcopy(self.layer)
+        definition['curves'][0]['nodes'][0]['outgoing']['y'] = 100001
+        self.document['symbols'] = [{'id': 'symbol-one', 'name': 'Mark', 'layer': definition}]
+        self.assert_invalid(self.document)
+
+    def test_symbol_definition_enforces_cumulative_node_budget(self):
+        definition = copy.deepcopy(self.layer)
+        definition['curves'] = [{'nodes': [self.anchor] * 10001, 'closed': False},
+                                {'nodes': [self.anchor] * 10000, 'closed': True}]
+        self.document['symbols'] = [{'id': 'symbol-one', 'name': 'Mark', 'layer': definition}]
+        self.assert_invalid(self.document)
+
+    def test_nested_group_path_round_trip(self):
+        self.layer['groupPath'] = ['composition', 'mark', 'detail']
+        self.assert_round_trip(self.document)
+
+    def test_invalid_group_paths_are_rejected(self):
+        for group_path in (['same', 'same'], [str(index) for index in range(17)],
+                           None, [''], ['x' * 101], [123], 'group'):
+            with self.subTest(group_path=group_path):
+                document = copy.deepcopy(self.document)
+                document['layers'][0]['groupPath'] = group_path
+                self.assert_invalid(document)
+
+    def test_group_path_requires_version_two_even_when_empty(self):
+        del self.layer['curves']
+        self.document['version'] = 1
+        for group_path in ([], ['group-one']):
+            with self.subTest(group_path=group_path):
+                self.layer['groupPath'] = group_path
+                self.assert_invalid(self.document)
+
+    def test_group_path_exact_depth_limit_round_trip(self):
+        self.layer['groupPath'] = [str(index) for index in range(16)]
+        self.assert_round_trip(self.document)
+
+    def test_mirrored_vector_and_image_round_trip(self):
+        self.layer.update(flipX=True, flipY=False)
+        image = copy.deepcopy(self.layer)
+        del image['curves']
+        image.update(id='image-one', kind='image', flipX=False, flipY=True,
+                     source='data:image/png;base64,AAAA')
+        self.document['layers'].append(image)
+        self.assert_round_trip(self.document)
+
+    def test_mirror_flags_reject_null_and_non_boolean_values(self):
+        for key in ('flipX', 'flipY'):
+            for value in (None, 0, 1, 'true', 'false', [], {}):
+                with self.subTest(key=key, value=value):
+                    document = copy.deepcopy(self.document)
+                    document['layers'][0][key] = value
+                    self.assert_invalid(document)
+
+    def test_mirror_flags_require_version_two_even_when_false(self):
+        del self.layer['curves']
+        self.document['version'] = 1
+        for key in ('flipX', 'flipY'):
+            for value in (False, True):
+                with self.subTest(key=key, value=value):
+                    document = copy.deepcopy(self.document)
+                    document['layers'][0][key] = value
+                    self.assert_invalid(document)

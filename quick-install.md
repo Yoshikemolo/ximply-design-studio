@@ -10,7 +10,7 @@ Allow roughly 4 GB available memory for the initial build. Docker must use a loc
 socket context. Windows users should enable Docker Desktop's Linux containers.
 
 ```bash
-git clone --branch feat/first-editor https://github.com/Yoshikemolo/ximply-design-studio.git
+git clone --branch feat/drawing-preview https://github.com/Yoshikemolo/ximply-design-studio.git
 cd ximply-design-studio
 ./scripts/local.sh start
 ```
@@ -18,7 +18,7 @@ cd ximply-design-studio
 PowerShell:
 
 ```powershell
-git clone --branch feat/first-editor https://github.com/Yoshikemolo/ximply-design-studio.git
+git clone --branch feat/drawing-preview https://github.com/Yoshikemolo/ximply-design-studio.git
 Set-Location ximply-design-studio
 ./scripts/local.ps1 start
 ```
@@ -46,8 +46,30 @@ isolation. Keycloak and PostgreSQL integration remain later slices.
    downstream SVG applications may differ in filter/blend rendering.
 8. Open About from the footer and change the version selector.
 
-Shortcuts: V select, R rectangle, O ellipse, P pencil, T text, B brush, E eraser,
-H pan, Ctrl/Cmd+Z undo, Ctrl/Cmd+Shift+Z redo, Ctrl/Cmd+D duplicate, Ctrl/Cmd+S save.
+Use Pen to place anchors; drag an anchor while placing it to create cubic handles.
+Use Direct selection to adjust existing anchors and controls. Finish an open path
+with Enter. Use the Text tool over existing text to edit it inline. Transform edge
+handles change one dimension; the rotation handle turns the selected object. Hold
+Shift for the angle configured in Settings (default 45 degrees).
+
+Defaults: V Select, A Direct selection, P Pen, N Pencil, M Rectangle, L Ellipse,
+T Text, B Brush, Shift+E Eraser, R Rotate, O Reflect, S Scale, Z Zoom, H Pan; Ctrl/Cmd+Z Undo,
+Ctrl/Cmd+Shift+Z Redo, Ctrl/Cmd+Alt+D Duplicate, Ctrl/Cmd+G Group,
+Ctrl/Cmd+Shift+G Ungroup and Ctrl/Cmd+S Save.
+Use a tool family's triangular flyout to choose its sibling tools. Click elsewhere
+or press Escape to close the flyout. Reflect preserves editable mirror flags;
+nonuniform group resizing does not add arbitrary shear.
+Open Settings with Ctrl/Cmd+K to change shortcuts, the constraint angle and the
+cursor badge. Duplicate normalized key chords cannot be saved. Current assignments
+appear in tooltips and menus. Hold Ctrl+Space and scroll over the canvas to zoom the
+artwork without scaling the interface.
+
+New saves use native format 2. Format 1 files import, but earlier applications cannot
+read new saves. Preserve original files before migrating. Tracing is a 64-pixel-side
+scanline preview; vector erasure approximates curved boundaries. Symbol nine-slice
+resizing uses fixed insets; see the [roadmap](doc/planning/drawing-roadmap.md) for
+remaining fidelity work.
+
 Small drafts auto-restore; save large or important work explicitly to a project file.
 
 ## Stop, logs and cleanup
@@ -96,11 +118,10 @@ The Docker nginx config serves SPA routes, including `/about?version=...`.
 
 ## Validation status
 
-The Angular build and automated domain/renderer/editor/API tests pass. GitHub Actions
-has built and started the Docker preview and passed the packaged HTTP smoke test.
-The remote browser cannot reach the development host, so visual browser acceptance
-is not claimed. SonarQube and independent human review remain pre-merge gates.
-This preview can be downloaded from its feature branch for local evaluation.
+Earlier preview builds passed automated and Docker smoke checks; those results do
+not establish this iteration's status. Current evidence belongs to the
+[drawing implementation plan](doc/implementation/PLAN-0008-0001.md). Visual browser
+acceptance, SonarQube and independent review remain pre-merge requirements.
 
-See [trhouble-shooting.md](trhouble-shooting.md) for diagnosis and
-[the implementation plan](doc/implementation/PLAN-0002-0001.md) for boundaries.
+See [trhouble-shooting.md](trhouble-shooting.md) for diagnosis and the
+[drawing roadmap](doc/planning/drawing-roadmap.md) for bounded and pending features.

@@ -15,10 +15,13 @@ class ChangelogTests(unittest.TestCase):
         for filename, content in outputs.items():
             self.assertEqual(content, (ROOT/filename).read_text(), filename)
         manifest = json.loads(outputs['release/changelog.json'])
-        self.assertEqual('0.2.0-alpha.2', manifest['currentVersion'])
-        self.assertEqual(['0.2.0-alpha.2', '0.2.0-alpha.1', '0.1.0-design.2', '0.1.0-design.1'], [x['version'] for x in manifest['entries']])
+        self.assertEqual('0.3.0-alpha.1', manifest['currentVersion'])
+        self.assertEqual(['0.3.0-alpha.1', '0.2.0-alpha.2', '0.2.0-alpha.1', '0.1.0-design.2', '0.1.0-design.1'], [x['version'] for x in manifest['entries']])
         for entry in manifest['entries']:
-            self.assertEqual([], entry['breakingChanges'])
+            if entry['version'] == '0.3.0-alpha.1':
+                self.assertTrue(any('Migration:' in note for note in entry['breakingChanges']))
+            else:
+                self.assertEqual([], entry['breakingChanges'])
             self.assertIn(entry['capabilityStatus'], ['design-only', 'local-preview'])
             self.assertNotIn('---', outputs['apps/web/public/assets/changelog/'+entry['markdown']])
 

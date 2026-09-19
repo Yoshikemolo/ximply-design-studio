@@ -70,3 +70,11 @@ any base/head change. Record evidence against the checked SHA; never pre-tick
 quality/review boxes. Resolve shared-branch conflicts through a fix branch and PR.
 Do not use the default web merge message, add new historical exemptions, force-push
 shared history or interpret a missing/skipped Sonar check as success.
+
+## Preview feedback versions
+
+The owner requests frequent, testable drawing-tool checkpoints. Publish coherent
+small batches with unique preview versions and updated Markdown release notes,
+including test evidence and limitations. After the native-v2 drawing baseline
+0.3.0-alpha.1, compatible feedback patches increment the patch version. A preview
+publish does not authorize merging or bypassing the strict product quality gate.

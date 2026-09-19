@@ -97,3 +97,19 @@ Tests: [collector tests](../../tests/test_quality_collector.py). Plan and scope:
 were checked on 2026-09-19, together with the official next.sonarqube.com API response
 examples for ce/task, project_analyses/search and measures/component. API examples
 support fixture shapes; they do not prove compatibility with an installed version.
+
+## Required PR evidence workflow
+
+The `Strict quality evidence / quality` job checks out the trusted base revision's
+collector and policy. Configure repository variables `SONAR_HOST_URL` and
+`SONAR_ANALYSIS_MANIFEST_JSON`, and the secret `SONAR_TOKEN`. The manifest must list
+successful scans for every required module at the exact candidate head revision.
+A missing value, stale revision or failed threshold makes the job fail; it never
+substitutes build/test success for Sonar evidence. Require this check in branch
+protection alongside design, contribution and editor checks. Branch protection
+configuration and independent approval still require verification.
+
+The editor workflow collects TypeScript LCOV in `reports/typescript/lcov.info`, API
+XML in `reports/api/coverage.xml`, and engineering XML in
+`reports/engineering/coverage.xml`. Collection includes uncovered source files.
+These artifacts are inputs for analysis, not proof that the strict gate passed.

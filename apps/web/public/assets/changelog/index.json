@@ -1,6 +1,133 @@
 {
-  "currentVersion": "0.2.0-alpha.2",
+  "currentVersion": "0.3.0-alpha.1",
   "entries": [
+    {
+      "version": "0.3.0-alpha.1",
+      "date": "2026-09-19",
+      "summary": "Editable cubic paths, drawing tools and configurable input",
+      "breakingChanges": [
+        "New saves use native document format 2 for curves, subpaths and symbol metadata. Earlier readers cannot open these files. Format 1 import remains supported.",
+        "Tool defaults change to M Rectangle, L Ellipse, P Pen, N Pencil, Shift+E Eraser and R Rotate. Configurable shortcuts replace the temporary preview bindings.",
+        "Migration: Preserve original .ximply files before opening and saving them with this version. Review Settings and resolve shortcut collisions before saving preferences. Keep the new application for v2 files: reverting the application does not downgrade documents. Existing server artifacts follow the same reader-version boundary. Rebuild local containers; retain .env.local and project volumes."
+      ],
+      "changes": [
+        {
+          "type": "Feature",
+          "description": "Draw editable cubic paths with Pen and edit anchors/handles with direct selection, anchor addition/deletion and corner/smooth conversion."
+        },
+        {
+          "type": "Feature",
+          "description": "Construct lines, rounded rectangles, polygons, stars, arcs, spirals, rectangular and polar grids and flares alongside existing shape tools."
+        },
+        {
+          "type": "Feature",
+          "description": "Refine paths with smooth, simplify, average, join/close, scissors, path eraser, filled-vector eraser and stray-point cleanup."
+        },
+        {
+          "type": "Feature",
+          "description": "Trace images in monochrome, grayscale or color using bounded editable scanline output; retain source images and update, expand or release a trace."
+        },
+        {
+          "type": "Feature",
+          "description": "Create linked symbols; redefine, replace and expand instances; import/export local libraries; spray and manipulate instances with shift, scrunch, size, spin, stain, screen and initial style operations."
+        },
+        {
+          "type": "Feature",
+          "description": "Select multiple objects; create and dissolve nested groups; align in six directions and distribute horizontally or vertically. Combine vectors with union, subtract, intersect or exclude; raster and text are excluded from boolean operations."
+        },
+        {
+          "type": "Feature",
+          "description": "Expose Rotate, Reflect and Scale tool families through triangular flyouts, with sibling choices dismissed by outside interaction or Escape. Reflect preserves editable flip flags for vectors, images and text; numeric transforms also support selected groups."
+        },
+        {
+          "type": "Feature",
+          "description": "Configure shortcuts with collision detection, Shift constraint angle and the optional lower-right cursor tool badge in Settings."
+        },
+        {
+          "type": "Improvement",
+          "description": "Replace the starter example with an editable branded cover, including a cubic X mark and grouped vector studies."
+        },
+        {
+          "type": "Improvement",
+          "description": "Hold Ctrl for temporary Selection; release it to restore the drawing tool without losing unfinished Pen paths."
+        },
+        {
+          "type": "Improvement",
+          "description": "Add explicit canvas zoom buttons."
+        },
+        {
+          "type": "Improvement",
+          "description": "Add visible rotation and four edge handles; edge scaling affects only its local dimension. Shift constrains rotation and linear transformations to the chosen angle."
+        },
+        {
+          "type": "Improvement",
+          "description": "Edit existing text inline using the Text tool."
+        },
+        {
+          "type": "Improvement",
+          "description": "Show active shortcuts in menus and tooltips; close custom dropdowns and menus when interacting elsewhere. Ctrl+Space+wheel zooms the canvas while preserving UI scale."
+        },
+        {
+          "type": "Improvement",
+          "description": "Keep About reachable from Help and the footer; company links open in a new tab."
+        },
+        {
+          "type": "Fix",
+          "description": "Prevent accidental text selection in interface labels while preserving selection in inputs, text areas and editable content."
+        },
+        {
+          "type": "Fix",
+          "description": "Load the full production stylesheet directly without a CSP-blocked inline handler."
+        },
+        {
+          "type": "Fix",
+          "description": "Use localhost:8090 by default. Existing installations should update XDS_PORT in .env.local; saved projects and credentials are retained."
+        },
+        {
+          "type": "Fix",
+          "description": "Generate identical documentation links and ordering on Windows and POSIX hosts."
+        },
+        {
+          "type": "Security",
+          "description": "Continue validating native versions and bounded geometry; imported documents and symbol libraries do not execute code. Existing bearer storage boundaries remain."
+        },
+        {
+          "type": "Engineering",
+          "description": "Collect whole-source frontend, API and engineering coverage; enforce fresh Sonar evidence in a separate fail-closed CI check. Coverage and unavailable analyses still block integration."
+        },
+        {
+          "type": "Engineering",
+          "description": "Keep drawing geometry separate from Angular; carry native format changes through renderer, SVG and API validation."
+        },
+        {
+          "type": "Engineering",
+          "description": "Pin polygon-clipping 0.15.7 for filled-vector erasure. Curves are sampled at 24 steps per segment, so erased geometry is approximate."
+        },
+        {
+          "type": "Engineering",
+          "description": "Tracing is limited to 64 pixels per side; contour fitting remains pending."
+        },
+        {
+          "type": "Engineering",
+          "description": "Preserve rotated child geometry during nonuniform group transforms using optional native-v2 skewX; keep curve controls and symbol-instance state during transformations."
+        },
+        {
+          "type": "Engineering",
+          "description": "Nine-slice resizing uses a fixed 25 percent inset. Editable registration and slice guides and a full graphic-style library remain pending."
+        },
+        {
+          "type": "Engineering",
+          "description": "Record the mandatory integration preflight and preview feedback cadence."
+        },
+        {
+          "type": "Engineering",
+          "description": "Preserve exact historical commit exemptions and the unchanged quality policy. Current build/test/CI evidence is recorded in the implementation handoff, not inferred from earlier releases."
+        }
+      ],
+      "capabilityStatus": "local-preview",
+      "markdown": "0.3.0-alpha.1.md",
+      "source": "doc/changelog/0.3.0-alpha.1.md"
+    },
     {
       "version": "0.2.0-alpha.2",
       "date": "2026-09-19",

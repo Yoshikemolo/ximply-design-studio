@@ -14,18 +14,32 @@ from uuid import uuid4
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.concurrency import run_in_threadpool
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator, model_validator
 
 MAX_DOCUMENT = 35_000_000
 MAX_STORAGE = 512_000_000
 Color = Annotated[str, Field(pattern=r'^#[0-9a-fA-F]{6}$')]
-Number = Annotated[float, Field(allow_inf_nan=False)]
+Number = Annotated[float, Field(allow_inf_nan=False, strict=True)]
 
 
 class Point(BaseModel):
     model_config = ConfigDict(extra='forbid')
     x: Annotated[Number, Field(ge=-100000, le=100000)]
     y: Annotated[Number, Field(ge=-100000, le=100000)]
+
+
+class Anchor(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    point: Point
+    incoming: Point
+    outgoing: Point
+    smooth: Annotated[bool, Field(strict=True)]
+
+
+class CurvePath(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    nodes: Annotated[list[Anchor], Field(max_length=20000)]
+    closed: Annotated[bool, Field(strict=True)]
 
 
 class Adjustments(BaseModel):
@@ -55,6 +69,28 @@ class Layer(Point):
     fontSize: Annotated[Number, Field(ge=1, le=500)]
     source: str
     adjustments: Adjustments
+    curves: Annotated[list[CurvePath], Field(max_length=4096)] | None = None
+    symbolId: Annotated[str, Field(min_length=1, max_length=100)] | None = None
+    traceSourceId: Annotated[str, Field(min_length=1, max_length=100)] | None = None
+    groupPath: Annotated[list[Annotated[str, Field(min_length=1, max_length=100)]], Field(max_length=16)] | None = None
+    skewX: Annotated[Number, Field(ge=-89.9999, le=89.9999)] | None = None
+    flipX: Annotated[bool, Field(strict=True)] | None = None
+    flipY: Annotated[bool, Field(strict=True)] | None = None
+
+    @model_validator(mode='before')
+    @classmethod
+    def non_nullable_extensions(cls, value):
+        if isinstance(value, dict) and any(key in value and value[key] is None for key in ('curves', 'symbolId', 'traceSourceId', 'groupPath', 'flipX', 'flipY', 'skewX')):
+            raise ValueError('Drawing extensions cannot be null')
+        return value
+
+    @model_validator(mode='after')
+    def curve_budget(self):
+        if self.curves is not None and (self.kind != 'path' or sum(len(p.nodes) for p in self.curves) > 20000):
+            raise ValueError('Invalid curve layer or node budget')
+        if self.groupPath is not None and len(set(self.groupPath)) != len(self.groupPath):
+            raise ValueError('Group path identities must be unique')
+        return self
 
     @field_validator('source')
     @classmethod
@@ -64,15 +100,45 @@ class Layer(Point):
         return value
 
 
+class SymbolDefinition(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    id: Annotated[str, Field(min_length=1, max_length=100)]
+    name: Annotated[str, Field(max_length=150)]
+    layer: Layer
+
+
 class Document(BaseModel):
     model_config = ConfigDict(extra='forbid')
     format: Literal['ximply-document']
-    version: Literal[1]
+    version: Literal[1, 2]
     name: Annotated[str, Field(max_length=150)]
     width: Annotated[int, Field(ge=16, le=4096)]
     height: Annotated[int, Field(ge=16, le=4096)]
     background: Color
     layers: Annotated[list[Layer], Field(max_length=150)]
+    symbols: Annotated[list[SymbolDefinition], Field(max_length=100)] | None = None
+
+    @model_validator(mode='before')
+    @classmethod
+    def non_nullable_symbols(cls, value):
+        if isinstance(value, dict) and 'symbols' in value and value['symbols'] is None:
+            raise ValueError('Symbol library cannot be null')
+        return value
+
+    @model_validator(mode='after')
+    def symbol_and_version_contract(self):
+        symbols = self.symbols or []
+        ids = {symbol.id for symbol in symbols}
+        if len(ids) != len(symbols) or any(symbol.layer.symbolId is not None for symbol in symbols):
+            raise ValueError('Invalid symbol definitions')
+        if any(layer.symbolId is not None and layer.symbolId not in ids for layer in self.layers):
+            raise ValueError('Unknown symbol reference')
+        if self.version == 1 and ('symbols' in self.model_fields_set or any(
+                layer.curves is not None or layer.symbolId is not None or layer.traceSourceId is not None
+                or layer.skewX is not None or layer.groupPath is not None or layer.flipX is not None or layer.flipY is not None
+                for layer in self.layers)):
+            raise ValueError('Drawing extensions require native format 2')
+        return self
 
     @field_validator('layers')
     @classmethod
@@ -95,7 +161,7 @@ class FileDocumentRepository:
         self.lock = Lock()
 
     def create(self, document: Document) -> str:
-        payload = document.model_dump_json()
+        payload = document.model_dump_json(exclude_none=True)
         with self.lock:
             self.directory.mkdir(parents=True, exist_ok=True)
             files = list(self.directory.glob('*.json'))
@@ -190,7 +256,7 @@ def create_app(repository: DocumentRepository | None = None, token: str | None =
         identifier = await run_in_threadpool(store.create, document)
         return {'id': identifier, 'name': document.name}
 
-    @app.get('/api/projects/{identifier}', dependencies=[Depends(authenticated)], response_model=Document, tags=['projects'])
+    @app.get('/api/projects/{identifier}', dependencies=[Depends(authenticated)], response_model=Document, response_model_exclude_none=True, tags=['projects'])
     async def read(identifier: str):
         return await run_in_threadpool(store.read, identifier)
 
