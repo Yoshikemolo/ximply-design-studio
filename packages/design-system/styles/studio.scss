@@ -1454,3 +1454,14 @@ textarea,
 .style-scope button { width: 32px; height: 30px; padding: 3px; border: 1px solid var(--border); }
 .style-scope-options { border-top: 1px solid var(--border); padding-top: 8px; margin-top: 5px; }
 .style-scope-options > span { display: block; color: var(--muted); padding: 4px 8px; font-size: 10px; }
+
+.blend-controls { padding: 8px 14px 12px; }
+.blend-controls > label { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 10px 0; font-size: 11px; }
+.blend-controls input { width: 65px; }
+.blend-controls select { max-width: 125px; }
+.blend-actions, .blend-endpoints { display: flex; gap: 8px; }
+.blend-actions button, .blend-endpoints button { width: 33px; height: 32px; padding: 5px; border: 1px solid var(--border); }
+.blend-actions img, .blend-endpoints img { width: 21px; height: 21px; }
+.blend-hint { color: var(--muted); font-size: 10px; line-height: 1.5; }
+.layer-exact-select { width: 24px; flex-shrink: 0; padding: 4px; }
+.layer-exact-select img { width: 15px; height: 15px; }

@@ -1,3 +1,4 @@
+import { blendCompatible, blendProgress, interpolateBlendLayer, syncBlends, ObjectBlend, BlendEasing } from "../../../../packages/domain/src/object-blend";
 import { defaultTypography, defaultTextLayout, FONT_FAMILIES, layoutText, TextLayoutOptions, TextTypography } from "../../../../packages/domain/src/text-layout";
 import { snapPoint, SnapConfig } from "../../../../packages/domain/src/measurements";
 import { transformLayers } from "../../../../packages/domain/src/affine";
@@ -132,7 +133,7 @@ export class EditorService {
   contextActions(target: ContextTarget): { id: ContextAction; enabled: boolean }[] {
     const members = this.contextMembers(target);
     if (!members.length) return [];
-    const editable = members.every((layer) => !layer.locked);
+    const editable = members.every((layer) => !this.isEffectivelyLocked(layer));
     if (target.kind === "node") {
       const layer = members[0], node = layer.curves?.[target.path]?.nodes[target.index];
       if (!node || layer.guide) return [];
@@ -217,6 +218,125 @@ export class EditorService {
     }
     this.setLayer(layer.id, fitCurves(layer, curves));
   }
+  readonly selectedBlend = computed(() => {
+    const ids = this.selectedLayers().map((layer) => layer.id);
+    if (!ids.length) return null;
+    return this.document().blends?.find((blend) => {
+      const members = new Set([...blend.backIds, ...blend.frontIds, ...blend.stepIds.flat()]);
+      return ids.every((id) => members.has(id));
+    }) ?? null;
+  });
+  readonly canCreateBlend = computed(() => this.blendCandidates() !== null);
+  readonly canEditBlend = computed(() => {
+    const blend = this.selectedBlend();
+    return !!blend && !this.blendMembers(blend).some((layer) => layer.locked);
+  });
+  private blendMembers(blend: ObjectBlend): Layer[] {
+    const ids = new Set([...blend.backIds, ...blend.frontIds, ...blend.stepIds.flat()]);
+    return this.document().layers.filter((layer) => ids.has(layer.id));
+  }
+  private isEffectivelyLocked(layer: Layer): boolean {
+    if (layer.locked) return true;
+    return this.document().blends?.some((blend) => {
+      const ids = [...blend.backIds, ...blend.frontIds, ...blend.stepIds.flat()];
+      return ids.includes(layer.id) && this.document().layers.some((member) => ids.includes(member.id) && member.locked);
+    }) ?? false;
+  }
+  selectLayerExact(id: string, add = false) {
+    const layer = this.document().layers.find((item) => item.id === id);
+    if (!layer || !layer.visible || this.isEffectivelyLocked(layer)) return;
+    const existing = add ? this.selectedLayers().map((item) => item.id) : [];
+    const ids = existing.includes(id) ? existing.filter((item) => item !== id) : [...existing, id];
+    this.selectedIds.set(ids); this.selectedId.set(ids.at(-1) ?? null); this.activeNodes.set([]);
+    if (!layer.guide) { this.fill.set(layer.fill); this.stroke.set(layer.stroke); this.size.set(layer.strokeWidth); this.strokeStyle.set({ ...defaultStrokeStyle, ...layer.strokeStyle }); }
+  }
+  selectBlendEndpoint(side: "back" | "front") {
+    const blend = this.selectedBlend();
+    if (!blend) return;
+    const ids = side === "back" ? blend.backIds : blend.frontIds;
+    this.selectedIds.set([...ids]); this.selectedId.set(ids.at(-1) ?? null); this.activeNodes.set([]);
+  }
+  private blendCandidates(): { back: Layer[]; front: Layer[]; parent: string[] } | null {
+    const selected = this.selectedLayers();
+    if (selected.length < 2 || selected.some((layer) => this.isEffectivelyLocked(layer) || layer.guide || !layer.visible)) return null;
+    const existing = new Set(this.document().blends?.flatMap((blend) => [...blend.backIds, ...blend.frontIds, ...blend.stepIds.flat()]) ?? []);
+    if (selected.some((layer) => existing.has(layer.id))) return null;
+    const parent = [...(selected[0].groupPath ?? [])];
+    while (parent.length && !selected.every((layer) => this.inGroup(layer, parent))) parent.pop();
+    if (parent.length > 14 || selected.some((layer) => (layer.groupPath?.length ?? 0) >= 16)) return null;
+    const units = new Map<string, Layer[]>();
+    for (const layer of selected) {
+      const group = layer.groupPath?.[parent.length], key = group ? "group:" + group : "layer:" + layer.id;
+      if (!units.has(key)) units.set(key, []);
+      units.get(key)!.push(layer);
+    }
+    if (units.size !== 2) return null;
+    const [back, front] = [...units.values()];
+    for (const unit of [back, front]) {
+      const group = unit[0].groupPath?.[parent.length];
+      if (group && this.document().layers.filter((layer) => this.inGroup(layer, [...parent, group])).length !== unit.length) return null;
+    }
+    try { blendCompatible(back, front); } catch { return null; }
+    return { back, front, parent };
+  }
+  createBlend(steps = 5, easing: BlendEasing = "linear"): boolean {
+    const candidates = this.blendCandidates();
+    if (!candidates || !this.validBlendOptions(steps, easing)) return false;
+    const { back, front, parent } = candidates;
+    if (this.document().layers.length + steps * back.length > 150) return false;
+    const blend: ObjectBlend = { id: crypto.randomUUID(), groupId: crypto.randomUUID(), backIds: back.map((layer) => layer.id), frontIds: front.map((layer) => layer.id), steps, easing, stepIds: Array.from({ length: steps }, () => back.map(() => crypto.randomUUID())) };
+    const ids = new Set([...blend.backIds, ...blend.frontIds]);
+    const insert = (layer: Layer) => ({ ...layer, groupPath: [...parent, blend.groupId, ...(layer.groupPath ?? []).slice(parent.length)] });
+    const generated = blend.stepIds.flatMap((step, stepIndex) => back.map((layer, index) => ({ ...interpolateBlendLayer(layer, front[index], blendProgress((stepIndex + 1) / (steps + 1), easing), step[index]), name: `Blend step ${stepIndex + 1}`, groupPath: [...parent, blend.groupId, step[0]] })));
+    const block = [...back.map(insert), ...generated, ...front.map(insert)];
+    const before = this.document(), first = before.layers.findIndex((layer) => ids.has(layer.id));
+    const layers = before.layers.filter((layer) => !ids.has(layer.id)); layers.splice(first, 0, ...block);
+    const next = syncBlends({ ...before, layers, blends: [...(before.blends ?? []), blend] });
+    this.history.commit(before); this.document.set(next);
+    this.selectedIds.set(block.map((layer) => layer.id)); this.selectedId.set(front.at(-1)!.id);
+    this.changed(); return true;
+  }
+  private validBlendOptions(steps: number, easing: string): easing is BlendEasing {
+    return Number.isInteger(steps) && steps >= 1 && steps <= 100 && ["linear", "ease-in", "ease-out", "ease-in-out"].includes(easing);
+  }
+  updateBlend(patch: { steps?: number; easing?: BlendEasing }): boolean {
+    const blend = this.selectedBlend();
+    if (!blend || !this.canEditBlend()) return false;
+    const steps = patch.steps ?? blend.steps, easing = patch.easing ?? blend.easing;
+    if (!this.validBlendOptions(steps, easing) || (steps === blend.steps && easing === blend.easing)) return false;
+    const before = this.document(), oldGenerated = new Set(blend.stepIds.flat());
+    if (before.layers.length - oldGenerated.size + steps * blend.backIds.length > 150) return false;
+    const nextBlend = { ...blend, steps, easing, stepIds: Array.from({ length: steps }, (_, index) => blend.stepIds[index] ?? blend.backIds.map(() => crypto.randomUUID())) };
+    const source = before.layers.find((layer) => layer.id === blend.backIds[0])!;
+    const parent = source.groupPath!.slice(0, source.groupPath!.indexOf(blend.groupId));
+    const generated = nextBlend.stepIds.flatMap((step, stepIndex) => step.map((id, index) => ({ ...interpolateBlendLayer(before.layers.find((layer) => layer.id === blend.backIds[index])!, before.layers.find((layer) => layer.id === blend.frontIds[index])!, blendProgress((stepIndex + 1) / (steps + 1), easing), id), name: `Blend step ${stepIndex + 1}`, groupPath: [...parent, blend.groupId, step[0]] })));
+    const layers = before.layers.filter((layer) => !oldGenerated.has(layer.id));
+    const position = layers.findIndex((layer) => layer.id === blend.frontIds[0]); layers.splice(position, 0, ...generated);
+    const next = syncBlends({ ...before, layers, blends: before.blends!.map((item) => item.id === blend.id ? nextBlend : item) });
+    this.history.commit(before);
+    this.document.set(next);
+    const remaining = new Set(this.document().layers.map((layer) => layer.id));
+    this.selectedIds.update((ids) => ids.filter((id) => remaining.has(id)));
+    if (!remaining.has(this.selectedId() ?? "")) this.selectedId.set(blend.frontIds[0]);
+    this.changed(); return true;
+  }
+  expandBlend(): boolean {
+    const blend = this.selectedBlend();
+    if (!blend || !this.canEditBlend()) return false;
+    this.history.commit(this.document());
+    this.document.update((doc) => ({ ...doc, blends: doc.blends!.filter((item) => item.id !== blend.id) }));
+    this.changed(); return true;
+  }
+  releaseBlend(): boolean {
+    const blend = this.selectedBlend();
+    if (!blend || !this.canEditBlend()) return false;
+    const generated = new Set(blend.stepIds.flat()), endpoints = new Set([...blend.backIds, ...blend.frontIds]);
+    this.history.commit(this.document());
+    this.document.update((doc) => ({ ...doc, blends: doc.blends!.filter((item) => item.id !== blend.id), layers: doc.layers.filter((layer) => !generated.has(layer.id)).map((layer) => endpoints.has(layer.id) ? { ...layer, groupPath: (layer.groupPath ?? []).filter((id) => id !== blend.groupId) } : layer) }));
+    this.selectedIds.set([...endpoints]); this.selectedId.set(blend.frontIds.at(-1) ?? null);
+    this.changed(); return true;
+  }
+
   readonly guidesLocked = signal(false);
   setGuidesLocked(locked: boolean) {
     this.guidesLocked.set(locked);
@@ -292,10 +412,11 @@ export class EditorService {
   private guideGesture?: { before: StudioDocument; id: string; selectedId: string | null; selectedIds: string[] };
 
   private applyAppearance(patch: Partial<Layer>) {
-    const ids = new Set(this.selectedLayers().filter((layer) => !layer.locked && !layer.guide).map((layer) => layer.id));
+    const ids = new Set(this.selectedLayers().filter((layer) => !this.isEffectivelyLocked(layer) && !layer.guide).map((layer) => layer.id));
     const changes = this.document().layers.some((layer) => ids.has(layer.id) && Object.entries(patch).some(([key, value]) => layer[key as keyof Layer] !== value));
     if (!changes) return;
     this.history.commit(this.document());
+    this.expandGeneratedForIds(ids);
     this.document.update((doc) => ({ ...doc, layers: doc.layers.map((layer) => ids.has(layer.id) ? { ...layer, ...patch } : layer) }));
     this.changed();
   }
@@ -305,11 +426,11 @@ export class EditorService {
     if (patch.cap !== undefined && !["butt", "square", "round"].includes(patch.cap)) return;
     const strokeStyle = { ...this.strokeStyle(), ...patch };
     this.strokeStyle.set(strokeStyle);
-    const ids = new Set(this.selectedLayers().filter((layer) => !layer.locked && !layer.guide).map((layer) => layer.id));
+    const ids = new Set(this.selectedLayers().filter((layer) => !this.isEffectivelyLocked(layer) && !layer.guide).map((layer) => layer.id));
     const before = this.document();
     const layers = before.layers.map((layer) => ids.has(layer.id) ? { ...layer, strokeStyle: { ...defaultStrokeStyle, ...layer.strokeStyle, ...patch } } : layer);
     if (JSON.stringify(layers) === JSON.stringify(before.layers)) return;
-    this.history.commit(before); this.document.set({ ...before, layers }); this.changed();
+    this.history.commit(before); this.expandGeneratedForIds(ids); this.document.set({ ...this.document(), layers }); this.changed();
   }
   private scopedStyle(fill: string, stroke: string, strokeWidth: number, strokeStyle: StrokeStyle): Partial<Layer> {
     const scope = this.styleScope();
@@ -320,7 +441,8 @@ export class EditorService {
     const layers = before.layers.map((layer) => ids.has(layer.id) ? { ...layer, ...structuredClone(patch) } : layer);
     if (JSON.stringify(layers) === JSON.stringify(before.layers)) return false;
     this.history.commit(before);
-    this.document.set({ ...before, layers });
+    this.expandGeneratedForIds(ids);
+    this.document.set({ ...this.document(), layers });
     this.changed();
     return true;
   }
@@ -332,7 +454,7 @@ export class EditorService {
     if (patch.stroke !== undefined) {
       this.stroke.set(patch.stroke); this.size.set(patch.strokeWidth!); this.strokeStyle.set({ ...patch.strokeStyle! });
     }
-    const targets = new Set(this.selectedLayers().filter((layer) => layer.id !== source.id && !layer.guide && !layer.locked && layer.kind !== "image").map((layer) => layer.id));
+    const targets = new Set(this.selectedLayers().filter((layer) => layer.id !== source.id && !layer.guide && !this.isEffectivelyLocked(layer) && layer.kind !== "image").map((layer) => layer.id));
     this.applyStyleTo(targets, patch);
     return true;
   }
@@ -450,6 +572,7 @@ export class EditorService {
     }
   }
   private changed() {
+    this.synchronizeBlends();
     this.revision.update((x) => x + 1);
     this.renderer.prune(this.document().layers);
     try {
@@ -465,7 +588,30 @@ export class EditorService {
       this.status.set("Browser storage is full. Save a project file.");
     }
   }
+  previewDocument(): StudioDocument {
+    try { return syncBlends(this.document()); } catch { return this.document(); }
+  }
+  private synchronizeBlends() {
+    const doc = this.document();
+    if (!doc.blends?.length) return;
+    let current = doc;
+    const valid: ObjectBlend[] = [];
+    for (const blend of doc.blends) {
+      try { current = syncBlends({ ...current, blends: [blend] }); valid.push(blend); }
+      catch { this.status.set("Blend expanded because its endpoints changed."); }
+    }
+    this.document.set({ ...current, blends: valid });
+  }
+  private expandGeneratedForIds(ids: Set<string>) {
+    const doc = this.document();
+    const invalid = doc.blends?.filter((blend) => blend.stepIds.flat().some((id) => ids.has(id)) && ![...blend.backIds, ...blend.frontIds, ...blend.stepIds.flat()].every((id) => ids.has(id))) ?? [];
+    if (!invalid.length) return;
+    const removed = new Set(invalid.map((blend) => blend.id));
+    this.document.set({ ...doc, blends: doc.blends!.filter((blend) => !removed.has(blend.id)) });
+    this.status.set("Blend expanded to edit an intermediate object.");
+  }
   private setLayer(id: string, patch: Partial<Layer>) {
+    if (Object.keys(patch).some((key) => !["locked", "visible", "name"].includes(key))) this.expandGeneratedForIds(new Set([id]));
     this.document.update((d) => ({
       ...d,
       layers: d.layers.map((l) => (l.id === id ? { ...l, ...patch } : l)),
@@ -483,7 +629,7 @@ export class EditorService {
     return { ...layer, width: Math.max(1, Math.min(16384, layout.width)), height: Math.max(1, Math.min(16384, layout.height)) };
   }
   private applyTextUpdate(update: (layer: Layer) => Layer) {
-    const ids = new Set(this.selectedLayers().filter((layer) => layer.kind === "text" && !layer.locked).map((layer) => layer.id));
+    const ids = new Set(this.selectedLayers().filter((layer) => layer.kind === "text" && !this.isEffectivelyLocked(layer)).map((layer) => layer.id));
     if (!ids.size) return;
     const before = this.document();
     const layers = before.layers.map((layer) => ids.has(layer.id) ? this.reflowText(update(layer)) : layer);
@@ -526,7 +672,7 @@ export class EditorService {
   }
   updateLayer(patch: Partial<Layer>) {
     const layer = this.selected();
-    if (!layer || layer.locked || layer.guide) return;
+    if (!layer || this.isEffectivelyLocked(layer) || layer.guide) return;
     this.history.commit(this.document());
     if (patch.width !== undefined || patch.height !== undefined)
       patch = {
@@ -569,7 +715,7 @@ export class EditorService {
   remove() {
     const ids = new Set(
       this.selectedLayers()
-        .filter((l) => !l.locked)
+        .filter((l) => !this.isEffectivelyLocked(l))
         .map((l) => l.id),
     );
     if (!ids.size) return;
@@ -603,7 +749,14 @@ export class EditorService {
           }
         : {}),
     }));
-    this.document.update((d) => ({ ...d, layers: [...d.layers, ...copies] }));
+    const copyIds = new Map(layers.map((layer, index) => [layer.id, copies[index].id]));
+    const blends = this.document().blends?.filter((blend) => [...blend.backIds, ...blend.frontIds, ...blend.stepIds.flat()].every((id) => copyIds.has(id))).map((blend) => ({ ...blend, id: crypto.randomUUID(), groupId: groups.get(blend.groupId)!, backIds: blend.backIds.map((id) => copyIds.get(id)!), frontIds: blend.frontIds.map((id) => copyIds.get(id)!), stepIds: blend.stepIds.map((step) => step.map((id) => copyIds.get(id)!)) }));
+    for (const blend of blends ?? []) for (const step of blend.stepIds) for (const id of step) {
+      const item = copies.find((layer) => layer.id === id)!;
+      const depth = item.groupPath!.indexOf(blend.groupId);
+      item.groupPath = [...item.groupPath!.slice(0, depth + 1), step[0]];
+    }
+    this.document.update((d) => ({ ...d, layers: [...d.layers, ...copies], ...(blends?.length ? { blends: [...(d.blends ?? []), ...blends] } : {}) }));
     this.selectedIds.set(copies.map((l) => l.id));
     this.selectedId.set(copies.at(-1)!.id);
     this.changed();
@@ -656,7 +809,7 @@ export class EditorService {
     }
     if (tool === "scale") {
       const active = this.selectionLayer();
-      if (active)
+      if (active && !this.selectedLayers().some((layer) => this.isEffectivelyLocked(layer)))
         this.gesture = {
           before,
           start: point,
@@ -694,7 +847,7 @@ export class EditorService {
     }
     if (tool === "path") {
       const active = this.selected();
-      if (active?.kind === "path" && !active.locked && active.visible && !active.guide) {
+      if (active?.kind === "path" && !this.isEffectivelyLocked(active) && active.visible && !active.guide) {
         const curves = this.editableCurves(active),
           path = curves[0],
           p = localPoint(active, point);
@@ -730,7 +883,7 @@ export class EditorService {
       tool === "select" &&
       this.selectedLayers().length === 1 &&
       selectedPath?.curves &&
-      !selectedPath.locked &&
+      !this.isEffectivelyLocked(selectedPath) &&
       selectedPath.visible &&
       this.findCurveNode(selectedPath, point)
     ) {
@@ -739,7 +892,7 @@ export class EditorService {
     }
     if (tool === "select" || tool === "rotate") {
       const active = this.selectionLayer();
-      if (active && !active.locked && active.visible && !active.guide) {
+      if (active && !this.selectedLayers().some((layer) => this.isEffectivelyLocked(layer)) && active.visible && !active.guide) {
         const p = localPoint(active, point);
         if (
           tool === "rotate" ||
@@ -786,6 +939,7 @@ export class EditorService {
         }
       }
       const layer = pick(this.document().layers, point);
+      if (layer && this.isEffectivelyLocked(layer)) return;
       if (layer) {
         if (
           modifiers.shift ||
@@ -818,7 +972,7 @@ export class EditorService {
       const active = this.selected();
       if (
         active &&
-        !active.locked &&
+        !this.isEffectivelyLocked(active) &&
         !active.guide &&
         active.visible &&
         ["path", "rectangle", "ellipse"].includes(active.kind)
@@ -1129,7 +1283,7 @@ export class EditorService {
   }
 
   reflect(axis: "horizontal" | "vertical") {
-    const layers = this.selectedLayers().filter((l) => !l.locked && !l.guide);
+    const layers = this.selectedLayers().filter((l) => !this.isEffectivelyLocked(l) && !l.guide);
     if (!layers.length) return;
     const bounds = selectionBounds(layers),
       ids = new Set(layers.map((l) => l.id));
@@ -1158,6 +1312,7 @@ export class EditorService {
     this.changed();
   }
   transformBy(rotation = 0, scale = 1) {
+    if (this.selectedLayers().some((layer) => this.isEffectivelyLocked(layer))) return;
     const source = this.selectionLayer();
     if (
       !source ||
@@ -1191,14 +1346,14 @@ export class EditorService {
   }
   selectLayer(id: string, add = false) {
     const layer = this.document().layers.find((l) => l.id === id);
-    if (!layer || layer.locked || !layer.visible) return;
+    if (!layer || this.isEffectivelyLocked(layer) || !layer.visible) return;
     const root = layer.groupPath?.[0],
       members = this.document()
         .layers.filter(
           (l) =>
             (root ? l.groupPath?.[0] === root : l.id === id) &&
             l.visible &&
-            !l.locked,
+            !this.isEffectivelyLocked(l),
         )
         .map((l) => l.id);
     let ids = members;
@@ -1221,19 +1376,20 @@ export class EditorService {
   selectAll() {
     this.activeNodes.set([]);
     const ids = this.document()
-      .layers.filter((l) => l.visible && !l.locked && !l.guide)
+      .layers.filter((l) => l.visible && !this.isEffectivelyLocked(l) && !l.guide)
       .map((l) => l.id);
     this.selectedIds.set(ids);
     this.selectedId.set(ids.at(-1) ?? null);
   }
   group(ungroup = false) {
-    const layers = this.selectedLayers().filter((l) => !l.locked && !l.guide);
+    const layers = this.selectedLayers().filter((l) => !this.isEffectivelyLocked(l) && !l.guide);
     if (!layers.length || (!ungroup && layers.length < 2)) return;
     if (!ungroup && layers.some((l) => (l.groupPath?.length ?? 0) >= 16))
       return;
     this.history.commit(this.document());
     const ids = new Set(layers.map((l) => l.id)),
       group = crypto.randomUUID();
+    if (ungroup) this.document.update((doc) => ({ ...doc, blends: doc.blends?.filter((blend) => !layers.some((layer) => layer.groupPath?.[0] === blend.groupId)) }));
     this.document.update((d) => ({
       ...d,
       layers: d.layers.map((l) =>
@@ -1250,7 +1406,7 @@ export class EditorService {
     this.changed();
   }
   arrange(mode: Parameters<typeof alignLayers>[1], artboard = false) {
-    const layers = this.selectedLayers().filter((l) => !l.locked && !l.guide);
+    const layers = this.selectedLayers().filter((l) => !this.isEffectivelyLocked(l) && !l.guide);
     if (!layers.length) return;
     const changed = alignLayers(
         layers,
@@ -1273,7 +1429,7 @@ export class EditorService {
     this.changed();
   }
   boolean(operation: Parameters<typeof booleanLayers>[1]) {
-    const layers = this.selectedLayers().filter((l) => !l.locked && !l.guide);
+    const layers = this.selectedLayers().filter((l) => !this.isEffectivelyLocked(l) && !l.guide);
     if (layers.length < 2) return;
     try {
       const result = booleanLayers(layers, operation, crypto.randomUUID()),
@@ -1296,6 +1452,8 @@ export class EditorService {
     g: NonNullable<EditorService["gesture"]>,
     target: Layer,
   ) {
+    const ids = new Set(g.ids ?? [g.id]);
+    if (this.document().layers.some((layer) => ids.has(layer.id) && this.isEffectivelyLocked(layer))) return;
     if (!g.ids || g.ids.length === 1) {
       const resized = resizeLayer(g.original, target.width, target.height);
       this.setLayer(g.ids?.[0] ?? g.id, this.reflowText({
@@ -1305,10 +1463,11 @@ export class EditorService {
       }));
       return;
     }
+    this.expandGeneratedForIds(new Set(g.ids));
     const updates = new Map(
       transformLayers(
         g.before.layers.filter(
-          (layer) => g.ids!.includes(layer.id) && !layer.locked && !layer.guide,
+          (layer) => g.ids!.includes(layer.id) && !this.isEffectivelyLocked(layer) && !layer.guide,
         ),
         g.original,
         target,
@@ -1332,7 +1491,7 @@ export class EditorService {
   }
   private startPen(point: Point, before: StudioDocument) {
     let layer = this.document().layers.find(
-      (l) => l.id === this.penId() && !l.locked && l.visible && !l.guide,
+      (l) => l.id === this.penId() && !this.isEffectivelyLocked(l) && l.visible && !l.guide,
     );
     if (!layer) {
       if (this.document().layers.length >= 150) return;
@@ -1432,7 +1591,7 @@ export class EditorService {
   ) {
     let layer = this.selected();
     let hit: ReturnType<EditorService["findCurveNode"]>;
-    if (layer && !layer.locked && layer.visible && !layer.guide) {
+    if (layer && !this.isEffectivelyLocked(layer) && layer.visible && !layer.guide) {
       if (
         !layer.curves &&
         ["path", "rectangle", "ellipse"].includes(layer.kind)
@@ -1457,7 +1616,7 @@ export class EditorService {
     }
     if (
       !layer ||
-      layer.locked ||
+      this.isEffectivelyLocked(layer) ||
       !layer.visible ||
       ["image", "text"].includes(layer.kind)
     ) {
@@ -1622,7 +1781,7 @@ export class EditorService {
       | "extend",
   ) {
     const layer = this.selected();
-    if (!layer || layer.locked || layer.guide || ["image", "text"].includes(layer.kind))
+    if (!layer || this.isEffectivelyLocked(layer) || layer.guide || ["image", "text"].includes(layer.kind))
       return;
     let curves = this.editableCurves(layer);
     if (action === "extend") {
@@ -1669,7 +1828,7 @@ export class EditorService {
   }
   nudge(dx: number, dy: number) {
     const layer = this.selected();
-    if (!layer || layer.locked || layer.guide) return;
+    if (!layer || this.isEffectivelyLocked(layer) || layer.guide) return;
     this.history.commit(this.document());
     if (this.tool() === "direct" && layer.curves && this.activeNodes().length) {
       const curves = structuredClone(layer.curves);
@@ -1686,7 +1845,7 @@ export class EditorService {
     } else {
       const ids = new Set(
         this.selectedLayers()
-          .filter((l) => !l.locked && !l.guide)
+          .filter((l) => !this.isEffectivelyLocked(l) && !l.guide)
           .map((l) => l.id),
       );
       this.document.update((d) => ({
@@ -1732,7 +1891,7 @@ export class EditorService {
 
   defineSymbol() {
     const layer = this.selected();
-    if (!layer || layer.locked || layer.guide) return;
+    if (!layer || this.isEffectivelyLocked(layer) || layer.guide) return;
     const symbols = this.document().symbols ?? [];
     if (symbols.length >= 100) return;
     this.history.commit(this.document());
@@ -1789,7 +1948,7 @@ export class EditorService {
   ) {
     const layer = this.selected(),
       id = this.activeSymbol();
-    if (!layer || layer.locked || layer.guide) return;
+    if (!layer || this.isEffectivelyLocked(layer) || layer.guide) return;
     const symbol = this.document().symbols?.find((s) => s.id === id);
     if (!symbol && action !== "expand") return;
     this.history.commit(this.document());
@@ -1954,7 +2113,7 @@ export class EditorService {
         ...d,
         layers: d.layers.map((l) =>
           l.symbolId === this.activeSymbol() &&
-          !l.locked &&
+          !this.isEffectivelyLocked(l) &&
           l.visible &&
           Math.hypot(
             l.x + l.width / 2 - point.x,

@@ -514,3 +514,115 @@ class NativeDrawingTests(unittest.TestCase):
         definition['strokeStyle']['join'] = 'arcs'
         self.document['symbols'] = [{'id': 'invalid-stroke', 'name': 'Stroke', 'layer': definition}]
         self.assert_invalid(self.document)
+
+    def blended_document(self):
+        document = copy.deepcopy(self.document)
+        layers = []
+        for identifier in ('back', 'step', 'front'):
+            layer = copy.deepcopy(self.layer)
+            layer.update(id=identifier, groupPath=['blend-group'])
+            if identifier == 'step':
+                layer['groupPath'].append('step')
+            layers.append(layer)
+        document.update(layers=layers, blends=[{'id': 'blend-one', 'groupId': 'blend-group',
+                        'backIds': ['back'], 'frontIds': ['front'], 'stepIds': [['step']],
+                        'steps': 1, 'easing': 'linear'}])
+        return document
+
+    def test_object_blend_metadata_and_generated_layers_round_trip(self):
+        for easing in ('linear', 'ease-in', 'ease-out', 'ease-in-out'):
+            document = self.blended_document()
+            document['blends'][0]['easing'] = easing
+            self.assert_round_trip(document)
+        self.assert_round_trip({**self.document, 'blends': []})
+
+    def test_blends_require_exact_non_null_native_v2_metadata(self):
+        for value in (None, {}, [{}], 'blend'):
+            self.assert_invalid({**self.document, 'blends': value})
+        document = self.blended_document()
+        for field in document['blends'][0]:
+            with self.subTest(missing=field):
+                candidate = copy.deepcopy(document)
+                del candidate['blends'][0][field]
+                self.assert_invalid(candidate)
+        document['blends'][0]['extra'] = True
+        self.assert_invalid(document)
+        self.assert_invalid({**DOCUMENT, 'blends': []})
+
+    def test_blend_step_counts_easing_and_id_types_are_strict(self):
+        for field, values in {'steps': [0, 101, 1.5, True, '1'], 'easing': ['smooth', None],
+                              'id': ['', 'x' * 101, 1], 'groupId': ['', None],
+                              'backIds': [[], [1]], 'frontIds': [[], ['missing']],
+                              'stepIds': [[], [[]], [['missing']]]}.items():
+            for value in values:
+                with self.subTest(field=field, value=value):
+                    document = self.blended_document()
+                    document['blends'][0][field] = value
+                    self.assert_invalid(document)
+
+    def test_blend_cardinality_duplicate_and_missing_references_are_rejected(self):
+        for changes in ({'backIds': ['missing']}, {'frontIds': ['back']}, {'steps': 2},
+                        {'backIds': ['back', 'front']}, {'stepIds': [['step', 'front']]},
+                        {'stepIds': [['back']]}):
+            document = self.blended_document()
+            document['blends'][0].update(changes)
+            self.assert_invalid(document)
+        document = self.blended_document()
+        document['blends'].append(copy.deepcopy(document['blends'][0]))
+        self.assert_invalid(document)
+        document['blends'][1].update(id='other-blend', groupId='other-group')
+        self.assert_invalid(document)
+
+    def test_blend_group_membership_subgroups_and_layer_order_are_validated(self):
+        for group_path in ([], ['other'], ['blend-group', 'wrong-step'], ['blend-group', 'step', 'nested']):
+            document = self.blended_document()
+            document['layers'][1]['groupPath'] = group_path
+            self.assert_invalid(document)
+        document = self.blended_document()
+        document['layers'].reverse()
+        self.assert_invalid(document)
+        document = self.blended_document()
+        extra = copy.deepcopy(document['layers'][0])
+        extra['id'] = 'extra'
+        document['layers'].append(extra)
+        self.assert_invalid(document)
+        extra['groupPath'] = ['outside-group']
+        document['layers'].insert(1, document['layers'].pop())
+        self.assert_invalid(document)
+
+    def test_blends_reject_text_images_guides_and_symbol_instances(self):
+        for index in range(3):
+            for kind in ('text', 'image'):
+                document = self.blended_document()
+                layer = document['layers'][index]
+                layer['kind'] = kind
+                del layer['curves']
+                self.assert_invalid(document)
+            document = self.blended_document()
+            document['layers'][index]['guide'] = 'vertical'
+            self.assert_invalid(document)
+            document = self.blended_document()
+            definition = copy.deepcopy(self.layer)
+            document['symbols'] = [{'id': 'symbol-one', 'name': 'Mark', 'layer': definition}]
+            document['layers'][index]['symbolId'] = 'symbol-one'
+            self.assert_invalid(document)
+
+    def test_blend_nested_parent_group_round_trip(self):
+        document = self.blended_document()
+        for layer in document['layers']:
+            layer['groupPath'].insert(0, 'outer')
+        self.assert_round_trip(document)
+
+    def test_blends_reject_incompatible_contours_and_node_budgets(self):
+        for nodes, closed in (([], False), ([self.anchor], False), ([self.anchor] * 2, True),
+                              ([self.anchor] * 257, False), ([self.anchor] * 3, True)):
+            document = self.blended_document()
+            document['layers'][2]['curves'] = [{'nodes': nodes, 'closed': closed}]
+            self.assert_invalid(document)
+        document = self.blended_document()
+        document['layers'][2]['curves'] *= 2
+        self.assert_invalid(document)
+        document = self.blended_document()
+        for layer in document['layers']:
+            layer['curves'] = []
+        self.assert_invalid(document)

@@ -1,3 +1,4 @@
+import { ObjectBlend, syncBlends, validateBlends } from "./object-blend";
 import { FONT_FAMILIES, layoutText, TextLayoutOptions, TextTypography, TextMeasurement } from "./text-layout";
 import {
   CurvePath,
@@ -69,6 +70,7 @@ export interface StudioDocument {
   format: "ximply-document";
   version: 1 | 2;
   symbols?: SymbolDefinition[];
+  blends?: ObjectBlend[];
   name: string;
   width: number;
   height: number;
@@ -565,7 +567,8 @@ export function parseDocument(text: string): StudioDocument {
     )
       throw new Error("Invalid image adjustment.");
   }
-  return { ...value, version: 2 } as unknown as StudioDocument;
+  validateBlends(value as unknown as StudioDocument);
+  return syncBlends({ ...value, version: 2 } as unknown as StudioDocument);
 }
 function escapeXml(text: string): string {
   return text.replace(

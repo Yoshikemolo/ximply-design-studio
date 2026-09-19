@@ -1,3 +1,4 @@
+import { BlendEasing } from "../../../../packages/domain/src/object-blend";
 import { FONT_FAMILIES, defaultTypography, defaultTextLayout, TextTypography, TextLayoutOptions } from "../../../../packages/domain/src/text-layout";
 import { measurementUnits, isUnit, snapPoint, fromPixels, toPixels, formatMeasurement, rulerTicks as makeRulerTicks, SnapConfig } from "../../../../packages/domain/src/measurements";
 import { PreferencesService } from "./preferences.service";
@@ -52,6 +53,19 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   @ViewChild("spatialHost") spatialHost?: ElementRef<HTMLDivElement>;
   @ViewChild("imageFile") imageFile?: ElementRef<HTMLInputElement>;
   @ViewChild("projectFile") projectFile?: ElementRef<HTMLInputElement>;
+  readonly blendSteps = signal(5);
+  readonly blendEasing = signal<BlendEasing>("linear");
+  readonly blendEasings = [
+    { id: "linear", label: "Linear" },
+    { id: "ease-in", label: "Ease in" },
+    { id: "ease-out", label: "Ease out" },
+    { id: "ease-in-out", label: "Ease in and out" },
+  ] as const;
+  readonly blendActions = [
+    { id: "makeBlend", label: "Make blend", icon: "object-blend", hint: "Create intermediate objects from the back object to the front object." },
+    { id: "expandBlend", label: "Expand blend", icon: "blend-expand", hint: "Convert the linked steps into independently editable objects." },
+    { id: "releaseBlend", label: "Release blend", icon: "blend-release", hint: "Remove intermediate objects and retain the editable endpoints." },
+  ] as const;
   readonly fontFamilies = FONT_FAMILIES;
   readonly fontWeights = [100, 200, 300, 400, 500, 600, 700, 800, 900];
   readonly textSizingActions = [
@@ -140,6 +154,12 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   readonly transformAngle = signal(90);
   readonly transformScale = signal(100);
   readonly actionGroups = [
+    {
+      id: "objectBlend",
+      label: "Blend objects",
+      icon: "object-blend",
+      commands: ["makeBlend", "expandBlend", "releaseBlend"],
+    },
     {
       id: "organize",
       label: "Organize",
@@ -575,7 +595,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     this.editor.cancel();
   }
   private renderDocument() {
-    const doc = this.editor.document(),
+    const doc = this.editor.previewDocument(),
       id = this.textEditing();
     return id
       ? {
@@ -681,6 +701,39 @@ export class AppComponent implements AfterViewInit, OnDestroy {
       []
     );
   }
+  isGeneratedBlendLayer(id: string) { return this.editor.document().blends?.some(blend => blend.stepIds.some(step => step.includes(id))) ?? false; }
+  blendStepLimit() {
+    const blend = this.editor.selectedBlend();
+    const leaves = blend?.backIds.length ?? Math.max(1, Math.floor(this.editor.selectedLayers().length / 2));
+    const generated = blend?.stepIds.flat().length ?? 0;
+    return Math.max(0, Math.min(100, Math.floor((150 - this.editor.document().layers.length + generated) / leaves)));
+  }
+  blendStepCount() { return this.editor.selectedBlend()?.steps ?? Math.max(1, Math.min(this.blendSteps(), this.blendStepLimit())); }
+  currentBlendEasing() { return this.editor.selectedBlend()?.easing ?? this.blendEasing(); }
+  blendIsLocked() {
+    const blend = this.editor.selectedBlend();
+    if (!blend) return false;
+    const ids = new Set([...blend.backIds, ...blend.frontIds, ...blend.stepIds.flat()]);
+    return this.editor.document().layers.some(layer => ids.has(layer.id) && layer.locked);
+  }
+  setBlendSteps(event: Event) {
+    const value = this.number(event), limit = this.blendStepLimit();
+    if (!Number.isFinite(value) || limit < 1 || this.blendIsLocked()) return;
+    const steps = Math.max(1, Math.min(limit, Math.round(value)));
+    this.blendSteps.set(steps);
+    if (this.editor.selectedBlend()) this.editor.updateBlend({ steps });
+  }
+  setBlendEasing(event: Event) {
+    const easing = this.text(event);
+    if (!this.blendEasings.some(option => option.id === easing) || this.blendIsLocked()) return;
+    this.blendEasing.set(easing as BlendEasing);
+    if (this.editor.selectedBlend()) this.editor.updateBlend({ easing: easing as BlendEasing });
+  }
+  commandEnabled(id: string) {
+    if (id === "makeBlend") return this.editor.canCreateBlend() && this.blendStepLimit() > 0;
+    if (id === "expandBlend" || id === "releaseBlend") return !!this.editor.selectedBlend() && !this.blendIsLocked();
+    return true;
+  }
   commandLabel(id: string) {
     return this.commandList.find((c) => c.id === id)?.label ?? id;
   }
@@ -692,6 +745,10 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   }
   runCommand(id: string) {
     this.flyout.set(null);
+    if (!this.commandEnabled(id)) return;
+    if (id === "makeBlend") { this.editor.createBlend(this.blendStepCount(), this.currentBlendEasing()); return; }
+    if (id === "expandBlend") { this.editor.expandBlend(); return; }
+    if (id === "releaseBlend") { this.editor.releaseBlend(); return; }
     if (id === "group" || id === "ungroup") {
       this.editor.group(id === "ungroup");
       return;

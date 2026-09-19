@@ -155,6 +155,21 @@ class SymbolDefinition(BaseModel):
     layer: Layer
 
 
+BlendIdentity = Annotated[str, Field(min_length=1, max_length=100)]
+BlendLayerIds = Annotated[list[BlendIdentity], Field(min_length=1, max_length=150)]
+
+
+class ObjectBlend(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    id: BlendIdentity
+    groupId: BlendIdentity
+    backIds: BlendLayerIds
+    frontIds: BlendLayerIds
+    stepIds: Annotated[list[BlendLayerIds], Field(min_length=1, max_length=100)]
+    steps: Annotated[Number, Field(ge=1, le=100, multiple_of=1)]
+    easing: Literal['linear', 'ease-in', 'ease-out', 'ease-in-out']
+
+
 class Document(BaseModel):
     model_config = ConfigDict(extra='forbid')
     format: Literal['ximply-document']
@@ -164,13 +179,14 @@ class Document(BaseModel):
     height: Annotated[int, Field(ge=16, le=4096)]
     background: Color
     layers: Annotated[list[Layer], Field(max_length=150)]
+    blends: Annotated[list[ObjectBlend], Field(max_length=150)] | None = None
     symbols: Annotated[list[SymbolDefinition], Field(max_length=100)] | None = None
 
     @model_validator(mode='before')
     @classmethod
     def non_nullable_symbols(cls, value):
-        if isinstance(value, dict) and 'symbols' in value and value['symbols'] is None:
-            raise ValueError('Symbol library cannot be null')
+        if isinstance(value, dict) and any(key in value and value[key] is None for key in ('symbols', 'blends')):
+            raise ValueError('Document extensions cannot be null')
         return value
 
     @model_validator(mode='after')
@@ -181,7 +197,7 @@ class Document(BaseModel):
             raise ValueError('Invalid symbol definitions')
         if any(layer.symbolId is not None and layer.symbolId not in ids for layer in self.layers):
             raise ValueError('Unknown symbol reference')
-        if self.version == 1 and ('symbols' in self.model_fields_set or any(
+        if self.version == 1 and ('symbols' in self.model_fields_set or 'blends' in self.model_fields_set or any(
                 layer.curves is not None or layer.symbolId is not None or layer.traceSourceId is not None
                 or layer.guide is not None or layer.fill == 'none' or layer.stroke == 'none'
                 or layer.strokeStyle is not None
@@ -191,6 +207,56 @@ class Document(BaseModel):
                 for layer in self.layers)):
             raise ValueError('Drawing extensions require native format 2')
         return self
+
+    @model_validator(mode='after')
+    def blend_reference_contract(self):
+        blends = self.blends or []
+        if len({blend.id for blend in blends}) != len(blends) or len({blend.groupId for blend in blends}) != len(blends):
+            raise ValueError('Blend and blend group identities must be unique')
+        layer_map = {layer.id: layer for layer in self.layers}
+        layer_order = [layer.id for layer in self.layers]
+        used = set()
+        for blend in blends:
+            count = len(blend.backIds)
+            if len(blend.frontIds) != count or len(blend.stepIds) != blend.steps or any(len(row) != count for row in blend.stepIds):
+                raise ValueError('Blend steps must match endpoint cardinality')
+            ordered = blend.backIds + [identifier for row in blend.stepIds for identifier in row] + blend.frontIds
+            references = set(ordered)
+            if len(references) != len(ordered) or references & used or not references.issubset(layer_map):
+                raise ValueError('Blend references must exist and be globally unique')
+            used.update(references)
+            start = layer_order.index(ordered[0])
+            if layer_order[start:start + len(ordered)] != ordered:
+                raise ValueError('Blend layers must form an ordered contiguous block')
+            back_path = layer_map[blend.backIds[0]].groupPath or []
+            if blend.groupId not in back_path:
+                raise ValueError('Blend group must contain its endpoint layers')
+            prefix = back_path[:back_path.index(blend.groupId) + 1]
+            members = {layer.id for layer in self.layers if blend.groupId in (layer.groupPath or [])}
+            if members != references or any((layer_map[identifier].groupPath or [])[:len(prefix)] != prefix for identifier in ordered):
+                raise ValueError('Blend group must contain exactly its referenced layers under a shared parent')
+            for identifier in ordered:
+                layer = layer_map[identifier]
+                if layer.kind not in ('rectangle', 'ellipse', 'path') or layer.guide is not None or layer.symbolId is not None:
+                    raise ValueError('Blend layers must be standalone vectors')
+            for row in blend.stepIds:
+                if any(layer_map[identifier].groupPath != prefix + [row[0]] for identifier in row):
+                    raise ValueError('Blend step layers must share their row subgroup')
+            rows = [blend.backIds, *blend.stepIds, blend.frontIds]
+            for index in range(count):
+                topology = [self.blend_contours(layer_map[row[index]]) for row in rows]
+                if any(value != topology[0] for value in topology[1:]):
+                    raise ValueError('Blend contour count and closure must match')
+        return self
+
+    @staticmethod
+    def blend_contours(layer: Layer) -> list[bool]:
+        if layer.kind in ('rectangle', 'ellipse'):
+            return [True]
+        contours = [(curve.closed, len(curve.nodes)) for curve in layer.curves] if layer.curves is not None else [(False, len(layer.points))]
+        if not contours or any(count < (3 if closed else 2) or count > 256 for closed, count in contours):
+            raise ValueError('Blend contours require supported node counts')
+        return [closed for closed, _ in contours]
 
     @field_validator('layers')
     @classmethod

@@ -74,6 +74,8 @@
             {{ t("Select all") }}<kbd>{{ shortcut("selectAll") }}</kbd>
           </button>
           <hr />
+          @for (action of blendActions; track action.id) {<button [disabled]="!commandEnabled(action.id)" (click)="runCommand(action.id)" [title]="t(action.hint)">{{ t(action.label) }}<kbd>{{ shortcut(action.id) }}</kbd></button>}
+          <hr />
           @for (
             id of [
               "mirrorH",
@@ -188,6 +190,7 @@
                 <button
                   class="family-primary"
                   [title]="commandTitle(group.commands[0])"
+                  [disabled]="!commandEnabled(group.commands[0])"
                   [attr.aria-label]="t(group.label)"
                   (click)="runCommand(group.commands[0])"
                 >
@@ -616,6 +619,28 @@
             </details>
           </div>
         </details>
+        <details class="panel blend-panel" open>
+          <summary>{{ t('Blend objects') }}</summary>
+          <div class="blend-controls">
+            <div class="blend-actions" role="group" [attr.aria-label]="t('Blend objects')">
+              @for (action of blendActions; track action.id) {<button [disabled]="!commandEnabled(action.id)" (click)="runCommand(action.id)" [title]="t(action.hint)" [attr.aria-label]="t(action.label)"><img [src]="'/assets/icons/' + action.icon + '.svg'" alt="" /></button>}
+            </div>
+            <label>{{ t('Intermediate steps') }}<input type="number" min="1" [max]="blendStepLimit()" step="1" [value]="blendStepCount()" [disabled]="blendIsLocked() || blendStepLimit() < 1" (change)="setBlendSteps($event)" /></label>
+            <label>{{ t('Interpolation easing') }}<select [value]="currentBlendEasing()" [disabled]="blendIsLocked()" (change)="setBlendEasing($event)">@for (option of blendEasings; track option.id) {<option [value]="option.id">{{ t(option.label) }}</option>}</select></label>
+            <p class="blend-hint">{{ t('Endpoints are excluded from the step count.') }} {{ t('Available step limit') }}: {{ blendStepLimit() }}.</p>
+            @if (editor.selectedBlend()) {
+              <div class="blend-endpoints" role="group" [attr.aria-label]="t('Edit endpoints')">
+                <button [disabled]="blendIsLocked()" (click)="editor.selectBlendEndpoint('back')" [title]="t('Select the back endpoint or endpoint group for editing.')" [attr.aria-label]="t('Edit back endpoint')"><img src="/assets/icons/blend-back.svg" alt="" /></button>
+                <button [disabled]="blendIsLocked()" (click)="editor.selectBlendEndpoint('front')" [title]="t('Select the front endpoint or endpoint group for editing.')" [attr.aria-label]="t('Edit front endpoint')"><img src="/assets/icons/blend-front.svg" alt="" /></button>
+              </div>
+              <p class="blend-hint">{{ t('Edit either endpoint to update the linked steps. Expand to edit intermediate objects independently.') }}</p>
+              @if (blendIsLocked()) {<p class="blend-hint">{{ t('Unlock the blend objects before changing the blend.') }}</p>}
+            } @else if (!editor.canCreateBlend()) {
+              <p class="blend-hint">{{ t('Select two compatible unlocked objects or groups at the same hierarchy level.') }}</p>
+              <p class="blend-hint">{{ t('Use vector endpoints with matching contour counts and open or closed paths. Groups must contain the same number of objects.') }}</p>
+            }
+          </div>
+        </details>
         @for (panel of panelOrder(); track panel) {
           <details
             class="panel"
@@ -827,7 +852,7 @@
                   <div
                     class="layer-row"
                     (contextmenu)="openLayerContext($event, layer.id)"
-                    [draggable]="!layer.locked"
+                    [draggable]="!layer.locked && !isGeneratedBlendLayer(layer.id)"
                     (dragstart)="dragLayer($event, layer.id)"
                     (dragover)="$event.preventDefault()"
                     (drop)="dropLayer($event, layer.id)"
@@ -863,6 +888,7 @@
                         >{{ layer.groupPath?.length ? "▸ " : ""
                         }}{{ layer.name }}</span
                       ></button
+                    ><button class="layer-exact-select" [disabled]="layer.locked || !layer.visible || isGeneratedBlendLayer(layer.id)" [title]="t(isGeneratedBlendLayer(layer.id) ? 'Expand the blend to edit intermediate objects.' : 'Edit object individually')" [attr.aria-label]="t('Edit object individually') + ': ' + layer.name" (click)="editor.selectLayerExact(layer.id, $event.shiftKey)"><img src="/assets/icons/direct.svg" alt="" /></button
                     ><button
                       class="lock"
                       [title]="t(layer.locked ? 'Unlock layer' : 'Lock layer')"
@@ -893,7 +919,7 @@
   </main>
   <footer>
     <span class="status-dot"></span
-    ><span role="status" class="status-text">{{ editor.status() }}</span>
+    ><span role="status" class="status-text">{{ t(editor.status()) }}</span>
     <div class="header-spacer"></div>
     <a
       class="footer-brand"
@@ -1226,7 +1252,7 @@
       </div>
     }
     @for (id of flyoutActions(); track id) {
-      <button role="menuitem" (click)="runCommand(id)">
+      <button role="menuitem" [disabled]="!commandEnabled(id)" (click)="runCommand(id)">
         <span>{{ t(commandLabel(id)) }}</span
         ><kbd>{{ shortcut(id) }}</kbd>
       </button>

@@ -47,6 +47,9 @@ export const COMMANDS: Command[] = [
     symbolScreen: "Symbol screener",
     symbolStyle: "Symbol styler",
   }).map(([id, label]) => ({ id: "tool." + id, label, keys: [] })),
+  { id: "makeBlend", label: "Make blend", keys: [] },
+  { id: "expandBlend", label: "Expand blend", keys: [] },
+  { id: "releaseBlend", label: "Release blend", keys: [] },
   { id: "group", label: "Group", keys: ["Mod+G"] },
   { id: "ungroup", label: "Ungroup", keys: ["Mod+Shift+G"] },
   { id: "selectAll", label: "Select all", keys: ["Mod+A"] },
@@ -182,7 +185,7 @@ export function validateShortcuts(value: unknown): ShortcutMap {
   if (Object.keys(input).some((id) => !COMMANDS.some((c) => c.id === id)))
     throw new Error("Unknown command");
   for (const command of COMMANDS) {
-    const introduced = ["tool.eyedropper", "tool.paintBucket"].includes(command.id);
+    const introduced = ["tool.eyedropper", "tool.paintBucket", "makeBlend", "expandBlend", "releaseBlend"].includes(command.id);
     const keys = input[command.id] ?? (introduced ? command.keys.filter((chord) => !Object.values(input).some((value) => Array.isArray(value) && value.some((key) => typeof key === "string" && normalizeChord(key) === chord))) : undefined);
     if (
       !Array.isArray(keys) ||

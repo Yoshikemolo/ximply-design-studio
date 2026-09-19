@@ -30,3 +30,4 @@
 | [Absent paint and nonprinting guide layers](ADR-0024.md) |
 | [Shared text composition and dictionary hyphenation](ADR-0025.md) |
 | [Explicit stroke geometry and scoped appearance transfer](ADR-0026.md) |
+| [Editable vector blends with materialized intermediate objects](ADR-0027.md) |

@@ -72,6 +72,21 @@ remaining fidelity work.
 
 Small drafts auto-restore; save large or important work explicitly to a project file.
 
+## Try an editable object blend
+
+Draw two vector objects and give them different positions, colors or outlines.
+Select both, open the **Blend objects** panel, choose the intermediate step count
+and easing, then click **Make blend**. Stacking order determines back and front.
+Use the endpoint controls to edit originals and recompute the intermediate objects.
+Two selected vector groups must have matching object counts and compatible contours.
+
+**Expand blend** keeps every step as ordinary editable objects; ungroup and regroup
+these objects as needed. **Release blend** removes the intermediate objects and
+retains the endpoints. Save native format to preserve the editable relationship;
+SVG and PNG preserve the rendered result. The step limit also respects the existing
+150-layer document capacity. Text, raster images and editable blend spines are not
+part of this preview.
+
 ## Stop, logs and cleanup
 
 ```bash
@@ -132,5 +147,5 @@ Before starting, run `./scripts/local.ps1 info` on Windows or
 `./scripts/local.sh info` on Linux/macOS. This read-only action prints the checkout
 version, branch and commit without Docker. It identifies source files, not a running
 container. After pulling, restart with `stop` and `start` to rebuild the container;
-confirm version **0.3.9-alpha.1** in the application footer or About.
+confirm version **0.3.10-alpha.1** in the application footer or About.
 The drawing features are on `feat/drawing-preview` until integration gates pass.

@@ -1,6 +1,47 @@
 {
-  "currentVersion": "0.3.9-alpha.1",
+  "currentVersion": "0.3.10-alpha.1",
   "entries": [
+    {
+      "version": "0.3.10-alpha.1",
+      "date": "2026-09-19",
+      "summary": "Editable vector blends with intermediate steps, easing and expansion",
+      "breakingChanges": [
+        "Optional native-v2 blend definitions require an updated reader. Migration: preserve original documents before saving live blends; older readers may reject the new metadata. Expand blends before exchanging editable objects without the live relation."
+      ],
+      "changes": [
+        {
+          "type": "Feature",
+          "description": "Blend two compatible vector objects or equally sized vector groups from back to front, interpolating vertices, handles, geometry, colors, alpha, stroke width and opacity."
+        },
+        {
+          "type": "Feature",
+          "description": "Edit intermediate step count and linear, ease-in, ease-out or ease-in-out distribution."
+        },
+        {
+          "type": "Feature",
+          "description": "Edit retained endpoints and regenerate intermediate objects; expand to independently editable objects or release to retain only the original endpoints."
+        },
+        {
+          "type": "Improvement",
+          "description": "Expose localized blend actions and endpoint editing controls; expanded objects support ordinary grouping and ungrouping."
+        },
+        {
+          "type": "Improvement",
+          "description": "Preserve undo and native save/load, and export materialized intermediate artwork through existing SVG/PNG rendering."
+        },
+        {
+          "type": "Engineering",
+          "description": "Validate blend metadata and reference ownership in frontend/API, with bounded subdivision, layer count and group depth."
+        },
+        {
+          "type": "Engineering",
+          "description": "Support compatible vector contour topology and equal-cardinality groups. Text/image blends, editable spines and path-following orientation remain outside this preview."
+        }
+      ],
+      "capabilityStatus": "local-preview",
+      "markdown": "0.3.10-alpha.1.md",
+      "source": "doc/changelog/0.3.10-alpha.1.md"
+    },
     {
       "version": "0.3.9-alpha.1",
       "date": "2026-09-19",
