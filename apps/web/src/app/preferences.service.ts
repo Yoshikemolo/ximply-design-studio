@@ -10,6 +10,7 @@ export interface MeasurementSettings {
   fontUnit: Unit;
   rulersVisible: boolean;
   guidesVisible: boolean;
+  guidesLocked: boolean;
   gridVisible: boolean;
   snapRulers: boolean;
   snapGuides: boolean;
@@ -22,7 +23,7 @@ export interface MeasurementSettings {
 }
 export type LayoutBlock = "appearance" | "workspace" | "measurement";
 const measurementDefaults: MeasurementSettings = {
-  distanceUnit: "px", fontUnit: "px", rulersVisible: false, guidesVisible: true,
+  distanceUnit: "px", fontUnit: "px", rulersVisible: false, guidesVisible: true, guidesLocked: false,
   gridVisible: false, snapRulers: false, snapGuides: false, snapGrid: false,
   rulerStep: 100, gridSize: 20, rulerSnapRadius: 8, guideSnapRadius: 8, gridSnapRadius: 8,
 };
@@ -47,6 +48,7 @@ export class PreferencesService {
   readonly fontUnit = signal<Unit>(measurementDefaults.fontUnit);
   readonly rulersVisible = signal(measurementDefaults.rulersVisible);
   readonly guidesVisible = signal(measurementDefaults.guidesVisible);
+  readonly guidesLocked = signal(measurementDefaults.guidesLocked);
   readonly gridVisible = signal(measurementDefaults.gridVisible);
   readonly snapRulers = signal(measurementDefaults.snapRulers);
   readonly snapGuides = signal(measurementDefaults.snapGuides);

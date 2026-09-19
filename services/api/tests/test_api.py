@@ -375,3 +375,104 @@ class NativeDrawingTests(unittest.TestCase):
                     document = copy.deepcopy(self.document)
                     document['layers'][0][key] = value
                     self.assert_invalid(document)
+
+    def text_document(self):
+        document = copy.deepcopy(self.document)
+        layer = document['layers'][0]
+        del layer['curves']
+        layer.update(kind='text', text='Engineering\nTipografía',
+                     textLayout={'sizing': 'fixed', 'wrap': True, 'hyphenate': True, 'fit': True},
+                     typography={'fontFamily': 'Arial', 'fontWeight': 400, 'fontStyle': 'italic',
+                                 'lineHeight': 0, 'letterSpacing': -1.5, 'wordSpacing': 3,
+                                 'paragraphSpacing': 12, 'horizontalScale': 1.2, 'verticalScale': 0.9,
+                                 'baselineShift': 2, 'align': 'justify', 'decoration': 'underline', 'language': 'es'})
+        return document
+
+    def test_typography_and_layout_round_trip_for_text_and_symbols(self):
+        document = self.text_document()
+        definition = copy.deepcopy(document['layers'][0])
+        document['symbols'] = [{'id': 'text-symbol', 'name': 'Text', 'layer': definition}]
+        document['layers'][0]['symbolId'] = 'text-symbol'
+        self.assert_round_trip(document)
+        for sizing in ('content', 'width', 'height'):
+            with self.subTest(sizing=sizing):
+                document['layers'][0]['textLayout'].update(sizing=sizing, fit=False)
+                self.assert_round_trip(document)
+
+    def test_text_extensions_are_full_non_null_objects_for_text_only(self):
+        for extension in ('textLayout', 'typography'):
+            for value in (None, {}, [], 'text'):
+                with self.subTest(extension=extension, value=value):
+                    document = self.text_document()
+                    document['layers'][0][extension] = value
+                    self.assert_invalid(document)
+            for field in self.text_document()['layers'][0][extension]:
+                with self.subTest(extension=extension, missing=field):
+                    document = self.text_document()
+                    del document['layers'][0][extension][field]
+                    self.assert_invalid(document)
+            document = self.text_document()
+            document['layers'][0][extension]['extra'] = 1
+            self.assert_invalid(document)
+            document = self.text_document()
+            other = 'typography' if extension == 'textLayout' else 'textLayout'
+            del document['layers'][0][other]
+            for kind in ('path', 'image', 'ellipse', 'rectangle'):
+                document['layers'][0]['kind'] = kind
+                self.assert_invalid(document)
+            document['layers'][0]['kind'] = 'text'
+            document['version'] = 1
+            self.assert_invalid(document)
+
+    def test_invalid_nested_symbol_text_extensions_are_rejected(self):
+        document = self.text_document()
+        definition = copy.deepcopy(document['layers'][0])
+        document['symbols'] = [{'id': 'text-symbol', 'name': 'Text', 'layer': definition}]
+        definition['kind'] = 'rectangle'
+        self.assert_invalid(document)
+        definition['kind'] = 'text'
+        definition['typography']['language'] = 'xx'
+        self.assert_invalid(document)
+        definition['typography']['language'] = 'es'
+        document['version'] = 1
+        self.assert_invalid(document)
+
+    def test_text_layout_boolean_flags_and_fit_modes_are_strict(self):
+        for field in ('wrap', 'hyphenate', 'fit'):
+            for value in (0, 1, 'true', None):
+                with self.subTest(field=field, value=value):
+                    document = self.text_document()
+                    document['layers'][0]['textLayout'][field] = value
+                    self.assert_invalid(document)
+        for sizing in ('content', 'width', 'height', 'other'):
+            document = self.text_document()
+            document['layers'][0]['textLayout']['sizing'] = sizing
+            self.assert_invalid(document)
+
+    def test_typography_numeric_bounds_types_and_discrete_weight(self):
+        import json
+        bounds = {'fontWeight': (100, 900), 'lineHeight': (0, 2000), 'letterSpacing': (-100, 500),
+                  'wordSpacing': (-100, 1000), 'paragraphSpacing': (0, 2000),
+                  'horizontalScale': (0.1, 10), 'verticalScale': (0.1, 10), 'baselineShift': (-1000, 1000)}
+        for field, (minimum, maximum) in bounds.items():
+            for value in (minimum - 1, maximum + 1, True, '1', None, float('nan'), float('inf')):
+                with self.subTest(field=field, value=value):
+                    document = self.text_document()
+                    document['layers'][0]['typography'][field] = value
+                    response = self.client.post('/api/projects', content=json.dumps(document), headers=self.headers)
+                    self.assertEqual(422, response.status_code, response.text)
+        document = self.text_document()
+        document['layers'][0]['typography']['fontWeight'] = 450
+        self.assert_invalid(document)
+        for index in (0, 1):
+            document = self.text_document()
+            document['layers'][0]['typography'].update({field: values[index] for field, values in bounds.items()})
+            self.assert_round_trip(document)
+
+    def test_typography_enumerations_reject_unsupported_values(self):
+        for field, value in [('fontFamily', 'url(remote-font)'), ('fontStyle', 'oblique'),
+                             ('align', 'start'), ('decoration', 'overline'), ('language', 'fr')]:
+            with self.subTest(field=field):
+                document = self.text_document()
+                document['layers'][0]['typography'][field] = value
+                self.assert_invalid(document)

@@ -1402,3 +1402,18 @@ textarea,
 .measurement-settings { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-bottom: 20px; }
 .measurement-settings label { display: flex; flex-direction: column; gap: 5px; }
 .layer-row[draggable=true] { cursor: grab; }
+
+.typography-actions { display: flex; flex-wrap: wrap; gap: 5px; margin: 9px 0; }
+.typography-actions button { width: 31px; height: 31px; padding: 5px; border: 1px solid var(--border); }
+.typography-actions button.active { background: var(--selected); border-color: var(--accent); }
+.typography-actions img, .aid-pair img { width: 19px; height: 19px; }
+.typography-fields label { display: flex; flex-direction: column; gap: 4px; align-items: stretch; font-size: 10px; }
+.typography-fields input, .typography-fields select { width: 100%; min-width: 0; }
+.typography-note { color: var(--muted); font-size: 10px; }
+.inline-editor-frame { position: absolute; z-index: 5; outline: 1px solid var(--accent); transform-origin: center; }
+.inline-editor-frame .inline-text-editor { left: 0; top: 0; color: transparent; caret-color: var(--accent); outline: 0; transform-origin: top left; }
+.inline-editor-frame .inline-text-editor::selection { background: #3979ff44; color: transparent; }
+.icon-action { min-width: 32px; justify-content: center; }
+.guide-lock { width: 30px; height: 30px; padding: 5px; margin-right: -6px; }
+.guide-lock img { width: 19px; height: 19px; }
+.guide-lock.active { background: var(--selected); border-color: var(--accent); }

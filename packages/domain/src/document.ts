@@ -1,3 +1,4 @@
+import { FONT_FAMILIES, layoutText, TextLayoutOptions, TextTypography, TextMeasurement } from "./text-layout";
 import {
   CurvePath,
   flatten,
@@ -44,6 +45,8 @@ export interface Layer {
   points: Point[];
   text: string;
   fontSize: number;
+  textLayout?: TextLayoutOptions;
+  typography?: TextTypography;
   source: string;
   adjustments: Adjustments;
   curves?: CurvePath[];
@@ -430,6 +433,31 @@ export function parseDocument(text: string): StudioDocument {
         (Array.isArray(layer["groupPath"]) && layer["groupPath"].length > 0))
     )
       throw new Error("Invalid guide layer.");
+    for (const key of ["textLayout", "typography"]) {
+      const settings = layer[key];
+      if (settings !== undefined) {
+        if (value["version"] !== 2 || layer["kind"] !== "text" || !record(settings))
+          throw new Error("Invalid text settings.");
+        if (key === "textLayout") {
+          if (Object.keys(settings).length !== 4 ||
+            !["fixed", "content", "width", "height"].includes(String(settings["sizing"])) ||
+            ["wrap", "hyphenate", "fit"].some((flag) => typeof settings[flag] !== "boolean") ||
+            (settings["fit"] && settings["sizing"] !== "fixed"))
+            throw new Error("Invalid text layout.");
+        } else if (Object.keys(settings).length !== 13 ||
+          !FONT_FAMILIES.includes(settings["fontFamily"] as TextTypography["fontFamily"]) ||
+          !finite(settings["fontWeight"], 100, 900) || (settings["fontWeight"] as number) % 100 !== 0 ||
+          !["normal", "italic"].includes(String(settings["fontStyle"])) ||
+          !finite(settings["lineHeight"], 0, 2000) || !finite(settings["letterSpacing"], -100, 500) ||
+          !finite(settings["wordSpacing"], -100, 1000) || !finite(settings["paragraphSpacing"], 0, 2000) ||
+          !finite(settings["horizontalScale"], 0.1, 10) || !finite(settings["verticalScale"], 0.1, 10) ||
+          !finite(settings["baselineShift"], -1000, 1000) ||
+          !["left", "center", "right", "justify"].includes(String(settings["align"])) ||
+          !["none", "underline", "line-through"].includes(String(settings["decoration"])) ||
+          !["en", "es"].includes(String(settings["language"])))
+          throw new Error("Invalid typography.");
+      }
+    }
     if (layer["curves"] !== undefined) {
       if (
         value["version"] === 1 ||
@@ -535,10 +563,10 @@ function svgPaint(property: "fill" | "stroke", value: string): string {
     return `${property}="${value.slice(0, 7)}" ${property}-opacity="${Number.parseInt(value.slice(7), 16) / 255}"`;
   return `${property}="${value}"`;
 }
-export function svgExport(doc: StudioDocument): string {
+export function svgExport(doc: StudioDocument, measure?: TextMeasurement): string {
   const shapes = doc.layers
     .filter((l) => l.visible && !l.guide)
-    .map((l) => {
+    .map((l, layerIndex) => {
       const style = `${svgPaint("fill", l.kind === "path" && !l.curves?.some((p) => p.closed) ? "none" : l.fill)} ${svgPaint("stroke", l.stroke)} stroke-width="${l.strokeWidth}" stroke-linecap="round" stroke-linejoin="round"`;
       let content = "";
       if (l.kind === "rectangle")
@@ -562,6 +590,18 @@ export function svgExport(doc: StudioDocument): string {
               `<tspan x="0" dy="${i ? l.fontSize * 1.2 : 0}">${escapeXml(line)}</tspan>`,
           )
           .join("")}</text>`;
+      if (l.kind === "text" && (l.textLayout || l.typography)) {
+        const layout = layoutText(l, measure), type = layout.typography;
+        const clipId = `text-frame-${layerIndex}`;
+        const clipping = l.textLayout ? `<defs><clipPath id="${clipId}"><rect width="${layout.width}" height="${layout.height}"/></clipPath></defs>` : "";
+        const glyphs = layout.lines.map((line) => line.glyphs.map((glyph) =>
+          `<tspan x="${glyph.x / type.horizontalScale}" y="${line.y / type.verticalScale}">${escapeXml(glyph.text)}</tspan>`).join("")).join("");
+        const decoration = type.decoration === "none" || (l.fill === "none" && (l.stroke === "none" || l.strokeWidth <= 0)) ? "" : layout.lines.map((line) => {
+          const offset = type.decoration === "underline" ? layout.fontSize * 0.12 : -layout.fontSize * 0.3;
+          return `<rect x="${line.x}" y="${line.y + offset * type.verticalScale}" width="${line.width}" height="${Math.max(1, layout.fontSize / 16) * type.verticalScale}" ${svgPaint("fill", l.fill === "none" ? l.stroke : l.fill)}/>`;
+        }).join("");
+        content = `${clipping}<g${l.textLayout ? ` clip-path="url(#${clipId})"` : ""}><text xml:space="preserve" font-size="${layout.fontSize}" font-family="${escapeXml(type.fontFamily)}" font-weight="${type.fontWeight}" font-style="${type.fontStyle}" transform="scale(${type.horizontalScale} ${type.verticalScale})" ${style}>${glyphs}</text>${decoration}</g>`;
+      }
       if (l.kind === "image")
         content = `<image width="${l.width}" height="${l.height}" href="${escapeXml(l.source)}" style="filter:brightness(${l.adjustments.brightness}%) contrast(${l.adjustments.contrast}%) saturate(${l.adjustments.saturation}%) blur(${l.adjustments.blur}px)"/>`;
       const blend = l.blend === "source-over" ? "normal" : l.blend;

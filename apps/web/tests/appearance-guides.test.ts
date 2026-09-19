@@ -124,3 +124,30 @@ describe("layer ordering and snapping", () => {
     e.end(); e.undo(); expect(e.selected()?.x).toBe(0);
   });
 });
+
+describe("global guide drag lock", () => {
+  it("prevents existing guide drags while allowing new guides from rulers", () => {
+    const e = editor();
+    const id = e.beginGuideDrag("vertical", 60)!; e.endGuideDrag(true);
+    e.setGuidesLocked(true);
+    expect(e.beginGuideDrag("vertical", 70, id)).toBeNull();
+    const created = e.beginGuideDrag("horizontal", 10)!;
+    expect(created).toBeTruthy();
+    e.updateGuideDrag(90); e.endGuideDrag(true);
+    expect(e.document().layers.find(layer => layer.id === created)?.y).toBe(90);
+    e.setGuidesLocked(false);
+    expect(e.beginGuideDrag("vertical", 70, id)).toBe(id); e.endGuideDrag(true);
+    e.toggle(id, "locked");
+    expect(e.beginGuideDrag("vertical", 80, id)).toBeNull();
+  });
+  it("cancels an existing drag when the global lock engages without removing the guide", () => {
+    const e = editor();
+    const id = e.beginGuideDrag("vertical", 60)!; e.endGuideDrag(true);
+    e.beginGuideDrag("vertical", 60, id); e.updateGuideDrag(100);
+    e.setGuidesLocked(true); e.endGuideDrag(false);
+    expect(e.document().layers.find(layer => layer.id === id)?.x).toBe(60);
+    const fresh = e.beginGuideDrag("vertical", 15)!;
+    e.setGuidesLocked(true); e.updateGuideDrag(25); e.endGuideDrag(true);
+    expect(e.document().layers.find(layer => layer.id === fresh)?.x).toBe(25);
+  });
+});

@@ -112,3 +112,31 @@ describe("input preferences", () => {
     expect(restored.error()).toContain("Defaults restored");
   });
 });
+
+describe("global guide lock preference", () => {
+  beforeEach(() => localStorage.clear());
+  it("persists independently from guide visibility and magnetic behavior", () => {
+    const preferences = new PreferencesService();
+    expect(preferences.guidesLocked()).toBe(false);
+    preferences.setMeasurement("guidesLocked", true);
+    preferences.setMeasurement("guidesVisible", false);
+    preferences.setMeasurement("snapGuides", true);
+    const restored = new PreferencesService();
+    expect(restored.guidesLocked()).toBe(true);
+    expect(restored.guidesVisible()).toBe(false);
+    expect(restored.snapGuides()).toBe(true);
+  });
+  it("loads older settings as unlocked and rejects failed persistence atomically", () => {
+    const preferences = new PreferencesService();
+    preferences.setMeasurement("guidesLocked", true);
+    const saved = JSON.parse(localStorage.getItem("xds-input-settings")!);
+    delete saved.measurements.guidesLocked;
+    localStorage.setItem("xds-input-settings", JSON.stringify(saved));
+    expect(new PreferencesService().guidesLocked()).toBe(false);
+    const storage = vi.spyOn(localStorage, "setItem").mockImplementation(() => { throw new Error("Storage unavailable"); });
+    try {
+      expect(preferences.setMeasurement("guidesLocked", false)).toBe(false);
+      expect(preferences.guidesLocked()).toBe(true);
+    } finally { storage.mockRestore(); }
+  });
+});

@@ -1,9 +1,16 @@
+import { defaultTypography, layoutText, textFont, TextMeasurement } from "../../domain/src/text-layout";
 import { selectionBounds } from "../../domain/src/arrange";
 import { newLayer } from "../../domain/src/document";
 import { CurvePath } from "../../domain/src/curves";
 import { Layer, StudioDocument } from "../../domain/src/document";
 export class CanvasRenderer {
   private images = new Map<string, HTMLImageElement>();
+  private measureContext?: CanvasRenderingContext2D;
+  readonly measureText: TextMeasurement = (text, size, typography = { ...defaultTypography }) => {
+    this.measureContext ??= window.document.createElement("canvas").getContext("2d")!;
+    this.measureContext.font = textFont(size, typography);
+    return this.measureContext.measureText(text).width;
+  };
   image(source: string, ready: () => void): HTMLImageElement | undefined {
     if (!source) return undefined;
     const cached = this.images.get(source);
@@ -212,7 +219,7 @@ export class CanvasRenderer {
       for (const p of l.points.slice(1)) ctx.lineTo(p.x, p.y);
       ctx.stroke();
     }
-    if (l.kind === "text") {
+    if (l.kind === "text" && !l.textLayout && !l.typography) {
       ctx.font = `${l.fontSize}px sans-serif`;
       ctx.textBaseline = "top";
       l.text
@@ -222,6 +229,38 @@ export class CanvasRenderer {
           if (hasFill) ctx.fillText(line, 0, y);
           if (hasStroke) ctx.strokeText(line, 0, y);
         });
+    }
+    if (l.kind === "text" && (l.textLayout || l.typography)) {
+      const layout = layoutText(l, (text, size, typography) => {
+        ctx.font = textFont(size, typography);
+        return ctx.measureText(text).width;
+      });
+      const type = layout.typography;
+      ctx.save();
+      if (l.textLayout) {
+        ctx.beginPath();
+        ctx.rect(0, 0, layout.width, layout.height);
+        ctx.clip();
+      }
+      ctx.font = textFont(layout.fontSize, type);
+      ctx.textBaseline = "alphabetic";
+      ctx.save();
+      ctx.scale(type.horizontalScale, type.verticalScale);
+      for (const line of layout.lines)
+        for (const glyph of line.glyphs) {
+          const x = glyph.x / type.horizontalScale, y = line.y / type.verticalScale;
+          if (hasFill) ctx.fillText(glyph.text, x, y);
+          if (hasStroke) ctx.strokeText(glyph.text, x, y);
+        }
+      ctx.restore();
+      if (type.decoration !== "none" && (hasFill || hasStroke)) {
+        ctx.fillStyle = hasFill ? l.fill : l.stroke;
+        for (const line of layout.lines) {
+          const offset = type.decoration === "underline" ? layout.fontSize * 0.12 : -layout.fontSize * 0.3;
+          ctx.fillRect(line.x, line.y + offset * type.verticalScale, line.width, Math.max(1, layout.fontSize / 16) * type.verticalScale);
+        }
+      }
+      ctx.restore();
     }
     if (l.kind === "image") {
       const image = painting ?? this.image(l.source, ready);

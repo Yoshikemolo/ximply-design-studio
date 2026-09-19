@@ -1,6 +1,6 @@
 {
   "name": "ximply-design-studio",
-  "version": "0.3.6-alpha.1",
+  "version": "0.3.7-alpha.1",
   "private": true,
   "scripts": {
     "start": "ng serve --host 127.0.0.1",
@@ -14,6 +14,7 @@
     "@angular/core": "22.1.7",
     "@angular/forms": "22.1.7",
     "@angular/platform-browser": "22.1.7",
+    "hyphen": "1.14.1",
     "polygon-clipping": "0.15.7",
     "rxjs": "7.8.2",
     "three": "0.186.0",

@@ -1,3 +1,4 @@
+import { FONT_FAMILIES, defaultTypography, defaultTextLayout, TextTypography, TextLayoutOptions } from "../../../../packages/domain/src/text-layout";
 import { measurementUnits, isUnit, snapPoint, fromPixels, toPixels, formatMeasurement, rulerTicks as makeRulerTicks, SnapConfig } from "../../../../packages/domain/src/measurements";
 import { PreferencesService } from "./preferences.service";
 import {
@@ -47,6 +48,21 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   @ViewChild("spatialHost") spatialHost?: ElementRef<HTMLDivElement>;
   @ViewChild("imageFile") imageFile?: ElementRef<HTMLInputElement>;
   @ViewChild("projectFile") projectFile?: ElementRef<HTMLInputElement>;
+  readonly fontFamilies = FONT_FAMILIES;
+  readonly fontWeights = [100, 200, 300, 400, 500, 600, 700, 800, 900];
+  readonly textSizingActions = [
+    { id: "content", icon: "text-fit-content", label: "Fit frame to content", hint: "Resize both frame dimensions to the text. Disables wrapping and fitting." },
+    { id: "width", icon: "text-auto-width", label: "Automatic width", hint: "Resize frame width to the text and keep its height. Disables wrapping and fitting." },
+    { id: "height", icon: "text-auto-height", label: "Automatic height", hint: "Resize frame height to the text and keep its width. Disables fitting." },
+  ] as const;
+  readonly textAlignments = ["left", "center", "right", "justify"] as const;
+  readonly typographyFields = [
+    { key: "lineHeight", label: "Leading", min: 0, max: 2000, hint: "Baseline spacing; zero uses automatic leading." },
+    { key: "letterSpacing", label: "Letter spacing", min: -100, max: 500, hint: "Extra space between characters." },
+    { key: "wordSpacing", label: "Word spacing", min: -100, max: 1000, hint: "Extra space between words." },
+    { key: "paragraphSpacing", label: "Paragraph spacing", min: 0, max: 2000, hint: "Extra space after an explicit line break." },
+    { key: "baselineShift", label: "Baseline shift", min: -1000, max: 1000, hint: "Positive values raise the text baseline." },
+  ] as const;
   readonly contextMenu = signal<{ target: ContextTarget; x: number; y: number } | null>(null);
   readonly units = measurementUnits;
   readonly fontUnits = measurementUnits;
@@ -184,6 +200,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
       };
       editor.snapConfig.set(config);
     });
+    effect(() => { editor.setGuidesLocked(preferences.guidesLocked()); });
     effect(() => {
       editor.snapAngle.set(preferences.snapAngle());
     });
@@ -198,6 +215,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
       editor.showHandles();
       editor.handleSize();
       this.textEditing();
+      this.textDraft();
       this.schedule();
     });
     effect(() => {
@@ -262,6 +280,38 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     if (context && enabled) this.editor.runContextAction(context.target, action as ContextAction);
   }
   dismissContext() { this.contextMenu?.set(null); }
+  typography(layer: Layer): TextTypography { return { ...defaultTypography, ...layer.typography }; }
+  textLayout(layer: Layer): TextLayoutOptions { return { ...defaultTextLayout, ...layer.textLayout }; }
+  setTextSizing(mode: TextLayoutOptions["sizing"]) {
+    const layer = this.editor.selected();
+    if (layer?.kind === "text") this.editor.updateTextLayout({ sizing: this.textLayout(layer).sizing === mode ? "fixed" : mode });
+  }
+  toggleTextOption(key: "wrap" | "hyphenate" | "fit") {
+    const layer = this.editor.selected();
+    if (layer?.kind !== "text") return;
+    const layout = this.textLayout(layer), enabled = !layout[key];
+    this.editor.updateTextLayout(key === "wrap" && enabled && ["width", "content"].includes(layout.sizing) ? { wrap: true, sizing: "fixed" } : { [key]: enabled });
+  }
+  setTypographyNumber(key: "lineHeight" | "letterSpacing" | "wordSpacing" | "paragraphSpacing" | "baselineShift", event: Event) {
+    const value = this.number(event), field = this.typographyFields.find(field => field.key === key)!;
+    if (Number.isFinite(value)) this.editor.updateTypography({ [key]: Math.max(field.min, Math.min(field.max, toPixels(value, this.preferences.fontUnit()))) });
+  }
+  setTextScale(key: "horizontalScale" | "verticalScale", event: Event) {
+    const value = this.number(event);
+    if (Number.isFinite(value)) this.editor.updateTypography({ [key]: Math.max(.1, Math.min(10, value / 100)) });
+  }
+  toggleTextStyle(key: "fontStyle" | "decoration", value: "italic" | "underline" | "line-through") {
+    const layer = this.editor.selected();
+    if (layer?.kind !== "text") return;
+    const current = this.typography(layer);
+    if (key === "fontStyle") this.editor.updateTypography({ fontStyle: current.fontStyle === "italic" ? "normal" : "italic" });
+    else this.editor.updateTypography({ decoration: current.decoration === value ? "none" : value as "underline" | "line-through" });
+  }
+  inlineLayer() {
+    const layer = this.editor.document().layers.find(layer => layer.id === this.textEditing());
+    return layer ? this.editor.previewText(layer, this.textDraft()) : null;
+  }
+  inlineMetrics(layer: Layer) { return this.editor.textMetrics(layer); }
   paintColor(target: "fill" | "stroke") {
     const selected = this.editor.selected();
     return selected && !selected.guide ? selected[target] : this.editor[target]();
@@ -309,7 +359,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   gridSpacing() { return this.preferences.gridSize() * this.editor.zoom(); }
   visibleGuides() { return this.editor.document().layers.filter((layer) => layer.guide && layer.visible); }
   startGuide(event: PointerEvent, axis: "vertical" | "horizontal", id?: string) {
-    if (event.button !== 0 || !this.canvas) return;
+    if (event.button !== 0 || !this.canvas || (id && this.preferences.guidesLocked())) return;
     event.preventDefault();
     event.stopPropagation();
     this.commitText();
@@ -324,6 +374,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     this.guideDrag = { axis, pointerId: event.pointerId, element };
   }
   moveGuide(event: PointerEvent) {
+    this.cursorPoint.set({ x: event.clientX, y: event.clientY });
     if (!this.guideDrag || this.guideDrag.pointerId !== event.pointerId) return;
     const raw = this.point(event);
     const config = this.editor.snapConfig();
@@ -478,7 +529,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     return id
       ? {
           ...doc,
-          layers: doc.layers.map((l) => (l.id === id ? { ...l, text: "" } : l)),
+          layers: doc.layers.map((l) => (l.id === id ? this.editor.previewText(l, this.textDraft()) : l)),
         }
       : doc;
   }
@@ -506,16 +557,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     if (layer && !layer.locked && layer.text !== this.textDraft()) {
       this.editor.selectedId.set(id);
       const text = this.textDraft().slice(0, 2000);
-      this.editor.updateLayer({
-        text,
-        height: Math.min(
-          16384,
-          Math.max(
-            layer.height,
-            text.split("\n").length * layer.fontSize * 1.2,
-          ),
-        ),
-      });
+      this.editor.updateLayer({ text });
     }
   }
   textKey(event: KeyboardEvent) {
@@ -855,7 +897,8 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     if (["x", "y", "width", "height", "strokeWidth", "fontSize"].includes(key))
       value = toPixels(value, key === "fontSize" ? this.preferences.fontUnit() : this.preferences.distanceUnit());
     value = Math.min(limits[key][1], Math.max(limits[key][0], value));
-    this.editor.updateLayer({ [key]: value });
+    if (key === "fontSize") this.editor.updateTextFontSize(value);
+    else this.editor.updateLayer({ [key]: value });
   }
   adjustment(
     key: "brightness" | "contrast" | "saturation" | "blur",

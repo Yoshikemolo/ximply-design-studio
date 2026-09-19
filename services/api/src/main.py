@@ -51,6 +51,38 @@ class Adjustments(BaseModel):
     blur: Annotated[Number, Field(ge=0, le=30)]
 
 
+class TextLayout(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    sizing: Literal['fixed', 'content', 'width', 'height']
+    wrap: Annotated[bool, Field(strict=True)]
+    hyphenate: Annotated[bool, Field(strict=True)]
+    fit: Annotated[bool, Field(strict=True)]
+
+    @model_validator(mode='after')
+    def fixed_fit(self):
+        if self.fit and self.sizing != 'fixed':
+            raise ValueError('Text fit requires fixed sizing')
+        return self
+
+
+class Typography(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    fontFamily: Literal['sans-serif', 'serif', 'monospace', 'Arial', 'Georgia', 'Times New Roman',
+                        'Courier New', 'Verdana', 'Trebuchet MS']
+    fontWeight: Annotated[Number, Field(ge=100, le=900, multiple_of=100)]
+    fontStyle: Literal['normal', 'italic']
+    lineHeight: Annotated[Number, Field(ge=0, le=2000)]
+    letterSpacing: Annotated[Number, Field(ge=-100, le=500)]
+    wordSpacing: Annotated[Number, Field(ge=-100, le=1000)]
+    paragraphSpacing: Annotated[Number, Field(ge=0, le=2000)]
+    horizontalScale: Annotated[Number, Field(ge=0.1, le=10)]
+    verticalScale: Annotated[Number, Field(ge=0.1, le=10)]
+    baselineShift: Annotated[Number, Field(ge=-1000, le=1000)]
+    align: Literal['left', 'center', 'right', 'justify']
+    decoration: Literal['none', 'underline', 'line-through']
+    language: Literal['en', 'es']
+
+
 class Layer(Point):
     id: Annotated[str, Field(min_length=1, max_length=100)]
     name: Annotated[str, Field(max_length=150)]
@@ -70,6 +102,8 @@ class Layer(Point):
     fontSize: Annotated[Number, Field(ge=1, le=500)]
     source: str
     adjustments: Adjustments
+    textLayout: TextLayout | None = None
+    typography: Typography | None = None
     guide: Literal['vertical', 'horizontal'] | None = None
     curves: Annotated[list[CurvePath], Field(max_length=4096)] | None = None
     symbolId: Annotated[str, Field(min_length=1, max_length=100)] | None = None
@@ -82,7 +116,7 @@ class Layer(Point):
     @model_validator(mode='before')
     @classmethod
     def non_nullable_extensions(cls, value):
-        if isinstance(value, dict) and any(key in value and value[key] is None for key in ('curves', 'symbolId', 'traceSourceId', 'groupPath', 'flipX', 'flipY', 'skewX', 'guide')):
+        if isinstance(value, dict) and any(key in value and value[key] is None for key in ('curves', 'symbolId', 'traceSourceId', 'groupPath', 'flipX', 'flipY', 'skewX', 'guide', 'textLayout', 'typography')):
             raise ValueError('Drawing extensions cannot be null')
         return value
 
@@ -92,6 +126,8 @@ class Layer(Point):
             raise ValueError('Invalid curve layer or node budget')
         if self.groupPath is not None and len(set(self.groupPath)) != len(self.groupPath):
             raise ValueError('Group path identities must be unique')
+        if self.kind != 'text' and (self.textLayout is not None or self.typography is not None):
+            raise ValueError('Text layout and typography require a text layer')
         if self.guide is not None and (self.kind != 'path' or self.symbolId is not None or self.groupPath):
             raise ValueError('Guides must be ungrouped paths without symbol references')
         return self
@@ -140,6 +176,7 @@ class Document(BaseModel):
         if self.version == 1 and ('symbols' in self.model_fields_set or any(
                 layer.curves is not None or layer.symbolId is not None or layer.traceSourceId is not None
                 or layer.guide is not None or layer.fill == 'none' or layer.stroke == 'none'
+                or layer.textLayout is not None or layer.typography is not None
                 or len(layer.fill) == 9 or len(layer.stroke) == 9
                 or layer.skewX is not None or layer.groupPath is not None or layer.flipX is not None or layer.flipY is not None
                 for layer in self.layers)):

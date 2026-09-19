@@ -21,7 +21,7 @@ describe('paint and measurement UI interactions', () => {
     capture.setPointerCapture = vi.fn();
     capture.hasPointerCapture = vi.fn(() => true);
     capture.releasePointerCapture = vi.fn();
-    Object.assign(component, { editor, preferences, paintTarget: signal('fill'), paintPicker: signal(null), draggingGuideId: signal(null), commitText: vi.fn(), canvas: { nativeElement: { getBoundingClientRect: () => ({ left: 100, top: 200, width: 640, height: 400 }) } } });
+    Object.assign(component, { editor, preferences, paintTarget: signal('fill'), paintPicker: signal(null), cursorPoint: signal(null), draggingGuideId: signal(null), commitText: vi.fn(), canvas: { nativeElement: { getBoundingClientRect: () => ({ left: 100, top: 200, width: 640, height: 400 }) } } });
     editor.document.update(doc => ({ ...doc, width: 1280, height: 800 }));
   });
   const pointer = (x: number, y: number, element: HTMLElement, id = 1) => ({ button: 0, clientX: x, clientY: y, pointerId: id, currentTarget: element, preventDefault: vi.fn(), stopPropagation: vi.fn() }) as unknown as PointerEvent;
@@ -69,7 +69,8 @@ describe('paint and measurement UI interactions', () => {
   });
 
   it('converts all dimensional edits using the selected unit, leaving font units independent', () => {
-    rectangle(); preferences.setMeasurement('distanceUnit', 'in'); preferences.setMeasurement('fontUnit', 'pt');
+    editor.setTool('text'); editor.start({ x: 10, y: 20 }); editor.end();
+    preferences.setMeasurement('distanceUnit', 'in'); preferences.setMeasurement('fontUnit', 'pt');
     component.patchNumber('width', input(2)); component.patchNumber('x', input(-.5)); component.patchNumber('fontSize', input(18)); component.setPaintWidth(input(.125));
     expect(editor.selected()!.width).toBe(192); expect(editor.selected()!.x).toBe(-48);
     expect(editor.selected()!.fontSize).toBe(24); expect(editor.selected()!.strokeWidth).toBe(12);
@@ -109,6 +110,18 @@ describe('paint and measurement UI interactions', () => {
     expect(component.visibleGuides()).toHaveLength(0);
     component.startGuide(pointer(200, 250, capture), 'horizontal'); expect(editor.document().layers[1].y).toBe(100);
     component.cancelGuide(); expect(editor.document().layers).toHaveLength(1);
+  });
+
+  it('blocks moving existing guides under global lock while permitting creation from rulers', () => {
+    const id = editor.beginGuideDrag('vertical', 200)!; editor.endGuideDrag(true);
+    preferences.setMeasurement('guidesLocked', true); editor.setGuidesLocked(true);
+    component.startGuide(pointer(200, 250, capture), 'vertical', id);
+    expect(capture.setPointerCapture).not.toHaveBeenCalled();
+    component.startGuide(pointer(150, 250, capture), 'horizontal');
+    component.finishGuide(pointer(150, 300, capture));
+    expect(editor.document().layers).toHaveLength(2);
+    expect(editor.document().layers[1].guide).toBe('horizontal');
+    expect(editor.document().layers[1].y).toBe(200);
   });
 
   it('maps reversed layer list drop positions back to document z-order and permits undo', () => {

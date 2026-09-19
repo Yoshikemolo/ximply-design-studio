@@ -233,13 +233,15 @@ describe("inline editing and canvas-only zoom", () => {
     expect(app.activeTool()).toBe("text");
     expect(app.temporarySelect()).toBe(false);
   });
-  it("bounds multiline text height to the native document limit", () => {
+  it("bounds explicit automatic multiline text height to the native document limit", () => {
     const app = component(),
       e = app.editor;
     e.setTool("text");
     e.start({ x: 20, y: 20 });
     e.end();
     e.updateLayer({ fontSize: 500 });
+    Object.assign(e.renderer, { measureText: (text: string, size: number) => text.length * size * .6 });
+    e.updateTextLayout({ sizing: "height" });
     app.textEditing.set(e.selectedId());
     app.textDraft.set("line\n".repeat(600));
     app.commitText();

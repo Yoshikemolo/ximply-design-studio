@@ -1,3 +1,4 @@
+import { defaultTypography, defaultTextLayout, FONT_FAMILIES, layoutText, TextLayoutOptions, TextTypography } from "../../../../packages/domain/src/text-layout";
 import { snapPoint, SnapConfig } from "../../../../packages/domain/src/measurements";
 import { transformLayers } from "../../../../packages/domain/src/affine";
 import {
@@ -213,6 +214,11 @@ export class EditorService {
     }
     this.setLayer(layer.id, fitCurves(layer, curves));
   }
+  readonly guidesLocked = signal(false);
+  setGuidesLocked(locked: boolean) {
+    this.guidesLocked.set(locked);
+    if (locked && this.guideGesture?.before.layers.some((layer) => layer.id === this.guideGesture?.id)) this.cancelGuideDrag();
+  }
   readonly snapAngle = signal(45);
   readonly snapConfig = signal<SnapConfig | null>(null);
   snap(point: Point): Point {
@@ -309,7 +315,7 @@ export class EditorService {
     this.cancelGuideDrag();
     const doc = this.document();
     const existing = id ? doc.layers.find((layer) => layer.id === id && layer.guide === axis) : undefined;
-    if ((id && (!existing || existing.locked || !existing.visible)) || (!id && doc.layers.length >= 150)) return null;
+    if ((id && (this.guidesLocked() || !existing || existing.locked || !existing.visible)) || (!id && doc.layers.length >= 150)) return null;
     const guide = existing ?? { ...newLayer("path", crypto.randomUUID(), { x: 0, y: 0 }, "none", "#00b8d9", 1), guide: axis, name: axis === "vertical" ? "Vertical guide" : "Horizontal guide", width: 1, height: 1 };
     this.guideGesture = { before: structuredClone(doc), id: guide.id, selectedId: this.selectedId(), selectedIds: [...this.selectedIds()] };
     if (!existing) this.document.update((value) => ({ ...value, layers: [...value.layers, guide] }));
@@ -319,6 +325,7 @@ export class EditorService {
   updateGuideDrag(position: number) {
     const gesture = this.guideGesture;
     if (!gesture || !Number.isFinite(position)) return;
+    if (this.guidesLocked() && gesture.before.layers.some((layer) => layer.id === gesture.id)) { this.cancelGuideDrag(); return; }
     const guide = this.document().layers.find((layer) => layer.id === gesture.id)!;
     this.setLayer(guide.id, guide.guide === "vertical" ? { x: position } : { y: position });
     this.revision.update((value) => value + 1);
@@ -326,6 +333,7 @@ export class EditorService {
   endGuideDrag(inside: boolean) {
     const gesture = this.guideGesture;
     if (!gesture) return;
+    if (this.guidesLocked() && gesture.before.layers.some((layer) => layer.id === gesture.id)) { this.cancelGuideDrag(); return; }
     if (!inside) this.document.update((doc) => ({ ...doc, layers: doc.layers.filter((layer) => layer.id !== gesture.id) }));
     if (JSON.stringify(gesture.before) !== JSON.stringify(this.document())) {
       this.history.commit(gesture.before);
@@ -408,6 +416,59 @@ export class EditorService {
       layers: d.layers.map((l) => (l.id === id ? { ...l, ...patch } : l)),
     }));
   }
+  textMetrics(layer: Layer) {
+    return layoutText(layer, this.renderer.measureText);
+  }
+  previewText(layer: Layer, text: string): Layer {
+    return this.reflowText({ ...layer, text: text.slice(0, 2000) });
+  }
+  private reflowText(layer: Layer): Layer {
+    if (layer.kind !== "text" || !layer.textLayout || layer.textLayout.sizing === "fixed") return layer;
+    const layout = this.textMetrics(layer);
+    return { ...layer, width: Math.max(1, Math.min(16384, layout.width)), height: Math.max(1, Math.min(16384, layout.height)) };
+  }
+  private applyTextUpdate(update: (layer: Layer) => Layer) {
+    const ids = new Set(this.selectedLayers().filter((layer) => layer.kind === "text" && !layer.locked).map((layer) => layer.id));
+    if (!ids.size) return;
+    const before = this.document();
+    const layers = before.layers.map((layer) => ids.has(layer.id) ? this.reflowText(update(layer)) : layer);
+    if (JSON.stringify(layers) === JSON.stringify(before.layers)) return;
+    this.history.commit(before);
+    this.document.set({ ...before, layers });
+    this.changed();
+  }
+  updateTextLayout(patch: Partial<TextLayoutOptions>) {
+    if (patch.sizing !== undefined && !["fixed", "content", "width", "height"].includes(patch.sizing)) return;
+    if (["wrap", "hyphenate", "fit"].some((key) => patch[key as keyof TextLayoutOptions] !== undefined && typeof patch[key as keyof TextLayoutOptions] !== "boolean")) return;
+    this.applyTextUpdate((layer) => {
+      const textLayout = { ...defaultTextLayout, ...layer.textLayout, ...patch };
+      if (patch.fit === true) textLayout.sizing = "fixed";
+      if (textLayout.sizing !== "fixed") textLayout.fit = false;
+      if (["content", "width"].includes(textLayout.sizing)) textLayout.wrap = false;
+      return { ...layer, textLayout, typography: { ...defaultTypography, ...layer.typography } };
+    });
+  }
+  updateTypography(patch: Partial<TextTypography>) {
+    const ranges: Partial<Record<keyof TextTypography, [number, number]>> = {
+      fontWeight: [100, 900], lineHeight: [0, 2000], letterSpacing: [-100, 500], wordSpacing: [-100, 1000],
+      paragraphSpacing: [0, 2000], horizontalScale: [0.1, 10], verticalScale: [0.1, 10], baselineShift: [-1000, 1000],
+    };
+    for (const [key, range] of Object.entries(ranges)) {
+      const value = patch[key as keyof TextTypography];
+      if (value !== undefined && (typeof value !== "number" || !Number.isFinite(value) || value < range[0] || value > range[1])) return;
+    }
+    if (patch.fontWeight !== undefined && patch.fontWeight % 100 !== 0) return;
+    if (patch.fontFamily !== undefined && !FONT_FAMILIES.includes(patch.fontFamily)) return;
+    if (patch.fontStyle !== undefined && !["normal", "italic"].includes(patch.fontStyle)) return;
+    if (patch.align !== undefined && !["left", "center", "right", "justify"].includes(patch.align)) return;
+    if (patch.decoration !== undefined && !["none", "underline", "line-through"].includes(patch.decoration)) return;
+    if (patch.language !== undefined && !["en", "es"].includes(patch.language)) return;
+    this.applyTextUpdate((layer) => ({ ...layer, typography: { ...defaultTypography, ...layer.typography, ...patch }, textLayout: { ...defaultTextLayout, ...layer.textLayout } }));
+  }
+  updateTextFontSize(fontSize: number) {
+    if (!Number.isFinite(fontSize) || fontSize < 1 || fontSize > 500) return;
+    this.applyTextUpdate((layer) => ({ ...layer, fontSize }));
+  }
   updateLayer(patch: Partial<Layer>) {
     const layer = this.selected();
     if (!layer || layer.locked || layer.guide) return;
@@ -421,7 +482,7 @@ export class EditorService {
         ),
         ...patch,
       };
-    this.setLayer(layer.id, patch);
+    this.setLayer(layer.id, this.reflowText({ ...layer, ...patch }));
     this.changed();
   }
   toggle(id: string, key: "visible" | "locked") {
@@ -1178,11 +1239,11 @@ export class EditorService {
   ) {
     if (!g.ids || g.ids.length === 1) {
       const resized = resizeLayer(g.original, target.width, target.height);
-      this.setLayer(g.ids?.[0] ?? g.id, {
+      this.setLayer(g.ids?.[0] ?? g.id, this.reflowText({
         ...target,
         points: resized.points,
         ...(resized.curves ? { curves: resized.curves } : {}),
-      });
+      }));
       return;
     }
     const updates = new Map(
@@ -1193,7 +1254,7 @@ export class EditorService {
         g.original,
         target,
         target.rotation - g.original.rotation,
-      ).map((layer) => [layer.id, layer]),
+      ).map((layer) => [layer.id, this.reflowText(layer)]),
     );
     this.document.update((d) => ({
       ...d,
@@ -1989,7 +2050,7 @@ export class EditorService {
   }
   exportSvg() {
     this.download(
-      new Blob([svgExport(this.document())], { type: "image/svg+xml" }),
+      new Blob([svgExport(this.document(), this.renderer.measureText)], { type: "image/svg+xml" }),
       this.document().name + ".svg",
     );
     this.status.set("SVG exported; raster layers remain embedded images");
