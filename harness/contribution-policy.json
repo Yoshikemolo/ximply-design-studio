@@ -54,6 +54,10 @@
     {
       "sha": "18f571807639daa73d64ce8b7238069dcbc79f28",
       "reason": "GitHub web merge of PR #13 into dev with the default message; history is preserved, not rewritten."
+    },
+    {
+      "sha": "174c5471381e06b2db92fb9eb78801eee520e444",
+      "reason": "GitHub web merge of PR #15 into dev with the default message; history is preserved, not rewritten."
     }
   ]
 }
