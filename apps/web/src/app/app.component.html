@@ -467,13 +467,20 @@
                   <label>{{ t('Pillar shape') }}<select [value]="procedural.shape" (change)="setPillarShape($event)"><option value="rectangle">{{ t('Rectangular pillar') }}</option><option value="circle">{{ t('Circular pillar') }}</option></select></label>
                 }
                 @if (procedural.type === 'door' || procedural.type === 'window') {
-                  <label>{{ t('Opening mechanism') }}<select [value]="procedural.operation" (change)="patchProcedural({operation: text($event)})"><option value="swing">{{ t('Hinged') }}</option><option value="sliding">{{ t('Sliding') }}</option>@if (procedural.type === 'window') {<option value="fixed">{{ t('Fixed glazing') }}</option>}</select></label>
+                  <label>{{ t('Opening mechanism') }}<select [value]="procedural.operation" (change)="patchProcedural({operation: text($event), leafTypes: undefined})">@for (operation of (procedural.type === 'door' ? doorOperations : windowOperations); track operation) {<option [value]="operation">{{ t(leafTypeLabels[operation]) }}</option>}</select></label>
                   <label>{{ t('Number of leaves') }}<input type="number" min="1" [max]="procedural.type === 'door' ? 4 : 8" step="1" [value]="procedural.leafWidths.length" (change)="setProceduralLeafCount($event)" /></label>
                   <div class="property-grid">@for (width of procedural.leafWidths; track $index) {<label>{{ t('Leaf') }} {{ $index + 1 }}<input type="number" [min]="displayDistance(1)" [max]="displayDistance(16384)" step="any" [value]="displayDistance(width)" (change)="setProceduralLeafWidth($index, $event)" /></label>}</div>
+                  @if (procedural.operation !== 'opening') {
+                    <div class="property-grid">@for (width of procedural.leafWidths; track $index) {<label>{{ t('Leaf type') }} {{ $index + 1 }}<select [value]="leafType($index)" (change)="setLeafType($index, $event)">@for (choice of leafTypeChoices(procedural.type); track choice) {<option [value]="choice">{{ t(leafTypeLabels[choice]) }}</option>}</select></label>}</div>
+                  }
                   <p class="typography-note">{{ t('Changing a leaf width updates the total opening width.') }}</p>
-                  @if (procedural.operation === 'swing') {
+                  @if (procedural.operation !== 'opening') {
                     <label>{{ t('Opening angle') }} (°)<input type="number" min="0" max="180" step="any" [value]="procedural.openingAngle" (change)="setProceduralNumber('openingAngle', $event)" /></label>
-                    <label>{{ t('Swing direction') }}<select [value]="procedural.swing" (change)="patchProcedural({swing: text($event)})"><option value="left">{{ t('Left') }}</option><option value="right">{{ t('Right') }}</option></select></label>
+                    <div class="property-grid">
+                      <label>{{ t('Hinge side') }}<select [value]="procedural.swing" (change)="patchProcedural({swing: text($event)})"><option value="left">{{ t('Left') }}</option><option value="right">{{ t('Right') }}</option></select></label>
+                      <label>{{ t('Opening side') }}<select [value]="procedural.side ?? 'front'" (change)="patchProcedural({side: text($event)})"><option value="front">{{ t('Front face') }}</option><option value="back">{{ t('Back face') }}</option></select></label>
+                    </div>
+                    <p class="typography-note">{{ t('Leaf travel is drawn as a broken projection line.') }}</p>
                   }
                   @if (procedural.host) {<p class="typography-note">{{ t('Attached to a wall') }} · {{ t('Move or rotate the opening independently to detach it.') }}</p>} @else {<p class="typography-note">{{ t('Free-standing opening') }}</p>}
                 }

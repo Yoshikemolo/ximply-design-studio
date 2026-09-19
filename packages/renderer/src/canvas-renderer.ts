@@ -1,4 +1,4 @@
-import { materializeProcedural } from "../../domain/src/procedural";
+import { materializeProcedural, projectionCurves, projectionDash } from "../../domain/src/procedural";
 import { dimensionGeometry, dimensionLabelLayout } from "../../domain/src/dimensions";
 import { lineEndGeometry, pathLineEnds, LineEnd } from "../../domain/src/line-endings";
 import { Point } from "../../domain/src/document";
@@ -232,21 +232,31 @@ export class CanvasRenderer {
       if (hasStroke) this.closedStroke(ctx, l, () => { ctx.moveTo(l.width, l.height / 2); ctx.ellipse(l.width / 2, l.height / 2, l.width / 2, l.height / 2, 0, 0, Math.PI * 2); });
     }
     if (l.curves) {
+      const projection = projectionCurves(l);
+      const drawn = l.curves.filter((_, index) => !projection[index]);
       ctx.beginPath();
-      for (const path of l.curves.filter((p) => p.closed))
+      for (const path of drawn.filter((p) => p.closed))
         this.curve(ctx, path);
       if (hasFill) ctx.fill("evenodd");
       if (hasStroke) {
         if (strokeStyle.alignment === "center") {
           ctx.beginPath();
-          for (const path of l.curves) this.curve(ctx, path);
+          for (const path of drawn) this.curve(ctx, path);
           ctx.stroke();
         } else {
-          const closed = l.curves.filter((path) => path.closed);
+          const closed = drawn.filter((path) => path.closed);
           if (closed.length) this.closedStroke(ctx, l, () => { for (const path of closed) this.curve(ctx, path); });
           ctx.beginPath();
-          for (const path of l.curves.filter((path) => !path.closed)) this.curve(ctx, path);
+          for (const path of drawn.filter((path) => !path.closed)) this.curve(ctx, path);
           ctx.stroke();
+        }
+        if (projection.some(Boolean)) {
+          ctx.save();
+          ctx.setLineDash(projectionDash(l.strokeWidth));
+          ctx.beginPath();
+          for (const path of l.curves.filter((_, index) => projection[index])) this.curve(ctx, path);
+          ctx.stroke();
+          ctx.restore();
         }
       }
     } else if (l.kind === "path" && l.points.length && hasStroke) {

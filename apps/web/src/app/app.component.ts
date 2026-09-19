@@ -1,6 +1,7 @@
 import { Procedural, ProceduralKind } from "../../../../packages/domain/src/procedural";
 import { Dimension, DimensionFormat, dimensionGeometry } from "../../../../packages/domain/src/dimensions";
 import { defaultLineEnds, lineEndGeometry, LineEnd, LineEnds } from "../../../../packages/domain/src/line-endings";
+import { LeafType, LEAF_TYPES } from "../../../../packages/domain/src/procedural";
 import { BlendEasing } from "../../../../packages/domain/src/object-blend";
 import { FONT_FAMILIES, defaultTypography, defaultTextLayout, TextTypography, TextLayoutOptions } from "../../../../packages/domain/src/text-layout";
 import { measurementUnits, isUnit, snapPoint, fromPixels, toPixels, formatMeasurement, rulerTicks as makeRulerTicks, SnapConfig } from "../../../../packages/domain/src/measurements";
@@ -49,6 +50,7 @@ const DASH_PRESETS: { id: string; label: string; dash: number[] }[] = [
   { id: "custom", label: "Custom sequence", dash: [] },
 ];
 const DASH_FIELDS = [0, 1, 2, 3, 4, 5];
+const LEAF_TYPE_LABELS: Record<string, string> = { swing: "Hinged", sliding: "Sliding", folding: "Folding", pocket: "Pocket", fixed: "Fixed glazing", opening: "Passage without leaves" };
 
 @Component({
   selector: "xds-root",
@@ -433,10 +435,30 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     if (p.type === "pillar" && p.shape === "circle" && (key === "width" || key === "depth")) { patch['width'] = value; patch['depth'] = value; }
     this.patchProcedural(patch);
   }
+  get leafTypeLabels() { return LEAF_TYPE_LABELS; }
+  doorOperations = ["swing", "sliding", "folding", "pocket", "opening"];
+  windowOperations = ["fixed", "swing", "sliding", "opening"];
+  leafTypeChoices(type: "door" | "window") {
+    return (type === "door" ? this.doorOperations : this.windowOperations).filter((operation) => operation !== "opening");
+  }
+  /** Per-leaf mechanism; an unset leaf follows the opening mechanism. */
+  leafType(index: number) {
+    const p = this.proceduralProperties();
+    return p?.type === "door" || p?.type === "window" ? (p.leafTypes?.[index] ?? p.operation) : "";
+  }
+  setLeafType(index: number, event: Event) {
+    const p = this.proceduralProperties();
+    if (p?.type !== "door" && p?.type !== "window") return;
+    const value = this.text(event);
+    if (!(LEAF_TYPES as string[]).includes(value)) return;
+    const leafTypes = p.leafWidths.map((_, position) => (position === index ? value : (p.leafTypes?.[position] ?? (p.operation === "opening" ? "fixed" : p.operation)))) as LeafType[];
+    this.patchProcedural({ leafTypes: leafTypes.every((leaf) => leaf === leafTypes[0]) && leafTypes[0] === p.operation ? undefined : leafTypes });
+  }
   setProceduralLeafCount(event: Event) {
     const p = this.proceduralProperties(); if (!p || (p.type !== "door" && p.type !== "window")) return;
     const count = this.number(event); if (!Number.isInteger(count) || count < 1 || count > (p.type === "door" ? 4 : 8)) return;
-    this.patchProcedural({ leafWidths: Array.from({length: count}, () => p.width / count) });
+    const previous = p.type === "door" || p.type === "window" ? p.leafTypes : undefined;
+    this.patchProcedural({ leafWidths: Array.from({length: count}, () => p.width / count), ...(previous ? { leafTypes: Array.from({length: count}, (_, index) => previous[index] ?? previous[previous.length - 1]) } : {}) });
   }
   setProceduralLeafWidth(index: number, event: Event) {
     const p = this.proceduralProperties(); if (!p || (p.type !== "door" && p.type !== "window")) return;

@@ -378,6 +378,8 @@ export class EditorService {
   }
   private proceduralPatch(value:Procedural,patch:Record<string,unknown>):Procedural {
     const next={...value,...patch,type:value.type} as Procedural;
+    // An explicit undefined clears an optional parameter instead of storing an empty key.
+    for(const key of Object.keys(patch))if(patch[key]===undefined)delete (next as Record<string,unknown>)[key];
     if((next.type==='door'||next.type==='window')&&(value.type==='door'||value.type==='window')&&patch['width']!==undefined&&patch['leafWidths']===undefined)next.leafWidths=value.leafWidths.map(w=>w*next.width/value.width);
     if(next.type==='pillar'&&next.shape==='circle'){if(patch['depth']!==undefined&&patch['width']===undefined)next.width=next.depth;else next.depth=next.width;}
     return next;

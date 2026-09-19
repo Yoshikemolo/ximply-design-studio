@@ -13,21 +13,28 @@ export interface OpeningHost {
     wallId: string;
     offset: number;
 }
+/** Leaf mechanisms available per leaf; `opening` is an empty passage and only applies to the whole hole. */
+export type LeafType = 'swing' | 'sliding' | 'folding' | 'pocket' | 'fixed';
+export const LEAF_TYPES: LeafType[] = ['swing', 'sliding', 'folding', 'pocket', 'fixed'];
 interface OpeningProcedure {
     width: number;
     depth: number;
     leafWidths: number[];
+    /** Optional mechanism per leaf; a missing entry uses the opening mechanism. */
+    leafTypes?: LeafType[];
     swing: 'left' | 'right';
+    /** Wall face the leaves project towards. */
+    side?: 'front' | 'back';
     openingAngle: number;
     host?: OpeningHost;
 }
 export interface DoorProcedure extends OpeningProcedure {
     type: 'door';
-    operation: 'swing' | 'sliding';
+    operation: 'swing' | 'sliding' | 'folding' | 'pocket' | 'opening';
 }
 export interface WindowProcedure extends OpeningProcedure {
     type: 'window';
-    operation: 'fixed' | 'swing' | 'sliding';
+    operation: 'fixed' | 'swing' | 'sliding' | 'opening';
 }
 export interface PillarProcedure {
     type: 'pillar';
@@ -42,8 +49,8 @@ export function defaultProcedural(type: ProceduralKind): Procedural {
     if (type === 'pillar')
         return { type, shape: 'rectangle', width: 60, depth: 60 };
     if (type === 'door')
-        return { type, width: 80, depth: 16, leafWidths: [80], operation: 'swing', swing: 'left', openingAngle: 90 };
-    return { type, width: 100, depth: 16, leafWidths: [50, 50], operation: 'fixed', swing: 'left', openingAngle: 90 };
+        return { type, width: 80, depth: 16, leafWidths: [80], operation: 'swing', swing: 'left', side: 'front', openingAngle: 90 };
+    return { type, width: 100, depth: 16, leafWidths: [50, 50], operation: 'fixed', swing: 'left', side: 'front', openingAngle: 90 };
 }
 const line = (a: Point, b: Point) => polyline([a, b]);
 const rectangle = (x: number, y: number, w: number, h: number) => polyline([{ x, y }, { x: x + w, y }, { x: x + w, y: y + h }, { x, y: y + h }], true);
@@ -76,30 +83,74 @@ function transformedWallPath(layer: Layer, procedure: WallProcedure): CurvePath 
         return { x: layer.flipX ? layer.width - px : px, y: layer.flipY ? layer.height - py : py };
     })[0];
 }
-function openingPaths(p: DoorProcedure | WindowProcedure): CurvePath[] {
-    const paths: CurvePath[] = [], center = p.depth / 2;
+/** Leaf mechanism of one leaf: an explicit per-leaf type wins over the opening mechanism. */
+export function leafType(p: DoorProcedure | WindowProcedure, index: number): LeafType | 'opening' {
+    if (p.operation === 'opening')
+        return 'opening';
+    return p.leafTypes?.[index] ?? p.operation;
+}
+interface OpeningCurve { path: CurvePath; projection: boolean }
+/** Swing and folding arcs are projections of the leaf travel and are drawn as broken lines. */
+function openingCurves(p: DoorProcedure | WindowProcedure): OpeningCurve[] {
+    const curves: OpeningCurve[] = [], center = p.depth / 2, face = p.side === 'back' ? 1 : -1;
+    const solid = (path: CurvePath) => curves.push({ path, projection: false });
+    const projected = (path: CurvePath) => curves.push({ path, projection: true });
     // Jambs terminate at the opening; the portal itself has no filled rectangle.
-    paths.push(line({ x: 0, y: 0 }, { x: 0, y: p.depth }), line({ x: p.width, y: 0 }, { x: p.width, y: p.depth }));
+    solid(line({ x: 0, y: 0 }, { x: 0, y: p.depth }));
+    solid(line({ x: p.width, y: 0 }, { x: p.width, y: p.depth }));
     let offset = 0;
     p.leafWidths.forEach((width, index) => {
+        const type = leafType(p, index);
+        if (type === 'opening')
+            return;
         const reverse = p.swing === 'right' ? (index % 2 === 0) : (index % 2 === 1), hinge = { x: offset + (reverse ? width : 0), y: center };
-        if (p.operation === 'swing') {
-            const start = reverse ? Math.PI : 0, angle = (reverse ? 1 : -1) * p.openingAngle * Math.PI / 180, end = { x: hinge.x + width * Math.cos(start + angle), y: center + width * Math.sin(start + angle) };
-            paths.push(line(hinge, end));
+        const slide = offset;
+        if (type === 'swing' || type === 'folding') {
+            const leaves = type === 'folding' ? 2 : 1, leaf = width / leaves;
+            const start = reverse ? Math.PI : 0, direction = (reverse ? -1 : 1) * face, angle = direction * p.openingAngle * Math.PI / 180;
+            const end = { x: hinge.x + leaf * Math.cos(start + angle), y: center + leaf * Math.sin(start + angle) };
+            solid(line(hinge, end));
+            if (type === 'folding') {
+                const fold = { x: end.x + leaf * Math.cos(start), y: end.y + leaf * Math.sin(start) };
+                solid(line(end, fold));
+            }
             if (p.openingAngle > 0)
-                paths.push(arc(hinge, width, start, angle));
+                projected(arc(hinge, leaf, start, angle));
+        }
+        else if (type === 'pocket') {
+            // The leaf slides inside the wall, so its housed position is a projection.
+            projected(rectangle(slide + (reverse ? width : -width), center - p.depth * .08, width, p.depth * .16));
+            solid(rectangle(slide, center - p.depth * .08, width, p.depth * .16));
         }
         else {
-            const y = p.operation === 'sliding' ? center + (index % 2 ? 1 : -1) * p.depth * .18 : center;
-            paths.push(rectangle(offset, y - p.depth * .08, width, p.depth * .16));
-            if (p.operation === 'sliding') {
-                const a = { x: offset + width * .3, y: y - p.depth * .3 }, b = { x: offset + width * .7, y: y - p.depth * .3 };
-                paths.push(line(a, b), line(b, { x: b.x - width * .08, y: b.y - p.depth * .12 }), line(b, { x: b.x - width * .08, y: b.y + p.depth * .12 }));
+            const y = type === 'sliding' ? center + (index % 2 ? 1 : -1) * p.depth * .18 * -face : center;
+            solid(rectangle(slide, y - p.depth * .08, width, p.depth * .16));
+            if (type === 'sliding') {
+                const a = { x: slide + width * .3, y: y - p.depth * .3 }, b = { x: slide + width * .7, y: y - p.depth * .3 };
+                solid(line(a, b));
+                solid(line(b, { x: b.x - width * .08, y: b.y - p.depth * .12 }));
+                solid(line(b, { x: b.x - width * .08, y: b.y + p.depth * .12 }));
             }
         }
         offset += width;
     });
-    return paths;
+    return curves;
+}
+function openingPaths(p: DoorProcedure | WindowProcedure): CurvePath[] {
+    return openingCurves(p).map((curve) => curve.path);
+}
+/** Broken-line pattern for projection curves, proportional to the stroke so it stays visible. */
+export function projectionDash(strokeWidth: number): number[] {
+    const unit = Math.max(1, strokeWidth);
+    return [unit * 3, unit * 2];
+}
+/** Which generated curves of a layer are projection lines; empty when the layer has none. */
+export function projectionCurves(layer: Layer): boolean[] {
+    const p = layer.procedural;
+    if (p?.type !== 'door' && p?.type !== 'window')
+        return [];
+    const flags = openingCurves(p).map((curve) => curve.projection);
+    return flags.some(Boolean) && flags.length === layer.curves?.length ? flags : [];
 }
 const generators: Record<ProceduralKind, (p: Procedural) => CurvePath[]> = {
     wall: p => [wallPath(p as WallProcedure)],
@@ -170,7 +221,12 @@ export function validProcedural(value: unknown): value is Procedural {
         return Object.keys(p).length === 4 && typeof p['shape'] === 'string' && ['rectangle', 'circle'].includes(p['shape']) && length(p['width']) && length(p['depth']) && (p['shape'] !== 'circle' || Math.abs(Number(p['width']) - Number(p['depth'])) <= 1e-6);
     if (p['type'] !== 'door' && p['type'] !== 'window')
         return false;
-    if (Object.keys(p).length !== (p['host'] === undefined ? 7 : 8) || !length(p['width']) || !length(p['depth']) || !Array.isArray(p['leafWidths']) || p['leafWidths'].length < 1 || p['leafWidths'].length > (p['type'] === 'door' ? 4 : 8) || !p['leafWidths'].every(length) || Math.abs(p['leafWidths'].reduce((a: number, b: number) => a + b, 0) - Number(p['width'])) > 1e-6 || typeof p['swing'] !== 'string' || !['left', 'right'].includes(p['swing']) || typeof p['operation'] !== 'string' || !(p['type'] === 'door' ? ['swing', 'sliding'] : ['fixed', 'swing', 'sliding']).includes(p['operation']) || typeof p['openingAngle'] !== 'number' || !Number.isFinite(p['openingAngle']) || p['openingAngle'] < 0 || p['openingAngle'] > 180)
+    const optional = ['host', 'leafTypes', 'side'].filter(key => p[key] !== undefined).length;
+    if (p['side'] !== undefined && !['front', 'back'].includes(p['side'] as string))
+        return false;
+    if (p['leafTypes'] !== undefined && (!Array.isArray(p['leafTypes']) || p['leafTypes'].length !== (p['leafWidths'] as unknown[])?.length || !p['leafTypes'].every(type => typeof type === 'string' && (LEAF_TYPES as string[]).includes(type))))
+        return false;
+    if (Object.keys(p).length !== 7 + optional || !length(p['width']) || !length(p['depth']) || !Array.isArray(p['leafWidths']) || p['leafWidths'].length < 1 || p['leafWidths'].length > (p['type'] === 'door' ? 4 : 8) || !p['leafWidths'].every(length) || Math.abs(p['leafWidths'].reduce((a: number, b: number) => a + b, 0) - Number(p['width'])) > 1e-6 || typeof p['swing'] !== 'string' || !['left', 'right'].includes(p['swing']) || typeof p['operation'] !== 'string' || !(p['type'] === 'door' ? ['swing', 'sliding', 'folding', 'pocket', 'opening'] : ['fixed', 'swing', 'sliding', 'opening']).includes(p['operation']) || typeof p['openingAngle'] !== 'number' || !Number.isFinite(p['openingAngle']) || p['openingAngle'] < 0 || p['openingAngle'] > 180)
         return false;
     return p['host'] === undefined || (record(p['host']) && Object.keys(p['host']).length === 2 && typeof p['host']['wallId'] === 'string' && p['host']['wallId'].length > 0 && p['host']['wallId'].length <= 100 && typeof p['host']['offset'] === 'number' && Number.isFinite(p['host']['offset']) && p['host']['offset'] >= 0 && p['host']['offset'] <= 1);
 }

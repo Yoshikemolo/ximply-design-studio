@@ -184,18 +184,26 @@ class ProceduralWall(BaseModel):
         return self
 
 
+LeafType = Literal['swing', 'sliding', 'folding', 'pocket', 'fixed']
+
+
 class ProceduralOpening(BaseModel):
     model_config = ConfigDict(extra='forbid')
     width: ProceduralLength
     depth: ProceduralLength
     leafWidths: Annotated[list[ProceduralLength], Field(min_length=1, max_length=8)]
+    leafTypes: Annotated[list[LeafType], Field(min_length=1, max_length=8)] | None = None
+    side: Literal['front', 'back'] | None = None
     openingAngle: Annotated[Number, Field(ge=0, le=180)]
     host: ProceduralHost | None = None
 
     @model_validator(mode='after')
     def opening_contract(self):
-        if 'host' in self.model_fields_set and self.host is None:
-            raise ValueError('Opening host cannot be null')
+        for optional in ('host', 'leafTypes', 'side'):
+            if optional in self.model_fields_set and getattr(self, optional) is None:
+                raise ValueError(f'Opening {optional} cannot be null')
+        if self.leafTypes is not None and len(self.leafTypes) != len(self.leafWidths):
+            raise ValueError('Leaf types must match the number of leaves')
         if abs(sum(self.leafWidths) - self.width) > 0.000001:
             raise ValueError('Opening leaves must sum to its width')
         return self
@@ -204,13 +212,14 @@ class ProceduralOpening(BaseModel):
 class ProceduralDoor(ProceduralOpening):
     type: Literal['door']
     leafWidths: Annotated[list[ProceduralLength], Field(min_length=1, max_length=4)]
-    operation: Literal['swing', 'sliding']
+    leafTypes: Annotated[list[LeafType], Field(min_length=1, max_length=4)] | None = None
+    operation: Literal['swing', 'sliding', 'folding', 'pocket', 'opening']
     swing: Literal['left', 'right']
 
 
 class ProceduralWindow(ProceduralOpening):
     type: Literal['window']
-    operation: Literal['fixed', 'sliding', 'swing']
+    operation: Literal['fixed', 'sliding', 'swing', 'opening']
     swing: Literal['left', 'right']
 
 

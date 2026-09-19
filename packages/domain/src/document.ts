@@ -1,4 +1,4 @@
-import { Procedural, materializeProcedural, syncProcedurals, validProcedural, validateProcedurals, resizeProcedural } from "./procedural";
+import { Procedural, materializeProcedural, projectionCurves, projectionDash, syncProcedurals, validProcedural, validateProcedurals, resizeProcedural } from "./procedural";
 import { Dimension, dimensionGeometry, dimensionLabelLayout, validDimension } from "./dimensions";
 import { LineEnds, lineEndGeometry, pathLineEnds, validLineEnds } from "./line-endings";
 import { ObjectBlend, syncBlends, validateBlends } from "./object-blend";
@@ -669,15 +669,19 @@ export function svgExport(doc: StudioDocument, measure?: TextMeasurement): strin
         content = shape(`${svgPaint("fill", l.fill)} stroke="none"`) + svgAlignedStroke(l, shape, layerIndex);
       }
       if (l.curves) {
-        const closed = l.curves.filter((path) => path.closed);
+        const projection = projectionCurves(l), drawnCurves = l.curves.filter((_, index) => !projection[index]);
+        const projected = projection.some(Boolean)
+          ? `<path d="${curveSvg(l.curves.filter((_, index) => projection[index]))}" fill="none" ${svgStroke(l)} stroke-dasharray="${projectionDash(l.strokeWidth).join(" ")}"/>`
+          : "";
+        const closed = drawnCurves.filter((path) => path.closed);
         content =
           (closed.length
             ? `<path d="${curveSvg(closed)}" ${svgPaint("fill", l.fill)} fill-rule="evenodd" stroke="none"/>`
             : "") +
           (l.strokeStyle?.alignment && l.strokeStyle.alignment !== "center"
             ? (closed.length ? svgAlignedStroke(l, (attributes) => `<path d="${curveSvg(closed)}" ${attributes}/>`, layerIndex) : "") +
-              `<path d="${curveSvg(l.curves.filter((path) => !path.closed))}" fill="none" ${svgStroke(l)}/>`
-            : `<path d="${curveSvg(l.curves)}" fill="none" ${svgStroke(l)}/>`);
+              `<path d="${curveSvg(drawnCurves.filter((path) => !path.closed))}" fill="none" ${svgStroke(l)}/>`
+            : `<path d="${curveSvg(drawnCurves)}" fill="none" ${svgStroke(l)}/>`) + projected;
       } else if (l.kind === "path")
         content = `<polyline points="${l.points.map((p) => `${p.x},${p.y}`).join(" ")}" ${style}/>`;
       if (l.kind === "text")

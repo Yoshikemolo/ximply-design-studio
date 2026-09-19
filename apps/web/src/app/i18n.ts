@@ -1,4 +1,13 @@
 const ES: Record<string, string> = {
+  "Leaf type": "Tipo de hoja",
+  "Folding": "Plegable",
+  "Pocket": "Corredera empotrada",
+  "Passage without leaves": "Hueco de paso",
+  "Hinge side": "Lado de la bisagra",
+  "Opening side": "Lado de apertura",
+  "Front face": "Cara frontal",
+  "Back face": "Cara posterior",
+  "Leaf travel is drawn as a broken projection line.": "El recorrido de la hoja se dibuja como línea de proyección discontinua.",
   "Line type": "Tipo de línea",
   "Solid line": "Línea continua",
   "Dashed line": "Línea discontinua",
