@@ -66,5 +66,5 @@ recreates the application database volume only; IAM and Sonar databases are pres
 After reset, run the future reviewed migrations/seed task before opening the editor.
 
 See [troubleshooting](trhouble-shooting.md),
-[full runbooks](docs/operations/runbooks.md) and
-[local development](docs/operations/local-development.md).
+[full runbooks](doc/operations/runbooks.md) and
+[local development](doc/operations/local-development.md).

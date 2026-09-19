@@ -12,18 +12,18 @@ Product owner and architectural reviewer: Yoshikemolo.
 
 ## Start here
 
-- [Product overview](docs/product/overview.md)
-- [Documentation index](docs/INDEX.md)
-- [Commercial model](docs/product/commercial-model.md)
-- [Ximplicity UX direction](docs/product/ux-direction.md)
-- [Functional specification](docs/product/functional-specification.md)
-- [System architecture](docs/architecture/system-overview.md)
-- [Architecture decisions](ADR/README.md)
-- [Features and scenarios](docs/planning/backlog.md)
-- [Local setup](docs/operations/local-development.md)
+- [Product overview](doc/product/overview.md)
+- [Documentation index](doc/INDEX.md)
+- [Commercial model](doc/product/commercial-model.md)
+- [Ximplicity UX direction](doc/product/ux-direction.md)
+- [Functional specification](doc/product/functional-specification.md)
+- [System architecture](doc/architecture/system-overview.md)
+- [Architecture decisions](doc/adr/README.md)
+- [Features and scenarios](doc/planning/backlog.md)
+- [Local setup](doc/operations/local-development.md)
 - [Agent workflow](AGENTS.md)
-- [Verification evidence](docs/testing/bootstrap-evidence.md)
-- [Research and version evidence](docs/research/sources.md)
+- [Verification evidence](doc/testing/bootstrap-evidence.md)
+- [Research and version evidence](doc/research/sources.md)
 
 ## Architecture
 
@@ -66,8 +66,8 @@ this bootstrap.
 | `services/realtime` | .NET SignalR authorized delivery |
 | `services/worker` | Python CPU/GPU processing |
 | `contracts` | Versioned document, plugin, API and event contracts |
-| `ADR` | Proposed decisions requiring human acceptance |
-| `docs/FEAT`, `docs/SC`, `docs/SEC` | Features, scenarios and security controls |
+| `doc/adr` | Proposed decisions requiring human acceptance |
+| `doc/feat`, `doc/sc`, `doc/sec`, `doc/po` | Features, scenarios, security controls and product outcomes |
 | `harness`, `tests` | Executable governance checks and their tests |
 
 ## Quick Start
@@ -85,7 +85,7 @@ python3 -m unittest discover -s tests -v
 
 See [quick-install.md](quick-install.md) for Bash/PowerShell infrastructure commands,
 [trhouble-shooting.md](trhouble-shooting.md) for diagnosis, and
-[GitFlow](docs/engineering/gitflow.md) for dev/feat/fix/qa/demo/release/main promotion.
+[GitFlow](doc/engineering/gitflow.md) for dev/feat/fix/qa/demo/release/main promotion.
 The requested troubleshooting filename is preserved; `trouble-shooting.md` links to it.
 
 ## Quality and licensing

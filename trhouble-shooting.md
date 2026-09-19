@@ -20,4 +20,4 @@ This filename retains the spelling requested for the README link.
 
 Capture command, environment, source revision and redacted logs. Never post tokens,
 .env files or private document contents in public issues. Use `status`, `logs` and
-`--dry-run` before mutation. See docs/operations/runbooks.md for operation scope.
+`--dry-run` before mutation. See doc/operations/runbooks.md for operation scope.

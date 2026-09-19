@@ -16,7 +16,7 @@ def check(root: Path) -> list[str]:
             parsed[path] = json.loads(path.read_text())
         except (ValueError, OSError) as error:
             errors.append(f"Invalid JSON {path.relative_to(root)}: {error}")
-    registry = parsed.get(root / "docs/planning/traceability.json")
+    registry = parsed.get(root / "doc/planning/traceability.json")
     if not isinstance(registry, dict):
         return errors + ["Missing traceability registry"]
     features = registry.get("features", [])
@@ -32,10 +32,10 @@ def check(root: Path) -> list[str]:
             if dependency not in known:
                 errors.append(f"Unknown dependency {dependency}")
         for adr in item["adrs"]:
-            if not (root / "ADR" / f"{adr}.md").is_file():
+            if not (root / "doc/adr" / f"{adr}.md").is_file():
                 errors.append(f"Missing decision {adr}")
         for scenario in item["scenarios"]:
-            target = root / "docs/SC" / f"{scenario}.md"
+            target = root / "doc/sc" / f"{scenario}.md"
             if not target.is_file() or f"Feature: {item['id']}" not in target.read_text():
                 errors.append(f"Missing or mismatched scenario {scenario}")
         if item["status"] == "Verified" and not all(item.get(key) for key in ("implementation","tests","evidence")):

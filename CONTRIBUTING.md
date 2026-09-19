@@ -1,7 +1,7 @@
 # Contributing
 
-Owner: Yoshikemolo. Read AGENTS.md, docs/engineering/gitflow.md and
-[contribution policy](docs/engineering/contribution-policy.md) before changes.
+Owner: Yoshikemolo. Read AGENTS.md, doc/engineering/gitflow.md and
+[contribution policy](doc/engineering/contribution-policy.md) before changes.
 
 All new work starts at current dev on feat/* or fix/*. Use Conventional Commits in
 English, no emojis, attribution trailers or provider/model mentions in commit/PR
