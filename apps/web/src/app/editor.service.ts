@@ -111,6 +111,7 @@ export class EditorService {
     original: Layer;
     mode: string;
     ids?: string[];
+    deselectNodeOnClick?: string;
   };
   constructor() {
     try {
@@ -245,6 +246,7 @@ export class EditorService {
     this.finishPath();
     this.history.commit(this.document());
     this.document.set(blankDocument());
+    this.activeNodes.set([]);
     this.selectedId.set(null);
     this.changed();
   }
@@ -253,13 +255,14 @@ export class EditorService {
     const doc = parseDocument(text);
     this.history.commit(this.document());
     this.document.set(doc);
+    this.activeNodes.set([]);
     this.selectedId.set(null);
     this.changed();
     this.status.set("Project opened");
   }
   start(
     point: Point,
-    modifiers: { shift?: boolean; alt?: boolean } = {},
+    modifiers: { shift?: boolean; alt?: boolean; ctrl?: boolean } = {},
     override?: ToolId,
   ) {
     const tool = override ?? this.tool();
@@ -301,7 +304,7 @@ export class EditorService {
         "pathEraser",
       ].includes(tool)
     ) {
-      this.startPathEdit(point, before, modifiers);
+      this.startPathEdit(point, before, modifiers, tool);
       return;
     }
     if (tool === "spray" || tool.startsWith("symbol")) {
@@ -340,6 +343,18 @@ export class EditorService {
         this.selectedId.set(existing.id);
         return;
       }
+    }
+    const selectedPath = this.selected();
+    if (
+      tool === "select" &&
+      this.selectedLayers().length === 1 &&
+      selectedPath?.curves &&
+      !selectedPath.locked &&
+      selectedPath.visible &&
+      this.findCurveNode(selectedPath, point)
+    ) {
+      this.startPathEdit(point, before, modifiers, "direct");
+      return;
     }
     if (tool === "select" || tool === "rotate") {
       const active = this.selectionLayer();
@@ -528,7 +543,7 @@ export class EditorService {
       mode: tool,
     };
   }
-  move(point: Point, modifiers: { shift?: boolean; alt?: boolean } = {}) {
+  move(point: Point, modifiers: { shift?: boolean; alt?: boolean; ctrl?: boolean } = {}) {
     const g = this.gesture;
     if (!g) return;
     if (g.mode === "rotate")
@@ -557,12 +572,16 @@ export class EditorService {
     } else if (g.mode === "pen") {
       const curves = structuredClone(g.original.curves!),
         node = curves[0].nodes.at(-1)!,
-        p = localPoint(g.original, point);
+        end = modifiers.shift
+          ? snapDirection(worldPoint(g.original, node.point), point, this.snapAngle())
+          : point,
+        p = localPoint(g.original, end);
       node.outgoing = p;
-      node.incoming = { x: node.point.x * 2 - p.x, y: node.point.y * 2 - p.y };
-      node.smooth = true;
+      if (!modifiers.ctrl && !modifiers.alt)
+        node.incoming = { x: node.point.x * 2 - p.x, y: node.point.y * 2 - p.y };
+      node.smooth = !modifiers.ctrl && !modifiers.alt;
       this.setLayer(g.id, { curves });
-    } else if (g.mode.startsWith("node:")) this.dragNode(point, modifiers.alt);
+    } else if (g.mode.startsWith("node:")) this.dragNode(point, modifiers);
     else if (
       [
         "line",
@@ -688,9 +707,22 @@ export class EditorService {
     ctx.restore();
     this.revision.update((v) => v + 1);
   }
+  isEditingCurve() {
+    return (
+      this.gesture?.mode === "pen" ||
+      !!this.gesture?.mode.startsWith("node:")
+    );
+  }
   end() {
     const g = this.gesture;
     if (!g) return;
+    if (
+      g.deselectNodeOnClick &&
+      Math.hypot(g.last.x - g.start.x, g.last.y - g.start.y) < 0.01
+    )
+      this.activeNodes.update((keys) =>
+        keys.filter((key) => key !== g.deselectNodeOnClick),
+      );
     const layer = this.document().layers.find((l) => l.id === g.id);
     if (layer?.curves && (g.mode === "pen" || g.mode.startsWith("node:")))
       this.setLayer(g.id, fitCurves(layer, layer.curves));
@@ -790,10 +822,12 @@ export class EditorService {
         ? existing.filter((id) => !members.includes(id))
         : [...new Set([...existing, ...members])];
     }
+    if (ids.length !== 1 || ids[0] !== this.selectedId()) this.activeNodes.set([]);
     this.selectedIds.set(ids);
     this.selectedId.set(ids.at(-1) ?? null);
   }
   selectAll() {
+    this.activeNodes.set([]);
     const ids = this.document()
       .layers.filter((l) => l.visible && !l.locked)
       .map((l) => l.id);
@@ -977,35 +1011,41 @@ export class EditorService {
       ),
     ];
   }
-  private startPathEdit(
-    point: Point,
-    before: StudioDocument,
-    modifiers: { shift?: boolean; alt?: boolean },
-  ) {
-    let layer = this.selected();
+  private findCurveNode(layer: Layer, point: Point) {
     let hit:
       | { path: number; index: number; part: "point" | "incoming" | "outgoing" }
       | undefined;
-    const find = (candidate: Layer) => {
-      const p = localPoint(candidate, point);
-      candidate.curves?.forEach((path, pi) =>
-        path.nodes.forEach((node, index) => {
-          for (const part of ["incoming", "outgoing", "point"] as const)
-            if (
-              Math.hypot(node[part].x - p.x, node[part].y - p.y) <
-              9 / this.zoom()
-            )
-              hit = { path: pi, index, part };
-        }),
-      );
-    };
+    let distance = 9 / this.zoom();
+    layer.curves?.forEach((path, pathIndex) => {
+      path.nodes.forEach((node, index) => {
+        for (const part of ["point", "incoming", "outgoing"] as const) {
+          if (part !== "point" && !this.showHandles()) continue;
+          const world = worldPoint(layer, node[part]);
+          const candidate = Math.hypot(world.x - point.x, world.y - point.y);
+          if (candidate < distance) {
+            distance = candidate;
+            hit = { path: pathIndex, index, part };
+          }
+        }
+      });
+    });
+    return hit;
+  }
+  private startPathEdit(
+    point: Point,
+    before: StudioDocument,
+    modifiers: { shift?: boolean; alt?: boolean; ctrl?: boolean },
+    tool = this.tool(),
+  ) {
+    let layer = this.selected();
+    let hit: ReturnType<EditorService["findCurveNode"]>;
     if (layer && !layer.locked && layer.visible) {
       if (
         !layer.curves &&
         ["path", "rectangle", "ellipse"].includes(layer.kind)
       )
         layer = { ...layer, kind: "path", curves: this.editableCurves(layer) };
-      find(layer);
+      hit = this.findCurveNode(layer, point);
     }
     if (!hit) {
       layer = pick(this.document().layers, point) ?? null;
@@ -1019,7 +1059,7 @@ export class EditorService {
             kind: "path",
             curves: this.editableCurves(layer),
           };
-        find(layer);
+        hit = this.findCurveNode(layer, point);
       }
     }
     if (
@@ -1031,11 +1071,11 @@ export class EditorService {
       this.selectedId.set(null);
       return;
     }
+    if (this.selectedId() !== layer.id) this.activeNodes.set([]);
     this.selectedIds.set([layer.id]);
     this.selectedId.set(layer.id);
     const curves = this.editableCurves(layer),
-      p = localPoint(layer, point),
-      tool = this.tool();
+      p = localPoint(layer, point);
     if (tool === "smooth") {
       this.history.commit(before);
       this.setLayer(
@@ -1112,10 +1152,13 @@ export class EditorService {
       this.changed();
       return;
     }
-    if (modifiers.shift) {
-      this.activeNodes.update((keys) =>
-        keys.includes(key) ? keys.filter((k) => k !== key) : [...keys, key],
-      );
+    const deselectNodeOnClick =
+      modifiers.shift && hit.part === "point" && this.activeNodes().includes(key)
+        ? key
+        : undefined;
+    if (modifiers.shift && hit.part === "point") {
+      if (!this.activeNodes().includes(key))
+        this.activeNodes.update((keys) => [...keys, key]);
     } else if (!this.activeNodes().includes(key)) this.activeNodes.set([key]);
     this.gesture = {
       before,
@@ -1123,16 +1166,25 @@ export class EditorService {
       last: point,
       id: layer.id,
       points: [],
-      original: structuredClone(layer),
+      original: structuredClone({ ...layer, curves }),
       mode: "node:" + hit.path + ":" + hit.index + ":" + hit.part,
+      deselectNodeOnClick,
     };
   }
-  private dragNode(point: Point, independent = false) {
+  private dragNode(
+    point: Point,
+    modifiers: { shift?: boolean; alt?: boolean; ctrl?: boolean },
+  ) {
     const g = this.gesture!;
     const [, pi, ni, part] = g.mode.split(":"),
       curves = structuredClone(g.original.curves!),
       node = curves[+pi].nodes[+ni],
-      p = localPoint(g.original, point);
+      origin = part === "point" ? g.start : worldPoint(g.original, node.point),
+      end = modifiers.shift
+        ? snapDirection(origin, point, this.snapAngle())
+        : point,
+      p = localPoint(g.original, end),
+      independent = modifiers.ctrl || modifiers.alt;
     if (part === "point") {
       const origin = localPoint(g.original, g.start),
         dx = p.x - origin.x,
@@ -1150,17 +1202,17 @@ export class EditorService {
       node[part as "incoming" | "outgoing"] = p;
       if (node.smooth && !independent) {
         const other = part === "incoming" ? "outgoing" : "incoming",
-          length = Math.hypot(
-            node[other].x - node.point.x,
-            node[other].y - node.point.y,
-          ),
-          dx = p.x - node.point.x,
-          dy = p.y - node.point.y,
-          mag = Math.hypot(dx, dy) || 1;
-        node[other] = {
-          x: node.point.x - (dx / mag) * length,
-          y: node.point.y - (dy / mag) * length,
-        };
+          center = worldPoint(g.original, node.point),
+          opposite = worldPoint(g.original, node[other]),
+          length = Math.hypot(opposite.x - center.x, opposite.y - center.y),
+          dx = end.x - center.x,
+          dy = end.y - center.y,
+          mag = Math.hypot(dx, dy);
+        if (mag > 0)
+          node[other] = localPoint(g.original, {
+            x: center.x - (dx / mag) * length,
+            y: center.y - (dy / mag) * length,
+          });
       }
       if (independent) node.smooth = false;
     }

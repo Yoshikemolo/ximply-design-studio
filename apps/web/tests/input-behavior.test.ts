@@ -162,6 +162,69 @@ describe("inline editing and canvas-only zoom", () => {
     expect(e.document().layers).toHaveLength(1);
     expect(e.document().layers[0].curves![0].nodes).toHaveLength(3);
   });
+  it("routes Ctrl and Shift through pointer events without replacing the stored tool", () => {
+    const app = component(), e = app.editor;
+    e.setTool("direct");
+    Object.assign(app, { canvas: { nativeElement: {
+      setPointerCapture: vi.fn(),
+      getBoundingClientRect: () => ({ left: 0, top: 0, width: 1200, height: 800 }),
+    } } });
+    const start = vi.spyOn(e, "start"), move = vi.spyOn(e, "move");
+    app.pointerDown(new PointerEvent("pointerdown", {
+      button: 0, clientX: 100, clientY: 120, ctrlKey: true, shiftKey: true,
+    }));
+    expect(start).toHaveBeenCalledWith(
+      { x: 100, y: 120 }, { ctrl: true, shift: true, alt: false }, "select",
+    );
+    app.pointerMove(new PointerEvent("pointermove", {
+      clientX: 150, clientY: 170, ctrlKey: true, shiftKey: true, altKey: true,
+    }));
+    expect(move).toHaveBeenCalledWith(
+      { x: 150, y: 170 }, { ctrl: true, shift: true, alt: true },
+    );
+    expect(e.tool()).toBe("direct");
+  });
+  it("keeps the Pen tool and path stable when Ctrl is pressed during a curve drag", () => {
+    const app = component(), e = app.editor;
+    e.setTool("pen");
+    e.start({ x: 100, y: 100 });
+    const pathId = e.penId();
+    app.key(new KeyboardEvent("keydown", {
+      key: "Control", code: "ControlLeft", ctrlKey: true,
+    }));
+    expect(e.isEditingCurve()).toBe(true);
+    expect(app.activeTool()).toBe("pen");
+    expect(e.tool()).toBe("pen");
+    app.pointerUp();
+    expect(app.activeTool()).toBe("select");
+    app.keyUp(new KeyboardEvent("keyup", { key: "Control", code: "ControlLeft" }));
+    expect(app.activeTool()).toBe("pen");
+    expect(e.penId()).toBe(pathId);
+    e.start({ x: 200, y: 150 });
+    e.end();
+    expect(e.document().layers).toHaveLength(1);
+    expect(e.document().layers[0].curves![0].nodes).toHaveLength(2);
+  });
+  it("requests control-point overlays for Select without changing other tools", () => {
+    const app = component(), e = app.editor;
+    const canvas = document.createElement("canvas");
+    Object.assign(app, { canvas: { nativeElement: canvas } });
+    const draw = vi.spyOn(e.renderer, "draw").mockImplementation(() => {});
+    const frame = vi.spyOn(globalThis, "requestAnimationFrame").mockImplementation((callback) => {
+      callback(0);
+      return 1;
+    });
+    try {
+      app.schedule();
+      expect(draw.mock.calls.at(-1)?.[6]).toMatchObject({ direct: true });
+      e.setTool("text");
+      app.schedule();
+      expect(draw.mock.calls.at(-1)?.[6]).toMatchObject({ direct: false });
+    } finally {
+      frame.mockRestore();
+      draw.mockRestore();
+    }
+  });
   it("clears a held Ctrl override when focus leaves the window", () => {
     const app = component();
     app.editor.setTool("text");

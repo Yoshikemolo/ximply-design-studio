@@ -220,7 +220,8 @@ export class AppComponent implements AfterViewInit, OnDestroy {
           false,
           {
             zoom: this.editor.zoom(),
-            direct: [
+            direct: this.editor.isEditingCurve() || [
+              "select",
               "direct",
               "pen",
               "addAnchor",
@@ -269,6 +270,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
         {
           shift: event.shiftKey,
           alt: event.altKey,
+          ctrl: event.ctrlKey,
         },
         this.temporarySelect() ? "select" : undefined,
       );
@@ -288,6 +290,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
       this.editor.move(this.point(event), {
         shift: event.shiftKey,
         alt: event.altKey,
+        ctrl: event.ctrlKey,
       });
   }
   pointerUp() {
@@ -489,7 +492,9 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     return this.tools.filter((tool) => tool.group === this.toolGroup());
   }
   activeTool(): ToolId {
-    return this.temporarySelect() ? "select" : this.editor.tool();
+    return this.temporarySelect() && !this.editor.isEditingCurve()
+      ? "select"
+      : this.editor.tool();
   }
   toolIcon() {
     return this.temporaryPan()
