@@ -6,6 +6,9 @@ export type ToolId =
   | "scale"
   | "zoom"
   | "select"
+  | "selectRectangle"
+  | "selectEllipse"
+  | "selectLasso"
   | "direct"
   | "pen"
   | "addAnchor"
@@ -52,6 +55,9 @@ export const TOOLS: ToolPlugin[] = [
   { id: "scale", label: "Scale", icon: "scale", group: "Select" },
   { id: "zoom", label: "Zoom", icon: "zoom", group: "Select" },
   { id: "select", label: "Select", icon: "select", group: "Select" },
+  { id: "selectRectangle", label: "Rectangular selection", icon: "select-rectangle", group: "Select" },
+  { id: "selectEllipse", label: "Circular selection", icon: "select-circle", group: "Select" },
+  { id: "selectLasso", label: "Freehand selection", icon: "select-lasso", group: "Select" },
   { id: "direct", label: "Direct selection", icon: "direct", group: "Select" },
   { id: "rotate", label: "Rotate", icon: "rotate", group: "Select" },
   { id: "hand", label: "Pan", icon: "hand", group: "Select" },
@@ -150,7 +156,7 @@ export interface ToolFamily {
   tools: ToolId[];
 }
 export const TOOL_FAMILIES: ToolFamily[] = [
-  { id: "selection", label: "Select", tools: ["select"] },
+  { id: "selection", label: "Select", tools: ["select", "selectRectangle", "selectEllipse", "selectLasso"] },
   { id: "direct", label: "Direct selection", tools: ["direct"] },
   {
     id: "pen",

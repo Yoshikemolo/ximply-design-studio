@@ -1,3 +1,4 @@
+import { AreaSelectionKind, SelectionArea, layerIntersectsArea } from "../../../../packages/domain/src/selection-area";
 import { blendCompatible, blendProgress, interpolateBlendLayer, syncBlends, ObjectBlend, BlendEasing } from "../../../../packages/domain/src/object-blend";
 import { defaultTypography, defaultTextLayout, FONT_FAMILIES, layoutText, TextLayoutOptions, TextTypography } from "../../../../packages/domain/src/text-layout";
 import { snapPoint, SnapConfig } from "../../../../packages/domain/src/measurements";
@@ -550,6 +551,39 @@ export class EditorService {
     this.document.update((doc) => ({ ...doc, layers: remaining }));
     this.changed();
   }
+  readonly lastAreaSelection = signal<AreaSelectionKind>("rectangle");
+  readonly areaSelection = signal<SelectionArea | null>(null);
+  private areaGesture?: { ids: string[]; primary: string | null; nodes: string[]; shift: boolean; moved: boolean };
+  private startAreaSelection(point: Point, kind: AreaSelectionKind, shift: boolean) {
+    this.lastAreaSelection.set(kind);
+    this.areaGesture = { ids: this.selectedLayers().map(layer => layer.id), primary: this.selectedId(), nodes: [...this.activeNodes()], shift, moved: false };
+    this.areaSelection.set({ kind, start: point, end: point, points: [point] });
+  }
+  private moveAreaSelection(point: Point) {
+    const previous = this.areaSelection(), gesture = this.areaGesture;
+    if (!previous || !gesture) return;
+    const points = [...previous.points];
+    if (previous.kind === "lasso" && Math.hypot(point.x - points.at(-1)!.x, point.y - points.at(-1)!.y) >= 2 / this.zoom()) points.push(point);
+    if (points.length > 512) points.splice(1, points.length - 2, ...points.slice(1, -1).filter((_, index) => index % 2 === 0));
+    const area = { ...previous, end: point, points };
+    this.areaSelection.set(area);
+    gesture.moved ||= Math.hypot(point.x - area.start.x, point.y - area.start.y) >= 3 / this.zoom();
+    if (!gesture.moved) return;
+    const layers = this.document().layers.filter(layer => layer.visible && !layer.guide && !this.isEffectivelyLocked(layer));
+    const units = new Map<string, Layer[]>();
+    for (const layer of layers) {
+      const key = layer.groupPath?.[0] ? "group:" + layer.groupPath[0] : "layer:" + layer.id;
+      units.set(key, [...(units.get(key) ?? []), layer]);
+    }
+    const selected = new Set(gesture.shift ? gesture.ids : []);
+    for (const members of units.values()) {
+      if (!members.some(layer => layerIntersectsArea(layer, area))) continue;
+      const remove = gesture.shift && members.every(layer => gesture.ids.includes(layer.id));
+      for (const layer of members) { if (remove) selected.delete(layer.id); else selected.add(layer.id); }
+    }
+    const ids = this.document().layers.filter(layer => selected.has(layer.id)).map(layer => layer.id);
+    this.selectedIds.set(ids); this.selectedId.set(ids.at(-1) ?? null); this.activeNodes.set([]);
+  }
   private gesture?: {
     before: StudioDocument;
     start: Point;
@@ -797,6 +831,8 @@ export class EditorService {
     override?: ToolId,
   ) {
     const tool = override ?? this.tool();
+    const areaTools: Partial<Record<ToolId, AreaSelectionKind>> = { selectRectangle: "rectangle", selectEllipse: "ellipse", selectLasso: "lasso" };
+    if (areaTools[tool]) { this.startAreaSelection(point, areaTools[tool]!, !!modifiers.shift); return; }
     if (tool === "eyedropper") { this.sampleStyle(point); return; }
     if (tool === "paintBucket") { this.applyStyleAt(point); return; }
     if (["rectangle", "ellipse", "path", "pen", "line", "rounded", "polygon", "star", "arc", "spiral", "grid", "polar", "flare", "text"].includes(tool)) point = this.snap(point);
@@ -958,9 +994,10 @@ export class EditorService {
             mode: "move",
             ids: this.selectedLayers().filter((l) => !l.guide).map((l) => l.id),
           };
+      } else if (tool === "select") {
+        this.startAreaSelection(point, this.lastAreaSelection(), !!modifiers.shift);
       } else if (!modifiers.shift) {
-        this.selectedId.set(null);
-        this.selectedIds.set([]);
+        this.selectedId.set(null); this.selectedIds.set([]);
       }
       return;
     }
@@ -1081,6 +1118,7 @@ export class EditorService {
     };
   }
   move(point: Point, modifiers: { shift?: boolean; alt?: boolean; ctrl?: boolean } = {}) {
+    if (this.areaGesture) { this.moveAreaSelection(point); return; }
     const g = this.gesture;
     if (!g) return;
     if (["rectangle", "ellipse", "line", "rounded", "polygon", "star", "arc", "spiral", "grid", "polar", "flare"].includes(g.mode) || g.mode.startsWith("resize:")) point = this.snap(point);
@@ -1253,6 +1291,10 @@ export class EditorService {
     );
   }
   end() {
+    if (this.areaGesture) {
+      if (!this.areaGesture.moved && !this.areaGesture.shift) { this.selectedId.set(null); this.selectedIds.set([]); this.activeNodes.set([]); }
+      this.areaGesture = undefined; this.areaSelection.set(null); return;
+    }
     const g = this.gesture;
     if (!g) return;
     if (
@@ -1276,6 +1318,10 @@ export class EditorService {
   }
   cancel() {
     this.cancelGuideDrag();
+    if (this.areaGesture) {
+      this.selectedIds.set(this.areaGesture.ids); this.selectedId.set(this.areaGesture.primary); this.activeNodes.set(this.areaGesture.nodes);
+      this.areaGesture = undefined; this.areaSelection.set(null);
+    }
     if (this.gesture) this.document.set(this.gesture.before);
     this.gesture = undefined;
     this.painting = undefined;

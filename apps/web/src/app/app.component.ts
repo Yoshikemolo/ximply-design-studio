@@ -253,6 +253,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
       };
       editor.snapConfig.set(config);
     });
+    effect(() => { editor.lastAreaSelection.set(preferences.lastAreaSelection()); });
     effect(() => { editor.setGuidesLocked(preferences.guidesLocked()); });
     effect(() => {
       editor.snapAngle.set(preferences.snapAngle());
@@ -262,6 +263,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
       editor.selectedId();
       editor.selectedIds();
       editor.revision();
+      editor.areaSelection();
       editor.zoom();
       editor.tool();
       this.temporarySelect();
@@ -526,6 +528,17 @@ export class AppComponent implements AfterViewInit, OnDestroy {
         );
     });
   }
+  areaSelectionPath() {
+    const area = this.editor.areaSelection();
+    if (!area) return "";
+    const { start, end } = area;
+    if (area.kind === "rectangle") return `M${start.x} ${start.y}H${end.x}V${end.y}H${start.x}Z`;
+    if (area.kind === "ellipse") {
+      const radius = Math.hypot(end.x - start.x, end.y - start.y);
+      return `M${start.x - radius} ${start.y}a${radius} ${radius} 0 1 0 ${radius * 2} 0a${radius} ${radius} 0 1 0 ${-radius * 2} 0Z`;
+    }
+    return `M${start.x} ${start.y}` + area.points.map(point => `L${point.x} ${point.y}`).join("") + "Z";
+  }
   private point(event: MouseEvent) {
     const rect = this.canvas!.nativeElement.getBoundingClientRect();
     return {
@@ -735,7 +748,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     return true;
   }
   commandLabel(id: string) {
-    return this.commandList.find((c) => c.id === id)?.label ?? id;
+    return this.commandList.find((c) => c.id === id)?.label ?? this.tools.find(tool => "tool." + tool.id === id)?.label ?? id;
   }
   commandTitle(id: string) {
     return (
@@ -880,6 +893,8 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   chooseTool(id: ToolId) {
     this.commitText();
     this.editor.setTool(id);
+    const mode = ({ selectRectangle: "rectangle", selectEllipse: "ellipse", selectLasso: "lasso" } as const)[id as "selectRectangle" | "selectEllipse" | "selectLasso"];
+    if (mode) this.preferences.setAreaSelection(mode);
     const family = this.families.find((f) => f.tools.includes(id));
     if (family) this.familyChoices.update((c) => ({ ...c, [family.id]: id }));
     this.flyout.set(null);

@@ -1470,3 +1470,23 @@ textarea,
 .ruler-cursor-marker { position: absolute; z-index: 1; background: #258bff; pointer-events: none; }
 .horizontal-ruler .ruler-cursor-marker { top: 0; bottom: 0; width: 2px; transform: translateX(-1px); }
 .vertical-ruler .ruler-cursor-marker { left: 0; right: 0; height: 2px; transform: translateY(-1px); }
+
+.area-selection-overlay {
+  width: 100%;
+  height: 100%;
+  fill: rgba(38, 128, 235, 0.12);
+  stroke: #2680eb;
+  stroke-width: 1px;
+  stroke-dasharray: 4 3;
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 5;
+}
+
+.selection-help {
+  max-width: 230px;
+  margin: 8px;
+  color: var(--muted);
+  font-size: 11px;
+}

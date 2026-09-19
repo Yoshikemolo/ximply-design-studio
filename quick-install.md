@@ -47,6 +47,10 @@ isolation. Keycloak and PostgreSQL integration remain later slices.
 8. Open About from the footer and change the version selector.
 
 Use Pen to place anchors; drag an anchor while placing it to create cubic handles.
+Use the Selection family flyout for rectangular, circular or lasso area selection.
+Drag empty canvas with Select to reuse the last area mode. Circular selection starts
+at its center and grows to the pointer. Hold Shift to toggle reached objects;
+Escape cancels the gesture. Explicit area tools can begin over existing artwork.
 Use Direct selection to adjust existing anchors and controls. Finish an open path
 with Enter. Use the Text tool over existing text to edit it inline. Transform edge
 handles change one dimension; the rotation handle turns the selected object. Hold
@@ -147,5 +151,5 @@ Before starting, run `./scripts/local.ps1 info` on Windows or
 `./scripts/local.sh info` on Linux/macOS. This read-only action prints the checkout
 version, branch and commit without Docker. It identifies source files, not a running
 container. After pulling, restart with `stop` and `start` to rebuild the container;
-confirm version **0.3.11-alpha.1** in the application footer or About.
+confirm version **0.3.12-alpha.1** in the application footer or About.
 The drawing features are on `feat/drawing-preview` until integration gates pass.

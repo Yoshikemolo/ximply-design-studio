@@ -312,7 +312,11 @@
               (pointerleave)="cursorPoint.set(null)"
               (pointerup)="pointerUp()"
               (pointercancel)="pointerCancel()"
+              (lostpointercapture)="pointerCancel()"
             ></canvas>
+            @if (editor.areaSelection()) {
+              <svg class="area-selection-overlay" [attr.viewBox]="'0 0 ' + editor.document().width + ' ' + editor.document().height" aria-hidden="true"><path [attr.d]="areaSelectionPath()" vector-effect="non-scaling-stroke"></path></svg>
+            }
             @if (cursorAxesPoint(); as axes) {
               <div class="canvas-cursor-axes" aria-hidden="true">
                 <span class="cursor-axis-horizontal" [style.top.px]="axes.y"></span>
@@ -1248,6 +1252,7 @@
         ><kbd>{{ shortcut("tool." + tool.id) }}</kbd>
       </button>
     }
+    @if (flyout() === 'selection') {<p class="selection-help">{{ t('Drag to select an area. Shift toggles objects in the selection.') }}</p>}
     @if (flyout() === 'style') {
       <div class="style-scope-options" role="group" [attr.aria-label]="t('Style transfer scope')">
         <span>{{ t('Style transfer scope') }}</span>

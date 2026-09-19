@@ -1,4 +1,8 @@
 const ES: Record<string, string> = {
+  "Rectangular selection": "Selección rectangular",
+  "Circular selection": "Selección circular",
+  "Freehand selection": "Selección a mano alzada",
+  "Drag to select an area. Shift toggles objects in the selection.": "Arrastra para seleccionar un área. Mayús añade o resta objetos de la selección.",
   "Use vector endpoints with matching contour counts and open or closed paths. Groups must contain the same number of objects.": "Utiliza extremos vectoriales con igual número de contornos y trazados abiertos o cerrados compatibles. Los grupos deben contener el mismo número de objetos.",
 
   "Blend expanded because its endpoints changed.": "La fusión se ha expandido porque cambiaron sus extremos.",

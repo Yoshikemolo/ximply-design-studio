@@ -5,6 +5,7 @@ import {
   validateShortcuts,
 } from "../../../../packages/domain/src/shortcuts";
 import { isUnit, Unit } from "../../../../packages/domain/src/measurements";
+export type AreaSelectionMode = "rectangle" | "ellipse" | "lasso";
 export interface MeasurementSettings {
   distanceUnit: Unit;
   fontUnit: Unit;
@@ -40,6 +41,7 @@ function validateMeasurement<K extends keyof MeasurementSettings>(key: K, value:
 @Injectable({ providedIn: "root" })
 export class PreferencesService {
   readonly bindings = signal<ShortcutMap>(defaultShortcuts());
+  readonly lastAreaSelection = signal<AreaSelectionMode>("rectangle");
   readonly cursorIcon = signal(true);
   readonly cursorAxes = signal(true);
   readonly snapAngle = signal(45);
@@ -66,6 +68,8 @@ export class PreferencesService {
         const saved = JSON.parse(raw);
         if (saved.version !== 1 || typeof saved.cursorIcon !== "boolean")
           throw new Error("Invalid shortcut settings");
+        if (saved.lastAreaSelection !== undefined && !["rectangle", "ellipse", "lasso"].includes(saved.lastAreaSelection)) throw new Error("Invalid selection mode");
+        this.lastAreaSelection.set(saved.lastAreaSelection ?? "rectangle");
         const measurements = { ...measurementDefaults, ...saved.measurements };
         for (const key of Object.keys(measurements) as (keyof MeasurementSettings)[]) validateMeasurement(key, measurements[key]);
         const layout = saved.layoutBlocks ?? this.layoutBlocks();
@@ -92,11 +96,26 @@ export class PreferencesService {
         this.layoutBlocks.set(layout);
       }
     } catch {
+      this.lastAreaSelection.set("rectangle");
       this.bindings.set(defaultShortcuts());
       this.cursorIcon.set(true);
       this.cursorAxes.set(true);
       this.snapAngle.set(45);
       this.error.set("Invalid saved settings. Defaults restored.");
+    }
+  }
+  setAreaSelection(mode: AreaSelectionMode): boolean {
+    if (!["rectangle", "ellipse", "lasso"].includes(mode)) return false;
+    const previous = this.lastAreaSelection();
+    try {
+      this.lastAreaSelection.set(mode);
+      this.persist(this.bindings(), this.cursorIcon());
+      this.error.set("");
+      return true;
+    } catch {
+      this.lastAreaSelection.set(previous);
+      this.error.set("Settings could not be saved.");
+      return false;
     }
   }
   assign(id: string, keys: string[]): boolean {
@@ -187,7 +206,7 @@ export class PreferencesService {
   }
   private persistExtended(measurements: MeasurementSettings, layoutBlocks: Record<LayoutBlock, boolean>) {
     localStorage.setItem("xds-input-settings", JSON.stringify({
-      version: 1, bindings: this.bindings(), cursorIcon: this.cursorIcon(), cursorAxes: this.cursorAxes(),
+      version: 1, lastAreaSelection: this.lastAreaSelection(), bindings: this.bindings(), cursorIcon: this.cursorIcon(), cursorAxes: this.cursorAxes(),
       snapAngle: this.snapAngle(), measurements, layoutBlocks,
     }));
   }
@@ -199,7 +218,7 @@ export class PreferencesService {
   ) {
     localStorage.setItem(
       "xds-input-settings",
-      JSON.stringify({ version: 1, bindings, cursorIcon, snapAngle, cursorAxes, measurements: this.measurements(), layoutBlocks: this.layoutBlocks() }),
+      JSON.stringify({ version: 1, lastAreaSelection: this.lastAreaSelection(), bindings, cursorIcon, snapAngle, cursorAxes, measurements: this.measurements(), layoutBlocks: this.layoutBlocks() }),
     );
   }
 }
