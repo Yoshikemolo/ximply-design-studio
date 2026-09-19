@@ -1,3 +1,4 @@
+import { measurementUnits, isUnit, snapPoint, fromPixels, toPixels, formatMeasurement, rulerTicks as makeRulerTicks, SnapConfig } from "../../../../packages/domain/src/measurements";
 import { PreferencesService } from "./preferences.service";
 import {
   COMMANDS,
@@ -45,6 +46,16 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   @ViewChild("spatialHost") spatialHost?: ElementRef<HTMLDivElement>;
   @ViewChild("imageFile") imageFile?: ElementRef<HTMLInputElement>;
   @ViewChild("projectFile") projectFile?: ElementRef<HTMLInputElement>;
+  readonly units = measurementUnits;
+  readonly fontUnits = measurementUnits;
+  readonly paintTargets = ["fill", "stroke"] as const;
+  readonly quickColors = [{ value: "#000000", label: "Black" }, { value: "#ffffff", label: "White" }, { value: "none", label: "No color" }];
+  readonly paintTarget = signal<"fill" | "stroke">("fill");
+  readonly paintPicker = signal<{ x: number; y: number } | null>(null);
+  readonly contextBlocks = [{ id: "appearance", label: "Appearance" }, { id: "workspace", label: "Workspace" }, { id: "measurement", label: "Measurement" }] as const;
+  readonly measurementAids = [{ id: "rulers", label: "Rulers" }, { id: "guides", label: "Guides" }, { id: "grid", label: "Grid" }] as const;
+  readonly draggingGuideId = signal<string | null>(null);
+  private guideDrag?: { axis: "vertical" | "horizontal"; pointerId: number; element: HTMLElement };
   readonly families = TOOL_FAMILIES;
   readonly toolbarSections = [
     {
@@ -160,6 +171,15 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     readonly preferences: PreferencesService,
   ) {
     effect(() => {
+      const config: SnapConfig = {
+        zoom: editor.zoom(),
+        rulers: { enabled: preferences.snapRulers(), visible: preferences.rulersVisible(), step: preferences.rulerStep(), radius: preferences.rulerSnapRadius() },
+        grid: { enabled: preferences.snapGrid(), visible: preferences.gridVisible(), step: preferences.gridSize(), radius: preferences.gridSnapRadius() },
+        guides: { enabled: preferences.snapGuides(), visible: preferences.guidesVisible(), radius: preferences.guideSnapRadius(), items: editor.document().layers.filter(layer => layer.guide && layer.visible && layer.id !== this.draggingGuideId()).map(layer => ({ axis: layer.guide === "vertical" ? "x" as const : "y" as const, position: layer.guide === "vertical" ? layer.x : layer.y })) },
+      };
+      editor.snapConfig.set(config);
+    });
+    effect(() => {
       editor.snapAngle.set(preferences.snapAngle());
     });
     effect(() => {
@@ -183,6 +203,96 @@ export class AppComponent implements AfterViewInit, OnDestroy {
       window.document.documentElement.lang = this.locale();
       localStorage.setItem("xds-locale", this.locale());
     });
+  }
+  paintColor(target: "fill" | "stroke") {
+    const selected = this.editor.selected();
+    return selected && !selected.guide ? selected[target] : this.editor[target]();
+  }
+  paintWidth() { const selected = this.editor.selected(); return selected && !selected.guide ? selected.strokeWidth : this.editor.size(); }
+  openPaint(target: "fill" | "stroke", event: MouseEvent) {
+    const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
+    this.paintTarget.set(target);
+    this.paintPicker.set({ x: Math.max(8, Math.min(rect.right + 8, window.innerWidth - 260)), y: Math.max(8, Math.min(rect.top, window.innerHeight - 300)) });
+  }
+  paintBaseColor() {
+    const color = this.paintColor(this.paintTarget());
+    return color === "none" ? "#000000" : color.slice(0, 7);
+  }
+  paintOpacity() {
+    const color = this.paintColor(this.paintTarget());
+    return color === "none" ? 0 : color.length === 9 ? Math.round(parseInt(color.slice(7), 16) / 255 * 100) : 100;
+  }
+  setPaintBaseColor(color: string) {
+    const current = this.paintColor(this.paintTarget());
+    this.editor.setPaint(this.paintTarget(), color + (current.length === 9 ? current.slice(7) : ""));
+  }
+  setPaintOpacity(opacity: number) {
+    if (!Number.isFinite(opacity)) return;
+    const alpha = Math.round(Math.max(0, Math.min(100, opacity)) / 100 * 255).toString(16).padStart(2, "0");
+    this.editor.setPaint(this.paintTarget(), this.paintBaseColor() + (alpha === "ff" ? "" : alpha));
+  }
+  @HostListener("document:pointerdown", ["$event"]) dismissPaint(event: PointerEvent) {
+    if (!(event.target instanceof Element) || !event.target.closest(".paint-popover,.paint-trigger")) this.paintPicker.set(null);
+  }
+  setUnit(key: "distanceUnit" | "fontUnit", event: Event) { const unit = this.text(event); if (isUnit(unit)) this.preferences.setMeasurement(key, unit); }
+  displayDistance(value: number) { return Number(fromPixels(value, this.preferences.distanceUnit()).toFixed(8)); }
+  displayFontSize(value: number) { return Number(fromPixels(value, this.preferences.fontUnit()).toFixed(8)); }
+  distanceInput(event: Event) { const value = this.number(event); return Number.isFinite(value) ? toPixels(value, this.preferences.distanceUnit()) : NaN; }
+  setSymbolRadius(event: Event) { const value = this.distanceInput(event); if (Number.isFinite(value)) this.editor.symbolRadius.set(Math.max(5, Math.min(500, value))); }
+  setPaintWidth(event: Event) { this.editor.setStrokeWidth(this.distanceInput(event)); }
+  setToolSize(event: Event) { this.editor.size.set(this.clampSize(this.distanceInput(event))); }
+  aidVisible(id: "rulers" | "guides" | "grid") { return this.preferences[`${id}Visible`](); }
+  toggleAid(id: "rulers" | "guides" | "grid") { this.preferences.setMeasurement(`${id}Visible`, !this.aidVisible(id)); }
+  aidSnaps(id: "rulers" | "guides" | "grid") { return id === "rulers" ? this.preferences.snapRulers() : id === "guides" ? this.preferences.snapGuides() : this.preferences.snapGrid(); }
+  toggleSnap(id: "rulers" | "guides" | "grid") { this.preferences.setMeasurement(id === "rulers" ? "snapRulers" : id === "guides" ? "snapGuides" : "snapGrid", !this.aidSnaps(id)); }
+  snapRadius(id: "rulers" | "guides" | "grid") { return id === "rulers" ? this.preferences.rulerSnapRadius() : id === "guides" ? this.preferences.guideSnapRadius() : this.preferences.gridSnapRadius(); }
+  setSnapRadius(id: "rulers" | "guides" | "grid", value: number) { this.preferences.setMeasurement(id === "rulers" ? "rulerSnapRadius" : id === "guides" ? "guideSnapRadius" : "gridSnapRadius", value); }
+  rulerTicks(axis: "vertical" | "horizontal") { return makeRulerTicks(axis === "vertical" ? this.editor.document().height : this.editor.document().width, this.editor.zoom(), this.preferences.distanceUnit(), this.preferences.rulerStep()); }
+  gridSpacing() { return this.preferences.gridSize() * this.editor.zoom(); }
+  visibleGuides() { return this.editor.document().layers.filter((layer) => layer.guide && layer.visible); }
+  startGuide(event: PointerEvent, axis: "vertical" | "horizontal", id?: string) {
+    if (event.button !== 0 || !this.canvas) return;
+    event.preventDefault();
+    event.stopPropagation();
+    this.commitText();
+    const point = this.point(event);
+    const guideId = this.editor.beginGuideDrag(axis, axis === "vertical" ? point.x : point.y, id);
+    if (!guideId) return;
+    this.draggingGuideId.set(guideId);
+    this.editor.selectLayer(guideId);
+    this.preferences.setMeasurement("guidesVisible", true);
+    const element = event.currentTarget as HTMLElement;
+    element.setPointerCapture(event.pointerId);
+    this.guideDrag = { axis, pointerId: event.pointerId, element };
+  }
+  moveGuide(event: PointerEvent) {
+    if (!this.guideDrag || this.guideDrag.pointerId !== event.pointerId) return;
+    const raw = this.point(event);
+    const config = this.editor.snapConfig();
+    const point = config ? snapPoint(raw, { ...config, guides: { ...config.guides, items: this.editor.document().layers.filter(layer => layer.guide && layer.visible && layer.id !== this.draggingGuideId()).map(layer => ({ axis: layer.guide === "vertical" ? "x" as const : "y" as const, position: layer.guide === "vertical" ? layer.x : layer.y })) } }) : raw;
+    this.editor.updateGuideDrag(this.guideDrag.axis === "vertical" ? point.x : point.y);
+  }
+  finishGuide(event: PointerEvent) {
+    if (!this.guideDrag || this.guideDrag.pointerId !== event.pointerId) return;
+    this.moveGuide(event);
+    const point = this.point(event), doc = this.editor.document();
+    this.editor.endGuideDrag(point.x >= 0 && point.y >= 0 && point.x <= doc.width && point.y <= doc.height);
+    this.releaseGuideCapture();
+  }
+  cancelGuide() { if (this.guideDrag) this.editor.cancelGuideDrag(); this.releaseGuideCapture(); }
+  private releaseGuideCapture() {
+    const drag = this.guideDrag;
+    this.guideDrag = undefined;
+    this.draggingGuideId.set(null);
+    if (drag?.element.hasPointerCapture(drag.pointerId)) drag.element.releasePointerCapture(drag.pointerId);
+  }
+  dragLayer(event: DragEvent, id: string) { event.stopPropagation(); event.dataTransfer?.setData("text/x-xds-layer", id); }
+  dropLayer(event: DragEvent, id: string) {
+    event.preventDefault(); event.stopPropagation();
+    const source = event.dataTransfer?.getData("text/x-xds-layer");
+    if (!source) return;
+    const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
+    this.editor.reorderLayer(source, id, event.clientY < rect.top + rect.height / 2 ? "after" : "before");
   }
   clampSize(value: number) {
     return Number.isFinite(value) ? Math.max(1, Math.min(200, value)) : 4;
@@ -298,6 +408,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     this.editor.end();
   }
   pointerCancel() {
+    if (this.guideDrag) this.cancelGuide();
     this.pan = undefined;
     this.editor.cancel();
   }
@@ -538,7 +649,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     this.cursorPoint.update((cursor) => (cursor ? { ...cursor } : null));
   }
   toolCursor() {
-    if (this.preferences.cursorAxes()) return "crosshair";
+    if (this.preferences.cursorAxes()) return "none";
     return this.temporaryPan() || this.activeTool() === "hand"
       ? "grab"
       : this.activeTool() === "text"
@@ -589,7 +700,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     if (Number.isFinite(value))
       this.editor.shapeOptions.update((o) => ({
         ...o,
-        [key]: Math.max(0.05, Math.min(200, value)),
+        [key]: Math.max(0.05, Math.min(200, key === "radius" ? toPixels(value, this.preferences.distanceUnit()) : value)),
       }));
   }
   captureKey(event: KeyboardEvent, id: string) {
@@ -680,6 +791,8 @@ export class AppComponent implements AfterViewInit, OnDestroy {
       fontSize: [1, 500],
       strokeWidth: [0, 200],
     };
+    if (["x", "y", "width", "height", "strokeWidth", "fontSize"].includes(key))
+      value = toPixels(value, key === "fontSize" ? this.preferences.fontUnit() : this.preferences.distanceUnit());
     value = Math.min(limits[key][1], Math.max(limits[key][0], value));
     this.editor.updateLayer({ [key]: value });
   }
@@ -690,7 +803,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     const layer = this.editor.selected();
     if (layer)
       this.editor.updateLayer({
-        adjustments: { ...layer.adjustments, [key]: this.number(event) },
+        adjustments: { ...layer.adjustments, [key]: key === "blur" ? Math.max(0, Math.min(30, this.distanceInput(event))) : this.number(event) },
       });
   }
   resetAdjustments() {
@@ -808,6 +921,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
       event.preventDefault();
       return;
     }
+    if (event.key === "Escape" && this.paintPicker?.()) { this.paintPicker.set(null); event.preventDefault(); return; }
     if (event.code === "Space" && !event.isComposing) this.spaceHeld = true;
     const target = event.target as HTMLElement;
     if (
@@ -869,6 +983,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
       remove: () => this.editor.remove(),
       finish: () => this.editor.finishPath(),
       cancel: () => {
+        if (this.guideDrag) this.cancelGuide();
         this.editor.cancel();
         this.editor.finishPath();
       },

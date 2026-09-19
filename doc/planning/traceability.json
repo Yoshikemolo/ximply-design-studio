@@ -204,7 +204,8 @@
       "adrs": [
         "ADR-0004",
         "ADR-0007",
-        "ADR-0023"
+        "ADR-0023",
+        "ADR-0024"
       ],
       "scenarios": [
         "SC-0022",
@@ -219,13 +220,19 @@
         "packages/domain/src/erase.ts",
         "packages/domain/src/arrange.ts",
         "packages/domain/src/symbols.ts",
-        "packages/domain/src/tracing.ts"
+        "packages/domain/src/tracing.ts",
+        "packages/domain/src/measurements.ts",
+        "apps/web/src/app/preferences.service.ts"
       ],
       "tests": [
         "packages/domain/tests/document.test.ts",
         "apps/web/tests/editor.test.ts",
         "packages/domain/tests/drawing.test.ts",
-        "packages/domain/tests/arrange.test.ts"
+        "packages/domain/tests/arrange.test.ts",
+        "packages/domain/tests/measurements.test.ts",
+        "packages/domain/tests/appearance-guides.test.ts",
+        "packages/renderer/tests/appearance-guides.test.ts",
+        "apps/web/tests/appearance-guides.test.ts"
       ],
       "evidence": [
         "doc/implementation/PLAN-0002-0001.md"

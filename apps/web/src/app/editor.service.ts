@@ -1,3 +1,4 @@
+import { snapPoint, SnapConfig } from "../../../../packages/domain/src/measurements";
 import { transformLayers } from "../../../../packages/domain/src/affine";
 import {
   alignLayers,
@@ -61,6 +62,29 @@ import { ToolId } from "./tools";
 @Injectable({ providedIn: "root" })
 export class EditorService {
   readonly snapAngle = signal(45);
+  readonly snapConfig = signal<SnapConfig | null>(null);
+  snap(point: Point): Point {
+    const config = this.snapConfig();
+    return config ? snapPoint(point, { ...config, zoom: this.zoom() }) : point;
+  }
+  private snapMovement(original: Layer, dx: number, dy: number): Point {
+    const box = selectionBounds([original]);
+    let correctionX = Infinity, correctionY = Infinity;
+    for (const fraction of [0, 0.5, 1]) {
+      const point = { x: box.x + box.width * fraction + dx, y: box.y + box.height * fraction + dy };
+      const snapped = this.snap(point);
+      const x = snapped.x - point.x, y = snapped.y - point.y;
+      if ((x !== 0 || this.isSnapTarget("x", point.x)) && Math.abs(x) < Math.abs(correctionX)) correctionX = x;
+      if ((y !== 0 || this.isSnapTarget("y", point.y)) && Math.abs(y) < Math.abs(correctionY)) correctionY = y;
+    }
+    return { x: dx + (Number.isFinite(correctionX) ? correctionX : 0), y: dy + (Number.isFinite(correctionY) ? correctionY : 0) };
+  }
+  private isSnapTarget(axis: "x" | "y", value: number): boolean {
+    const config = this.snapConfig();
+    if (!config) return false;
+    if (config.guides.enabled && config.guides.visible && config.guides.items.some((guide) => guide.axis === axis && Math.abs(guide.position - value) < 1e-8)) return true;
+    return [config.rulers, config.grid].some((scale) => scale.enabled && scale.visible && scale.step > 0 && Math.abs(Math.round(value / scale.step) * scale.step - value) < 1e-8);
+  }
   readonly shapeOptions = signal<ShapeOptions>({ ...DEFAULT_SHAPE });
   readonly activeNodes = signal<string[]>([]);
   readonly penId = signal<string | null>(null);
@@ -87,13 +111,13 @@ export class EditorService {
     );
   });
   readonly selectionLayer = computed(() => {
-    const layers = this.selectedLayers();
+    const layers = this.selectedLayers().filter((layer) => !layer.guide);
     return layers.length > 1
       ? {
           ...newLayer("rectangle", "__selection__", { x: 0, y: 0 }),
           ...selectionBounds(layers),
         }
-      : (layers[0] ?? null);
+      : (layers[0]?.guide ? null : (layers[0] ?? null));
   });
   readonly selected = computed(
     () =>
@@ -102,6 +126,93 @@ export class EditorService {
   readonly history = new DocumentHistory();
   readonly renderer = new CanvasRenderer();
   painting?: { id: string; canvas: HTMLCanvasElement };
+  private guideGesture?: { before: StudioDocument; id: string; selectedId: string | null; selectedIds: string[] };
+
+  private applyAppearance(patch: Partial<Layer>) {
+    const ids = new Set(this.selectedLayers().filter((layer) => !layer.locked && !layer.guide).map((layer) => layer.id));
+    const changes = this.document().layers.some((layer) => ids.has(layer.id) && Object.entries(patch).some(([key, value]) => layer[key as keyof Layer] !== value));
+    if (!changes) return;
+    this.history.commit(this.document());
+    this.document.update((doc) => ({ ...doc, layers: doc.layers.map((layer) => ids.has(layer.id) ? { ...layer, ...patch } : layer) }));
+    this.changed();
+  }
+  setPaint(target: "fill" | "stroke", color: string) {
+    if (color !== "none" && color !== "transparent" && !/^#[0-9a-f]{6}([0-9a-f]{2})?$/i.test(color)) return;
+    this[target].set(color === "transparent" ? "none" : color);
+    this.applyAppearance({ [target]: this[target]() });
+  }
+  swapPaint() {
+    const fill = this.fill();
+    this.fill.set(this.stroke());
+    this.stroke.set(fill);
+    this.applyAppearance({ fill: this.fill(), stroke: this.stroke() });
+  }
+  setStrokeWidth(width: number) {
+    if (!Number.isFinite(width) || width < 0 || width > 200) return;
+    this.size.set(width);
+    this.applyAppearance({ strokeWidth: width });
+  }
+  beginGuideDrag(axis: "vertical" | "horizontal", position: number, id?: string): string | null {
+    if (!Number.isFinite(position)) return null;
+    this.cancelGuideDrag();
+    const doc = this.document();
+    const existing = id ? doc.layers.find((layer) => layer.id === id && layer.guide === axis) : undefined;
+    if ((id && (!existing || existing.locked || !existing.visible)) || (!id && doc.layers.length >= 150)) return null;
+    const guide = existing ?? { ...newLayer("path", crypto.randomUUID(), { x: 0, y: 0 }, "none", "#00b8d9", 1), guide: axis, name: axis === "vertical" ? "Vertical guide" : "Horizontal guide", width: 1, height: 1 };
+    this.guideGesture = { before: structuredClone(doc), id: guide.id, selectedId: this.selectedId(), selectedIds: [...this.selectedIds()] };
+    if (!existing) this.document.update((value) => ({ ...value, layers: [...value.layers, guide] }));
+    this.updateGuideDrag(position);
+    return guide.id;
+  }
+  updateGuideDrag(position: number) {
+    const gesture = this.guideGesture;
+    if (!gesture || !Number.isFinite(position)) return;
+    const guide = this.document().layers.find((layer) => layer.id === gesture.id)!;
+    this.setLayer(guide.id, guide.guide === "vertical" ? { x: position } : { y: position });
+    this.revision.update((value) => value + 1);
+  }
+  endGuideDrag(inside: boolean) {
+    const gesture = this.guideGesture;
+    if (!gesture) return;
+    if (!inside) this.document.update((doc) => ({ ...doc, layers: doc.layers.filter((layer) => layer.id !== gesture.id) }));
+    if (JSON.stringify(gesture.before) !== JSON.stringify(this.document())) {
+      this.history.commit(gesture.before);
+      this.changed();
+    }
+    if (!inside && this.selectedId() === gesture.id) {
+      this.selectedId.set(null);
+      this.selectedIds.update((ids) => ids.filter((id) => id !== gesture.id));
+    }
+    this.guideGesture = undefined;
+  }
+  cancelGuideDrag() {
+    const gesture = this.guideGesture;
+    if (!gesture) return;
+    this.document.set(gesture.before);
+    this.selectedId.set(gesture.selectedId);
+    this.selectedIds.set(gesture.selectedIds);
+    this.guideGesture = undefined;
+    this.revision.update((value) => value + 1);
+  }
+  reorderLayer(sourceId: string, targetId: string, placement: "before" | "after" = "before") {
+    const original = this.document().layers;
+    const source = original.find((layer) => layer.id === sourceId), target = original.find((layer) => layer.id === targetId);
+    if (!source || !target || sourceId === targetId) return;
+    const root = source.groupPath?.[0], targetRoot = target.groupPath?.[0];
+    const selected = new Set(this.selectedLayers().map((layer) => layer.id));
+    const roots = new Set(original.filter((layer) => selected.has(layer.id)).map((layer) => layer.groupPath?.[0]).filter(Boolean));
+    const moving = original.filter((layer) => (root && layer.groupPath?.[0] === root) || layer.id === sourceId || (selected.has(sourceId) && (selected.has(layer.id) || (layer.groupPath?.[0] && roots.has(layer.groupPath[0])))));
+    const ids = new Set(moving.map((layer) => layer.id));
+    if (ids.has(targetId) || moving.some((layer) => layer.locked)) return;
+    const remaining = original.filter((layer) => !ids.has(layer.id));
+    const targetIndices = remaining.map((layer, index) => (targetRoot ? layer.groupPath?.[0] === targetRoot : layer.id === targetId) ? index : -1).filter((index) => index >= 0);
+    const index = placement === "before" ? targetIndices[0] : targetIndices.at(-1)! + 1;
+    remaining.splice(index, 0, ...moving);
+    if (remaining.every((layer, index) => layer.id === original[index].id)) return;
+    this.history.commit(this.document());
+    this.document.update((doc) => ({ ...doc, layers: remaining }));
+    this.changed();
+  }
   private gesture?: {
     before: StudioDocument;
     start: Point;
@@ -147,7 +258,7 @@ export class EditorService {
   }
   updateLayer(patch: Partial<Layer>) {
     const layer = this.selected();
-    if (!layer || layer.locked) return;
+    if (!layer || layer.locked || layer.guide) return;
     this.history.commit(this.document());
     if (patch.width !== undefined || patch.height !== undefined)
       patch = {
@@ -178,15 +289,14 @@ export class EditorService {
     this.changed();
   }
   moveOrder(delta: number) {
-    const id = this.selectedId(),
-      layers = [...this.document().layers],
-      i = layers.findIndex((l) => l.id === id),
-      j = i + delta;
-    if (i < 0 || j < 0 || j >= layers.length) return;
-    this.history.commit(this.document());
-    [layers[i], layers[j]] = [layers[j], layers[i]];
-    this.document.update((d) => ({ ...d, layers }));
-    this.changed();
+    const layers = this.document().layers, id = this.selectedId();
+    const source = layers.find((layer) => layer.id === id);
+    if (!source || !delta) return;
+    const root = source.groupPath?.[0];
+    const selected = new Set(this.selectedLayers().map((layer) => layer.id));
+    const members = layers.map((layer, index) => selected.has(layer.id) || (root && layer.groupPath?.[0] === root) ? index : -1).filter((index) => index >= 0);
+    const target = layers[delta < 0 ? members[0] - 1 : members.at(-1)! + 1];
+    if (target) this.reorderLayer(source.id, target.id, delta < 0 ? "before" : "after");
   }
   remove() {
     const ids = new Set(
@@ -266,7 +376,8 @@ export class EditorService {
     override?: ToolId,
   ) {
     const tool = override ?? this.tool();
-    if (tool === "hand") return;
+    if (["rectangle", "ellipse", "path", "pen", "line", "rounded", "polygon", "star", "arc", "spiral", "grid", "polar", "flare", "text"].includes(tool)) point = this.snap(point);
+    if (tool === "hand" || (tool === "brush" && ["none", "transparent"].includes(this.fill()))) return;
     const before = structuredClone(this.document());
     if (tool !== "pen" && !override) this.penId.set(null);
     if (tool === "mirror") {
@@ -284,7 +395,7 @@ export class EditorService {
           points: [],
           original: structuredClone(active),
           mode: "scale",
-          ids: this.selectedLayers().map((l) => l.id),
+          ids: this.selectedLayers().filter((l) => !l.guide).map((l) => l.id),
         };
       return;
     }
@@ -313,7 +424,7 @@ export class EditorService {
     }
     if (tool === "path") {
       const active = this.selected();
-      if (active?.kind === "path" && !active.locked && active.visible) {
+      if (active?.kind === "path" && !active.locked && active.visible && !active.guide) {
         const curves = this.editableCurves(active),
           path = curves[0],
           p = localPoint(active, point);
@@ -358,7 +469,7 @@ export class EditorService {
     }
     if (tool === "select" || tool === "rotate") {
       const active = this.selectionLayer();
-      if (active && !active.locked && active.visible) {
+      if (active && !active.locked && active.visible && !active.guide) {
         const p = localPoint(active, point);
         if (
           tool === "rotate" ||
@@ -373,7 +484,7 @@ export class EditorService {
             points: [],
             original: structuredClone(active),
             mode: "rotate",
-            ids: this.selectedLayers().map((l) => l.id),
+            ids: this.selectedLayers().filter((l) => !l.guide).map((l) => l.id),
           };
           return;
         }
@@ -399,7 +510,7 @@ export class EditorService {
             points: [],
             original: structuredClone(active),
             mode: "resize:" + corner[0],
-            ids: this.selectedLayers().map((l) => l.id),
+            ids: this.selectedLayers().filter((l) => !l.guide).map((l) => l.id),
           };
           return;
         }
@@ -421,7 +532,7 @@ export class EditorService {
             points: [],
             original: structuredClone(active),
             mode: "move",
-            ids: this.selectedLayers().map((l) => l.id),
+            ids: this.selectedLayers().filter((l) => !l.guide).map((l) => l.id),
           };
       } else if (!modifiers.shift) {
         this.selectedId.set(null);
@@ -438,6 +549,7 @@ export class EditorService {
       if (
         active &&
         !active.locked &&
+        !active.guide &&
         active.visible &&
         ["path", "rectangle", "ellipse"].includes(active.kind)
       ) {
@@ -546,6 +658,7 @@ export class EditorService {
   move(point: Point, modifiers: { shift?: boolean; alt?: boolean; ctrl?: boolean } = {}) {
     const g = this.gesture;
     if (!g) return;
+    if (["rectangle", "ellipse", "line", "rounded", "polygon", "star", "arc", "spiral", "grid", "polar", "flare"].includes(g.mode) || g.mode.startsWith("resize:")) point = this.snap(point);
     if (g.mode === "rotate")
       this.transformSelection(g, {
         ...g.original,
@@ -626,10 +739,11 @@ export class EditorService {
       const end = modifiers.shift
         ? snapDirection(g.start, point, this.snapAngle())
         : point;
+      const delta = modifiers.shift ? { x: end.x - g.start.x, y: end.y - g.start.y } : this.snapMovement(g.original, end.x - g.start.x, end.y - g.start.y);
       this.transformSelection(g, {
         ...g.original,
-        x: g.original.x + end.x - g.start.x,
-        y: g.original.y + end.y - g.start.y,
+        x: g.original.x + delta.x,
+        y: g.original.y + delta.y,
       });
     } else if (g.mode.startsWith("resize:"))
       this.transformSelection(
@@ -681,7 +795,7 @@ export class EditorService {
   private paint(point: Point) {
     const g = this.gesture,
       painting = this.painting;
-    if (!g || !painting) return;
+    if (!g || !painting || (g.mode !== "eraser" && ["none", "transparent"].includes(this.fill()))) return;
     const ctx = painting.canvas.getContext("2d")!,
       a = localPoint(g.original, g.last),
       b = localPoint(g.original, point);
@@ -692,8 +806,8 @@ export class EditorService {
     );
     ctx.globalCompositeOperation =
       g.mode === "eraser" ? "destination-out" : "source-over";
-    ctx.strokeStyle = this.fill();
-    ctx.fillStyle = this.fill();
+    ctx.strokeStyle = g.mode === "eraser" ? "#000000" : this.fill();
+    ctx.fillStyle = g.mode === "eraser" ? "#000000" : this.fill();
     ctx.lineWidth = this.size();
     ctx.lineCap = "round";
     ctx.lineJoin = "round";
@@ -736,6 +850,7 @@ export class EditorService {
     this.changed();
   }
   cancel() {
+    this.cancelGuideDrag();
     if (this.gesture) this.document.set(this.gesture.before);
     this.gesture = undefined;
     this.painting = undefined;
@@ -743,7 +858,7 @@ export class EditorService {
   }
 
   reflect(axis: "horizontal" | "vertical") {
-    const layers = this.selectedLayers().filter((l) => !l.locked);
+    const layers = this.selectedLayers().filter((l) => !l.locked && !l.guide);
     if (!layers.length) return;
     const bounds = selectionBounds(layers),
       ids = new Set(layers.map((l) => l.id));
@@ -790,7 +905,7 @@ export class EditorService {
         points: [],
         original: source,
         mode: "transform",
-        ids: this.selectedLayers().map((l) => l.id),
+        ids: this.selectedLayers().filter((l) => !l.guide).map((l) => l.id),
       };
     this.history.commit(before);
     this.transformSelection(g, {
@@ -825,17 +940,22 @@ export class EditorService {
     if (ids.length !== 1 || ids[0] !== this.selectedId()) this.activeNodes.set([]);
     this.selectedIds.set(ids);
     this.selectedId.set(ids.at(-1) ?? null);
+    if (ids.length === 1 && !layer.guide) {
+      this.fill.set(layer.fill);
+      this.stroke.set(layer.stroke);
+      this.size.set(layer.strokeWidth);
+    }
   }
   selectAll() {
     this.activeNodes.set([]);
     const ids = this.document()
-      .layers.filter((l) => l.visible && !l.locked)
+      .layers.filter((l) => l.visible && !l.locked && !l.guide)
       .map((l) => l.id);
     this.selectedIds.set(ids);
     this.selectedId.set(ids.at(-1) ?? null);
   }
   group(ungroup = false) {
-    const layers = this.selectedLayers().filter((l) => !l.locked);
+    const layers = this.selectedLayers().filter((l) => !l.locked && !l.guide);
     if (!layers.length || (!ungroup && layers.length < 2)) return;
     if (!ungroup && layers.some((l) => (l.groupPath?.length ?? 0) >= 16))
       return;
@@ -858,7 +978,7 @@ export class EditorService {
     this.changed();
   }
   arrange(mode: Parameters<typeof alignLayers>[1], artboard = false) {
-    const layers = this.selectedLayers().filter((l) => !l.locked);
+    const layers = this.selectedLayers().filter((l) => !l.locked && !l.guide);
     if (!layers.length) return;
     const changed = alignLayers(
         layers,
@@ -881,7 +1001,7 @@ export class EditorService {
     this.changed();
   }
   boolean(operation: Parameters<typeof booleanLayers>[1]) {
-    const layers = this.selectedLayers().filter((l) => !l.locked);
+    const layers = this.selectedLayers().filter((l) => !l.locked && !l.guide);
     if (layers.length < 2) return;
     try {
       const result = booleanLayers(layers, operation, crypto.randomUUID()),
@@ -916,7 +1036,7 @@ export class EditorService {
     const updates = new Map(
       transformLayers(
         g.before.layers.filter(
-          (layer) => g.ids!.includes(layer.id) && !layer.locked,
+          (layer) => g.ids!.includes(layer.id) && !layer.locked && !layer.guide,
         ),
         g.original,
         target,
@@ -940,7 +1060,7 @@ export class EditorService {
   }
   private startPen(point: Point, before: StudioDocument) {
     let layer = this.document().layers.find(
-      (l) => l.id === this.penId() && !l.locked && l.visible,
+      (l) => l.id === this.penId() && !l.locked && l.visible && !l.guide,
     );
     if (!layer) {
       if (this.document().layers.length >= 150) return;
@@ -1039,7 +1159,7 @@ export class EditorService {
   ) {
     let layer = this.selected();
     let hit: ReturnType<EditorService["findCurveNode"]>;
-    if (layer && !layer.locked && layer.visible) {
+    if (layer && !layer.locked && layer.visible && !layer.guide) {
       if (
         !layer.curves &&
         ["path", "rectangle", "ellipse"].includes(layer.kind)
@@ -1229,7 +1349,7 @@ export class EditorService {
       | "extend",
   ) {
     const layer = this.selected();
-    if (!layer || layer.locked || ["image", "text"].includes(layer.kind))
+    if (!layer || layer.locked || layer.guide || ["image", "text"].includes(layer.kind))
       return;
     let curves = this.editableCurves(layer);
     if (action === "extend") {
@@ -1276,7 +1396,7 @@ export class EditorService {
   }
   nudge(dx: number, dy: number) {
     const layer = this.selected();
-    if (!layer || layer.locked) return;
+    if (!layer || layer.locked || layer.guide) return;
     this.history.commit(this.document());
     if (this.tool() === "direct" && layer.curves && this.activeNodes().length) {
       const curves = structuredClone(layer.curves);
@@ -1293,7 +1413,7 @@ export class EditorService {
     } else {
       const ids = new Set(
         this.selectedLayers()
-          .filter((l) => !l.locked)
+          .filter((l) => !l.locked && !l.guide)
           .map((l) => l.id),
       );
       this.document.update((d) => ({
@@ -1339,7 +1459,7 @@ export class EditorService {
 
   defineSymbol() {
     const layer = this.selected();
-    if (!layer || layer.locked) return;
+    if (!layer || layer.locked || layer.guide) return;
     const symbols = this.document().symbols ?? [];
     if (symbols.length >= 100) return;
     this.history.commit(this.document());
@@ -1396,7 +1516,7 @@ export class EditorService {
   ) {
     const layer = this.selected(),
       id = this.activeSymbol();
-    if (!layer || layer.locked) return;
+    if (!layer || layer.locked || layer.guide) return;
     const symbol = this.document().symbols?.find((s) => s.id === id);
     if (!symbol && action !== "expand") return;
     this.history.commit(this.document());

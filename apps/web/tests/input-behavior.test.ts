@@ -302,7 +302,7 @@ describe("inline editing and canvas-only zoom", () => {
     expect(app.cursorAxesPoint()).toBeNull();
     expect(app.preferences.cursorIcon()).toBe(true);
     app.preferences.toggleCursorAxes(true);
-    expect(app.toolCursor()).toBe("crosshair");
+    expect(app.toolCursor()).toBe("none");
     app.cursorPoint.set(null);
     expect(app.cursorAxesPoint()).toBeNull();
   });

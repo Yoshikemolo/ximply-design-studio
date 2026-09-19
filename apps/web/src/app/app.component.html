@@ -55,9 +55,12 @@
           ><button (click)="panels.set(!panels())">
             {{ t(panels() ? "Hide panels" : "Show panels") }}</button
           ><button (click)="spatialPreview()">{{ t("Spatial preview") }}</button
-          ><button (click)="theme.set(theme() === 'dark' ? 'light' : 'dark')">
-            {{ t(theme() === "dark" ? "Light theme" : "Dark theme") }}
-          </button>
+          >
+          <div class="layout-menu"><strong>{{ t("Layout") }}</strong>
+            @for (block of contextBlocks; track block.id) {
+              <button (click)="preferences.toggleLayoutBlock(block.id)" [attr.aria-pressed]="preferences.layoutBlocks()[block.id]">{{ preferences.layoutBlocks()[block.id] ? "✓" : "○" }} {{ t(block.label) }}</button>
+            }
+          </div>
         </div>
       </details>
       <details>
@@ -112,58 +115,31 @@
       <option value="en">EN</option>
       <option value="es">ES</option>
     </select>
+    <button class="theme-toggle" (click)="theme.set(theme() === 'dark' ? 'light' : 'dark')" [title]="t(theme() === 'dark' ? 'Light theme' : 'Dark theme')" [attr.aria-label]="t(theme() === 'dark' ? 'Light theme' : 'Dark theme')"><img [src]="'/assets/icons/' + (theme() === 'dark' ? 'moon' : 'sun') + '.svg'" alt="" /></button>
     <button class="primary small" (click)="editor.exportPng()">
       <img src="/assets/icons/export.svg" alt="" />{{ t("Export PNG") }}
     </button>
   </header>
   <div class="contextbar">
-    <div class="context-tool">
-      <img [src]="'/assets/icons/' + activeTool() + '.svg'" alt="" /><span>{{
-        t("Appearance")
-      }}</span>
-    </div>
-    <label class="color-control"
-      >{{ t("Fill")
-      }}<input
-        type="color"
-        [value]="editor.fill()"
-        (input)="
-          editor.fill.set(text($event));
-          editor.updateLayer({ fill: text($event) })
-        "
-    /></label>
-    <label class="color-control"
-      >{{ t("Stroke")
-      }}<input
-        type="color"
-        [value]="editor.stroke()"
-        (input)="
-          editor.stroke.set(text($event));
-          editor.updateLayer({ stroke: text($event) })
-        "
-    /></label>
-    <label class="size-control"
-      >{{ t("Size")
-      }}<input
-        type="number"
-        min="1"
-        max="200"
-        [value]="editor.size()"
-        (change)="editor.size.set(clampSize(number($event)))"
-      /><span>px</span></label
-    >
-    <div class="header-spacer"></div>
-    <span class="workspace-label">{{ t("Workspace") }}</span
-    ><select
-      [value]="workspace()"
-      (change)="
-        workspace.set(text($event));
-        editor.tool.set(workspace() === 'Retouching' ? 'brush' : 'select')
-      "
-    >
-      <option value="Drawing">{{ t("Drawing") }}</option>
-      <option value="Retouching">{{ t("Retouching") }}</option>
-    </select>
+    @if (preferences.layoutBlocks().appearance) {
+      <section class="context-block" [attr.aria-label]="t('Appearance')">
+        <span>{{ t("Appearance") }}</span>
+        @for (target of paintTargets; track target) {
+          <button class="paint-trigger compact-paint" [class.no-paint]="paintColor(target) === 'none'" [style.--paint]="paintColor(target)" (click)="openPaint(target, $event)" [title]="t(target === 'fill' ? 'Fill' : 'Stroke')" [attr.aria-label]="t(target === 'fill' ? 'Fill' : 'Stroke')"><span [class.stroke-preview]="target === 'stroke'"></span></button>
+        }
+        <label>{{ t("Size") }} <input type="number" min="0" step="any" [value]="displayDistance(editor.size())" (change)="setToolSize($event)" /> {{ preferences.distanceUnit() }}</label>
+      </section>
+    }
+    @if (preferences.layoutBlocks().workspace) {
+      <section class="context-block"><label>{{ t("Workspace") }} <select [value]="workspace()" (change)="workspace.set(text($event)); editor.tool.set(workspace() === 'Retouching' ? 'brush' : 'select')"><option value="Drawing">{{ t("Drawing") }}</option><option value="Retouching">{{ t("Retouching") }}</option></select></label></section>
+    }
+    @if (preferences.layoutBlocks().measurement) {
+      <section class="context-block measurement-controls" [attr.aria-label]="t('Measurement')">
+        @for (aid of measurementAids; track aid.id) {
+          <div class="aid-pair"><button [class.active]="aidVisible(aid.id)" [attr.aria-pressed]="aidVisible(aid.id)" (click)="toggleAid(aid.id)">{{ t(aid.label) }}</button><button class="magnet-toggle" [class.active]="aidSnaps(aid.id)" [attr.aria-pressed]="aidSnaps(aid.id)" [title]="t('Snap to') + ' ' + t(aid.label)" [attr.aria-label]="t('Snap to') + ' ' + t(aid.label)" (click)="toggleSnap(aid.id)"><img src="/assets/icons/magnet.svg" alt="" /></button></div>
+        }
+      </section>
+    }
   </div>
   <main class="workspace" [class.no-panels]="!panels()">
     <aside class="toolrail" [attr.aria-label]="t('Drawing tools')">
@@ -250,22 +226,17 @@
           }
         </div>
       }
-      <div
-        class="tool-section appearance-tools"
-        role="group"
-        [attr.aria-label]="t('Appearance')"
-      >
-        <div class="swatches">
-          <span [style.background]="editor.stroke()"></span
-          ><span [style.background]="editor.fill()"></span>
+      <div class="rail-palette" [attr.aria-label]="t('Appearance')">
+        <div class="overlapping-paints">
+          @for (target of paintTargets; track target) {
+            <button class="paint-trigger" [class.fill-trigger]="target === 'fill'" [class.stroke-trigger]="target === 'stroke'" [class.active-paint]="paintTarget() === target" [class.no-paint]="paintColor(target) === 'none'" [style.--paint]="paintColor(target)" (click)="openPaint(target, $event)" [title]="t(target === 'fill' ? 'Fill' : 'Stroke')" [attr.aria-label]="t(target === 'fill' ? 'Fill' : 'Stroke')"><span [class.stroke-preview]="target === 'stroke'"></span></button>
+          }
+          <button class="swap-paint" (click)="editor.swapPaint()" [title]="t('Swap fill and stroke')" [attr.aria-label]="t('Swap fill and stroke')">⇄</button>
         </div>
-        <button
-          (click)="theme.set(theme() === 'dark' ? 'light' : 'dark')"
-          [title]="t('Light theme')"
-          aria-label="Toggle theme"
-        >
-          <img src="/assets/icons/theme.svg" alt="" />
-        </button>
+        @for (target of paintTargets; track target) {
+          <div class="quick-paints" [attr.aria-label]="t(target === 'fill' ? 'Fill' : 'Stroke')"><span>{{ t(target === 'fill' ? 'Fill' : 'Stroke') }}</span>@for (color of quickColors; track color.value) {<button [class.no-paint]="color.value === 'none'" [style.background]="color.value === 'none' ? '' : color.value" [title]="t(target === 'fill' ? 'Fill' : 'Stroke') + ': ' + t(color.label)" [attr.aria-label]="t(target === 'fill' ? 'Fill' : 'Stroke') + ': ' + t(color.label)" (click)="editor.setPaint(target, color.value)"></button>}</div>
+        }
+        <label class="rail-width">{{ t("Width") }}<input type="number" min="0" step="any" [value]="displayDistance(paintWidth())" (change)="setPaintWidth($event)" /><small>{{ preferences.distanceUnit() }}</small></label>
       </div>
     </aside>
     <section class="canvas-area">
@@ -282,8 +253,8 @@
         </button>
         <div class="header-spacer"></div>
         <span
-          >{{ editor.document().width }} ×
-          {{ editor.document().height }} px</span
+          >{{ displayDistance(editor.document().width) }} ×
+          {{ displayDistance(editor.document().height) }} {{ preferences.distanceUnit() }}</span
         >
       </div>
       <div
@@ -303,6 +274,21 @@
             [style.width.px]="editor.document().width * editor.zoom()"
             [style.height.px]="editor.document().height * editor.zoom()"
           >
+            @if (preferences.rulersVisible()) {
+              <div class="canvas-ruler horizontal-ruler" [attr.aria-label]="t('Drag to create horizontal guide')" (pointerdown)="startGuide($event, 'horizontal')" (pointermove)="moveGuide($event)" (pointerup)="finishGuide($event)" (pointercancel)="cancelGuide()" (lostpointercapture)="cancelGuide()">
+                @for (tick of rulerTicks('horizontal'); track tick.position) {<span class="ruler-tick" [style.left.px]="tick.position * editor.zoom()">{{ tick.label }}</span>}
+              </div>
+              <div class="canvas-ruler vertical-ruler" [attr.aria-label]="t('Drag to create vertical guide')" (pointerdown)="startGuide($event, 'vertical')" (pointermove)="moveGuide($event)" (pointerup)="finishGuide($event)" (pointercancel)="cancelGuide()" (lostpointercapture)="cancelGuide()">
+                @for (tick of rulerTicks('vertical'); track tick.position) {<span class="ruler-tick" [style.top.px]="tick.position * editor.zoom()">{{ tick.label }}</span>}
+              </div>
+              <span class="ruler-origin">{{ preferences.distanceUnit() }}</span>
+            }
+            @if (preferences.gridVisible()) {<div class="measurement-grid" [style.background-size]="gridSpacing() + 'px ' + gridSpacing() + 'px'" aria-hidden="true"></div>}
+            @if (preferences.guidesVisible()) {
+              @for (guide of visibleGuides(); track guide.id) {
+                <div class="canvas-guide" [class.vertical-guide]="guide.guide === 'vertical'" [class.horizontal-guide]="guide.guide === 'horizontal'" [class.selected-guide]="editor.selectedIds().includes(guide.id)" [class.locked-guide]="guide.locked" [style.left.px]="guide.guide === 'vertical' ? guide.x * editor.zoom() : 0" [style.top.px]="guide.guide === 'horizontal' ? guide.y * editor.zoom() : 0" [attr.aria-label]="t('Guide') + ': ' + guide.name" (pointerdown)="startGuide($event, guide.guide!, guide.id)" (pointermove)="moveGuide($event)" (pointerup)="finishGuide($event)" (pointercancel)="cancelGuide()" (lostpointercapture)="cancelGuide()"></div>
+              }
+            }
             <canvas
               #canvas
               aria-label="Editable design canvas"
@@ -468,13 +454,13 @@
             ) {
               @for (option of shapeFields(); track option[0]) {
                 <label
-                  >{{ t(option[1])
+                  >{{ t(option[1]) + (option[0] === "radius" ? " (" + preferences.distanceUnit() + ")" : "")
                   }}<input
                     type="number"
-                    min="0.05"
-                    max="200"
-                    step="0.05"
-                    [value]="$any(editor.shapeOptions())[option[0]]"
+                    [min]="option[0] === 'radius' ? displayDistance(0.05) : 0.05"
+                    [max]="option[0] === 'radius' ? displayDistance(200) : 200"
+                    step="any"
+                    [value]="option[0] === 'radius' ? displayDistance(editor.shapeOptions().radius) : $any(editor.shapeOptions())[option[0]]"
                     (change)="shapeOption($any(option[0]), $event)"
                 /></label>
               }
@@ -609,10 +595,10 @@
                 >{{ t("Radius")
                 }}<input
                   type="number"
-                  min="5"
-                  max="500"
-                  [value]="editor.symbolRadius()"
-                  (change)="editor.symbolRadius.set(number($event))" /></label
+                  [min]="displayDistance(5)"
+                  [max]="displayDistance(500)" step="any"
+                  [value]="displayDistance(editor.symbolRadius())"
+                  (change)="setSymbolRadius($event)" /></label
               ><label
                 >{{ t("Intensity")
                 }}<input
@@ -652,30 +638,30 @@
                   ><small>{{ layer.kind }}</small>
                 </div>
                 <fieldset [disabled]="layer.locked">
-                  <div class="section-label">{{ t("Transform") }}</div>
+                  <div class="section-label">{{ t("Transform") }} · {{ preferences.distanceUnit() }}</div>
                   <div class="property-grid">
                     <label
                       >X<input
-                        type="number"
-                        [value]="layer.x.toFixed(0)"
+                        type="number" step="any"
+                        [value]="displayDistance(layer.x)"
                         (change)="patchNumber('x', $event)" /></label
                     ><label
                       >Y<input
-                        type="number"
-                        [value]="layer.y.toFixed(0)"
+                        type="number" step="any"
+                        [value]="displayDistance(layer.y)"
                         (change)="patchNumber('y', $event)"
                     /></label>
                     <label
                       >W<input
                         type="number"
-                        min="1"
-                        [value]="layer.width.toFixed(0)"
+                        min="0" step="any"
+                        [value]="displayDistance(layer.width)"
                         (change)="patchNumber('width', $event)" /></label
                     ><label
                       >H<input
                         type="number"
-                        min="1"
-                        [value]="layer.height.toFixed(0)"
+                        min="0" step="any"
+                        [value]="displayDistance(layer.height)"
                         (change)="patchNumber('height', $event)"
                     /></label>
                     <label
@@ -697,27 +683,15 @@
                     /></label>
                   </div>
                   <div class="section-label">{{ t("Appearance") }}</div>
-                  <div class="property-row">
-                    <label>{{ t("Fill") }}</label
-                    ><input
-                      type="color"
-                      [value]="layer.fill"
-                      (input)="editor.updateLayer({ fill: text($event) })"
-                    /><label>{{ t("Stroke") }}</label
-                    ><input
-                      type="color"
-                      [value]="layer.stroke"
-                      (input)="editor.updateLayer({ stroke: text($event) })"
-                    />
-                  </div>
+                  <div class="property-row">@for (target of paintTargets; track target) {<button class="paint-trigger compact-paint" [class.no-paint]="paintColor(target) === 'none'" [style.--paint]="paintColor(target)" (click)="openPaint(target, $event)" [attr.aria-label]="t(target === 'fill' ? 'Fill' : 'Stroke')"><span [class.stroke-preview]="target === 'stroke'"></span></button><span>{{ t(target === 'fill' ? 'Fill' : 'Stroke') }}</span>}</div>
                   <div class="property-row">
                     <label>{{ t("Stroke") }}</label
                     ><input
                       type="number"
                       min="0"
-                      max="200"
-                      [value]="layer.strokeWidth"
-                      (change)="patchNumber('strokeWidth', $event)"
+                      [max]="displayDistance(200)" step="any"
+                      [value]="displayDistance(layer.strokeWidth)"
+                      (change)="setPaintWidth($event)"
                     />
                   </div>
                   <label class="wide-label"
@@ -736,7 +710,7 @@
                     </select></label
                   >
                   @if (layer.kind === "text") {
-                    <div class="section-label">{{ t("Text") }}</div>
+                    <div class="section-label">{{ t("Text") }} · {{ preferences.fontUnit() }}</div>
                     <textarea
                       maxlength="2000"
                       [value]="layer.text"
@@ -747,9 +721,9 @@
                       >{{ t("Size")
                       }}<input
                         type="number"
-                        min="1"
-                        max="500"
-                        [value]="layer.fontSize"
+                        [min]="displayFontSize(1)"
+                        [max]="displayFontSize(500)" step="any"
+                        [value]="displayFontSize(layer.fontSize)"
                         (change)="patchNumber('fontSize', $event)"
                     /></label>
                   }
@@ -763,12 +737,13 @@
                     ) {
                       <label class="slider-label"
                         >{{ t(key.charAt(0).toUpperCase() + key.slice(1))
-                        }}<span>{{ $any(layer.adjustments)[key] }}</span
+                        }}<span>{{ key === "blur" ? displayDistance(layer.adjustments.blur) + " " + preferences.distanceUnit() : $any(layer.adjustments)[key] }}</span
                         ><input
                           type="range"
                           min="0"
-                          [max]="key === 'blur' ? 30 : 200"
-                          [value]="$any(layer.adjustments)[key]"
+                          [max]="key === 'blur' ? displayDistance(30) : 200"
+                          [step]="key === 'blur' ? displayDistance(0.1) : 1"
+                          [value]="key === 'blur' ? displayDistance(layer.adjustments.blur) : $any(layer.adjustments)[key]"
                           (change)="adjustment($any(key), $event)"
                       /></label>
                     }
@@ -836,6 +811,10 @@
                 ) {
                   <div
                     class="layer-row"
+                    [draggable]="!layer.locked"
+                    (dragstart)="dragLayer($event, layer.id)"
+                    (dragover)="$event.preventDefault()"
+                    (drop)="dropLayer($event, layer.id)"
                     [class.selected]="editor.selectedLayers().includes(layer)"
                   >
                     <button
@@ -1124,6 +1103,14 @@
           (change)="preferences.setSnapAngle(number($event))"
         />°</label
       >
+      <h3>{{ t("Measurement") }}</h3>
+      <div class="measurement-settings">
+        <label>{{ t("Distance units") }}<select [value]="preferences.distanceUnit()" (change)="setUnit('distanceUnit', $event)">@for (unit of units; track unit) {<option [value]="unit">{{ unit }}</option>}</select></label>
+        <label>{{ t("Font units") }}<select [value]="preferences.fontUnit()" (change)="setUnit('fontUnit', $event)">@for (unit of fontUnits; track unit) {<option [value]="unit">{{ unit }}</option>}</select></label>
+        <label>{{ t("Ruler interval") }} ({{ preferences.distanceUnit() }})<input type="number" [min]="displayDistance(0.01)" step="any" [value]="displayDistance(preferences.rulerStep())" (change)="preferences.setMeasurement('rulerStep', distanceInput($event))" /></label>
+        <label>{{ t("Grid spacing") }} ({{ preferences.distanceUnit() }})<input type="number" [min]="displayDistance(0.01)" step="any" [value]="displayDistance(preferences.gridSize())" (change)="preferences.setMeasurement('gridSize', distanceInput($event))" /></label>
+        @for (aid of measurementAids; track aid.id) {<label>{{ t('Snap radius') }} · {{ t(aid.label) }} (px)<input type="number" min="0" max="100" [value]="snapRadius(aid.id)" (change)="setSnapRadius(aid.id, number($event))" /></label>}
+      </div>
       <h3>{{ t("Keyboard shortcuts") }}</h3>
       <p>
         {{
@@ -1201,4 +1188,14 @@
       </button>
     }
   </div>
+}
+
+@if (paintPicker()) {
+  <section class="paint-popover" role="dialog" [attr.aria-label]="t('Appearance')" [style.left.px]="paintPicker()!.x" [style.top.px]="paintPicker()!.y">
+    <header><strong>{{ t(paintTarget() === 'fill' ? 'Fill' : 'Stroke') }}</strong><button (click)="paintPicker.set(null)" [attr.aria-label]="t('Close')">×</button></header>
+    <label>{{ t('Color') }}<input type="color" [value]="paintBaseColor()" (input)="setPaintBaseColor(text($event))" /></label>
+    <label>{{ t("Paint opacity") }}<input type="range" min="0" max="100" [value]="paintOpacity()" (input)="setPaintOpacity(number($event))" />{{ paintOpacity() }}%</label>
+    <div class="paint-options">@for (color of quickColors; track color.value) {<button (click)="editor.setPaint(paintTarget(), color.value)" [class.active]="paintColor(paintTarget()) === color.value"><span [class.no-paint]="color.value === 'none'" [style.background]="color.value === 'none' ? '' : color.value"></span>{{ t(color.label) }}</button>}</div>
+    @if (paintTarget() === 'stroke') {<label>{{ t('Width') }} ({{ preferences.distanceUnit() }})<input type="number" min="0" step="any" [value]="displayDistance(paintWidth())" (change)="setPaintWidth($event)" /></label>}
+  </section>
 }

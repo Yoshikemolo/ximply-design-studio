@@ -2,7 +2,7 @@
 
 A layered vector and image editor by Ximplicity.
 
-**0.3.4-alpha.1 — single-user drawing workbench preview.** Draw editable cubic paths
+**0.3.5-alpha.1 — single-user drawing workbench preview.** Draw editable cubic paths
 and construction shapes, refine paths, trace images, reuse symbols, edit text inline,
 transform layers, retouch images and save editable projects or PNG/SVG exports. The architecture for the broader professional platform
 remains documented; this alpha implements a bounded first slice.
@@ -37,7 +37,9 @@ keyboard shortcuts, cleanup and development commands.
 - Undo/redo, native .ximply save/open, PNG export and supported-vector SVG export.
 - Rotate/Reflect/Scale tool families, triangular flyouts and numeric group transforms.
 - Configurable collision-checked shortcuts, Shift angle constraints and tool cursor badge.
-- Dark/light themes, EN/ES interface labels, collapsible/reorderable panels.
+- Shared fill/stroke palette with independent alpha, no-color and quick swatches.
+- Configurable distance/font units, rulers, guide layers, grid and independent snapping.
+- Dark/light themes, EN/ES interface labels and configurable context blocks.
 - Three.js layer-plane inspection with camera orbit, zoom and pan.
 - About screen with a version selector and bundled Markdown release notes.
 - Bearer-protected FastAPI artifact storage for one local user.
