@@ -1,4 +1,17 @@
 const ES: Record<string, string> = {
+  "Hide": "Ocultar",
+  "Show": "Mostrar",
+  "Send to back": "Enviar al fondo",
+  "Bring to front": "Traer al frente",
+  "Convert to corner": "Convertir en vértice",
+  "Convert to smooth": "Convertir en punto suave",
+  "Retract incoming handle": "Retraer manejador de entrada",
+  "Retract outgoing handle": "Retraer manejador de salida",
+  "Extend incoming handle": "Extender manejador de entrada",
+  "Extend outgoing handle": "Extender manejador de salida",
+  "Anchor actions": "Acciones del punto de ancla",
+  "Object actions": "Acciones del objeto",
+
   "Layout": "Distribución",
   "Measurement": "Medidas",
   "Rulers": "Reglas",

@@ -1,3 +1,5 @@
+@use "context-menu";
+
 :root {
   color-scheme: dark;
   --bg: #13161d;
@@ -1396,7 +1398,7 @@ textarea,
 .vertical-guide::after { left: 4px; top: 0; height: 100%; width: 1px; }
 .horizontal-guide::after { left: 0; top: 4px; width: 100%; height: 1px; }
 .selected-guide::after { background: #ed3989; }
-.locked-guide { pointer-events: none; }
+.locked-guide { cursor: default; }
 .measurement-settings { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-bottom: 20px; }
 .measurement-settings label { display: flex; flex-direction: column; gap: 5px; }
 .layer-row[draggable=true] { cursor: grab; }

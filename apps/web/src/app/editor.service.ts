@@ -59,8 +59,160 @@ import {
 } from "../../../../packages/domain/src/document";
 import { CanvasRenderer } from "../../../../packages/renderer/src/canvas-renderer";
 import { ToolId } from "./tools";
+export type ContextAction = "hide" | "show" | "delete" | "backward" | "forward" | "toBack" | "toFront" | "corner" | "smooth" | "collapseIncoming" | "collapseOutgoing" | "expandIncoming" | "expandOutgoing" | "deleteNode";
+export type ContextTarget = { revision: number; layerId: string } & (
+  { kind: "object"; groupPath?: string[] } |
+  { kind: "node"; path: number; index: number }
+);
 @Injectable({ providedIn: "root" })
 export class EditorService {
+  contextAt(point: Point): ContextTarget | null {
+    const selected = this.selected();
+    if (selected && this.selectedLayers().length === 1 && selected.visible && !selected.guide && selected.curves) {
+      const hit = this.findCurveNode(selected, point);
+      if (hit) {
+        this.activeNodes.set([hit.path + ":" + hit.index]);
+        return { kind: "node", layerId: selected.id, path: hit.path, index: hit.index, revision: this.revision() };
+      }
+    }
+    const hit = pick(this.document().layers.map((layer) => ({ ...layer, locked: false })), point);
+    return hit ? this.contextForLayer(hit.id) : null;
+  }
+  contextForLayer(id: string, selectGroup = true): ContextTarget | null {
+    const layer = this.document().layers.find((item) => item.id === id);
+    if (!layer) return null;
+    let groupPath: string[] | undefined;
+    if (selectGroup && layer.groupPath?.length) {
+      groupPath = layer.groupPath.slice(0, 1);
+      const selectedIds = new Set(this.selectedLayers().map((item) => item.id));
+      for (let depth = 1; depth <= layer.groupPath.length; depth++) {
+        const prefix = layer.groupPath.slice(0, depth);
+        const members = this.document().layers.filter((item) => this.inGroup(item, prefix));
+        if (members.length > 1 && members.length === selectedIds.size && members.every((item) => selectedIds.has(item.id))) groupPath = prefix;
+      }
+    }
+    const target: ContextTarget = { kind: "object", layerId: id, revision: this.revision(), ...(groupPath ? { groupPath } : {}) };
+    const members = this.contextMembers(target);
+    this.selectedIds.set(members.map((item) => item.id));
+    this.selectedId.set(id);
+    this.activeNodes.set([]);
+    return target;
+  }
+  private inGroup(layer: Layer, prefix: string[]) {
+    return prefix.every((id, index) => layer.groupPath?.[index] === id);
+  }
+  private contextMembers(target: ContextTarget): Layer[] {
+    if (target.revision !== this.revision()) return [];
+    const layer = this.document().layers.find((item) => item.id === target.layerId);
+    if (!layer) return [];
+    return target.kind === "object" && target.groupPath?.length
+      ? this.document().layers.filter((item) => this.inGroup(item, target.groupPath!)) : [layer];
+  }
+  private contextSiblings(target: ContextTarget): { blocks: Layer[][]; index: number; positions: number[] } {
+    const members = this.contextMembers(target), first = members[0];
+    if (!first || target.kind !== "object") return { blocks: [], index: -1, positions: [] };
+    const parent = target.groupPath ? target.groupPath.slice(0, -1) : (first.groupPath ?? []);
+    const blocks: Layer[][] = [], keys: string[] = [], positions: number[] = [];
+    this.document().layers.forEach((layer, position) => {
+      if (!this.inGroup(layer, parent)) return;
+      const group = layer.groupPath?.[parent.length];
+      const key = group ? "group:" + group : "layer:" + layer.id;
+      let index = keys.indexOf(key);
+      if (index < 0) { index = keys.length; keys.push(key); blocks.push([]); }
+      blocks[index].push(layer);
+      positions.push(position);
+    });
+    const ids = new Set(members.map((layer) => layer.id));
+    return { blocks, positions, index: blocks.findIndex((block) => block.some((layer) => ids.has(layer.id))) };
+  }
+  contextActions(target: ContextTarget): { id: ContextAction; enabled: boolean }[] {
+    const members = this.contextMembers(target);
+    if (!members.length) return [];
+    const editable = members.every((layer) => !layer.locked);
+    if (target.kind === "node") {
+      const layer = members[0], node = layer.curves?.[target.path]?.nodes[target.index];
+      if (!node || layer.guide) return [];
+      const collapsed = (part: "incoming" | "outgoing") => Math.hypot(node[part].x - node.point.x, node[part].y - node.point.y) < 1e-8;
+      return [
+        { id: "corner", enabled: editable && node.smooth },
+        { id: "smooth", enabled: editable && (!node.smooth || collapsed("incoming") || collapsed("outgoing")) },
+        { id: "collapseIncoming", enabled: editable && !collapsed("incoming") },
+        { id: "collapseOutgoing", enabled: editable && !collapsed("outgoing") },
+        { id: "expandIncoming", enabled: editable && collapsed("incoming") },
+        { id: "expandOutgoing", enabled: editable && collapsed("outgoing") },
+        { id: "deleteNode", enabled: editable },
+      ];
+    }
+    const siblings = this.contextSiblings(target);
+    return [
+      { id: members.some((layer) => layer.visible) ? "hide" : "show", enabled: true },
+      { id: "delete", enabled: editable },
+      { id: "backward", enabled: editable && siblings.index > 0 },
+      { id: "forward", enabled: editable && siblings.index >= 0 && siblings.index < siblings.blocks.length - 1 },
+      { id: "toBack", enabled: editable && siblings.index > 0 },
+      { id: "toFront", enabled: editable && siblings.index >= 0 && siblings.index < siblings.blocks.length - 1 },
+    ];
+  }
+  runContextAction(target: ContextTarget, action: ContextAction): boolean {
+    if (!this.contextActions(target).some((entry) => entry.id === action && entry.enabled)) return false;
+    const members = this.contextMembers(target), ids = new Set(members.map((layer) => layer.id));
+    const before = structuredClone(this.document());
+    if (target.kind === "node") this.contextNodeAction(target, action);
+    else if (action === "hide" || action === "show") this.document.update((doc) => ({ ...doc, layers: doc.layers.map((layer) => ids.has(layer.id) ? { ...layer, visible: action === "show" } : layer) }));
+    else if (action === "delete") {
+      this.document.update((doc) => ({ ...doc, layers: doc.layers.filter((layer) => !ids.has(layer.id)) }));
+      this.selectedIds.set([]); this.selectedId.set(null);
+    } else {
+      const { blocks, positions, index } = this.contextSiblings(target);
+      const destination = action === "toBack" ? 0 : action === "toFront" ? blocks.length - 1 : index + (action === "backward" ? -1 : 1);
+      const [block] = blocks.splice(index, 1); blocks.splice(destination, 0, block);
+      const reordered = blocks.flat();
+      this.document.update((doc) => {
+        const layers = [...doc.layers]; positions.forEach((position, offset) => layers[position] = reordered[offset]);
+        return { ...doc, layers };
+      });
+    }
+    this.history.commit(before);
+    this.changed();
+    return true;
+  }
+  private contextNodeAction(target: Extract<ContextTarget, { kind: "node" }>, action: ContextAction) {
+    const layer = this.contextMembers(target)[0], curves = structuredClone(layer.curves!);
+    const path = curves[target.path], node = path.nodes[target.index];
+    if (action === "deleteNode") {
+      path.nodes.splice(target.index, 1);
+      if (path.nodes.length < 3) path.closed = false;
+      if (!path.nodes.length) curves.splice(target.path, 1);
+      if (!curves.length) {
+        this.document.update((doc) => ({ ...doc, layers: doc.layers.filter((item) => item.id !== layer.id) }));
+        this.selectedIds.set([]); this.selectedId.set(null);
+      } else this.setLayer(layer.id, fitCurves(layer, curves));
+      this.activeNodes.set([]);
+      return;
+    }
+    const previous = path.nodes[target.index - 1] ?? (path.closed ? path.nodes.at(-1) : undefined);
+    const next = path.nodes[target.index + 1] ?? (path.closed ? path.nodes[0] : undefined);
+    const tangent = { x: (next?.point.x ?? node.point.x) - (previous?.point.x ?? node.point.x), y: (next?.point.y ?? node.point.y) - (previous?.point.y ?? node.point.y) };
+    let magnitude = Math.hypot(tangent.x, tangent.y);
+    if (magnitude < 1e-8) { tangent.x = 1; tangent.y = 0; magnitude = 1; }
+    const extend = (part: "incoming" | "outgoing", preserveLength: boolean) => {
+      const neighbor = part === "incoming" ? previous ?? next : next ?? previous;
+      const existing = Math.hypot(node[part].x - node.point.x, node[part].y - node.point.y);
+      const fallback = neighbor ? Math.hypot(neighbor.point.x - node.point.x, neighbor.point.y - node.point.y) / 3 : Math.max(layer.width, layer.height) / 3;
+      const length = preserveLength && existing > 1e-8 ? existing : Math.max(1, fallback);
+      const sign = part === "incoming" ? -1 : 1;
+      node[part] = { x: node.point.x + sign * tangent.x / magnitude * length, y: node.point.y + sign * tangent.y / magnitude * length };
+    };
+    if (action === "corner") node.smooth = false;
+    else if (action === "smooth") { extend("incoming", true); extend("outgoing", true); node.smooth = true; }
+    else {
+      const part = action.endsWith("Incoming") ? "incoming" : "outgoing";
+      if (action.startsWith("collapse")) node[part] = { ...node.point };
+      else extend(part, false);
+      node.smooth = false;
+    }
+    this.setLayer(layer.id, fitCurves(layer, curves));
+  }
   readonly snapAngle = signal(45);
   readonly snapConfig = signal<SnapConfig | null>(null);
   snap(point: Point): Point {

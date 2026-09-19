@@ -286,7 +286,7 @@
             @if (preferences.gridVisible()) {<div class="measurement-grid" [style.background-size]="gridSpacing() + 'px ' + gridSpacing() + 'px'" aria-hidden="true"></div>}
             @if (preferences.guidesVisible()) {
               @for (guide of visibleGuides(); track guide.id) {
-                <div class="canvas-guide" [class.vertical-guide]="guide.guide === 'vertical'" [class.horizontal-guide]="guide.guide === 'horizontal'" [class.selected-guide]="editor.selectedIds().includes(guide.id)" [class.locked-guide]="guide.locked" [style.left.px]="guide.guide === 'vertical' ? guide.x * editor.zoom() : 0" [style.top.px]="guide.guide === 'horizontal' ? guide.y * editor.zoom() : 0" [attr.aria-label]="t('Guide') + ': ' + guide.name" (pointerdown)="startGuide($event, guide.guide!, guide.id)" (pointermove)="moveGuide($event)" (pointerup)="finishGuide($event)" (pointercancel)="cancelGuide()" (lostpointercapture)="cancelGuide()"></div>
+                <div class="canvas-guide" (contextmenu)="openLayerContext($event, guide.id)" [class.vertical-guide]="guide.guide === 'vertical'" [class.horizontal-guide]="guide.guide === 'horizontal'" [class.selected-guide]="editor.selectedIds().includes(guide.id)" [class.locked-guide]="guide.locked" [style.left.px]="guide.guide === 'vertical' ? guide.x * editor.zoom() : 0" [style.top.px]="guide.guide === 'horizontal' ? guide.y * editor.zoom() : 0" [attr.aria-label]="t('Guide') + ': ' + guide.name" (pointerdown)="startGuide($event, guide.guide!, guide.id)" (pointermove)="moveGuide($event)" (pointerup)="finishGuide($event)" (pointercancel)="cancelGuide()" (lostpointercapture)="cancelGuide()"></div>
               }
             }
             <canvas
@@ -294,6 +294,7 @@
               aria-label="Editable design canvas"
               [style.cursor]="toolCursor()"
               (pointerdown)="pointerDown($event)"
+              (contextmenu)="openCanvasContext($event)"
               (pointermove)="pointerMove($event)"
               (pointerleave)="cursorPoint.set(null)"
               (pointerup)="pointerUp()"
@@ -592,7 +593,7 @@
                 {{ t("Rename symbol") }}
               </button>
               <label
-                >{{ t("Radius")
+                >{{ t("Radius") + " (" + preferences.distanceUnit() + ")"
                 }}<input
                   type="number"
                   [min]="displayDistance(5)"
@@ -685,7 +686,7 @@
                   <div class="section-label">{{ t("Appearance") }}</div>
                   <div class="property-row">@for (target of paintTargets; track target) {<button class="paint-trigger compact-paint" [class.no-paint]="paintColor(target) === 'none'" [style.--paint]="paintColor(target)" (click)="openPaint(target, $event)" [attr.aria-label]="t(target === 'fill' ? 'Fill' : 'Stroke')"><span [class.stroke-preview]="target === 'stroke'"></span></button><span>{{ t(target === 'fill' ? 'Fill' : 'Stroke') }}</span>}</div>
                   <div class="property-row">
-                    <label>{{ t("Stroke") }}</label
+                    <label>{{ t("Stroke") }} ({{ preferences.distanceUnit() }})</label
                     ><input
                       type="number"
                       min="0"
@@ -811,6 +812,7 @@
                 ) {
                   <div
                     class="layer-row"
+                    (contextmenu)="openLayerContext($event, layer.id)"
                     [draggable]="!layer.locked"
                     (dragstart)="dragLayer($event, layer.id)"
                     (dragover)="$event.preventDefault()"
@@ -1085,7 +1087,7 @@
         />{{ t("Show direction handles") }}</label
       >
       <label class="setting-toggle"
-        >{{ t("Anchor size")
+        >{{ t("Anchor size") + " (px)"
         }}<input
           type="number"
           min="3"
@@ -1198,4 +1200,8 @@
     <div class="paint-options">@for (color of quickColors; track color.value) {<button (click)="editor.setPaint(paintTarget(), color.value)" [class.active]="paintColor(paintTarget()) === color.value"><span [class.no-paint]="color.value === 'none'" [style.background]="color.value === 'none' ? '' : color.value"></span>{{ t(color.label) }}</button>}</div>
     @if (paintTarget() === 'stroke') {<label>{{ t('Width') }} ({{ preferences.distanceUnit() }})<input type="number" min="0" step="any" [value]="displayDistance(paintWidth())" (change)="setPaintWidth($event)" /></label>}
   </section>
+}
+
+@if (contextMenu(); as context) {
+  <xds-context-menu [entries]="contextEntries()" [label]="t(context.target.kind === 'node' ? 'Anchor actions' : 'Object actions')" [x]="context.x" [y]="context.y" (action)="executeContext($event)" (dismiss)="dismissContext()" />
 }

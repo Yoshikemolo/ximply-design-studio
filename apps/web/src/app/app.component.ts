@@ -22,7 +22,8 @@ import {
   signal,
 } from "@angular/core";
 import { FormsModule } from "@angular/forms";
-import { EditorService } from "./editor.service";
+import { EditorService, ContextAction, ContextTarget } from "./editor.service";
+import { ContextMenuComponent, ContextMenuEntry } from "./context-menu.component";
 import { TOOLS, ToolId, TOOL_FAMILIES, ToolFamily } from "./tools";
 import { translate } from "./i18n";
 import { BLENDS, Layer } from "../../../../packages/domain/src/document";
@@ -37,7 +38,7 @@ interface Release {
 @Component({
   selector: "xds-root",
   standalone: true,
-  imports: [FormsModule],
+  imports: [FormsModule, ContextMenuComponent],
   templateUrl: "./app.component.html",
 })
 export class AppComponent implements AfterViewInit, OnDestroy {
@@ -46,6 +47,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   @ViewChild("spatialHost") spatialHost?: ElementRef<HTMLDivElement>;
   @ViewChild("imageFile") imageFile?: ElementRef<HTMLInputElement>;
   @ViewChild("projectFile") projectFile?: ElementRef<HTMLInputElement>;
+  readonly contextMenu = signal<{ target: ContextTarget; x: number; y: number } | null>(null);
   readonly units = measurementUnits;
   readonly fontUnits = measurementUnits;
   readonly paintTargets = ["fill", "stroke"] as const;
@@ -142,6 +144,9 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   readonly symbolName = signal("");
   private spaceHeld = false;
   private panKey = "";
+  private readonly contextScrollHandler = (event: Event) => {
+    if (!(event.target instanceof Element) || !event.target.closest("xds-context-menu")) this.dismissContext();
+  };
   private readonly wheelHandler = (event: WheelEvent) =>
     this.canvasWheel(event);
   readonly tools = TOOLS;
@@ -204,6 +209,59 @@ export class AppComponent implements AfterViewInit, OnDestroy {
       localStorage.setItem("xds-locale", this.locale());
     });
   }
+  openCanvasContext(event: MouseEvent) {
+    if (this.nativeEditingTarget(event) || !this.canvas) return;
+    event.preventDefault();
+    event.stopPropagation();
+    this.showContext(this.editor.contextAt(this.point(event)), event);
+  }
+  openLayerContext(event: MouseEvent, id: string) {
+    if (this.nativeEditingTarget(event)) return;
+    event.preventDefault();
+    event.stopPropagation();
+    this.showContext(this.editor.contextForLayer(id, false), event);
+  }
+  private nativeEditingTarget(event: MouseEvent) {
+    return event.target instanceof Element && !!event.target.closest('input,textarea,select,[contenteditable="true"]');
+  }
+  private showContext(target: ContextTarget | null, event: MouseEvent) {
+    this.dismissMenus();
+    this.flyout.set(null);
+    this.paintPicker.set(null);
+    this.cursorPoint.set(null);
+    this.contextMenu.set(target ? { target, x: event.clientX, y: event.clientY } : null);
+  }
+  contextEntries(): ContextMenuEntry[] {
+    const context = this.contextMenu();
+    if (!context) return [];
+    const definitions: Record<ContextAction, { label: string; section: string; command?: string }> = {
+      hide: { label: "Hide", section: "visibility" },
+      show: { label: "Show", section: "visibility" },
+      backward: { label: "Send backward", section: "order" },
+      forward: { label: "Bring forward", section: "order" },
+      toBack: { label: "Send to back", section: "order" },
+      toFront: { label: "Bring to front", section: "order" },
+      delete: { label: "Delete", section: "edit", command: "remove" },
+      corner: { label: "Convert to corner", section: "node" },
+      smooth: { label: "Convert to smooth", section: "node" },
+      collapseIncoming: { label: "Retract incoming handle", section: "handles" },
+      collapseOutgoing: { label: "Retract outgoing handle", section: "handles" },
+      expandIncoming: { label: "Extend incoming handle", section: "handles" },
+      expandOutgoing: { label: "Extend outgoing handle", section: "handles" },
+      deleteNode: { label: "Delete anchor", section: "edit" },
+    };
+    return this.editor.contextActions(context.target).map(action => {
+      const definition = definitions[action.id];
+      return { id: action.id, label: this.t(definition.label), section: definition.section, disabled: !action.enabled, shortcut: definition.command ? this.shortcut(definition.command) : undefined };
+    });
+  }
+  executeContext(action: string) {
+    const context = this.contextMenu();
+    const enabled = context && this.contextEntries().some(entry => entry.id === action && !entry.disabled);
+    this.dismissContext();
+    if (context && enabled) this.editor.runContextAction(context.target, action as ContextAction);
+  }
+  dismissContext() { this.contextMenu?.set(null); }
   paintColor(target: "fill" | "stroke") {
     const selected = this.editor.selected();
     return selected && !selected.guide ? selected[target] : this.editor[target]();
@@ -301,6 +359,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     return translate(key, this.locale());
   }
   ngAfterViewInit() {
+    document.addEventListener("scroll", this.contextScrollHandler, true);
     this.viewport?.nativeElement.addEventListener("wheel", this.wheelHandler, {
       passive: false,
     });
@@ -310,6 +369,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     if (location.pathname === "/about") this.about.set(true);
   }
   ngOnDestroy() {
+    document.removeEventListener("scroll", this.contextScrollHandler, true);
     this.viewport?.nativeElement.removeEventListener(
       "wheel",
       this.wheelHandler,
@@ -344,7 +404,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
         );
     });
   }
-  private point(event: PointerEvent) {
+  private point(event: MouseEvent) {
     const rect = this.canvas!.nativeElement.getBoundingClientRect();
     return {
       x:
@@ -646,6 +706,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
       : null;
   }
   refreshCursorPosition() {
+    this.dismissContext();
     this.cursorPoint.update((cursor) => (cursor ? { ...cursor } : null));
   }
   toolCursor() {
@@ -901,6 +962,10 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     );
   }
   @HostListener("window:keydown", ["$event"]) key(event: KeyboardEvent) {
+    if (this.contextMenu?.()) {
+      if (event.key === "Escape") { this.dismissContext(); event.preventDefault(); }
+      return;
+    }
     if (!event.isComposing) this.temporarySelect.set(event.ctrlKey);
     if (
       event.key === "Escape" &&
@@ -1029,6 +1094,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     }
   }
   @HostListener("window:blur") resetInput() {
+    this.dismissContext();
     this.dismissMenus();
     this.flyout.set(null);
     this.spaceHeld = false;
@@ -1095,6 +1161,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     }
   }
   openAbout() {
+    this.dismissContext();
     this.about.set(true);
     void this.selectVersion(this.currentVersion());
   }
@@ -1103,6 +1170,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     history.pushState({}, "", "/");
   }
   @HostListener("window:popstate") route() {
+    this.dismissContext();
     this.about.set(location.pathname === "/about");
     if (this.about())
       void this.selectVersion(
