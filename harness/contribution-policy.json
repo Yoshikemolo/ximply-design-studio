@@ -50,6 +50,10 @@
     {
       "sha": "c948cdfeeeba73fd9c32380a7c22ec111989094b",
       "reason": "GitHub web merge created before server-side merges were constrained; history is preserved, not rewritten."
+    },
+    {
+      "sha": "18f571807639daa73d64ce8b7238069dcbc79f28",
+      "reason": "GitHub web merge of PR #13 into dev with the default message; history is preserved, not rewritten."
     }
   ]
 }

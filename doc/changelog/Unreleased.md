@@ -42,6 +42,7 @@ None.
 
 ## Engineering
 
+- Add the GitHub web merge of PR #13 on dev to the pinned legacy-commit exemptions by exact SHA and reason, without rewriting history.
 - Temporarily pause the Sonar quality job at the owner's request, preserving its commented analysis steps and strict policy for reactivation; skipped analysis is not passing quality evidence.
 - Add a disposable SonarQube trial with pinned images, real coverage inputs, retained findings and automatic container/volume teardown. This diagnostic run does not replace the strict integration gate.
 - Exercise the actual trial image-resolution and teardown commands with regression tests, including preservation of unrelated containers. These tests do not claim a live scan.
