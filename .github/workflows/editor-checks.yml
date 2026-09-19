@@ -17,6 +17,7 @@ jobs:
           cache: npm
       - run: npm ci --ignore-scripts --no-audit --no-fund
       - run: npm run build
+      - run: python3 scripts/check_styles.py
       - run: npm test
       - uses: actions/setup-python@v5
         with:

@@ -3,12 +3,18 @@ import json
 import os
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
+from check_styles import screen_stylesheets
 
 
 def main() -> None:
     base = 'http://127.0.0.1:8090'
     with urlopen(base, timeout=10) as response:
-        assert b'xds-root' in response.read(), 'Missing editor application'
+        html = response.read().decode()
+        assert 'xds-root' in html, 'Missing editor application'
+    for stylesheet in screen_stylesheets(html):
+        with urlopen(base+'/'+stylesheet.lstrip('/'), timeout=10) as response:
+            assert response.headers.get_content_type() == 'text/css', 'Invalid stylesheet content type'
+            assert b'.studio-shell' in response.read(), 'Missing editor layout styles'
     with urlopen(base+'/api/health', timeout=10) as response:
         assert json.load(response)['status'] == 'ok'
     try:
