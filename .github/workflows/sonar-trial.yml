@@ -1,0 +1,69 @@
+name: Disposable SonarQube trial
+on:
+  push:
+    branches: [feat/drawing-preview]
+    paths:
+      - '.github/workflows/sonar-trial.yml'
+      - 'scripts/sonar_trial.py'
+      - 'infra/sonar/trial-images.json'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  trial:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24.19.0'
+          cache: npm
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Generate real coverage
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund
+          npm run test:coverage
+          python -m pip install -r services/api/requirements-dev.txt
+          python -m pytest services/api/tests -q --cov=services/api/src --cov-branch --cov-report=xml:reports/api/coverage.xml
+          python -m coverage run --branch --source=harness,scripts -m unittest discover -s tests -v
+          python -m coverage xml -o reports/engineering/coverage.xml
+      - name: Create isolated temporary server
+        run: |
+          sudo sysctl -w vm.max_map_count=524288
+          XDS_SONAR_IMAGE=$(python -c 'import json; print(json.load(open("infra/sonar/trial-images.json"))["server"])')
+          docker pull "$XDS_SONAR_IMAGE"
+          docker run -d --name xds-sonar-trial --publish 127.0.0.1:19000:9000 --ulimit nofile=131072:131072 --ulimit nproc=8192:8192 "$XDS_SONAR_IMAGE"
+      - name: Analyze current source and collect findings
+        run: python scripts/sonar_trial.py
+      - name: Destroy temporary containers and their volumes
+        if: always()
+        run: |
+          mkdir -p reports/sonar-trial
+          for XDS_CONTAINER in xds-sonar-trial-scanner xds-sonar-trial; do
+            if docker container inspect "$XDS_CONTAINER" >/dev/null 2>&1; then
+              docker rm --force --volumes "$XDS_CONTAINER"
+            fi
+          done
+          python - <<'PY'
+          import json
+          import subprocess
+          from pathlib import Path
+          names = subprocess.check_output(['docker', 'ps', '-a', '--format', '{{.Names}}'], text=True).splitlines()
+          remaining = sorted(set(names) & {'xds-sonar-trial', 'xds-sonar-trial-scanner'})
+          Path('reports/sonar-trial/cleanup.json').write_text(json.dumps({'remainingContainers': remaining, 'destroyed': not remaining}, indent=2))
+          if remaining:
+              raise SystemExit('Temporary Sonar containers remain')
+          PY
+      - name: Preserve findings and teardown evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sonar-trial-${{ github.sha }}
+          path: reports/sonar-trial/
+          if-no-files-found: error
+          retention-days: 7

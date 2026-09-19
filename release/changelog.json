@@ -1,6 +1,597 @@
 {
-  "currentVersion": "0.2.0-alpha.2",
+  "currentVersion": "0.3.12-alpha.1",
   "entries": [
+    {
+      "version": "0.3.12-alpha.1",
+      "date": "2026-09-19",
+      "summary": "Area selection tools with remembered mode and Shift toggling",
+      "breakingChanges": [],
+      "changes": [
+        {
+          "type": "Feature",
+          "description": "Add rectangular, circular and freehand lasso subtools to Selection, with localized icons/tooltips and live area previews."
+        },
+        {
+          "type": "Feature",
+          "description": "Reuse the last area-selection mode when dragging empty canvas with the normal Selection tool; persist the last mode locally."
+        },
+        {
+          "type": "Feature",
+          "description": "Hold Shift during area selection to toggle reached objects against the starting selection, adding unselected objects and removing selected ones."
+        },
+        {
+          "type": "Improvement",
+          "description": "Preserve ordinary object movement and transforms, respect groups and locked/hidden layers, and exclude editing guides."
+        },
+        {
+          "type": "Improvement",
+          "description": "Cancel area selection with Escape or pointer cancellation without changing artwork or document undo history."
+        },
+        {
+          "type": "Engineering",
+          "description": "Use bounded geometric area intersection and document-coordinate previews without changing native documents or API contracts."
+        }
+      ],
+      "capabilityStatus": "local-preview",
+      "markdown": "0.3.12-alpha.1.md",
+      "source": "doc/changelog/0.3.12-alpha.1.md"
+    },
+    {
+      "version": "0.3.11-alpha.1",
+      "date": "2026-09-19",
+      "summary": "Blue ruler markers follow the canvas cursor",
+      "breakingChanges": [],
+      "changes": [
+        {
+          "type": "Feature",
+          "description": "Show a blue cursor projection on each visible ruler: a vertical mark at X on the horizontal ruler and a horizontal mark at Y on the vertical ruler."
+        },
+        {
+          "type": "Improvement",
+          "description": "Keep markers aligned through zoom and scrolling, independently of the full-canvas cursor-axes setting. Hide them when the cursor leaves the canvas or an editing dialog is active."
+        },
+        {
+          "type": "Engineering",
+          "description": "Reuse viewport-aware cursor coordinates and noninteractive overlays without changing document or preference formats."
+        }
+      ],
+      "capabilityStatus": "local-preview",
+      "markdown": "0.3.11-alpha.1.md",
+      "source": "doc/changelog/0.3.11-alpha.1.md"
+    },
+    {
+      "version": "0.3.10-alpha.1",
+      "date": "2026-09-19",
+      "summary": "Editable vector blends with intermediate steps, easing and expansion",
+      "breakingChanges": [
+        "Optional native-v2 blend definitions require an updated reader. Migration: preserve original documents before saving live blends; older readers may reject the new metadata. Expand blends before exchanging editable objects without the live relation."
+      ],
+      "changes": [
+        {
+          "type": "Feature",
+          "description": "Blend two compatible vector objects or equally sized vector groups from back to front, interpolating vertices, handles, geometry, colors, alpha, stroke width and opacity."
+        },
+        {
+          "type": "Feature",
+          "description": "Edit intermediate step count and linear, ease-in, ease-out or ease-in-out distribution."
+        },
+        {
+          "type": "Feature",
+          "description": "Edit retained endpoints and regenerate intermediate objects; expand to independently editable objects or release to retain only the original endpoints."
+        },
+        {
+          "type": "Improvement",
+          "description": "Expose localized blend actions and endpoint editing controls; expanded objects support ordinary grouping and ungrouping."
+        },
+        {
+          "type": "Improvement",
+          "description": "Preserve undo and native save/load, and export materialized intermediate artwork through existing SVG/PNG rendering."
+        },
+        {
+          "type": "Engineering",
+          "description": "Validate blend metadata and reference ownership in frontend/API, with bounded subdivision, layer count and group depth."
+        },
+        {
+          "type": "Engineering",
+          "description": "Support compatible vector contour topology and equal-cardinality groups. Text/image blends, editable spines and path-following orientation remain outside this preview."
+        }
+      ],
+      "capabilityStatus": "local-preview",
+      "markdown": "0.3.10-alpha.1.md",
+      "source": "doc/changelog/0.3.10-alpha.1.md"
+    },
+    {
+      "version": "0.3.9-alpha.1",
+      "date": "2026-09-19",
+      "summary": "Stroke alignment, joins, caps and scoped eyedropper/bucket tools",
+      "breakingChanges": [
+        "Optional native-v2 strokeStyle metadata requires an updated reader. Migration: preserve original documents before saving new stroke properties; older readers may reject new metadata. Absent metadata retains the legacy centered round stroke."
+      ],
+      "changes": [
+        {
+          "type": "Feature",
+          "description": "Configure center, inside or outside stroke alignment on closed vector contours through the shared stroke picker."
+        },
+        {
+          "type": "Feature",
+          "description": "Choose round, bevel or miter joins and butt, projecting square or round caps using localized icon controls."
+        },
+        {
+          "type": "Feature",
+          "description": "Sample semantic object styles with Eyedropper and apply current styles with Paint Bucket, choosing fill, stroke or both. Stroke transfer includes alpha, width, alignment, joins and caps."
+        },
+        {
+          "type": "Improvement",
+          "description": "Preserve existing shortcut assignments when introducing style tools; conflicting new default bindings remain unassigned."
+        },
+        {
+          "type": "Improvement",
+          "description": "Record style application in undo history and preserve new stroke defaults when drawing subsequent objects."
+        },
+        {
+          "type": "Fix",
+          "description": "Keep stroke geometry consistent between canvas and SVG, including compound closed contours and independent paint alpha."
+        },
+        {
+          "type": "Engineering",
+          "description": "Validate stroke metadata in frontend/API native-v2 readers and symbol definitions."
+        },
+        {
+          "type": "Engineering",
+          "description": "Open contours and live text use centered stroke alignment. Style sampling reads object properties, not image pixels; bucket applies object styles rather than region flood filling or live-paint topology."
+        }
+      ],
+      "capabilityStatus": "local-preview",
+      "markdown": "0.3.9-alpha.1.md",
+      "source": "doc/changelog/0.3.9-alpha.1.md"
+    },
+    {
+      "version": "0.3.8-alpha.1",
+      "date": "2026-09-19",
+      "summary": "Settings category navigation with one active form panel",
+      "breakingChanges": [],
+      "changes": [
+        {
+          "type": "Feature",
+          "description": "Navigate settings through a left-hand category menu and edit only the selected category in the right-hand panel."
+        },
+        {
+          "type": "Improvement",
+          "description": "Preserve all existing settings and their values, with localized category navigation, keyboard access and responsive layout."
+        },
+        {
+          "type": "Improvement",
+          "description": "Keep long forms separately scrollable and cancel unfinished shortcut recording when changing categories."
+        },
+        {
+          "type": "Engineering",
+          "description": "Record the owner's settings layout requirement in repository instructions and UX guidance for future categories."
+        },
+        {
+          "type": "Engineering",
+          "description": "Record undo-memory limits, clearing history, temporary directory and default work directory as future requirements, without exposing unimplemented controls."
+        }
+      ],
+      "capabilityStatus": "local-preview",
+      "markdown": "0.3.8-alpha.1.md",
+      "source": "doc/changelog/0.3.8-alpha.1.md"
+    },
+    {
+      "version": "0.3.7-alpha.1",
+      "date": "2026-09-19",
+      "summary": "Editable typography and text frame sizing with shared canvas and SVG composition",
+      "breakingChanges": [
+        "Optional native-v2 typography and text-layout metadata may be rejected by older readers. Migration: preserve original documents and use the updated application for new saves; legacy text without metadata retains its rendering behavior."
+      ],
+      "changes": [
+        {
+          "type": "Feature",
+          "description": "Select font family, weight and style; configure leading, letter, word and paragraph spacing, horizontal and vertical scale, baseline offset, alignment and decoration."
+        },
+        {
+          "type": "Feature",
+          "description": "Text property toggles control wrapping, automatic English/Spanish hyphenation, content sizing, horizontal or vertical automatic sizing and shrink-to-fit within a fixed frame."
+        },
+        {
+          "type": "Feature",
+          "description": "Text layout uses shared canvas/SVG glyph positions and browser font measurements. Automatic frame changes and multi-object property updates are undoable."
+        },
+        {
+          "type": "Feature",
+          "description": "Add a persistent global guide-lock button immediately before Guides, reusing the layer padlock icons. Existing guides cannot be dragged while locked; rulers still create new guides."
+        },
+        {
+          "type": "Improvement",
+          "description": "Replace compact action labels with icons and localized tooltips while preserving form labels, accessible names and menu shortcuts."
+        },
+        {
+          "type": "Improvement",
+          "description": "Display text dimensions and spacing in configured units while retaining canonical pixel values."
+        },
+        {
+          "type": "Fix",
+          "description": "Preserve fixed text frame dimensions during text editing; automatic sizing is explicit."
+        },
+        {
+          "type": "Engineering",
+          "description": "Add strict matching frontend/API text metadata validation and bounded layout calculations."
+        },
+        {
+          "type": "Engineering",
+          "description": "Pin the hyphen dependency to 1.14.1 for automatic English/Spanish hyphenation; retain its distributed license notice."
+        },
+        {
+          "type": "Engineering",
+          "description": "Fonts depend on system availability. Inline editing uses a native textarea: its caret and selection may differ from composed artwork for justification, automatic hyphenation or scaling. This release does not implement per-character styles, linked frames, text on paths or complete OpenType controls."
+        }
+      ],
+      "capabilityStatus": "local-preview",
+      "markdown": "0.3.7-alpha.1.md",
+      "source": "doc/changelog/0.3.7-alpha.1.md"
+    },
+    {
+      "version": "0.3.6-alpha.1",
+      "date": "2026-09-19",
+      "summary": "Target-aware menus for objects, groups, guides and Bezier nodes",
+      "breakingChanges": [],
+      "changes": [
+        {
+          "type": "Feature",
+          "description": "Right-click canvas objects, groups, guide lines or layer rows for grouped visibility, deletion and stacking actions. Move one step or to either end within the containing group; groups move as complete units."
+        },
+        {
+          "type": "Feature",
+          "description": "Right-click selected Bezier anchors or handles to convert corner/smooth nodes, collapse or expand either handle independently, or delete the vertex."
+        },
+        {
+          "type": "Feature",
+          "description": "Show current configured shortcuts when the contextual action matches a registered command; support keyboard navigation and outside dismissal."
+        },
+        {
+          "type": "Improvement",
+          "description": "Preserve native context menus in text fields. Locked targets disable destructive actions; stale targets are rejected after document edits."
+        },
+        {
+          "type": "Improvement",
+          "description": "Display explicit units beside additional dimensional properties. The canvas cursor remains hidden while its axis guides are visible, independently of the optional tool badge."
+        },
+        {
+          "type": "Fix",
+          "description": "Keep guide context menus accessible when guides are locked without permitting locked dragging."
+        },
+        {
+          "type": "Engineering",
+          "description": "Context targets capture document revision, exact layer/group scope and node indices. Actions are undoable and do not modify unrelated siblings."
+        }
+      ],
+      "capabilityStatus": "local-preview",
+      "markdown": "0.3.6-alpha.1.md",
+      "source": "doc/changelog/0.3.6-alpha.1.md"
+    },
+    {
+      "version": "0.3.5-alpha.1",
+      "date": "2026-09-19",
+      "summary": "Shared alpha paint picker, configurable units and editable magnetic guides",
+      "breakingChanges": [
+        "Native-v2 now supports absent/alpha paints and guide metadata that older readers may reject or discard. Migration: preserve original files and use this version for new saves; reverting the application does not convert new files. Guides are intentionally omitted from PNG and SVG exports."
+      ],
+      "changes": [
+        {
+          "type": "Feature",
+          "description": "Open the same fill/stroke picker from Appearance, the inspector or overlapping swatches below the two-column toolbar. Choose a color, no color, black or white and edit independent color opacity and stroke width."
+        },
+        {
+          "type": "Feature",
+          "description": "Swap fill and stroke without losing their transparency. Paint alpha remains separate from overall layer opacity."
+        },
+        {
+          "type": "Feature",
+          "description": "Configure distance and font units independently using px, pt, mm, cm, inches or feet. Rulers and dimensional controls convert their display and input without resizing artwork."
+        },
+        {
+          "type": "Feature",
+          "description": "Show or hide rulers, guides and grid with paired magnetic buttons. Configure ruler step, grid spacing and each source's magnetic radius in Settings."
+        },
+        {
+          "type": "Feature",
+          "description": "Drag horizontal or vertical guides from rulers, reposition them and drag them outside the artboard to delete them. Guides persist as ordered layers with visibility, locking and undo support."
+        },
+        {
+          "type": "Feature",
+          "description": "Reorder layers by dragging, preserving grouped artwork together."
+        },
+        {
+          "type": "Improvement",
+          "description": "Toggle Appearance, Workspace and Measurement context blocks through View > Layout; visibility preferences persist."
+        },
+        {
+          "type": "Improvement",
+          "description": "Move theme switching beside the language selector in the header, using sun/moon icons for the current theme."
+        },
+        {
+          "type": "Improvement",
+          "description": "Match snapping distance to screen pixels across canvas zoom and preserve the pointer offset while moving objects."
+        },
+        {
+          "type": "Fix",
+          "description": "Keep guide layers out of artwork rendering, exports, 3D preview and normal artwork operations."
+        },
+        {
+          "type": "Fix",
+          "description": "Preserve independent fill/stroke alpha through native files, authenticated API storage, Canvas and SVG."
+        },
+        {
+          "type": "Security",
+          "description": "Validate paint strings, guide metadata, finite coordinates and bounded measurement preferences without weakening storage authentication."
+        },
+        {
+          "type": "Engineering",
+          "description": "Use 96 document pixels per inch and 72 points per inch; these units do not assert physical monitor calibration."
+        },
+        {
+          "type": "Engineering",
+          "description": "Keep ruler generation bounded and canonical document geometry in pixels. Full quality certification remains separate from feature-branch preview publication."
+        }
+      ],
+      "capabilityStatus": "local-preview",
+      "markdown": "0.3.5-alpha.1.md",
+      "source": "doc/changelog/0.3.5-alpha.1.md"
+    },
+    {
+      "version": "0.3.4-alpha.1",
+      "date": "2026-09-19",
+      "summary": "Edit Bezier points with Selection and constrain handle drags",
+      "breakingChanges": [],
+      "changes": [
+        {
+          "type": "Feature",
+          "description": "Edit anchors and direction handles on a selected curve using Selection as well as Direct Selection."
+        },
+        {
+          "type": "Improvement",
+          "description": "Hold Shift while dragging anchors, handles or new Pen tangents to constrain their direction to the angle increment in Settings, relative to the canvas axes."
+        },
+        {
+          "type": "Improvement",
+          "description": "Hold Ctrl or Alt while dragging a handle to move it independently without moving the opposite handle. Unmodified smooth handles remain coupled."
+        },
+        {
+          "type": "Improvement",
+          "description": "Preserve curve controls and the active gesture when Ctrl changes during a drag; temporary Ctrl selection remains available while idle."
+        },
+        {
+          "type": "Fix",
+          "description": "Preserve selected anchors when Shift starts a constrained drag; a Shift-click can still deselect an anchor."
+        },
+        {
+          "type": "Fix",
+          "description": "Clear stale node selections when changing layers and ignore direction handles hidden by Settings."
+        },
+        {
+          "type": "Fix",
+          "description": "Apply path edits with the effective selection tool instead of accidentally invoking the underlying drawing or anchor-deletion tool."
+        },
+        {
+          "type": "Engineering",
+          "description": "Add geometry and routing regression checks, including transformed paths, modifier changes, undo and cancellation. Native files and API contracts remain compatible."
+        }
+      ],
+      "capabilityStatus": "local-preview",
+      "markdown": "0.3.4-alpha.1.md",
+      "source": "doc/changelog/0.3.4-alpha.1.md"
+    },
+    {
+      "version": "0.3.3-alpha.1",
+      "date": "2026-09-19",
+      "summary": "Follow the canvas cursor with optional horizontal and vertical guides",
+      "breakingChanges": [],
+      "changes": [
+        {
+          "type": "Feature",
+          "description": "Show horizontal and vertical guides across the canvas, intersecting at the pointer, with a crosshair cursor."
+        },
+        {
+          "type": "Feature",
+          "description": "Enable or disable cursor axes with a Settings toggle; the choice persists between sessions and is independent of the tool-icon setting."
+        },
+        {
+          "type": "Improvement",
+          "description": "Keep guides aligned through canvas zoom and scrolling, clipped to the canvas, and hidden outside it or while editing text."
+        },
+        {
+          "type": "Engineering",
+          "description": "Extend existing local input preferences with an optional boolean; existing settings default to enabled and native documents remain compatible."
+        }
+      ],
+      "capabilityStatus": "local-preview",
+      "markdown": "0.3.3-alpha.1.md",
+      "source": "doc/changelog/0.3.3-alpha.1.md"
+    },
+    {
+      "version": "0.3.2-alpha.1",
+      "date": "2026-09-19",
+      "summary": "Organize drawing controls in a grouped two-column toolbar",
+      "breakingChanges": [],
+      "changes": [
+        {
+          "type": "Improvement",
+          "description": "Arrange toolbar buttons in two columns, grouped by selection, drawing, paint, transformation and navigation, followed by appearance controls."
+        },
+        {
+          "type": "Improvement",
+          "description": "Expose Selection and Direct Selection side by side while preserving tool flyouts, configured shortcuts and tooltips."
+        },
+        {
+          "type": "Improvement",
+          "description": "Place related operations together and adjust the workspace width and flyout placement for the wider rail."
+        },
+        {
+          "type": "Engineering",
+          "description": "Preserve native document and API compatibility; no data migration is required."
+        }
+      ],
+      "capabilityStatus": "local-preview",
+      "markdown": "0.3.2-alpha.1.md",
+      "source": "doc/changelog/0.3.2-alpha.1.md"
+    },
+    {
+      "version": "0.3.1-alpha.1",
+      "date": "2026-09-19",
+      "summary": "Identify the local preview and dismiss menus on window blur",
+      "breakingChanges": [],
+      "changes": [
+        {
+          "type": "Feature",
+          "description": "Run the local launcher with info to identify the source version, branch and commit without starting Docker or reading credentials."
+        },
+        {
+          "type": "Improvement",
+          "description": "Print the source version, branch and commit after successfully starting the local preview. About and the footer show the new preview version."
+        },
+        {
+          "type": "Fix",
+          "description": "Close main menus and tool flyouts when leaving the browser window; preserve expandable inspector panels and reset temporary input state."
+        },
+        {
+          "type": "Engineering",
+          "description": "Add regression checks for window-blur dismissal and checkout identification, including operation without Git."
+        },
+        {
+          "type": "Engineering",
+          "description": "Preview publication does not certify the strict integration gate; existing quality and browser-acceptance limitations remain."
+        }
+      ],
+      "capabilityStatus": "local-preview",
+      "markdown": "0.3.1-alpha.1.md",
+      "source": "doc/changelog/0.3.1-alpha.1.md"
+    },
+    {
+      "version": "0.3.0-alpha.1",
+      "date": "2026-09-19",
+      "summary": "Editable cubic paths, drawing tools and configurable input",
+      "breakingChanges": [
+        "New saves use native document format 2 for curves, subpaths and symbol metadata. Earlier readers cannot open these files. Format 1 import remains supported.",
+        "Tool defaults change to M Rectangle, L Ellipse, P Pen, N Pencil, Shift+E Eraser and R Rotate. Configurable shortcuts replace the temporary preview bindings.",
+        "Migration: Preserve original .ximply files before opening and saving them with this version. Review Settings and resolve shortcut collisions before saving preferences. Keep the new application for v2 files: reverting the application does not downgrade documents. Existing server artifacts follow the same reader-version boundary. Rebuild local containers; retain .env.local and project volumes."
+      ],
+      "changes": [
+        {
+          "type": "Feature",
+          "description": "Draw editable cubic paths with Pen and edit anchors/handles with direct selection, anchor addition/deletion and corner/smooth conversion."
+        },
+        {
+          "type": "Feature",
+          "description": "Construct lines, rounded rectangles, polygons, stars, arcs, spirals, rectangular and polar grids and flares alongside existing shape tools."
+        },
+        {
+          "type": "Feature",
+          "description": "Refine paths with smooth, simplify, average, join/close, scissors, path eraser, filled-vector eraser and stray-point cleanup."
+        },
+        {
+          "type": "Feature",
+          "description": "Trace images in monochrome, grayscale or color using bounded editable scanline output; retain source images and update, expand or release a trace."
+        },
+        {
+          "type": "Feature",
+          "description": "Create linked symbols; redefine, replace and expand instances; import/export local libraries; spray and manipulate instances with shift, scrunch, size, spin, stain, screen and initial style operations."
+        },
+        {
+          "type": "Feature",
+          "description": "Select multiple objects; create and dissolve nested groups; align in six directions and distribute horizontally or vertically. Combine vectors with union, subtract, intersect or exclude; raster and text are excluded from boolean operations."
+        },
+        {
+          "type": "Feature",
+          "description": "Expose Rotate, Reflect and Scale tool families through triangular flyouts, with sibling choices dismissed by outside interaction or Escape. Reflect preserves editable flip flags for vectors, images and text; numeric transforms also support selected groups."
+        },
+        {
+          "type": "Feature",
+          "description": "Configure shortcuts with collision detection, Shift constraint angle and the optional lower-right cursor tool badge in Settings."
+        },
+        {
+          "type": "Improvement",
+          "description": "Replace the starter example with an editable branded cover, including a cubic X mark and grouped vector studies."
+        },
+        {
+          "type": "Improvement",
+          "description": "Hold Ctrl for temporary Selection; release it to restore the drawing tool without losing unfinished Pen paths."
+        },
+        {
+          "type": "Improvement",
+          "description": "Add explicit canvas zoom buttons."
+        },
+        {
+          "type": "Improvement",
+          "description": "Add visible rotation and four edge handles; edge scaling affects only its local dimension. Shift constrains rotation and linear transformations to the chosen angle."
+        },
+        {
+          "type": "Improvement",
+          "description": "Edit existing text inline using the Text tool."
+        },
+        {
+          "type": "Improvement",
+          "description": "Show active shortcuts in menus and tooltips; close custom dropdowns and menus when interacting elsewhere. Ctrl+Space+wheel zooms the canvas while preserving UI scale."
+        },
+        {
+          "type": "Improvement",
+          "description": "Keep About reachable from Help and the footer; company links open in a new tab."
+        },
+        {
+          "type": "Fix",
+          "description": "Prevent accidental text selection in interface labels while preserving selection in inputs, text areas and editable content."
+        },
+        {
+          "type": "Fix",
+          "description": "Load the full production stylesheet directly without a CSP-blocked inline handler."
+        },
+        {
+          "type": "Fix",
+          "description": "Use localhost:8090 by default. Existing installations should update XDS_PORT in .env.local; saved projects and credentials are retained."
+        },
+        {
+          "type": "Fix",
+          "description": "Generate identical documentation links and ordering on Windows and POSIX hosts."
+        },
+        {
+          "type": "Security",
+          "description": "Continue validating native versions and bounded geometry; imported documents and symbol libraries do not execute code. Existing bearer storage boundaries remain."
+        },
+        {
+          "type": "Engineering",
+          "description": "Collect whole-source frontend, API and engineering coverage; enforce fresh Sonar evidence in a separate fail-closed CI check. Coverage and unavailable analyses still block integration."
+        },
+        {
+          "type": "Engineering",
+          "description": "Keep drawing geometry separate from Angular; carry native format changes through renderer, SVG and API validation."
+        },
+        {
+          "type": "Engineering",
+          "description": "Pin polygon-clipping 0.15.7 for filled-vector erasure. Curves are sampled at 24 steps per segment, so erased geometry is approximate."
+        },
+        {
+          "type": "Engineering",
+          "description": "Tracing is limited to 64 pixels per side; contour fitting remains pending."
+        },
+        {
+          "type": "Engineering",
+          "description": "Preserve rotated child geometry during nonuniform group transforms using optional native-v2 skewX; keep curve controls and symbol-instance state during transformations."
+        },
+        {
+          "type": "Engineering",
+          "description": "Nine-slice resizing uses a fixed 25 percent inset. Editable registration and slice guides and a full graphic-style library remain pending."
+        },
+        {
+          "type": "Engineering",
+          "description": "Record the mandatory integration preflight and preview feedback cadence."
+        },
+        {
+          "type": "Engineering",
+          "description": "Preserve exact historical commit exemptions and the unchanged quality policy. Current build/test/CI evidence is recorded in the implementation handoff, not inferred from earlier releases."
+        }
+      ],
+      "capabilityStatus": "local-preview",
+      "markdown": "0.3.0-alpha.1.md",
+      "source": "doc/changelog/0.3.0-alpha.1.md"
+    },
     {
       "version": "0.2.0-alpha.2",
       "date": "2026-09-19",

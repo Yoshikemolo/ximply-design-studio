@@ -26,6 +26,7 @@ all indexes or the complete specification into every working context.
 | Locate code and tests | [Code map](code-map.md) |
 | Add or update documentation | [Documentation protocol](engineering/documentation-protocol.md) |
 | Understand system boundaries | [Architecture](architecture/system-overview.md) |
+| Drawing tool delivery | [Drawing roadmap](planning/drawing-roadmap.md) |
 | Plan delivery | [Backlog](planning/backlog.md) and [iterations](planning/iterations.md) |
 | Run locally | [Operations](operations/local-development.md) |
 | Check completed work | [Evidence](testing/bootstrap-evidence.md) |

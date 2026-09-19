@@ -10,17 +10,17 @@ source: ["Project change history and owner changelog requirements"]
 version: "Unreleased"
 date: null
 summary: "Pending changes"
-breaking_changes: false
+breaking_changes: true
 capability_status: "local-preview"
 ---
 
 # Unreleased — Pending changes
 
-Pending corrections to the local editor preview.
+Engineering follow-up for incremental preview delivery.
 
 ## Breaking changes
 
-None.
+- Extended native-v2 paints and guide metadata require the updated reader. Migration: preserve original files and use this version for new saves; older readers may reject or discard these extensions.
 
 ## New features
 
@@ -28,7 +28,7 @@ None.
 
 ## Improvements
 
-- Add explicit Help > About and footer About entries, with Ximplicity company links opening its website in a new tab.
+None.
 
 ## Fixes
 
@@ -42,4 +42,8 @@ None.
 
 ## Engineering
 
-- The contribution check accepts two pinned historical GitHub merge commits on dev by exact SHA and reason, without rewriting history; all other commits remain fully checked.
+- Add a disposable SonarQube trial with pinned images, real coverage inputs, retained findings and automatic container/volume teardown. This diagnostic run does not replace the strict integration gate.
+- Exercise the actual trial image-resolution and teardown commands with regression tests, including preservation of unrelated containers. These tests do not claim a live scan.
+- Record incremental product checkpoints and explicit branch/version feedback as permanent project instructions.
+- Retry temporary connection resets while the disposable server starts; sanitize transport errors before writing diagnostic output.
+- Add native-v2 absent/alpha paints and nonprinting guide metadata with matching API validation, renderer tests and measurement preferences; interface integration is in progress.
