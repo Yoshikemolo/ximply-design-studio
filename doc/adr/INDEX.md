@@ -27,3 +27,4 @@
 | [ADR-0021 — GitFlow environment promotion and scoped operations](ADR-0021.md) |
 | [ADR-0022 — Ximplicity editorial restraint in a dense editing UI](ADR-0022.md) |
 | [Editable cubic drawing and bounded polygon erasure](ADR-0023.md) |
+| [Absent paint and nonprinting guide layers](ADR-0024.md) |

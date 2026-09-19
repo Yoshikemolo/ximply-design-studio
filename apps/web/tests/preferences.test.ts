@@ -70,4 +70,45 @@ describe("input preferences", () => {
     }
   });
 
+  it("persists measurement units, visibility and individual layout blocks", () => {
+    const p = new PreferencesService();
+    p.setMeasurement("distanceUnit", "mm");
+    p.setMeasurement("fontUnit", "pt");
+    p.setMeasurement("gridSize", 96);
+    p.setMeasurement("rulersVisible", true);
+    p.setMeasurement("snapGuides", true);
+    p.toggleLayoutBlock("appearance");
+    p.toggleCursor(false);
+    const restored = new PreferencesService();
+    expect(restored.distanceUnit()).toBe("mm");
+    expect(restored.fontUnit()).toBe("pt");
+    expect(restored.gridSize()).toBe(96);
+    expect(restored.rulersVisible()).toBe(true);
+    expect(restored.snapGuides()).toBe(true);
+    expect(restored.layoutBlocks()).toEqual({ appearance: false, workspace: true, measurement: true });
+  });
+  it("rejects invalid measurements and rolls back failed persistence", () => {
+    const p = new PreferencesService();
+    for (const value of [0, -1, NaN, Infinity, 100001]) expect(p.setMeasurement("gridSize", value)).toBe(false);
+    expect(p.gridSize()).toBe(20);
+    expect(p.setMeasurement("guideSnapRadius", 0)).toBe(true);
+    const storage = vi.spyOn(localStorage, "setItem").mockImplementation(() => { throw new Error("Storage unavailable"); });
+    try {
+      expect(p.setMeasurement("distanceUnit", "mm")).toBe(false);
+      expect(p.distanceUnit()).toBe("px");
+      expect(p.toggleLayoutBlock("appearance")).toBe(false);
+      expect(p.layoutBlocks().appearance).toBe(true);
+    } finally { storage.mockRestore(); }
+  });
+  it("restores all defaults when persisted measurement data is malformed", () => {
+    const p = new PreferencesService();
+    p.setMeasurement("distanceUnit", "in");
+    const saved = JSON.parse(localStorage.getItem("xds-input-settings")!);
+    saved.measurements.gridSize = -20;
+    localStorage.setItem("xds-input-settings", JSON.stringify(saved));
+    const restored = new PreferencesService();
+    expect(restored.distanceUnit()).toBe("px");
+    expect(restored.gridSize()).toBe(20);
+    expect(restored.error()).toContain("Defaults restored");
+  });
 });

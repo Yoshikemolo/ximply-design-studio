@@ -286,3 +286,92 @@ class NativeDrawingTests(unittest.TestCase):
                     document = copy.deepcopy(self.document)
                     document['layers'][0][key] = value
                     self.assert_invalid(document)
+
+    def test_guide_and_transparent_paint_round_trip(self):
+        self.layer.update(guide='vertical', fill='none', stroke='none', groupPath=[])
+        self.assert_round_trip(self.document)
+        self.layer.update(guide='horizontal', stroke='#ffffff', x=-100000, y=100000)
+        self.assert_round_trip(self.document)
+
+    def test_transparent_paints_on_artwork_and_symbol_definitions_round_trip(self):
+        self.layer.update(fill='none', stroke='none')
+        definition = copy.deepcopy(self.layer)
+        self.document['symbols'] = [{'id': 'clear-symbol', 'name': 'Clear', 'layer': definition}]
+        self.layer['symbolId'] = 'clear-symbol'
+        self.assert_round_trip(self.document)
+
+    def test_transparent_paints_do_not_relax_background_or_color_contract(self):
+        for key in ('fill', 'stroke'):
+            for value in ('transparent', 'NONE', '#fff0', '#fffffff', '#fffffffff', '#ffffffgg', '#fff', '', None, False):
+                with self.subTest(key=key, value=value):
+                    document = copy.deepcopy(self.document)
+                    document['layers'][0][key] = value
+                    self.assert_invalid(document)
+        self.assert_invalid({**self.document, 'background': 'none'})
+
+    def test_guides_reject_invalid_orientation_kind_and_grouping(self):
+        for value in ('diagonal', '', None, False, 0):
+            with self.subTest(guide=value):
+                document = copy.deepcopy(self.document)
+                document['layers'][0]['guide'] = value
+                self.assert_invalid(document)
+        self.layer['guide'] = 'vertical'
+        del self.layer['curves']
+        for kind in ('rectangle', 'ellipse', 'image', 'text'):
+            with self.subTest(kind=kind):
+                document = copy.deepcopy(self.document)
+                document['layers'][0]['kind'] = kind
+                self.assert_invalid(document)
+        self.layer['groupPath'] = ['group-one']
+        self.assert_invalid(self.document)
+
+    def test_guides_cannot_be_symbol_instances_or_definitions(self):
+        definition = copy.deepcopy(self.layer)
+        self.document['symbols'] = [{'id': 'symbol-one', 'name': 'Mark', 'layer': definition}]
+        self.layer.update(guide='vertical', symbolId='symbol-one')
+        self.assert_invalid(self.document)
+        del self.layer['symbolId']
+        del self.layer['guide']
+        definition['guide'] = 'horizontal'
+        self.assert_invalid(self.document)
+
+    def test_guides_and_transparent_paints_require_native_version_two(self):
+        del self.layer['curves']
+        self.document['version'] = 1
+        for key, value in (('guide', 'vertical'), ('guide', 'horizontal'), ('fill', 'none'), ('stroke', 'none')):
+            with self.subTest(key=key, value=value):
+                document = copy.deepcopy(self.document)
+                document['layers'][0][key] = value
+                self.assert_invalid(document)
+
+    def test_guide_positions_remain_finite_bounded_numbers(self):
+        import json
+        self.layer['guide'] = 'vertical'
+        for axis in ('x', 'y'):
+            for value in (float('inf'), float('-inf'), float('nan'), -100001, 100001, True, '12'):
+                with self.subTest(axis=axis, value=value):
+                    document = copy.deepcopy(self.document)
+                    document['layers'][0][axis] = value
+                    response = self.client.post('/api/projects', content=json.dumps(document), headers=self.headers)
+                    self.assertEqual(422, response.status_code, response.text)
+        self.assertEqual([], list(Path(self.folder.name).glob('*.json')))
+
+
+    def test_independent_alpha_paints_round_trip_on_artwork_and_symbols(self):
+        self.layer.update(fill='#33669980', stroke='#abcdef40')
+        definition = copy.deepcopy(self.layer)
+        definition.update(fill='#FFFFFF00', stroke='#000000FF')
+        self.document['symbols'] = [{'id': 'alpha-symbol', 'name': 'Alpha', 'layer': definition}]
+        self.layer['symbolId'] = 'alpha-symbol'
+        self.assert_round_trip(self.document)
+
+    def test_alpha_paints_require_native_version_two_and_cannot_color_background(self):
+        self.assert_invalid({**self.document, 'background': '#ffffff80'})
+        del self.layer['curves']
+        self.document['version'] = 1
+        for key in ('fill', 'stroke'):
+            for value in ('#12345600', '#123456ff'):
+                with self.subTest(key=key, value=value):
+                    document = copy.deepcopy(self.document)
+                    document['layers'][0][key] = value
+                    self.assert_invalid(document)

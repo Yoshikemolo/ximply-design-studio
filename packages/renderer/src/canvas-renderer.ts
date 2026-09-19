@@ -46,7 +46,7 @@ export class CanvasRenderer {
       ctx.fillRect(0, 0, canvas.width, canvas.height);
     }
     for (const layer of document.layers)
-      if (layer.visible)
+      if (layer.visible && !layer.guide)
         this.layer(
           ctx,
           layer,
@@ -59,7 +59,8 @@ export class CanvasRenderer {
           ? selection.includes(l.id)
           : l.id === selection) &&
         l.visible &&
-        !l.locked,
+        !l.locked &&
+        !l.guide,
     );
     const layer =
       selected.length > 1
@@ -172,14 +173,16 @@ export class CanvasRenderer {
     this.transform(ctx, l);
     ctx.globalAlpha = l.opacity;
     ctx.globalCompositeOperation = l.blend;
-    ctx.fillStyle = l.fill;
-    ctx.strokeStyle = l.stroke;
+    const hasFill = l.fill !== "none";
+    const hasStroke = l.stroke !== "none" && l.strokeWidth > 0;
+    if (hasFill) ctx.fillStyle = l.fill;
+    if (hasStroke) ctx.strokeStyle = l.stroke;
     ctx.lineWidth = l.strokeWidth;
     ctx.lineCap = "round";
     ctx.lineJoin = "round";
     if (l.kind === "rectangle") {
-      ctx.fillRect(0, 0, l.width, l.height);
-      if (l.strokeWidth) ctx.strokeRect(0, 0, l.width, l.height);
+      if (hasFill) ctx.fillRect(0, 0, l.width, l.height);
+      if (hasStroke) ctx.strokeRect(0, 0, l.width, l.height);
     }
     if (l.kind === "ellipse") {
       ctx.beginPath();
@@ -192,18 +195,18 @@ export class CanvasRenderer {
         0,
         Math.PI * 2,
       );
-      ctx.fill();
-      if (l.strokeWidth) ctx.stroke();
+      if (hasFill) ctx.fill();
+      if (hasStroke) ctx.stroke();
     }
     if (l.curves) {
       ctx.beginPath();
       for (const path of l.curves.filter((p) => p.closed))
         this.curve(ctx, path);
-      ctx.fill("evenodd");
+      if (hasFill) ctx.fill("evenodd");
       ctx.beginPath();
       for (const path of l.curves) this.curve(ctx, path);
-      if (l.strokeWidth > 0) ctx.stroke();
-    } else if (l.kind === "path" && l.points.length && l.strokeWidth > 0) {
+      if (hasStroke) ctx.stroke();
+    } else if (l.kind === "path" && l.points.length && hasStroke) {
       ctx.beginPath();
       ctx.moveTo(l.points[0].x, l.points[0].y);
       for (const p of l.points.slice(1)) ctx.lineTo(p.x, p.y);
@@ -214,9 +217,11 @@ export class CanvasRenderer {
       ctx.textBaseline = "top";
       l.text
         .split("\n")
-        .forEach((line, index) =>
-          ctx.fillText(line, 0, index * l.fontSize * 1.2),
-        );
+        .forEach((line, index) => {
+          const y = index * l.fontSize * 1.2;
+          if (hasFill) ctx.fillText(line, 0, y);
+          if (hasStroke) ctx.strokeText(line, 0, y);
+        });
     }
     if (l.kind === "image") {
       const image = painting ?? this.image(l.source, ready);

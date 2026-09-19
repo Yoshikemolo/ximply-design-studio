@@ -10,7 +10,7 @@ source: ["Project change history and owner changelog requirements"]
 version: "Unreleased"
 date: null
 summary: "Pending changes"
-breaking_changes: false
+breaking_changes: true
 capability_status: "local-preview"
 ---
 
@@ -20,7 +20,7 @@ Engineering follow-up for incremental preview delivery.
 
 ## Breaking changes
 
-None.
+- Extended native-v2 paints and guide metadata require the updated reader. Migration: preserve original files and use this version for new saves; older readers may reject or discard these extensions.
 
 ## New features
 
@@ -44,3 +44,4 @@ None.
 - Exercise the actual trial image-resolution and teardown commands with regression tests, including preservation of unrelated containers. These tests do not claim a live scan.
 - Record incremental product checkpoints and explicit branch/version feedback as permanent project instructions.
 - Retry temporary connection resets while the disposable server starts; sanitize transport errors before writing diagnostic output.
+- Add native-v2 absent/alpha paints and nonprinting guide metadata with matching API validation, renderer tests and measurement preferences; interface integration is in progress.

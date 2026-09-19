@@ -50,6 +50,7 @@ export interface Layer {
   symbolId?: string;
   traceSourceId?: string;
   groupPath?: string[];
+  guide?: "vertical" | "horizontal";
   skewX?: number;
   flipX?: boolean;
   flipY?: boolean;
@@ -153,7 +154,7 @@ function segmentDistance(p: Point, a: Point, b: Point): number {
   return Math.hypot(p.x - a.x - t * dx, p.y - a.y - t * dy);
 }
 export function hitTest(layer: Layer, point: Point): boolean {
-  if (!layer.visible || layer.locked) return false;
+  if (!layer.visible || layer.locked || layer.guide) return false;
   const p = localPoint(layer, point),
     pad = Math.max(5, layer.strokeWidth / 2);
   if (layer.kind === "ellipse")
@@ -309,6 +310,10 @@ function finite(value: unknown, min: number, max: number): value is number {
 }
 const color = (value: unknown) =>
   typeof value === "string" && /^#[0-9a-f]{6}$/i.test(value);
+function paint(value: unknown, version: unknown): boolean {
+  return color(value) || (version === 2 && typeof value === "string" &&
+    (value === "none" || /^#[0-9a-f]{8}$/i.test(value)));
+}
 export function parseDocument(text: string): StudioDocument {
   if (text.length > 35_000_000)
     throw new Error("Project exceeds the 35 MB preview limit.");
@@ -353,7 +358,8 @@ export function parseDocument(text: string): StudioDocument {
       typeof symbol.name !== "string" ||
       symbol.name.length > 150 ||
       !record(symbol.layer) ||
-      symbol.layer["symbolId"] !== undefined
+      symbol.layer["symbolId"] !== undefined ||
+      symbol.layer["guide"] !== undefined
     )
       throw new Error("Invalid symbol definition.");
     symbolIds.add(symbol.id);
@@ -415,6 +421,15 @@ export function parseDocument(text: string): StudioDocument {
         !symbolIds.has(layer["symbolId"]))
     )
       throw new Error("Unknown symbol reference.");
+    if (
+      layer["guide"] !== undefined &&
+      (value["version"] !== 2 ||
+        !["vertical", "horizontal"].includes(String(layer["guide"])) ||
+        layer["kind"] !== "path" ||
+        layer["symbolId"] !== undefined ||
+        (Array.isArray(layer["groupPath"]) && layer["groupPath"].length > 0))
+    )
+      throw new Error("Invalid guide layer.");
     if (layer["curves"] !== undefined) {
       if (
         value["version"] === 1 ||
@@ -465,8 +480,8 @@ export function parseDocument(text: string): StudioDocument {
       !finite(layer["opacity"], 0, 1) ||
       !finite(layer["strokeWidth"], 0, 200) ||
       !finite(layer["fontSize"], 1, 500) ||
-      !color(layer["fill"]) ||
-      !color(layer["stroke"])
+      !paint(layer["fill"], value["version"]) ||
+      !paint(layer["stroke"], value["version"])
     )
       throw new Error("Invalid layer style.");
     if (
@@ -515,11 +530,16 @@ function escapeXml(text: string): string {
       })[c]!,
   );
 }
+function svgPaint(property: "fill" | "stroke", value: string): string {
+  if (/^#[0-9a-f]{8}$/i.test(value))
+    return `${property}="${value.slice(0, 7)}" ${property}-opacity="${Number.parseInt(value.slice(7), 16) / 255}"`;
+  return `${property}="${value}"`;
+}
 export function svgExport(doc: StudioDocument): string {
   const shapes = doc.layers
-    .filter((l) => l.visible)
+    .filter((l) => l.visible && !l.guide)
     .map((l) => {
-      const style = `fill="${l.kind === "path" && !l.curves?.some((p) => p.closed) ? "none" : l.fill}" stroke="${l.stroke}" stroke-width="${l.strokeWidth}" stroke-linecap="round" stroke-linejoin="round"`;
+      const style = `${svgPaint("fill", l.kind === "path" && !l.curves?.some((p) => p.closed) ? "none" : l.fill)} ${svgPaint("stroke", l.stroke)} stroke-width="${l.strokeWidth}" stroke-linecap="round" stroke-linejoin="round"`;
       let content = "";
       if (l.kind === "rectangle")
         content = `<rect width="${l.width}" height="${l.height}" ${style}/>`;
@@ -529,13 +549,13 @@ export function svgExport(doc: StudioDocument): string {
         const closed = l.curves.filter((path) => path.closed);
         content =
           (closed.length
-            ? `<path d="${curveSvg(closed)}" fill="${l.fill}" fill-rule="evenodd" stroke="none"/>`
+            ? `<path d="${curveSvg(closed)}" ${svgPaint("fill", l.fill)} fill-rule="evenodd" stroke="none"/>`
             : "") +
-          `<path d="${curveSvg(l.curves)}" fill="none" stroke="${l.stroke}" stroke-width="${l.strokeWidth}" stroke-linecap="round" stroke-linejoin="round"/>`;
+          `<path d="${curveSvg(l.curves)}" fill="none" ${svgPaint("stroke", l.stroke)} stroke-width="${l.strokeWidth}" stroke-linecap="round" stroke-linejoin="round"/>`;
       } else if (l.kind === "path")
         content = `<polyline points="${l.points.map((p) => `${p.x},${p.y}`).join(" ")}" ${style}/>`;
       if (l.kind === "text")
-        content = `<text y="${l.fontSize}" font-size="${l.fontSize}" font-family="sans-serif" fill="${l.fill}">${l.text
+        content = `<text y="${l.fontSize}" font-size="${l.fontSize}" font-family="sans-serif" ${style}>${l.text
           .split("\n")
           .map(
             (line, i) =>

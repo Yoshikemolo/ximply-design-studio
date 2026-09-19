@@ -19,6 +19,7 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_valida
 MAX_DOCUMENT = 35_000_000
 MAX_STORAGE = 512_000_000
 Color = Annotated[str, Field(pattern=r'^#[0-9a-fA-F]{6}$')]
+Paint = Annotated[str, Field(pattern=r'^(#[0-9a-fA-F]{6}([0-9a-fA-F]{2})?|none)$')]
 Number = Annotated[float, Field(allow_inf_nan=False, strict=True)]
 
 
@@ -61,14 +62,15 @@ class Layer(Point):
     visible: bool
     locked: bool
     blend: Literal['source-over', 'multiply', 'screen', 'overlay', 'darken', 'lighten']
-    fill: Color
-    stroke: Color
+    fill: Paint
+    stroke: Paint
     strokeWidth: Annotated[Number, Field(ge=0, le=200)]
     points: Annotated[list[Point], Field(max_length=20000)]
     text: Annotated[str, Field(max_length=2000)]
     fontSize: Annotated[Number, Field(ge=1, le=500)]
     source: str
     adjustments: Adjustments
+    guide: Literal['vertical', 'horizontal'] | None = None
     curves: Annotated[list[CurvePath], Field(max_length=4096)] | None = None
     symbolId: Annotated[str, Field(min_length=1, max_length=100)] | None = None
     traceSourceId: Annotated[str, Field(min_length=1, max_length=100)] | None = None
@@ -80,7 +82,7 @@ class Layer(Point):
     @model_validator(mode='before')
     @classmethod
     def non_nullable_extensions(cls, value):
-        if isinstance(value, dict) and any(key in value and value[key] is None for key in ('curves', 'symbolId', 'traceSourceId', 'groupPath', 'flipX', 'flipY', 'skewX')):
+        if isinstance(value, dict) and any(key in value and value[key] is None for key in ('curves', 'symbolId', 'traceSourceId', 'groupPath', 'flipX', 'flipY', 'skewX', 'guide')):
             raise ValueError('Drawing extensions cannot be null')
         return value
 
@@ -90,6 +92,8 @@ class Layer(Point):
             raise ValueError('Invalid curve layer or node budget')
         if self.groupPath is not None and len(set(self.groupPath)) != len(self.groupPath):
             raise ValueError('Group path identities must be unique')
+        if self.guide is not None and (self.kind != 'path' or self.symbolId is not None or self.groupPath):
+            raise ValueError('Guides must be ungrouped paths without symbol references')
         return self
 
     @field_validator('source')
@@ -129,12 +133,14 @@ class Document(BaseModel):
     def symbol_and_version_contract(self):
         symbols = self.symbols or []
         ids = {symbol.id for symbol in symbols}
-        if len(ids) != len(symbols) or any(symbol.layer.symbolId is not None for symbol in symbols):
+        if len(ids) != len(symbols) or any(symbol.layer.symbolId is not None or symbol.layer.guide is not None for symbol in symbols):
             raise ValueError('Invalid symbol definitions')
         if any(layer.symbolId is not None and layer.symbolId not in ids for layer in self.layers):
             raise ValueError('Unknown symbol reference')
         if self.version == 1 and ('symbols' in self.model_fields_set or any(
                 layer.curves is not None or layer.symbolId is not None or layer.traceSourceId is not None
+                or layer.guide is not None or layer.fill == 'none' or layer.stroke == 'none'
+                or len(layer.fill) == 9 or len(layer.stroke) == 9
                 or layer.skewX is not None or layer.groupPath is not None or layer.flipX is not None or layer.flipY is not None
                 for layer in self.layers)):
             raise ValueError('Drawing extensions require native format 2')
