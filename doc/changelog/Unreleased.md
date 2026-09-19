@@ -28,7 +28,7 @@ None.
 
 ## Improvements
 
-None.
+- Add explicit Help > About and footer About entries, with Ximplicity company links opening its website in a new tab.
 
 ## Fixes
 
