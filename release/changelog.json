@@ -1,6 +1,51 @@
 {
-  "currentVersion": "0.3.8-alpha.1",
+  "currentVersion": "0.3.9-alpha.1",
   "entries": [
+    {
+      "version": "0.3.9-alpha.1",
+      "date": "2026-09-19",
+      "summary": "Stroke alignment, joins, caps and scoped eyedropper/bucket tools",
+      "breakingChanges": [
+        "Optional native-v2 strokeStyle metadata requires an updated reader. Migration: preserve original documents before saving new stroke properties; older readers may reject new metadata. Absent metadata retains the legacy centered round stroke."
+      ],
+      "changes": [
+        {
+          "type": "Feature",
+          "description": "Configure center, inside or outside stroke alignment on closed vector contours through the shared stroke picker."
+        },
+        {
+          "type": "Feature",
+          "description": "Choose round, bevel or miter joins and butt, projecting square or round caps using localized icon controls."
+        },
+        {
+          "type": "Feature",
+          "description": "Sample semantic object styles with Eyedropper and apply current styles with Paint Bucket, choosing fill, stroke or both. Stroke transfer includes alpha, width, alignment, joins and caps."
+        },
+        {
+          "type": "Improvement",
+          "description": "Preserve existing shortcut assignments when introducing style tools; conflicting new default bindings remain unassigned."
+        },
+        {
+          "type": "Improvement",
+          "description": "Record style application in undo history and preserve new stroke defaults when drawing subsequent objects."
+        },
+        {
+          "type": "Fix",
+          "description": "Keep stroke geometry consistent between canvas and SVG, including compound closed contours and independent paint alpha."
+        },
+        {
+          "type": "Engineering",
+          "description": "Validate stroke metadata in frontend/API native-v2 readers and symbol definitions."
+        },
+        {
+          "type": "Engineering",
+          "description": "Open contours and live text use centered stroke alignment. Style sampling reads object properties, not image pixels; bucket applies object styles rather than region flood filling or live-paint topology."
+        }
+      ],
+      "capabilityStatus": "local-preview",
+      "markdown": "0.3.9-alpha.1.md",
+      "source": "doc/changelog/0.3.9-alpha.1.md"
+    },
     {
       "version": "0.3.8-alpha.1",
       "date": "2026-09-19",

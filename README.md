@@ -2,7 +2,7 @@
 
 A layered vector and image editor by Ximplicity.
 
-**0.3.8-alpha.1 — single-user drawing workbench preview.** Draw editable cubic paths
+**0.3.9-alpha.1 — single-user drawing workbench preview.** Draw editable cubic paths
 and construction shapes, refine paths, trace images, reuse symbols, edit text inline,
 transform layers, retouch images and save editable projects or PNG/SVG exports. The architecture for the broader professional platform
 remains documented; this alpha implements a bounded first slice.

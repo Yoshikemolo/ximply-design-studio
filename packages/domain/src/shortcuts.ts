@@ -5,6 +5,8 @@ export interface Command {
 }
 export const COMMANDS: Command[] = [
   ...Object.entries({
+    eyedropper: ["Eyedropper", "I"],
+    paintBucket: ["Paint bucket", "K"],
     mirror: ["Reflect", "O"],
     scale: ["Scale", "S"],
     zoom: ["Zoom", "Z"],
@@ -180,7 +182,8 @@ export function validateShortcuts(value: unknown): ShortcutMap {
   if (Object.keys(input).some((id) => !COMMANDS.some((c) => c.id === id)))
     throw new Error("Unknown command");
   for (const command of COMMANDS) {
-    const keys = input[command.id];
+    const introduced = ["tool.eyedropper", "tool.paintBucket"].includes(command.id);
+    const keys = input[command.id] ?? (introduced ? command.keys.filter((chord) => !Object.values(input).some((value) => Array.isArray(value) && value.some((key) => typeof key === "string" && normalizeChord(key) === chord))) : undefined);
     if (
       !Array.isArray(keys) ||
       keys.length > 2 ||

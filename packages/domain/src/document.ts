@@ -26,6 +26,12 @@ export interface Adjustments {
   saturation: number;
   blur: number;
 }
+export interface StrokeStyle {
+  alignment: "center" | "inside" | "outside";
+  join: "round" | "bevel" | "miter";
+  cap: "butt" | "square" | "round";
+}
+export const defaultStrokeStyle: Readonly<StrokeStyle> = { alignment: "center", join: "round", cap: "round" };
 export interface Layer {
   id: string;
   name: string;
@@ -42,6 +48,7 @@ export interface Layer {
   fill: string;
   stroke: string;
   strokeWidth: number;
+  strokeStyle?: StrokeStyle;
   points: Point[];
   text: string;
   fontSize: number;
@@ -91,6 +98,14 @@ export function blankDocument(): StudioDocument {
     background: "#ffffff",
     layers: [],
   };
+}
+export function strokeBounds(layer: Layer) {
+  const controls = layer.curves?.flatMap((path) => path.nodes.flatMap((node) => [node.point, node.incoming, node.outgoing])) ?? layer.points;
+  const xs = [0, layer.width, ...controls.map((point) => point.x)];
+  const ys = [0, layer.height, ...controls.map((point) => point.y)];
+  const margin = layer.strokeWidth * 10 + 1;
+  const x = Math.min(...xs) - margin, y = Math.min(...ys) - margin;
+  return { x, y, width: Math.max(...xs) + margin - x, height: Math.max(...ys) + margin - y };
 }
 export function newLayer(
   kind: LayerKind,
@@ -159,7 +174,7 @@ function segmentDistance(p: Point, a: Point, b: Point): number {
 export function hitTest(layer: Layer, point: Point): boolean {
   if (!layer.visible || layer.locked || layer.guide) return false;
   const p = localPoint(layer, point),
-    pad = Math.max(5, layer.strokeWidth / 2);
+    pad = Math.max(5, layer.strokeWidth * (layer.strokeStyle?.alignment === "outside" ? 1 : 0.5));
   if (layer.kind === "ellipse")
     return (
       ((p.x - layer.width / 2) / (layer.width / 2 + pad)) ** 2 +
@@ -433,6 +448,13 @@ export function parseDocument(text: string): StudioDocument {
         (Array.isArray(layer["groupPath"]) && layer["groupPath"].length > 0))
     )
       throw new Error("Invalid guide layer.");
+    const strokeStyle = layer["strokeStyle"];
+    if (strokeStyle !== undefined && (value["version"] !== 2 || !record(strokeStyle) ||
+      Object.keys(strokeStyle).length !== 3 ||
+      (typeof strokeStyle["alignment"] !== "string" || !["center", "inside", "outside"].includes(strokeStyle["alignment"])) ||
+      (typeof strokeStyle["join"] !== "string" || !["round", "bevel", "miter"].includes(strokeStyle["join"])) ||
+      (typeof strokeStyle["cap"] !== "string" || !["butt", "square", "round"].includes(strokeStyle["cap"]))))
+      throw new Error("Invalid stroke style.");
     for (const key of ["textLayout", "typography"]) {
       const settings = layer[key];
       if (settings !== undefined) {
@@ -563,23 +585,47 @@ function svgPaint(property: "fill" | "stroke", value: string): string {
     return `${property}="${value.slice(0, 7)}" ${property}-opacity="${Number.parseInt(value.slice(7), 16) / 255}"`;
   return `${property}="${value}"`;
 }
+function svgStroke(layer: Layer, width = layer.strokeWidth) {
+  const style = layer.strokeStyle ?? defaultStrokeStyle;
+  return `${svgPaint("stroke", layer.stroke)} stroke-width="${width}" stroke-linecap="${style.cap}" stroke-linejoin="${style.join}" stroke-miterlimit="10"`;
+}
+function svgAlignedStroke(layer: Layer, shape: (style: string) => string, index: number): string {
+  if (layer.stroke === "none" || layer.strokeWidth <= 0) return "";
+  const alignment = layer.strokeStyle?.alignment ?? "center";
+  if (alignment === "center") return shape(`fill="none" ${svgStroke(layer)}`);
+  const id = `stroke-region-${index}`;
+  const stroke = shape(`fill="none" ${svgStroke(layer, layer.strokeWidth * 2)}`);
+  if (alignment === "inside")
+    return `<defs><clipPath id="${id}" clipPathUnits="userSpaceOnUse">${shape('fill="#ffffff" fill-rule="evenodd" clip-rule="evenodd" stroke="none"')}</clipPath></defs><g clip-path="url(#${id})">${stroke}</g>`;
+  const bounds = strokeBounds(layer);
+  return `<defs><mask id="${id}" maskUnits="userSpaceOnUse" x="${bounds.x}" y="${bounds.y}" width="${bounds.width}" height="${bounds.height}" style="mask-type:luminance"><rect x="${bounds.x}" y="${bounds.y}" width="${bounds.width}" height="${bounds.height}" fill="#ffffff"/>${shape('fill="#000000" fill-rule="evenodd" stroke="none"')}</mask></defs><g mask="url(#${id})">${stroke}</g>`;
+}
 export function svgExport(doc: StudioDocument, measure?: TextMeasurement): string {
   const shapes = doc.layers
     .filter((l) => l.visible && !l.guide)
     .map((l, layerIndex) => {
-      const style = `${svgPaint("fill", l.kind === "path" && !l.curves?.some((p) => p.closed) ? "none" : l.fill)} ${svgPaint("stroke", l.stroke)} stroke-width="${l.strokeWidth}" stroke-linecap="round" stroke-linejoin="round"`;
+      const style = `${svgPaint("fill", l.kind === "path" && !l.curves?.some((p) => p.closed) ? "none" : l.fill)} ${svgStroke(l)}`;
       let content = "";
       if (l.kind === "rectangle")
         content = `<rect width="${l.width}" height="${l.height}" ${style}/>`;
       if (l.kind === "ellipse")
         content = `<ellipse cx="${l.width / 2}" cy="${l.height / 2}" rx="${l.width / 2}" ry="${l.height / 2}" ${style}/>`;
+      if (["rectangle", "ellipse"].includes(l.kind) && l.strokeStyle?.alignment && l.strokeStyle.alignment !== "center") {
+        const shape = (attributes: string) => l.kind === "rectangle"
+          ? `<rect width="${l.width}" height="${l.height}" ${attributes}/>`
+          : `<ellipse cx="${l.width / 2}" cy="${l.height / 2}" rx="${l.width / 2}" ry="${l.height / 2}" ${attributes}/>`;
+        content = shape(`${svgPaint("fill", l.fill)} stroke="none"`) + svgAlignedStroke(l, shape, layerIndex);
+      }
       if (l.curves) {
         const closed = l.curves.filter((path) => path.closed);
         content =
           (closed.length
             ? `<path d="${curveSvg(closed)}" ${svgPaint("fill", l.fill)} fill-rule="evenodd" stroke="none"/>`
             : "") +
-          `<path d="${curveSvg(l.curves)}" fill="none" ${svgPaint("stroke", l.stroke)} stroke-width="${l.strokeWidth}" stroke-linecap="round" stroke-linejoin="round"/>`;
+          (l.strokeStyle?.alignment && l.strokeStyle.alignment !== "center"
+            ? (closed.length ? svgAlignedStroke(l, (attributes) => `<path d="${curveSvg(closed)}" ${attributes}/>`, layerIndex) : "") +
+              `<path d="${curveSvg(l.curves.filter((path) => !path.closed))}" fill="none" ${svgStroke(l)}/>`
+            : `<path d="${curveSvg(l.curves)}" fill="none" ${svgStroke(l)}/>`);
       } else if (l.kind === "path")
         content = `<polyline points="${l.points.map((p) => `${p.x},${p.y}`).join(" ")}" ${style}/>`;
       if (l.kind === "text")

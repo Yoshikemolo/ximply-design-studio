@@ -83,6 +83,13 @@ class Typography(BaseModel):
     language: Literal['en', 'es']
 
 
+class StrokeStyle(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    alignment: Literal['center', 'inside', 'outside']
+    join: Literal['round', 'bevel', 'miter']
+    cap: Literal['butt', 'square', 'round']
+
+
 class Layer(Point):
     id: Annotated[str, Field(min_length=1, max_length=100)]
     name: Annotated[str, Field(max_length=150)]
@@ -102,6 +109,7 @@ class Layer(Point):
     fontSize: Annotated[Number, Field(ge=1, le=500)]
     source: str
     adjustments: Adjustments
+    strokeStyle: StrokeStyle | None = None
     textLayout: TextLayout | None = None
     typography: Typography | None = None
     guide: Literal['vertical', 'horizontal'] | None = None
@@ -116,7 +124,7 @@ class Layer(Point):
     @model_validator(mode='before')
     @classmethod
     def non_nullable_extensions(cls, value):
-        if isinstance(value, dict) and any(key in value and value[key] is None for key in ('curves', 'symbolId', 'traceSourceId', 'groupPath', 'flipX', 'flipY', 'skewX', 'guide', 'textLayout', 'typography')):
+        if isinstance(value, dict) and any(key in value and value[key] is None for key in ('curves', 'symbolId', 'traceSourceId', 'groupPath', 'flipX', 'flipY', 'skewX', 'guide', 'textLayout', 'typography', 'strokeStyle')):
             raise ValueError('Drawing extensions cannot be null')
         return value
 
@@ -176,6 +184,7 @@ class Document(BaseModel):
         if self.version == 1 and ('symbols' in self.model_fields_set or any(
                 layer.curves is not None or layer.symbolId is not None or layer.traceSourceId is not None
                 or layer.guide is not None or layer.fill == 'none' or layer.stroke == 'none'
+                or layer.strokeStyle is not None
                 or layer.textLayout is not None or layer.typography is not None
                 or len(layer.fill) == 9 or len(layer.stroke) == 9
                 or layer.skewX is not None or layer.groupPath is not None or layer.flipX is not None or layer.flipY is not None

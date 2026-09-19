@@ -476,3 +476,41 @@ class NativeDrawingTests(unittest.TestCase):
                 document = self.text_document()
                 document['layers'][0]['typography'][field] = value
                 self.assert_invalid(document)
+
+    def test_stroke_style_round_trip_on_layer_and_symbol(self):
+        self.layer['strokeStyle'] = {'alignment': 'inside', 'join': 'miter', 'cap': 'square'}
+        definition = copy.deepcopy(self.layer)
+        definition['strokeStyle'] = {'alignment': 'outside', 'join': 'bevel', 'cap': 'round'}
+        self.document['symbols'] = [{'id': 'stroke-symbol', 'name': 'Stroke', 'layer': definition}]
+        self.layer['symbolId'] = 'stroke-symbol'
+        self.assert_round_trip(self.document)
+        self.layer['strokeStyle'] = {'alignment': 'center', 'join': 'round', 'cap': 'butt'}
+        self.assert_round_trip(self.document)
+
+    def test_stroke_style_requires_exact_complete_object(self):
+        for value in (None, {}, [], 'round',
+                      {'alignment': 'inside', 'join': 'miter'},
+                      {'alignment': 'inside', 'cap': 'round'},
+                      {'join': 'miter', 'cap': 'round'},
+                      {'alignment': 'center', 'join': 'round', 'cap': 'butt', 'extra': True}):
+            with self.subTest(value=value):
+                document = copy.deepcopy(self.document)
+                document['layers'][0]['strokeStyle'] = value
+                self.assert_invalid(document)
+        for field in ('alignment', 'join', 'cap'):
+            for value in ('unknown', None, True, 1):
+                with self.subTest(field=field, value=value):
+                    document = copy.deepcopy(self.document)
+                    document['layers'][0]['strokeStyle'] = {'alignment': 'center', 'join': 'round', 'cap': 'butt', field: value}
+                    self.assert_invalid(document)
+
+    def test_stroke_style_is_native_v2_only_and_validated_inside_symbols(self):
+        self.layer['strokeStyle'] = {'alignment': 'center', 'join': 'round', 'cap': 'butt'}
+        del self.layer['curves']
+        self.document['version'] = 1
+        self.assert_invalid(self.document)
+        self.document['version'] = 2
+        definition = copy.deepcopy(self.layer)
+        definition['strokeStyle']['join'] = 'arcs'
+        self.document['symbols'] = [{'id': 'invalid-stroke', 'name': 'Stroke', 'layer': definition}]
+        self.assert_invalid(self.document)

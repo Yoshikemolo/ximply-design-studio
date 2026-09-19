@@ -1,5 +1,7 @@
 /** Trusted built-in descriptors; shortcut assignments belong to the command registry. */
 export type ToolId =
+  | "eyedropper"
+  | "paintBucket"
   | "mirror"
   | "scale"
   | "zoom"
@@ -44,6 +46,8 @@ export interface ToolPlugin {
   group: "Select" | "Draw" | "Paths" | "Paint" | "Symbols";
 }
 export const TOOLS: ToolPlugin[] = [
+  { id: "eyedropper", label: "Eyedropper", icon: "eyedropper", group: "Paint" },
+  { id: "paintBucket", label: "Paint bucket", icon: "paintBucket", group: "Paint" },
   { id: "mirror", label: "Reflect", icon: "mirror", group: "Select" },
   { id: "scale", label: "Scale", icon: "scale", group: "Select" },
   { id: "zoom", label: "Zoom", icon: "zoom", group: "Select" },
@@ -172,6 +176,7 @@ export const TOOL_FAMILIES: ToolFamily[] = [
   { id: "scissors", label: "Scissors", tools: ["scissors"] },
   { id: "paint", label: "Brush", tools: ["brush"] },
   { id: "eraser", label: "Eraser", tools: ["eraser"] },
+  { id: "style", label: "Style tools", tools: ["eyedropper", "paintBucket"] },
   { id: "rotate", label: "Rotate", tools: ["rotate"] },
   { id: "mirror", label: "Reflect", tools: ["mirror"] },
   { id: "scale", label: "Scale", tools: ["scale"] },

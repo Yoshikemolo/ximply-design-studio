@@ -29,3 +29,4 @@
 | [Editable cubic drawing and bounded polygon erasure](ADR-0023.md) |
 | [Absent paint and nonprinting guide layers](ADR-0024.md) |
 | [Shared text composition and dictionary hyphenation](ADR-0025.md) |
+| [Explicit stroke geometry and scoped appearance transfer](ADR-0026.md) |

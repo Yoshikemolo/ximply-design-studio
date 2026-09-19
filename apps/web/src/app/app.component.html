@@ -130,6 +130,12 @@
         <label>{{ t("Size") }} <input type="number" min="0" step="any" [value]="displayDistance(editor.size())" (change)="setToolSize($event)" /> {{ preferences.distanceUnit() }}</label>
       </section>
     }
+    @if (['eyedropper', 'paintBucket'].includes(editor.tool())) {
+      <section class="context-block style-scope" role="group" [attr.aria-label]="t('Style transfer scope')">
+        <span>{{ t('Style transfer scope') }}</span>
+        @for (scope of styleScopes; track scope.id) {<button [class.active]="editor.styleScope() === scope.id" [attr.aria-pressed]="editor.styleScope() === scope.id" [title]="t(scope.label)" [attr.aria-label]="t(scope.label)" (click)="setStyleScope(scope.id)"><img [src]="'/assets/icons/' + scope.icon + '.svg'" alt="" /></button>}
+      </section>
+    }
     @if (preferences.layoutBlocks().workspace) {
       <section class="context-block"><label>{{ t("Workspace") }} <select [value]="workspace()" (change)="workspace.set(text($event)); editor.tool.set(workspace() === 'Retouching' ? 'brush' : 'select')"><option value="Drawing">{{ t("Drawing") }}</option><option value="Retouching">{{ t("Retouching") }}</option></select></label></section>
     }
@@ -1213,6 +1219,12 @@
         ><kbd>{{ shortcut("tool." + tool.id) }}</kbd>
       </button>
     }
+    @if (flyout() === 'style') {
+      <div class="style-scope-options" role="group" [attr.aria-label]="t('Style transfer scope')">
+        <span>{{ t('Style transfer scope') }}</span>
+        @for (scope of styleScopes; track scope.id) {<button [class.active]="editor.styleScope() === scope.id" [attr.aria-pressed]="editor.styleScope() === scope.id" [title]="t(scope.label)" (click)="setStyleScope(scope.id)"><img [src]="'/assets/icons/' + scope.icon + '.svg'" alt="" />{{ t(scope.label) }}</button>}
+      </div>
+    }
     @for (id of flyoutActions(); track id) {
       <button role="menuitem" (click)="runCommand(id)">
         <span>{{ t(commandLabel(id)) }}</span
@@ -1228,7 +1240,17 @@
     <label>{{ t('Color') }}<input type="color" [value]="paintBaseColor()" (input)="setPaintBaseColor(text($event))" /></label>
     <label>{{ t("Paint opacity") }}<input type="range" min="0" max="100" [value]="paintOpacity()" (input)="setPaintOpacity(number($event))" />{{ paintOpacity() }}%</label>
     <div class="paint-options">@for (color of quickColors; track color.value) {<button (click)="editor.setPaint(paintTarget(), color.value)" [class.active]="paintColor(paintTarget()) === color.value"><span [class.no-paint]="color.value === 'none'" [style.background]="color.value === 'none' ? '' : color.value"></span>{{ t(color.label) }}</button>}</div>
-    @if (paintTarget() === 'stroke') {<label>{{ t('Width') }} ({{ preferences.distanceUnit() }})<input type="number" min="0" step="any" [value]="displayDistance(paintWidth())" (change)="setPaintWidth($event)" /></label>}
+    @if (paintTarget() === 'stroke') {
+      <label>{{ t('Width') }} ({{ preferences.distanceUnit() }})<input type="number" min="0" step="any" [value]="displayDistance(paintWidth())" (change)="setPaintWidth($event)" /></label>
+      @for (control of strokeControls; track control.key) {
+        <fieldset class="stroke-style-control"><legend>{{ t(control.label) }}</legend><div>
+          @for (choice of control.choices; track choice.value) {
+            <button [class.active]="paintStrokeStyle()[control.key] === choice.value" [attr.aria-pressed]="paintStrokeStyle()[control.key] === choice.value" [disabled]="control.key === 'alignment' && choice.value !== 'center' && !strokeAlignmentAvailable()" [title]="t(choice.label) + ' · ' + t(choice.hint)" [attr.aria-label]="t(choice.label)" (click)="setStrokeOption(control.key, choice.value)"><img [src]="'/assets/icons/' + choice.icon + '.svg'" alt="" /></button>
+          }
+        </div></fieldset>
+      }
+      <p class="stroke-style-hint">{{ t('Inside and outside alignment apply to closed outlines; open paths and text use centered strokes.') }}</p>
+    }
   </section>
 }
 

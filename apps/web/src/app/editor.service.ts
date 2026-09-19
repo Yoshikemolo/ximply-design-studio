@@ -44,6 +44,8 @@ import {
 import { Injectable, computed, signal } from "@angular/core";
 import {
   blankDocument,
+  defaultStrokeStyle,
+  StrokeStyle,
   bounds,
   DocumentHistory,
   Layer,
@@ -60,6 +62,7 @@ import {
 } from "../../../../packages/domain/src/document";
 import { CanvasRenderer } from "../../../../packages/renderer/src/canvas-renderer";
 import { ToolId } from "./tools";
+export type StyleScope = "fill" | "stroke" | "both";
 export type ContextAction = "hide" | "show" | "delete" | "backward" | "forward" | "toBack" | "toFront" | "corner" | "smooth" | "collapseIncoming" | "collapseOutgoing" | "expandIncoming" | "expandOutgoing" | "deleteNode";
 export type ContextTarget = { revision: number; layerId: string } & (
   { kind: "object"; groupPath?: string[] } |
@@ -254,6 +257,8 @@ export class EditorService {
   readonly document = signal<StudioDocument>(blankDocument());
   readonly selectedId = signal<string | null>(null);
   readonly tool = signal<ToolId>("select");
+  readonly styleScope = signal<StyleScope>("both");
+  readonly strokeStyle = signal<StrokeStyle>({ ...defaultStrokeStyle });
   readonly fill = signal("#0d59f2");
   readonly stroke = signal("#163363");
   readonly size = signal(4);
@@ -293,6 +298,56 @@ export class EditorService {
     this.history.commit(this.document());
     this.document.update((doc) => ({ ...doc, layers: doc.layers.map((layer) => ids.has(layer.id) ? { ...layer, ...patch } : layer) }));
     this.changed();
+  }
+  setStrokeStyle(patch: Partial<StrokeStyle>) {
+    if (patch.alignment !== undefined && !["center", "inside", "outside"].includes(patch.alignment)) return;
+    if (patch.join !== undefined && !["round", "bevel", "miter"].includes(patch.join)) return;
+    if (patch.cap !== undefined && !["butt", "square", "round"].includes(patch.cap)) return;
+    const strokeStyle = { ...this.strokeStyle(), ...patch };
+    this.strokeStyle.set(strokeStyle);
+    const ids = new Set(this.selectedLayers().filter((layer) => !layer.locked && !layer.guide).map((layer) => layer.id));
+    const before = this.document();
+    const layers = before.layers.map((layer) => ids.has(layer.id) ? { ...layer, strokeStyle: { ...defaultStrokeStyle, ...layer.strokeStyle, ...patch } } : layer);
+    if (JSON.stringify(layers) === JSON.stringify(before.layers)) return;
+    this.history.commit(before); this.document.set({ ...before, layers }); this.changed();
+  }
+  private scopedStyle(fill: string, stroke: string, strokeWidth: number, strokeStyle: StrokeStyle): Partial<Layer> {
+    const scope = this.styleScope();
+    return { ...(scope !== "stroke" ? { fill } : {}), ...(scope !== "fill" ? { stroke, strokeWidth, strokeStyle: { ...strokeStyle } } : {}) };
+  }
+  private applyStyleTo(ids: Set<string>, patch: Partial<Layer>): boolean {
+    const before = this.document();
+    const layers = before.layers.map((layer) => ids.has(layer.id) ? { ...layer, ...structuredClone(patch) } : layer);
+    if (JSON.stringify(layers) === JSON.stringify(before.layers)) return false;
+    this.history.commit(before);
+    this.document.set({ ...before, layers });
+    this.changed();
+    return true;
+  }
+  sampleStyle(point: Point): boolean {
+    const source = pick(this.document().layers.map((layer) => ({ ...layer, locked: false })), point);
+    if (!source || source.guide || source.kind === "image") return false;
+    const patch = this.scopedStyle(source.fill, source.stroke, source.strokeWidth, { ...defaultStrokeStyle, ...source.strokeStyle });
+    if (patch.fill !== undefined) this.fill.set(patch.fill);
+    if (patch.stroke !== undefined) {
+      this.stroke.set(patch.stroke); this.size.set(patch.strokeWidth!); this.strokeStyle.set({ ...patch.strokeStyle! });
+    }
+    const targets = new Set(this.selectedLayers().filter((layer) => layer.id !== source.id && !layer.guide && !layer.locked && layer.kind !== "image").map((layer) => layer.id));
+    this.applyStyleTo(targets, patch);
+    return true;
+  }
+  applyStyleAt(point: Point): boolean {
+    const target = pick(this.document().layers.map((layer) => ({ ...layer, locked: false })), point);
+    if (!target || target.locked || target.guide || target.kind === "image") return false;
+    const root = target.groupPath?.[0];
+    const members = this.document().layers.filter((layer) => root ? layer.groupPath?.[0] === root : layer.id === target.id);
+    if (members.some((layer) => layer.locked)) return false;
+    const ids = new Set(members.filter((layer) => !layer.guide && layer.kind !== "image").map((layer) => layer.id));
+    const patch = this.scopedStyle(this.fill(), this.stroke(), this.size(), this.strokeStyle());
+    const changed = this.applyStyleTo(ids, patch);
+    this.selectedIds.set([...ids]); this.selectedId.set(target.id);
+    this.activeNodes.set([]);
+    return changed;
   }
   setPaint(target: "fill" | "stroke", color: string) {
     if (color !== "none" && color !== "transparent" && !/^#[0-9a-f]{6}([0-9a-f]{2})?$/i.test(color)) return;
@@ -589,6 +644,8 @@ export class EditorService {
     override?: ToolId,
   ) {
     const tool = override ?? this.tool();
+    if (tool === "eyedropper") { this.sampleStyle(point); return; }
+    if (tool === "paintBucket") { this.applyStyleAt(point); return; }
     if (["rectangle", "ellipse", "path", "pen", "line", "rounded", "polygon", "star", "arc", "spiral", "grid", "polar", "flare", "text"].includes(tool)) point = this.snap(point);
     if (tool === "hand" || (tool === "brush" && ["none", "transparent"].includes(this.fill()))) return;
     const before = structuredClone(this.document());
@@ -842,6 +899,7 @@ export class EditorService {
       this.stroke(),
       this.size(),
     );
+    layer.strokeStyle = { ...this.strokeStyle() };
     if (construct) {
       layer.name = tool[0].toUpperCase() + tool.slice(1);
       layer.curves = construction(
@@ -1157,6 +1215,7 @@ export class EditorService {
       this.fill.set(layer.fill);
       this.stroke.set(layer.stroke);
       this.size.set(layer.strokeWidth);
+      this.strokeStyle.set({ ...defaultStrokeStyle, ...layer.strokeStyle });
     }
   }
   selectAll() {
@@ -1285,6 +1344,7 @@ export class EditorService {
         this.stroke(),
         this.size(),
       );
+      layer.strokeStyle = { ...this.strokeStyle() };
       layer.name = "Bézier path";
       layer.curves = [{ nodes: [], closed: false }];
       this.document.update((d) => ({ ...d, layers: [...d.layers, layer!] }));

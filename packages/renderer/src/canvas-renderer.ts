@@ -1,6 +1,6 @@
 import { defaultTypography, layoutText, textFont, TextMeasurement } from "../../domain/src/text-layout";
 import { selectionBounds } from "../../domain/src/arrange";
-import { newLayer } from "../../domain/src/document";
+import { newLayer, defaultStrokeStyle, strokeBounds } from "../../domain/src/document";
 import { CurvePath } from "../../domain/src/curves";
 import { Layer, StudioDocument } from "../../domain/src/document";
 export class CanvasRenderer {
@@ -170,6 +170,24 @@ export class CanvasRenderer {
       ctx.scale(l.flipX ? -1 : 1, l.flipY ? -1 : 1);
     }
   }
+  private closedStroke(ctx: CanvasRenderingContext2D, layer: Layer, path: () => void) {
+    const alignment = layer.strokeStyle?.alignment ?? "center";
+    ctx.save();
+    if (alignment !== "center") {
+      ctx.beginPath();
+      if (alignment === "outside") {
+        const bounds = strokeBounds(layer);
+        ctx.rect(bounds.x, bounds.y, bounds.width, bounds.height);
+      }
+      path();
+      ctx.clip("evenodd");
+      ctx.lineWidth = layer.strokeWidth * 2;
+    }
+    ctx.beginPath();
+    path();
+    ctx.stroke();
+    ctx.restore();
+  }
   private layer(
     ctx: CanvasRenderingContext2D,
     l: Layer,
@@ -185,11 +203,13 @@ export class CanvasRenderer {
     if (hasFill) ctx.fillStyle = l.fill;
     if (hasStroke) ctx.strokeStyle = l.stroke;
     ctx.lineWidth = l.strokeWidth;
-    ctx.lineCap = "round";
-    ctx.lineJoin = "round";
+    const strokeStyle = l.strokeStyle ?? defaultStrokeStyle;
+    ctx.lineCap = strokeStyle.cap;
+    ctx.lineJoin = strokeStyle.join;
+    ctx.miterLimit = 10;
     if (l.kind === "rectangle") {
       if (hasFill) ctx.fillRect(0, 0, l.width, l.height);
-      if (hasStroke) ctx.strokeRect(0, 0, l.width, l.height);
+      if (hasStroke) this.closedStroke(ctx, l, () => ctx.rect(0, 0, l.width, l.height));
     }
     if (l.kind === "ellipse") {
       ctx.beginPath();
@@ -203,16 +223,26 @@ export class CanvasRenderer {
         Math.PI * 2,
       );
       if (hasFill) ctx.fill();
-      if (hasStroke) ctx.stroke();
+      if (hasStroke) this.closedStroke(ctx, l, () => { ctx.moveTo(l.width, l.height / 2); ctx.ellipse(l.width / 2, l.height / 2, l.width / 2, l.height / 2, 0, 0, Math.PI * 2); });
     }
     if (l.curves) {
       ctx.beginPath();
       for (const path of l.curves.filter((p) => p.closed))
         this.curve(ctx, path);
       if (hasFill) ctx.fill("evenodd");
-      ctx.beginPath();
-      for (const path of l.curves) this.curve(ctx, path);
-      if (hasStroke) ctx.stroke();
+      if (hasStroke) {
+        if (strokeStyle.alignment === "center") {
+          ctx.beginPath();
+          for (const path of l.curves) this.curve(ctx, path);
+          ctx.stroke();
+        } else {
+          const closed = l.curves.filter((path) => path.closed);
+          if (closed.length) this.closedStroke(ctx, l, () => { for (const path of closed) this.curve(ctx, path); });
+          ctx.beginPath();
+          for (const path of l.curves.filter((path) => !path.closed)) this.curve(ctx, path);
+          ctx.stroke();
+        }
+      }
     } else if (l.kind === "path" && l.points.length && hasStroke) {
       ctx.beginPath();
       ctx.moveTo(l.points[0].x, l.points[0].y);

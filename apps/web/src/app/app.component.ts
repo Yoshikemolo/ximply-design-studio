@@ -27,7 +27,7 @@ import { EditorService, ContextAction, ContextTarget } from "./editor.service";
 import { ContextMenuComponent, ContextMenuEntry } from "./context-menu.component";
 import { TOOLS, ToolId, TOOL_FAMILIES, ToolFamily } from "./tools";
 import { translate } from "./i18n";
-import { BLENDS, Layer } from "../../../../packages/domain/src/document";
+import { BLENDS, Layer, StrokeStyle, defaultStrokeStyle } from "../../../../packages/domain/src/document";
 import { createSampleDocument } from "../../../../packages/domain/src/sample";
 interface Release {
   version: string;
@@ -70,6 +70,28 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   readonly contextMenu = signal<{ target: ContextTarget; x: number; y: number } | null>(null);
   readonly units = measurementUnits;
   readonly fontUnits = measurementUnits;
+  readonly styleScopes = [
+    { id: "fill", label: "Fill only", icon: "style-fill" },
+    { id: "stroke", label: "Stroke only", icon: "style-stroke" },
+    { id: "both", label: "Fill and stroke", icon: "style-both" },
+  ] as const;
+  readonly strokeControls = [
+    { key: "alignment", label: "Stroke alignment", choices: [
+      { value: "center", label: "Centered stroke", hint: "Place half the stroke on each side of the path.", icon: "stroke-center" },
+      { value: "inside", label: "Inside stroke", hint: "Place the stroke inside closed outlines.", icon: "stroke-inside" },
+      { value: "outside", label: "Outside stroke", hint: "Place the stroke outside closed outlines.", icon: "stroke-outside" },
+    ] },
+    { key: "join", label: "Corner joins", choices: [
+      { value: "round", label: "Round join", hint: "Round the corner between stroke segments.", icon: "join-round" },
+      { value: "bevel", label: "Bevel join", hint: "Cut off the outer corner with a straight edge.", icon: "join-bevel" },
+      { value: "miter", label: "Miter join", hint: "Extend the edges to an angular corner. Very sharp corners use a bevel.", icon: "join-miter" },
+    ] },
+    { key: "cap", label: "Line caps", choices: [
+      { value: "butt", label: "Butt cap", hint: "End the stroke exactly at its endpoint.", icon: "cap-butt" },
+      { value: "square", label: "Projecting square cap", hint: "Extend a square cap half the stroke width beyond the endpoint.", icon: "cap-square" },
+      { value: "round", label: "Round cap", hint: "Extend a semicircular cap beyond the endpoint.", icon: "cap-round" },
+    ] },
+  ] as const;
   readonly paintTargets = ["fill", "stroke"] as const;
   readonly quickColors = [{ value: "#000000", label: "Black" }, { value: "#ffffff", label: "White" }, { value: "none", label: "No color" }];
   readonly paintTarget = signal<"fill" | "stroke">("fill");
@@ -93,7 +115,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     {
       id: "paint",
       label: "Painting and symbols",
-      families: ["paint", "eraser", "symbols"],
+      families: ["paint", "eraser", "style", "symbols"],
     },
     {
       id: "transform",
@@ -323,15 +345,33 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     return layer ? this.editor.previewText(layer, this.textDraft()) : null;
   }
   inlineMetrics(layer: Layer) { return this.editor.textMetrics(layer); }
+  usesStyleDefaults() { return ["eyedropper", "paintBucket"].includes(this.editor.tool()); }
+  paintStrokeStyle(): StrokeStyle {
+    const layer = this.editor.selected();
+    return !this.usesStyleDefaults() && layer && !layer.guide && layer.kind !== "image" ? { ...defaultStrokeStyle, ...layer.strokeStyle } : this.editor.strokeStyle();
+  }
+  strokeAlignmentAvailable() {
+    if (this.usesStyleDefaults()) return true;
+    const layers = this.editor.selectedLayers().filter(layer => !layer.guide && !layer.locked);
+    return !layers.length || layers.some(layer => layer.kind === "rectangle" || layer.kind === "ellipse" || layer.curves?.some(path => path.closed));
+  }
+  setStrokeOption(key: keyof StrokeStyle, value: string) {
+    if (key === "alignment") {
+      if (!["center", "inside", "outside"].includes(value) || (value !== "center" && !this.strokeAlignmentAvailable())) return;
+      this.editor.setStrokeStyle({ alignment: value as StrokeStyle["alignment"] });
+    } else if (key === "join" && ["round", "bevel", "miter"].includes(value)) this.editor.setStrokeStyle({ join: value as StrokeStyle["join"] });
+    else if (key === "cap" && ["butt", "square", "round"].includes(value)) this.editor.setStrokeStyle({ cap: value as StrokeStyle["cap"] });
+  }
+  setStyleScope(scope: "fill" | "stroke" | "both") { this.editor.styleScope.set(scope); }
   paintColor(target: "fill" | "stroke") {
     const selected = this.editor.selected();
-    return selected && !selected.guide ? selected[target] : this.editor[target]();
+    return !this.usesStyleDefaults() && selected && !selected.guide ? selected[target] : this.editor[target]();
   }
-  paintWidth() { const selected = this.editor.selected(); return selected && !selected.guide ? selected.strokeWidth : this.editor.size(); }
+  paintWidth() { const selected = this.editor.selected(); return !this.usesStyleDefaults() && selected && !selected.guide ? selected.strokeWidth : this.editor.size(); }
   openPaint(target: "fill" | "stroke", event: MouseEvent) {
     const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
     this.paintTarget.set(target);
-    this.paintPicker.set({ x: Math.max(8, Math.min(rect.right + 8, window.innerWidth - 260)), y: Math.max(8, Math.min(rect.top, window.innerHeight - 300)) });
+    this.paintPicker.set({ x: Math.max(8, Math.min(rect.right + 8, window.innerWidth - 260)), y: Math.max(8, Math.min(rect.top, window.innerHeight - 440)) });
   }
   paintBaseColor() {
     const color = this.paintColor(this.paintTarget());
