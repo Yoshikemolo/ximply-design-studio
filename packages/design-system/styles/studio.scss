@@ -278,30 +278,49 @@ hr {
   flex: 1;
   min-height: 0;
   display: grid;
-  grid-template-columns: 54px minmax(0, 1fr) 270px;
+  grid-template-columns: 100px minmax(0, 1fr) 270px;
 }
 .workspace.no-panels {
-  grid-template-columns: 54px minmax(0, 1fr);
+  grid-template-columns: 100px minmax(0, 1fr);
 }
 .toolrail {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 5px;
-  padding: 14px 6px 8px;
+  gap: 0;
+  padding: 10px 6px 8px;
+  scrollbar-width: thin;
   background: var(--panel);
   border-right: 1px solid var(--border);
 }
-.toolrail > button {
+.tool-section {
+  display: grid;
+  grid-template-columns: repeat(2, 38px);
+  align-items: center;
+  justify-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+  padding: 8px 0;
+}
+.tool-section + .tool-section {
+  border-top: 1px solid var(--border);
+}
+.tool-section:first-child {
+  padding-top: 0;
+}
+.appearance-tools {
+  margin-top: auto;
+}
+.tool-section > button {
   width: 36px;
   height: 36px;
   border-radius: 7px;
 }
-.toolrail > button.active {
+.tool-section > button.active {
   background: var(--selected);
   border-color: #4f78bb77;
 }
-.toolrail > button.active img {
+.tool-section > button.active img {
   filter: invert(59%) sepia(92%) saturate(1592%) hue-rotate(194deg);
 }
 .rail-divider {
@@ -314,7 +333,7 @@ hr {
   height: 43px;
   width: 37px;
   position: relative;
-  margin: 5px;
+  margin: 5px 0;
 }
 .swatches span {
   position: absolute;
@@ -946,13 +965,13 @@ textarea {
     display: none;
   }
   .workspace {
-    grid-template-columns: 48px minmax(0, 1fr) 230px;
+    grid-template-columns: 96px minmax(0, 1fr) 230px;
   }
   .toolrail {
     padding-inline: 4px;
   }
   .workspace.no-panels {
-    grid-template-columns: 48px minmax(0, 1fr);
+    grid-template-columns: 96px minmax(0, 1fr);
   }
   .contextbar {
     gap: 12px;
@@ -981,10 +1000,10 @@ textarea {
 }
 @media (max-width: 720px) {
   .workspace {
-    grid-template-columns: 44px minmax(0, 1fr);
+    grid-template-columns: 96px minmax(0, 1fr);
   }
   .workspace.no-panels {
-    grid-template-columns: 44px minmax(0, 1fr);
+    grid-template-columns: 96px minmax(0, 1fr);
   }
   .inspector {
     position: absolute;
@@ -1036,7 +1055,7 @@ textarea {
   .spatial-toolbar span {
     display: none;
   }
-  .toolrail > button {
+  .tool-section > button {
     width: 32px;
     height: 34px;
   }
@@ -1053,7 +1072,7 @@ textarea {
   min-height: 0;
   flex-shrink: 0;
 }
-.toolrail > button {
+.tool-section > button {
   flex-shrink: 0;
 }
 .tool-group-select {

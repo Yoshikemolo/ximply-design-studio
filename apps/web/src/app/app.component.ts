@@ -46,6 +46,38 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   @ViewChild("imageFile") imageFile?: ElementRef<HTMLInputElement>;
   @ViewChild("projectFile") projectFile?: ElementRef<HTMLInputElement>;
   readonly families = TOOL_FAMILIES;
+  readonly toolbarSections = [
+    {
+      id: "selection",
+      label: "Selection tools",
+      families: ["selection", "direct"],
+    },
+    {
+      id: "drawing",
+      label: "Drawing and paths",
+      families: ["pen", "pencil", "shape", "line", "text", "scissors"],
+    },
+    {
+      id: "paint",
+      label: "Painting and symbols",
+      families: ["paint", "eraser", "symbols"],
+    },
+    {
+      id: "transform",
+      label: "Transform and arrange",
+      families: ["rotate", "mirror", "scale"],
+    },
+    {
+      id: "navigation",
+      label: "Canvas navigation",
+      families: ["hand", "zoom"],
+    },
+  ].map((section) => ({
+    ...section,
+    families: section.families.map(
+      (id) => TOOL_FAMILIES.find((family) => family.id === id)!,
+    ),
+  }));
   readonly flyout = signal<string | null>(null);
   readonly flyoutPosition = signal({ x: 52, y: 120 });
   readonly familyChoices = signal<Record<string, ToolId>>({});
@@ -351,9 +383,11 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     return this.tools.find((t) => t.id === id)!;
   }
   toggleFlyout(id: string, event: MouseEvent) {
-    const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
+    const trigger = event.currentTarget as HTMLElement;
+    const rect = trigger.getBoundingClientRect();
+    const rail = trigger.closest(".toolrail")?.getBoundingClientRect();
     this.flyoutPosition.set({
-      x: rect.right + 8,
+      x: (rail?.right ?? rect.right) + 8,
       y: Math.max(8, Math.min(rect.top, window.innerHeight - 340)),
     });
     this.flyout.set(this.flyout() === id ? null : id);

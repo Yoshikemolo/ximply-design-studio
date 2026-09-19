@@ -146,7 +146,8 @@ export interface ToolFamily {
   tools: ToolId[];
 }
 export const TOOL_FAMILIES: ToolFamily[] = [
-  { id: "selection", label: "Selection tools", tools: ["select", "direct"] },
+  { id: "selection", label: "Select", tools: ["select"] },
+  { id: "direct", label: "Direct selection", tools: ["direct"] },
   {
     id: "pen",
     label: "Pen tools",
@@ -165,10 +166,12 @@ export const TOOL_FAMILIES: ToolFamily[] = [
   {
     id: "pencil",
     label: "Pencil tools",
-    tools: ["path", "smooth", "pathEraser", "scissors"],
+    tools: ["path", "smooth", "pathEraser"],
   },
   { id: "text", label: "Text", tools: ["text"] },
-  { id: "paint", label: "Paint tools", tools: ["brush", "eraser"] },
+  { id: "scissors", label: "Scissors", tools: ["scissors"] },
+  { id: "paint", label: "Brush", tools: ["brush"] },
+  { id: "eraser", label: "Eraser", tools: ["eraser"] },
   { id: "rotate", label: "Rotate", tools: ["rotate"] },
   { id: "mirror", label: "Reflect", tools: ["mirror"] },
   { id: "scale", label: "Scale", tools: ["scale"] },

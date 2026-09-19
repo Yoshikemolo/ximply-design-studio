@@ -166,94 +166,107 @@
     </select>
   </div>
   <main class="workspace" [class.no-panels]="!panels()">
-    <aside class="toolrail" aria-label="Drawing tools">
-      @for (family of families; track family.id) {
-        <div class="tool-family">
-          <button
-            class="family-primary"
-            [class.active]="family.tools.includes(activeTool())"
-            [attr.aria-label]="t(familyTool(family).label)"
-            [title]="commandTitle('tool.' + familyTool(family).id)"
-            (click)="chooseTool(familyTool(family).id)"
-          >
-            <img
-              [src]="'/assets/icons/' + familyTool(family).icon + '.svg'"
-              alt=""
-            />
-          </button>
-          @if (
-            family.tools.length > 1 ||
-            ["rotate", "mirror", "scale", "zoom"].includes(family.id)
-          ) {
+    <aside class="toolrail" [attr.aria-label]="t('Drawing tools')">
+      @for (section of toolbarSections; track section.id) {
+        <div class="tool-section" role="group" [attr.aria-label]="t(section.label)">
+          @for (family of section.families; track family.id) {
+            <div class="tool-family">
+              <button
+                class="family-primary"
+                [class.active]="family.tools.includes(activeTool())"
+                [attr.aria-label]="t(familyTool(family).label)"
+                [title]="commandTitle('tool.' + familyTool(family).id)"
+                (click)="chooseTool(familyTool(family).id)"
+              >
+                <img
+                  [src]="'/assets/icons/' + familyTool(family).icon + '.svg'"
+                  alt=""
+                />
+              </button>
+              @if (
+                family.tools.length > 1 ||
+                ["rotate", "mirror", "scale", "zoom"].includes(family.id)
+              ) {
+                <button
+                  class="family-expander"
+                  [attr.aria-label]="t('More tools') + ' · ' + t(family.label)"
+                  [attr.aria-expanded]="flyout() === family.id"
+                  aria-haspopup="menu"
+                  (click)="toggleFlyout(family.id, $event)"
+                >
+                  <span></span>
+                </button>
+              }
+            </div>
+          }
+          @if (section.id === 'transform') {
+            @for (group of actionGroups; track group.id) {
+              <div class="tool-family">
+                <button
+                  class="family-primary"
+                  [title]="commandTitle(group.commands[0])"
+                  [attr.aria-label]="t(group.label)"
+                  (click)="runCommand(group.commands[0])"
+                >
+                  <img
+                    [src]="'/assets/icons/' + group.icon + '.svg'"
+                    alt=""
+                  /></button
+                ><button
+                  class="family-expander"
+                  [attr.aria-label]="t('More tools') + ' · ' + t(group.label)"
+                  [attr.aria-expanded]="flyout() === group.id"
+                  aria-haspopup="menu"
+                  (click)="toggleFlyout(group.id, $event)"
+                >
+                  <span></span>
+                </button>
+              </div>
+            }
+          }
+          @if (section.id === 'navigation') {
             <button
-              class="family-expander"
-              [attr.aria-label]="t('More tools') + ' · ' + t(family.label)"
-              [attr.aria-expanded]="flyout() === family.id"
-              aria-haspopup="menu"
-              (click)="toggleFlyout(family.id, $event)"
+              (click)="runCommand('zoomIn')"
+              [title]="commandTitle('zoomIn')"
+              [attr.aria-label]="t('Zoom in')"
             >
-              <span></span>
+              <img src="/assets/icons/zoom-in.svg" alt="" /></button
+            ><button
+              (click)="runCommand('zoomOut')"
+              [title]="commandTitle('zoomOut')"
+              [attr.aria-label]="t('Zoom out')"
+            >
+              <img src="/assets/icons/zoom-out.svg" alt="" />
+            </button>
+          }
+          @if (section.id === 'paint') {
+            <button
+              (click)="imageFile.click()"
+              [title]="commandTitle('importImage')"
+              [attr.aria-label]="t('Import image')"
+            >
+              <img src="/assets/icons/image.svg" alt="" />
             </button>
           }
         </div>
       }
-      <div class="rail-divider"></div>
-      @for (group of actionGroups; track group.id) {
-        <div class="tool-family">
-          <button
-            class="family-primary"
-            [title]="commandTitle(group.commands[0])"
-            [attr.aria-label]="t(group.label)"
-            (click)="runCommand(group.commands[0])"
-          >
-            <img
-              [src]="'/assets/icons/' + group.icon + '.svg'"
-              alt=""
-            /></button
-          ><button
-            class="family-expander"
-            [attr.aria-label]="t('More tools') + ' · ' + t(group.label)"
-            [attr.aria-expanded]="flyout() === group.id"
-            aria-haspopup="menu"
-            (click)="toggleFlyout(group.id, $event)"
-          >
-            <span></span>
-          </button>
+      <div
+        class="tool-section appearance-tools"
+        role="group"
+        [attr.aria-label]="t('Appearance')"
+      >
+        <div class="swatches">
+          <span [style.background]="editor.stroke()"></span
+          ><span [style.background]="editor.fill()"></span>
         </div>
-      }
-      <button
-        (click)="runCommand('zoomIn')"
-        [title]="commandTitle('zoomIn')"
-        [attr.aria-label]="t('Zoom in')"
-      >
-        <img src="/assets/icons/zoom-in.svg" alt="" /></button
-      ><button
-        (click)="runCommand('zoomOut')"
-        [title]="commandTitle('zoomOut')"
-        [attr.aria-label]="t('Zoom out')"
-      >
-        <img src="/assets/icons/zoom-out.svg" alt="" />
-      </button>
-      <div class="rail-divider"></div>
-      <button
-        (click)="imageFile.click()"
-        [title]="commandTitle('importImage')"
-        [attr.aria-label]="t('Import image')"
-      >
-        <img src="/assets/icons/image.svg" alt="" />
-      </button>
-      <div class="rail-spacer"></div>
-      <div class="swatches">
-        <span [style.background]="editor.stroke()"></span
-        ><span [style.background]="editor.fill()"></span>
+        <button
+          (click)="theme.set(theme() === 'dark' ? 'light' : 'dark')"
+          [title]="t('Light theme')"
+          aria-label="Toggle theme"
+        >
+          <img src="/assets/icons/theme.svg" alt="" />
+        </button>
       </div>
-      <button
-        (click)="theme.set(theme() === 'dark' ? 'light' : 'dark')"
-        [title]="t('Light theme')"
-        aria-label="Toggle theme"
-      >
-        <img src="/assets/icons/theme.svg" alt="" />
-      </button>
     </aside>
     <section class="canvas-area">
       <div class="document-tabs">

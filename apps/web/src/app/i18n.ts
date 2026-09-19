@@ -239,6 +239,10 @@ const ES: Record<string, string> = {
   "Apply rotation": "Aplicar rotación",
   "Scale percent": "Escala en porcentaje",
   "Apply scale": "Aplicar escala",
+  "Drawing and paths": "Dibujo y trazados",
+  "Painting and symbols": "Pintura y símbolos",
+  "Transform and arrange": "Transformar y organizar",
+  "Canvas navigation": "Navegación del lienzo",
 };
 export function translate(key: string, locale: string) {
   return locale === "es" ? (ES[key] ?? key) : key;
