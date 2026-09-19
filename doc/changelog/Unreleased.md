@@ -42,7 +42,7 @@ None.
 
 ## Engineering
 
-- The contribution check accepts GitHub merge button commits when GitHub verified the signature, the author is the owner and the pull request title used as message is a Conventional Commit; the web merge of PR #16 joins the pinned historical exemptions.
+- The contribution check accepts GitHub merge button commits when GitHub verified the signature, the author is the owner and the pull request title used as message is a Conventional Commit; the web merges of PR #16, PR #17 and PR #18 join the pinned historical exemptions.
 - Add the GitHub web merges of PR #13 and PR #15 on dev to the pinned legacy-commit exemptions by exact SHA and reason, without rewriting history.
 - Temporarily pause the Sonar quality job at the owner's request, preserving its commented analysis steps and strict policy for reactivation; skipped analysis is not passing quality evidence.
 - Add a disposable SonarQube trial with pinned images, real coverage inputs, retained findings and automatic container/volume teardown. This diagnostic run does not replace the strict integration gate.
