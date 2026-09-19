@@ -90,3 +90,5 @@
 | [SC-0084 — Exact footer link parity](SC-0084.md) |
 | [SC-0085 — Tabbed documents and unsaved-change protection](SC-0085.md) |
 | [SC-0086 — Drafting-rule linear dimension presentation](SC-0086.md) |
+| [SC-0087 — Broken line types and leaf projections](SC-0087.md) |
+| [SC-0088 — Connected wall runs and plan tools](SC-0088.md) |

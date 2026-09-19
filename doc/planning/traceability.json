@@ -222,7 +222,9 @@
         "SC-0022",
         "SC-0023",
         "SC-0024",
-        "SC-0086"
+        "SC-0086",
+        "SC-0087",
+        "SC-0088"
       ],
       "implementation": [
         "apps/web/src/app/editor.service.ts",
@@ -258,13 +260,19 @@
         "apps/web/tests/procedural-independent.test.ts",
         "packages/renderer/tests/procedural.test.ts",
         "packages/renderer/tests/dimensions.test.ts",
-        "apps/web/tests/dimension-pointer.test.ts"
+        "apps/web/tests/dimension-pointer.test.ts",
+        "packages/renderer/tests/stroke-dash.test.ts",
+        "packages/domain/tests/openings.test.ts",
+        "apps/web/tests/wall-runs.test.ts",
+        "apps/web/tests/plan-tools.test.ts",
+        "apps/web/tests/stroke-dash-ui.test.ts"
       ],
       "evidence": [
         "doc/implementation/PLAN-0002-0001.md",
         "doc/implementation/PLAN-0008-0003.md",
         "doc/implementation/PLAN-0008-0004.md",
-        "doc/implementation/PLAN-0008-0005.md"
+        "doc/implementation/PLAN-0008-0005.md",
+        "doc/implementation/PLAN-0008-0006.md"
       ]
     },
     {

@@ -1,6 +1,69 @@
 {
-  "currentVersion": "0.3.15-alpha.1",
+  "currentVersion": "0.3.16-alpha.1",
   "entries": [
+    {
+      "version": "0.3.16-alpha.1",
+      "date": "2026-09-20",
+      "summary": "Connected wall runs, leaf mechanisms with opening side, stairs, chain dimensions and dashed line types",
+      "breakingChanges": [],
+      "changes": [
+        {
+          "type": "Feature",
+          "description": "Draw connected wall runs: each click continues the wall from the previous end, and the segments share exact joints. Escape ends the run."
+        },
+        {
+          "type": "Feature",
+          "description": "Choose whether a wall is centred on the drawn line or has its left or right face on it."
+        },
+        {
+          "type": "Feature",
+          "description": "Give each door or window leaf its own mechanism: hinged, sliding, folding, pocket or fixed, and choose the wall face the leaves open towards."
+        },
+        {
+          "type": "Feature",
+          "description": "Add a passage without leaves for open doorways."
+        },
+        {
+          "type": "Feature",
+          "description": "Set the line type of any stroke: solid, dashed, dotted, axis or a custom sequence of up to six dash and gap lengths."
+        },
+        {
+          "type": "Feature",
+          "description": "Add a straight stair flight with a configurable width, length, number of steps and walking direction."
+        },
+        {
+          "type": "Feature",
+          "description": "Add a chain dimension tool that measures consecutive spans against a single offset line in one step."
+        },
+        {
+          "type": "Improvement",
+          "description": "Draw leaf travel as a broken projection line in the editor and in SVG exports, scaled with the stroke width."
+        },
+        {
+          "type": "Improvement",
+          "description": "Snap wall drawing to existing wall ends and axes before the grid, so corners and T junctions meet exactly."
+        },
+        {
+          "type": "Improvement",
+          "description": "Give new walls and pillars a construction appearance and draw openings as outlines instead of using the current drawing colors."
+        },
+        {
+          "type": "Security",
+          "description": "Validate dash sequences, leaf mechanisms, opening sides, wall alignment and stair parameters in the native parser and in the authenticated API before storage."
+        },
+        {
+          "type": "Engineering",
+          "description": "Derive projection curves instead of storing them, and share one geometry between Canvas, SVG and hit testing."
+        },
+        {
+          "type": "Engineering",
+          "description": "Keep every new parameter optional so existing documents open unchanged."
+        }
+      ],
+      "capabilityStatus": "local-preview",
+      "markdown": "0.3.16-alpha.1.md",
+      "source": "doc/changelog/0.3.16-alpha.1.md"
+    },
     {
       "version": "0.3.15-alpha.1",
       "date": "2026-09-19",

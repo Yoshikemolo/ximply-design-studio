@@ -419,7 +419,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   }
   inlineMetrics(layer: Layer) { return this.editor.textMetrics(layer); }
   usesStyleDefaults() { return ["eyedropper", "paintBucket"].includes(this.editor.tool()); }
-  proceduralTool(): ProceduralKind | null { const tool = this.editor.tool(); return ["wall", "door", "window", "pillar"].includes(tool) ? tool as ProceduralKind : null; }
+  proceduralTool(): ProceduralKind | null { const tool = this.editor.tool(); return ["wall", "door", "window", "pillar", "stair"].includes(tool) ? tool as ProceduralKind : null; }
   proceduralProperties(): Procedural | undefined { const tool = this.proceduralTool(); return tool ? this.editor.proceduralDefaults()[tool] : this.editor.selected()?.procedural; }
   patchProcedural(patch: Record<string, unknown>) {
     const tool = this.proceduralTool();
@@ -472,7 +472,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     this.patchProcedural({ leafWidths, width: total });
   }
   setPillarShape(event: Event) { const p = this.proceduralProperties(); if (p?.type !== "pillar") return; const shape = this.text(event); if (shape === "rectangle" || shape === "circle") this.patchProcedural({shape, ...(shape === "circle" ? {depth: p.width} : {})}); }
-  proceduralHint() { const tool = this.proceduralTool(); return tool === "wall" ? "Drag the wall centerline. Set its thickness before drawing." : tool === "pillar" ? "Drag to size the pillar footprint." : "Click near a wall to attach the opening, or click empty space for free placement."; }
+  proceduralHint() { const tool = this.proceduralTool(); return tool === "wall" ? "Click to continue the wall run; press Escape to end it." : tool === "pillar" ? "Drag to size the pillar footprint." : tool === "stair" ? "Drag to size the flight; the arrow follows the walking direction." : "Click near a wall to attach the opening, or click empty space for free placement."; }
   readonly transformDialog = signal<"displacement" | "rotation" | null>(null);
   transformX = 0; transformY = 0; numericAngle = 0; transformCenterX = 0; transformCenterY = 0;
   openTransformDialog(kind: "displacement" | "rotation") {

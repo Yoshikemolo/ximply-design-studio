@@ -151,5 +151,5 @@ Before starting, run `./scripts/local.ps1 info` on Windows or
 `./scripts/local.sh info` on Linux/macOS. This read-only action prints the checkout
 version, branch and commit without Docker. It identifies source files, not a running
 container. After pulling, restart with `stop` and `start` to rebuild the container;
-confirm version **0.3.15-alpha.1** in the application footer or About.
+confirm version **0.3.16-alpha.1** in the application footer or About.
 The drawing features are on `feat/drawing-preview` until integration gates pass.

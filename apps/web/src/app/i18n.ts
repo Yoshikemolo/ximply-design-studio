@@ -1,4 +1,5 @@
 const ES: Record<string, string> = {
+  "Drag to size the flight; the arrow follows the walking direction.": "Arrastra para dimensionar el tramo; la flecha sigue el sentido de subida.",
   "Stair": "Escalera",
   "Chain dimension": "Cota en cadena",
   "Flight width": "Ancho del tramo",
