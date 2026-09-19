@@ -47,6 +47,15 @@ initial commit. The policy applies to new contribution commits after that baseli
 no history is silently rewritten. Agent handoffs must carry this file's path rather
 than relying on conversation memory. No cross-session memory service is assumed.
 
+Two later merge commits into dev, 310daca1c44d942b10a882552dbe8f5166a0ec78 and
+c948cdfeeeba73fd9c32380a7c22ec111989094b, were created by the GitHub web merge button
+with its default message and GitHub as committer. They are listed with a reason under
+`legacyCommitExemptions` in `harness/contribution-policy.json` instead of rewriting
+shared history. Exemptions match exact full SHAs only; a malformed entry fails closed.
+Adding an entry is an owner decision recorded in review, never a way to pass a new
+commit. Server-side merges always record GitHub as committer, so feature branches
+reach dev by fast-forward after their checks pass rather than by the merge button.
+
 ## Authorization scope
 
 The owner's permission and persistent preferences apply only to ximply-design-studio.

@@ -32,8 +32,19 @@ def check_text(text: str, label: str, policy: dict[str, Any]) -> list[str]:
             break
     return errors
 
+def legacy_exemptions(policy: dict[str, Any]) -> set[str]:
+    """Return exact full SHAs of reviewed historical commits that predate enforcement."""
+    exemptions = set()
+    for entry in policy.get("legacyCommitExemptions", []):
+        sha = entry.get("sha", "") if isinstance(entry, dict) else ""
+        if not re.fullmatch(r"[0-9a-f]{40}", sha) or not str(entry.get("reason", "")).strip():
+            raise ValueError("Legacy exemptions require a full SHA and a reason")
+        exemptions.add(sha)
+    return exemptions
+
 def check_metadata(report: dict[str, Any], expected_head: str, policy: dict[str, Any]) -> list[str]:
     errors: list[str] = []
+    exempt = legacy_exemptions(policy)
     if report.get("headSha") != expected_head:
         errors.append("Metadata does not match the expected head revision")
     commits = report.get("commits")
@@ -43,6 +54,8 @@ def check_metadata(report: dict[str, Any], expected_head: str, policy: dict[str,
         for commit in commits:
             if not isinstance(commit, dict):
                 errors.append("Invalid commit metadata")
+                continue
+            if commit.get("sha") in exempt:
                 continue
             for identity in ("authorLogin", "committerLogin"):
                 if commit.get(identity) != policy["owner"]:
