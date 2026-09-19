@@ -16,7 +16,7 @@ capability_status: "local-preview"
 
 # Unreleased — Pending changes
 
-No additional changes beyond the drawing workbench preview are recorded yet.
+Engineering follow-up for incremental preview delivery.
 
 ## Breaking changes
 
@@ -41,3 +41,6 @@ None.
 ## Engineering
 
 - Add a disposable SonarQube trial with pinned images, real coverage inputs, retained findings and automatic container/volume teardown. This diagnostic run does not replace the strict integration gate.
+- Exercise the actual trial image-resolution and teardown commands with regression tests, including preservation of unrelated containers. These tests do not claim a live scan.
+- Record incremental product checkpoints and explicit branch/version feedback as permanent project instructions.
+- Retry temporary connection resets while the disposable server starts; sanitize transport errors before writing diagnostic output.

@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import base64
+from http.client import HTTPException
 import json
 import math
 import os
@@ -12,7 +13,7 @@ import secrets
 import subprocess
 import tempfile
 import time
-from urllib import error, parse, request
+from urllib import parse, request
 
 METRICS = ('bugs', 'vulnerabilities', 'code_smells', 'security_hotspots', 'coverage',
            'line_coverage', 'branch_coverage', 'conditions_to_cover',
@@ -51,7 +52,7 @@ class Api:
                 if len(body) > 2 * 1024 * 1024:
                     raise TrialError('Sonar API response exceeded the size limit')
             return json.loads(body) if body else {}
-        except (error.URLError, ValueError) as exc:
+        except (OSError, HTTPException, ValueError):
             raise TrialError(f'Sonar API request failed: {path}') from None
 
 

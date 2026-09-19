@@ -78,3 +78,12 @@ small batches with unique preview versions and updated Markdown release notes,
 including test evidence and limitations. After the native-v2 drawing baseline
 0.3.0-alpha.1, compatible feedback patches increment the patch version. A preview
 publish does not authorize merging or bypassing the strict product quality gate.
+
+## Incremental preview delivery
+
+Publish small tested product checkpoints with Conventional Commits and no attribution.
+Each user-facing patch gets a unique version and Markdown release notes. After every
+published checkpoint, report its branch, commit, visible behavior, checks and exact
+local update commands. Clearly distinguish published preview work from dev/main
+integration; never describe a subtask as available there until it is integrated.
+Keep the owner informed during active work; inspect workflow results after publishing.

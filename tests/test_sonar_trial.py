@@ -1,14 +1,67 @@
 """Independent boundary and failure-path checks for the disposable diagnostic."""
 import json
+import os
 from pathlib import Path
+import subprocess
+import sys
 import tempfile
+import textwrap
 import unittest
-from unittest.mock import Mock, patch
+from unittest.mock import MagicMock, Mock, patch
 
 from scripts import sonar_trial as trial
 
 
 class TrialTests(unittest.TestCase):
+    def test_workflow_resolves_the_pinned_server_image(self):
+        root = Path(__file__).resolve().parents[1]
+        workflow = (root / '.github/workflows/sonar-trial.yml').read_text()
+        assignment = next(line.strip() for line in workflow.splitlines()
+                          if line.strip().startswith('XDS_SONAR_IMAGE='))
+        result = subprocess.run(['bash', '-e', '-c', assignment + '\nprintf "%s" "$XDS_SONAR_IMAGE"'],
+                                cwd=root, capture_output=True, text=True, check=True)
+        images = json.loads((root / 'infra/sonar/trial-images.json').read_text())
+        self.assertEqual(result.stdout, images['server'])
+        self.assertRegex(result.stdout, r'^sonarqube@sha256:[0-9a-f]{64}$')
+
+    def test_workflow_teardown_removes_both_containers_and_volumes(self):
+        root = Path(__file__).resolve().parents[1]
+        workflow = (root / '.github/workflows/sonar-trial.yml').read_text()
+        cleanup = workflow.split('      - name: Destroy temporary containers and their volumes\n', 1)[1]
+        cleanup = cleanup.split('      - name: Preserve findings', 1)[0]
+        self.assertIn('        if: always()\n', cleanup)
+        script = textwrap.dedent(cleanup.split('        run: |\n', 1)[1])
+        with tempfile.TemporaryDirectory() as folder:
+            temporary = Path(folder)
+            docker = temporary / 'docker'
+            docker.write_text(f'#!{sys.executable}\n' + textwrap.dedent('''\
+                import json
+                from pathlib import Path
+                import sys
+                state = Path('containers.json')
+                names = json.loads(state.read_text())
+                args = sys.argv[1:]
+                if args[:2] == ['container', 'inspect']:
+                    raise SystemExit(0 if args[-1] in names else 1)
+                if args[:3] == ['rm', '--force', '--volumes']:
+                    names.remove(args[-1])
+                    state.write_text(json.dumps(names))
+                elif args[:2] == ['ps', '-a']:
+                    print('\\n'.join(names))
+                else:
+                    raise SystemExit('Unexpected Docker operation')
+                '''))
+            docker.chmod(0o700)
+            (temporary / 'containers.json').write_text(json.dumps([
+                'xds-sonar-trial-scanner', 'xds-sonar-trial', 'unrelated-container']))
+            result = subprocess.run(['bash', '-e', '-c', script], cwd=temporary,
+                                    env={**os.environ, 'PATH': folder + os.pathsep + os.environ['PATH']},
+                                    capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(json.loads((temporary / 'containers.json').read_text()), ['unrelated-container'])
+            evidence = json.loads((temporary / 'reports/sonar-trial/cleanup.json').read_text())
+            self.assertEqual(evidence, {'remainingContainers': [], 'destroyed': True})
+
     def test_strict_metric_boundaries_and_missing_evidence(self):
         passing = dict(bugs=0, vulnerabilities=0, code_smells=0, security_hotspots=0,
                        coverage=81, line_coverage=81, branch_coverage=81,
@@ -38,6 +91,42 @@ class TrialTests(unittest.TestCase):
         with patch.object(trial.time, 'monotonic', side_effect=[0, 0, 10]), patch.object(trial.time, 'sleep'):
             with self.assertRaises(trial.TrialError):
                 trial.wait_for(lambda: {}, lambda _: False, 5)
+
+    def test_startup_retries_a_connection_reset_before_server_is_ready(self):
+        api = trial.Api('http://127.0.0.1:19000')
+        responses = []
+        for body in [{'status': 'UP'}, {}, {'token': 'secret'},
+                     {'task': {'status': 'FAILED'}}]:
+            response = MagicMock()
+            response.__enter__.return_value.read.return_value = json.dumps(body).encode()
+            responses.append(response)
+        api.opener = Mock()
+        api.opener.open.side_effect = [ConnectionResetError('private transport details'), *responses]
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            def scanner(*args):
+                (args[-1] / 'report-task.txt').write_text('ceTaskId=123\n')
+            with patch.object(trial.subprocess, 'check_output', return_value='abc\n'), \
+                    patch.object(trial.time, 'sleep') as sleep, \
+                    patch.object(trial, 'run_scanner', side_effect=scanner) as scan:
+                self.assertEqual(trial.trial(root, 'http://127.0.0.1:19000', api), 1)
+            sleep.assert_called_once_with(3)
+            scan.assert_called_once()
+            status = json.loads((root / 'reports/sonar-trial/status.json').read_text())
+            self.assertEqual(status['server']['status'], 'UP')
+            self.assertIn('compute task', status['error'])
+            self.assertNotIn('private transport details', json.dumps(status))
+
+    def test_api_transport_errors_are_secret_safe(self):
+        api = trial.Api('http://127.0.0.1:19000')
+        api.credentials('private-token')
+        api.opener = Mock()
+        for failure in [ConnectionResetError('private-token'),
+                        trial.HTTPException('private-token')]:
+            with self.subTest(failure=type(failure).__name__):
+                api.opener.open.side_effect = failure
+                with self.assertRaisesRegex(trial.TrialError, '^Sonar API request failed: system/status$'):
+                    api.call('system/status')
 
     def test_issue_export_paginates_and_preserves_findings(self):
         api = Mock()
