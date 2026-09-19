@@ -28,14 +28,14 @@ None.
 
 ## Improvements
 
+- Prevent accidental text selection in interface labels while preserving native selection in inputs, text areas and editable text.
 - Add explicit Help > About and footer About entries, with Ximplicity company links opening its website in a new tab.
 
 ## Fixes
 
-- Prevent accidental text selection in interface labels while preserving native selection in inputs, text areas and editable text.
+- Generated documentation navigation is identical on Windows and POSIX hosts, with forward-slash links and case-sensitive document order.
 - Load the full editor stylesheet directly in production so the Content Security Policy does not leave the interface unstyled. Rebuild the local containers to apply the correction.
 - Use localhost:8090 by default for the local editor to avoid conflicts with port 8080. Existing installations should set XDS_PORT=8090 in .env.local and restart; credentials and saved projects are preserved.
-- Generated documentation navigation is identical on Windows and POSIX hosts, with forward-slash links and case-sensitive document order.
 
 ## Security
 
@@ -43,4 +43,5 @@ None.
 
 ## Engineering
 
+- Record the PR integration preflight and distinguish passing build checks from the required product quality gate.
 - The contribution check accepts two pinned historical GitHub merge commits on dev by exact SHA and reason, without rewriting history; all other commits remain fully checked.
