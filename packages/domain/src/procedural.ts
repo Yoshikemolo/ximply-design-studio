@@ -111,9 +111,10 @@ function openingCurves(p: DoorProcedure | WindowProcedure): OpeningCurve[] {
     const curves: OpeningCurve[] = [], center = p.depth / 2, face = p.side === 'back' ? 1 : -1;
     const solid = (path: CurvePath) => curves.push({ path, projection: false });
     const projected = (path: CurvePath) => curves.push({ path, projection: true });
-    // Jambs terminate at the opening; the portal itself has no filled rectangle.
-    solid(line({ x: 0, y: 0 }, { x: 0, y: p.depth }));
-    solid(line({ x: p.width, y: 0 }, { x: p.width, y: p.depth }));
+    // Each jamb is drawn as the plan section of its frame: a square as deep as the wall.
+    const frame = Math.min(p.depth, p.width / 4);
+    solid(rectangle(0, 0, frame, p.depth));
+    solid(rectangle(p.width - frame, 0, frame, p.depth));
     let offset = 0;
     p.leafWidths.forEach((width, index) => {
         const type = leafType(p, index);
@@ -226,9 +227,10 @@ export function generateProcedural(layer: Layer, document?: StudioDocument): Lay
     }
     else if ((metadata.type === 'door' || metadata.type === 'window') && metadata.host)
         delete metadata.host;
-    if (!host && (metadata.type === 'door' || metadata.type === 'window') && layer.curves?.length && layer.curves[0].nodes.length === 2 && layer.curves[1]?.nodes.length === 2) {
+    // A free opening keeps its portal centre when its parameters change; both jamb frames define it.
+    if (!host && (metadata.type === 'door' || metadata.type === 'window') && layer.curves && layer.curves.length >= 2) {
         const jambs = [...layer.curves[0].nodes, ...layer.curves[1].nodes].map(n => worldPoint(layer, n.point));
-        const previous = { x: jambs.reduce((a, p) => a + p.x, 0) / 4, y: jambs.reduce((a, p) => a + p.y, 0) / 4 };
+        const previous = { x: jambs.reduce((a, p) => a + p.x, 0) / jambs.length, y: jambs.reduce((a, p) => a + p.y, 0) / jambs.length };
         const portal = worldPoint(result, { x: metadata.width / 2 - bounds.x, y: metadata.depth / 2 - bounds.y });
         result.x += previous.x - portal.x;
         result.y += previous.y - portal.y;

@@ -36,6 +36,10 @@
           "description": "Add a chain dimension tool that measures consecutive spans against a single offset line in one step."
         },
         {
+          "type": "Feature",
+          "description": "Draw the plan section of the frame at each side of a door or window."
+        },
+        {
           "type": "Improvement",
           "description": "Draw leaf travel as a broken projection line in the editor and in SVG exports, scaled with the stroke width."
         },
@@ -45,7 +49,15 @@
         },
         {
           "type": "Improvement",
+          "description": "Lean wall drawing to the nearest 45 degree direction when the angle is within six degrees of it, which keeps plans orthogonal; a wall joint still wins over the tendency."
+        },
+        {
+          "type": "Improvement",
           "description": "Give new walls and pillars a construction appearance and draw openings as outlines instead of using the current drawing colors."
+        },
+        {
+          "type": "Fix",
+          "description": "Draw walls as complete rectangles: composing their outlines dropped one corner, so a wall appeared as a triangle with its start edge collapsed."
         },
         {
           "type": "Security",

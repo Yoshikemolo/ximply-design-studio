@@ -54,10 +54,17 @@ describe('door and window leaves', () => {
     }
   });
 
-  it('keeps geometry stable for the leaf count and widths', () => {
+  it('draws each jamb as the plan section of its frame', () => {
     const single = opening(), double = opening({ leafWidths: [40, 40] });
-    const jamb = ys(single, 0);
-    expect(Math.abs(jamb[1] - jamb[0])).toBe(16);
+    // A 16 deep wall and an 80 wide door: the frame is a 16 by 16 square at each side.
+    for (const index of [0, 1]) {
+      const frame = single.curves![index];
+      expect(frame.closed).toBe(true);
+      const xs = frame.nodes.map((node) => node.point.x), depth = ys(single, index);
+      expect(Math.max(...xs) - Math.min(...xs)).toBe(16);
+      expect(Math.max(...depth) - Math.min(...depth)).toBe(16);
+    }
+    expect(Math.min(...single.curves![1].nodes.map((n) => n.point.x))).toBeGreaterThan(Math.max(...single.curves![0].nodes.map((n) => n.point.x)));
     expect(double.curves!.filter((path) => path.nodes.length === 2).length).toBeGreaterThan(single.curves!.filter((path) => path.nodes.length === 2).length);
   });
 });

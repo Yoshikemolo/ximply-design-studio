@@ -76,6 +76,8 @@ export type ContextTarget = { revision: number; layerId: string } & (
   { kind: "object"; groupPath?: string[]; selectionIds?: string[] } |
   { kind: "node"; path: number; index: number }
 );
+/** Walls within this angle of a 45 degree direction are drawn on it, which keeps plans orthogonal. */
+const WALL_ANGLE_TOLERANCE = 6 * Math.PI / 180;
 const WALL_POCHE = "#3f4753";
 const WALL_OUTLINE = "#161b22";
 const WORKSPACE_KEY = "xds-workspace";
@@ -402,7 +404,18 @@ export class EditorService {
     this.wallSnapTarget.set(target);
     return target?.point??this.snap(point);
   }
-  hoverWall(point:Point) { if(this.tool()==='wall'&&!this.proceduralGesture)this.wallPoint(point); }
+  hoverWall(point:Point) { if(this.tool()==='wall'&&!this.proceduralGesture)this.wallTarget(this.wallChain(),point); }
+  /** Where the wall being drawn ends: a wall joint when one is near, otherwise a point that leans to 45 degrees. */
+  wallTarget(start:Point|null,point:Point,exclude?:string):Point {
+    const snapped=this.wallPoint(point,exclude);
+    if(this.wallSnapTarget()||!start)return snapped;
+    const dx=point.x-start.x,dy=point.y-start.y;
+    if(Math.hypot(dx,dy)<1e-6)return snapped;
+    const step=Math.PI/4,angle=Math.atan2(dy,dx),nearest=Math.round(angle/step)*step;
+    let difference=Math.abs(angle-nearest);
+    if(difference>Math.PI)difference=Math.PI*2-difference;
+    return difference<=WALL_ANGLE_TOLERANCE?snapDirection(start,point,45):snapped;
+  }
   private proceduralLayer(type:Procedural['type'],start:Point,end?:Point,id:string=crypto.randomUUID()):Layer {
     let procedural=structuredClone(this.proceduralDefaults()[type]);
     // Architectural defaults: walls read as solid construction, openings as outlines.
@@ -423,7 +436,7 @@ export class EditorService {
     if(type==='door'||type==='window'){this.createProcedural(type,this.snap(point));return;}
     if(this.document().layers.length>=150)return;
     if(type==='wall'){
-      const chain=this.wallChain(),target=this.wallPoint(point);
+      const chain=this.wallChain(),target=this.wallTarget(this.wallChain(),point);
       if(chain&&Math.hypot(target.x-chain.x,target.y-chain.y)>=1){
         if(this.createProcedural('wall',chain,target))this.wallChain.set(target);
         return;
@@ -1460,7 +1473,7 @@ export class EditorService {
     };
   }
   move(point: Point, modifiers: { shift?: boolean; alt?: boolean; ctrl?: boolean } = {}) {
-    if(this.proceduralGesture){const g=this.proceduralGesture;const end=modifiers.shift?snapDirection(g.start,point,this.snapAngle()):(g.type==='wall'?this.wallPoint(point,g.id):this.snap(point));try{const layer=this.proceduralLayer(g.type,g.start,end,g.id);const next=syncProcedurals({...g.before,layers:[...g.before.layers,layer]});parseDocument(JSON.stringify(next));this.document.set(next);this.selectedId.set(layer.id);this.selectedIds.set([layer.id]);}catch{/* Keep the last valid preview. */}return;}
+    if(this.proceduralGesture){const g=this.proceduralGesture;const end=modifiers.shift?snapDirection(g.start,point,this.snapAngle()):(g.type==='wall'?this.wallTarget(g.start,point,g.id):this.snap(point));try{const layer=this.proceduralLayer(g.type,g.start,end,g.id);const next=syncProcedurals({...g.before,layers:[...g.before.layers,layer]});parseDocument(JSON.stringify(next));this.document.set(next);this.selectedId.set(layer.id);this.selectedIds.set([layer.id]);}catch{/* Keep the last valid preview. */}return;}
     if(this.dimensionLabelGesture){const layer=this.document().layers.find(l=>l.id===this.dimensionLabelGesture!.id)!;this.setLayer(layer.id,{dimension:{...layer.dimension!,labelPosition:localPoint(layer,point)}});return;}
     const draft=this.dimensionDraft();if(draft){const count=draft.kind==="chain"?Infinity:(draft.kind==="angular"?3:2);const placing=draft.ready===true||draft.points.length>=count;this.dimensionDraft.set({...draft,cursor:placing?point:this.dimensionPoint(point,true)});if(placing)this.dimensionSnapTarget.set(null);return;}
     if(!this.gesture&&["dimensionSmart","dimensionLinear","dimensionAngular","dimensionChain"].includes(this.tool())){this.hoverDimension(point);return;}

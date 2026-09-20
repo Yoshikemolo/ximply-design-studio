@@ -57,7 +57,13 @@ describe('independent architectural geometry oracles', () => {
     const rendered = materializeProcedural(doc(host, opening(host)));
     expect(area(rendered.layers[0])).toBeCloseTo(200 * 20 - 40 * 20);
     expect(rendered.layers[0].curves).toHaveLength(2);
-    expect(rendered.layers[1].curves!.every(path => !path.closed)).toBe(true);
+    // Only the two frame sections are closed, and neither spans the clear opening.
+    const closed = rendered.layers[1].curves!.filter(path => path.closed);
+    expect(closed).toHaveLength(2);
+    for (const path of closed) {
+      const xs = path.nodes.map(node => node.point.x);
+      expect(Math.max(...xs) - Math.min(...xs)).toBeLessThanOrEqual(20);
+    }
   });
   it('keeps a crossing second wall solid when the opening belongs only to the first wall', () => {
     const host = wall('host');

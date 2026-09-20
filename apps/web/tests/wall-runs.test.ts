@@ -80,3 +80,41 @@ describe('wall runs', () => {
     expect(e.selected()?.fill).toBe('none');
   });
 });
+
+describe('wall angle tendency', () => {
+  const drawn = (from: { x: number; y: number }, to: { x: number; y: number }) => {
+    localStorage.clear();
+    const e = new EditorService();
+    e.setTool('wall');
+    e.start(from);
+    e.move(to);
+    e.end();
+    return ends(walls(e)[0])[1];
+  };
+  const angle = (from: { x: number; y: number }, to: { x: number; y: number }) => Math.round(Math.atan2(to.y - from.y, to.x - from.x) * 180 / Math.PI * 100) / 100;
+
+  it('leans to the nearest 45 degree direction when the angle is close', () => {
+    const from = { x: 200, y: 200 };
+    // 3 degrees off horizontal and 2 degrees off the diagonal both land on the clean direction.
+    expect(angle(from, drawn(from, { x: 400, y: 210 }))).toBe(0);
+    expect(angle(from, drawn(from, { x: 400, y: 190 }))).toBe(0);
+    expect(angle(from, drawn(from, { x: 400, y: 393 }))).toBe(45);
+    expect(angle(from, drawn(from, { x: 200, y: 400 }))).toBe(90);
+  });
+
+  it('keeps a deliberate angle and exact wall joints', () => {
+    const from = { x: 200, y: 200 };
+    expect(angle(from, drawn(from, { x: 400, y: 300 }))).toBeCloseTo(26.57, 1);
+    localStorage.clear();
+    const e = new EditorService();
+    e.setTool('wall');
+    e.start({ x: 100, y: 100 });
+    e.move({ x: 300, y: 100 });
+    e.end();
+    // A joint on an existing wall wins over the angle tendency.
+    e.start({ x: 302, y: 104 });
+    e.move({ x: 305, y: 300 });
+    e.end();
+    expect(ends(walls(e)[1])[0]).toEqual(ends(walls(e)[0])[1]);
+  });
+});
