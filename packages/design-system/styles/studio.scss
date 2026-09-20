@@ -205,6 +205,8 @@ hr {
   color: var(--muted);
 }
 .preview-badge {
+  cursor: pointer;
+  min-height: 0;
   font-size: 9px;
   letter-spacing: 0.6px;
   text-transform: uppercase;
@@ -1542,9 +1544,10 @@ textarea,
 .inline-editor-frame .inline-text-editor { left: 0; top: 0; color: transparent; caret-color: var(--accent); outline: 0; transform-origin: top left; }
 .inline-editor-frame .inline-text-editor::selection { background: #3979ff44; color: transparent; }
 .icon-action { min-width: 32px; justify-content: center; }
-.guide-lock { width: 30px; height: 30px; padding: 5px; margin-right: -6px; }
-.guide-lock img { width: 19px; height: 19px; }
-.guide-lock.active { background: var(--selected); border-color: var(--accent); }
+.guide-lock, .dimension-lock { width: 30px; height: 30px; padding: 5px; }
+.guide-lock { margin-right: -6px; }
+.guide-lock img, .dimension-lock img { width: 19px; height: 19px; }
+.guide-lock.active, .dimension-lock.active { background: var(--selected); border-color: var(--accent); }
 
 /* Category navigation keeps the settings form scoped and independently scrollable. */
 .settings-dialog > header h2 { margin: 0; }

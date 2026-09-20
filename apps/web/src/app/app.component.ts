@@ -1125,6 +1125,8 @@ export class AppComponent implements AfterViewInit, OnDestroy {
         [key]: Math.max(0.05, Math.min(200, key === "radius" ? toPixels(value, this.preferences.distanceUnit()) : value)),
       }));
   }
+  /** The badge states that this preview stores work locally; it opens the local service settings. */
+  openServerSettings() { this.dismissMenus(); this.dialog.set(true); void this.refreshProjects(); }
   openSettings() {
     this.settings.set(true);
     this.recording.set(null);

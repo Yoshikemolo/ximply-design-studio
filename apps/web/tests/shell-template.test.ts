@@ -22,4 +22,16 @@ describe('shell template', () => {
     expect(tabs).toContain('closeDocument(tab.id)');
     expect(template).not.toMatch(/\bconfirm\(\s*["']/);
   });
+
+  it('shows the local preview badge as a button into the local service settings', () => {
+    const badge = section('class="preview-badge"', '</button>');
+    expect(badge).toContain('(click)="openServerSettings()"');
+    expect(badge).toContain("t('Local preview explanation')");
+  });
+
+  it('gives the dimension lock the same styled toggle as the guide lock', () => {
+    expect(template).toContain('class="dimension-lock"');
+    const styles = readFileSync('packages/design-system/styles/studio.scss', 'utf-8');
+    expect(styles).toContain('.guide-lock.active, .dimension-lock.active');
+  });
 });

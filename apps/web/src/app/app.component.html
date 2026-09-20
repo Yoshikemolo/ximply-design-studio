@@ -108,7 +108,7 @@
         </div>
       </details>
     </nav>
-    <span class="preview-badge">{{ t("Local preview") }}</span>
+    <button class="preview-badge" [title]="t('Local preview explanation')" [attr.aria-label]="t('Local preview') + ': ' + t('Local preview explanation')" (click)="openServerSettings()">{{ t("Local preview") }}</button>
     <div class="header-spacer"></div>
     <select
       class="language"
@@ -153,7 +153,7 @@
     }
     @if (preferences.layoutBlocks().dimensions) {
       <section class="context-block measurement-controls" [attr.aria-label]="t('Dimensions')">
-        <button [class.active]="preferences.dimensionsLocked()" [attr.aria-pressed]="preferences.dimensionsLocked()" [title]="t(preferences.dimensionsLocked() ? 'Unlock dimensions' : 'Lock dimensions')" [attr.aria-label]="t(preferences.dimensionsLocked() ? 'Unlock dimensions' : 'Lock dimensions')" (click)="preferences.setMeasurement('dimensionsLocked', !preferences.dimensionsLocked())"><img [src]="'/assets/icons/' + (preferences.dimensionsLocked() ? 'lock' : 'unlock') + '.svg'" alt="" /></button>
+        <button class="dimension-lock" [class.active]="preferences.dimensionsLocked()" [attr.aria-pressed]="preferences.dimensionsLocked()" [title]="t(preferences.dimensionsLocked() ? 'Unlock dimensions' : 'Lock dimensions')" [attr.aria-label]="t(preferences.dimensionsLocked() ? 'Unlock dimensions' : 'Lock dimensions')" (click)="preferences.setMeasurement('dimensionsLocked', !preferences.dimensionsLocked())"><img [src]="'/assets/icons/' + (preferences.dimensionsLocked() ? 'lock' : 'unlock') + '.svg'" alt="" /></button>
         <div class="aid-pair"><button [class.active]="preferences.dimensionsVisible()" [attr.aria-pressed]="preferences.dimensionsVisible()" [title]="t('Show dimensions')" [attr.aria-label]="t('Show dimensions')" (click)="preferences.setMeasurement('dimensionsVisible', !preferences.dimensionsVisible())"><img src="/assets/icons/dimension-linear.svg" alt="" /></button><button class="magnet-toggle" [class.active]="preferences.dimensionsSnap()" [attr.aria-pressed]="preferences.dimensionsSnap()" [title]="t('Snap dimension points')" [attr.aria-label]="t('Snap dimension points')" (click)="preferences.setMeasurement('dimensionsSnap', !preferences.dimensionsSnap())"><img src="/assets/icons/magnet.svg" alt="" /></button></div>
       </section>
     }

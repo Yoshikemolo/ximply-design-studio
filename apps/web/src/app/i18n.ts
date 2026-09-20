@@ -1,4 +1,5 @@
 const ES: Record<string, string> = {
+  "Local preview explanation": "Vista previa local: el editor funciona en tu navegador y guarda el trabajo en este equipo. Pulsa para abrir los ajustes del servicio local de documentos.",
   "Gap": "Separación",
   "Places": "Decimales",
   "Separator": "Separador",
