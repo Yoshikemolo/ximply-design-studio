@@ -85,7 +85,7 @@ describe("input preferences", () => {
     expect(restored.gridSize()).toBe(96);
     expect(restored.rulersVisible()).toBe(true);
     expect(restored.snapGuides()).toBe(true);
-    expect(restored.layoutBlocks()).toEqual({ appearance: false, workspace: true, measurement: true, dimensions: true, pivot: true });
+    expect(restored.layoutBlocks()).toEqual({ appearance: false, workspace: true, measurement: true, dimensions: true, pivot: true, selection: true });
   });
   it("rejects invalid measurements and rolls back failed persistence", () => {
     const p = new PreferencesService();

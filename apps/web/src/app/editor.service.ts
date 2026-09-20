@@ -4,7 +4,7 @@ import { MarginGuides, MARGIN_GUIDE_PREFIX, marginGuidePositions, PageEdges, Pag
 import { Dimension, DimensionFormat, defaultDimensionFormat, dimensionGeometry } from "../../../../packages/domain/src/dimensions";
 import { LineEnds, defaultLineEnds, validLineEnds } from "../../../../packages/domain/src/line-endings";
 import { snapDimensionPoint, snapDimensionOffset, DimensionSnap } from "./dimension-snapping";
-import { AreaSelectionKind, SelectionArea, layerIntersectsArea } from "../../../../packages/domain/src/selection-area";
+import { AreaSelectionKind, SelectionArea, layerInsideArea, layerIntersectsArea } from "../../../../packages/domain/src/selection-area";
 import { blendCompatible, blendProgress, interpolateBlendLayer, syncBlends, ObjectBlend, BlendEasing } from "../../../../packages/domain/src/object-blend";
 import { defaultTypography, defaultTextLayout, FONT_FAMILIES, layoutText, TextLayoutOptions, TextTypography } from "../../../../packages/domain/src/text-layout";
 import { snapPoint, SnapConfig, rulerSnapSteps } from "../../../../packages/domain/src/measurements";
@@ -827,6 +827,8 @@ export class EditorService {
   }
   readonly lastAreaSelection = signal<AreaSelectionKind>("rectangle");
   readonly areaSelection = signal<SelectionArea | null>(null);
+  /** Objects the area touches, or only the ones it encloses. */
+  readonly areaSelectionMode = signal<"intersect" | "inside">("intersect");
   private areaGesture?: { ids: string[]; primary: string | null; nodes: string[]; shift: boolean; moved: boolean };
   private startAreaSelection(point: Point, kind: AreaSelectionKind, shift: boolean) {
     this.lastAreaSelection.set(kind);
@@ -851,7 +853,10 @@ export class EditorService {
     }
     const selected = new Set(gesture.shift ? gesture.ids : []);
     for (const members of units.values()) {
-      if (!members.some(layer => layerIntersectsArea(layer, area))) continue;
+      const covered = this.areaSelectionMode() === "inside"
+        ? members.every(layer => layerInsideArea(layer, area))
+        : members.some(layer => layerIntersectsArea(layer, area));
+      if (!covered) continue;
       const remove = gesture.shift && members.every(layer => gesture.ids.includes(layer.id));
       for (const layer of members) { if (remove) selected.delete(layer.id); else selected.add(layer.id); }
     }

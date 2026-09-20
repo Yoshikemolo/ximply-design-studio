@@ -151,6 +151,13 @@
         }
       </section>
     }
+    @if (preferences.layoutBlocks().selection) {
+      <section class="context-block measurement-controls" [attr.aria-label]="t('Selection')">
+        <div class="aid-pair">
+          <button [class.active]="preferences.areaSelectionMode() === 'intersect'" [attr.aria-pressed]="preferences.areaSelectionMode() === 'intersect'" [title]="t('Intersection') + ' · ' + t('Select every object the area touches')" [attr.aria-label]="t('Intersection')" (click)="preferences.setMeasurement('areaSelectionMode', 'intersect')"><img src="/assets/icons/select-intersect.svg" alt="" /></button><button [class.active]="preferences.areaSelectionMode() === 'inside'" [attr.aria-pressed]="preferences.areaSelectionMode() === 'inside'" [title]="t('Inner') + ' · ' + t('Select only objects fully inside the area')" [attr.aria-label]="t('Inner')" (click)="preferences.setMeasurement('areaSelectionMode', 'inside')"><img src="/assets/icons/select-inner.svg" alt="" /></button>
+        </div>
+      </section>
+    }
     @if (preferences.layoutBlocks().pivot) {
       <section class="context-block measurement-controls" [attr.aria-label]="t('Pivot')">
         <button class="dimension-lock" [class.active]="preferences.pivotLocked()" [attr.aria-pressed]="preferences.pivotLocked()" [title]="t(preferences.pivotLocked() ? 'Unlock pivot' : 'Lock pivot')" [attr.aria-label]="t(preferences.pivotLocked() ? 'Unlock pivot' : 'Lock pivot')" (click)="preferences.setMeasurement('pivotLocked', !preferences.pivotLocked())"><img [src]="preferences.pivotLocked() ? '/assets/icons/lock.svg' : '/assets/icons/unlock.svg'" alt="" /></button>

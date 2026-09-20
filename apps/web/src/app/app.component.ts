@@ -178,7 +178,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   readonly quickColors = [{ value: "#000000", label: "Black" }, { value: "#ffffff", label: "White" }, { value: "none", label: "No color" }];
   readonly paintTarget = signal<"fill" | "stroke">("fill");
   readonly paintPicker = signal<{ x: number; y: number } | null>(null);
-  readonly contextBlocks = [{ id: "appearance", label: "Appearance" }, { id: "workspace", label: "Workspace" }, { id: "measurement", label: "Measurement" }, { id: "dimensions", label: "Dimensions" }, { id: "pivot", label: "Pivot" }] as const;
+  readonly contextBlocks = [{ id: "appearance", label: "Appearance" }, { id: "workspace", label: "Workspace" }, { id: "measurement", label: "Measurement" }, { id: "dimensions", label: "Dimensions" }, { id: "pivot", label: "Pivot" }, { id: "selection", label: "Selection" }] as const;
   readonly measurementAids = [{ id: "rulers", label: "Rulers" }, { id: "guides", label: "Guides" }, { id: "grid", label: "Grid" }] as const;
   readonly draggingGuideId = signal<string | null>(null);
   private guideDrag?: { axis: "vertical" | "horizontal"; pointerId: number; element: HTMLElement };
@@ -328,7 +328,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
       editor.snapConfig.set(config);
     });
     effect(() => { editor.lastAreaSelection.set(preferences.lastAreaSelection()); });
-    effect(() => { editor.dimensionsVisible.set(preferences.dimensionsVisible()); editor.setDimensionsLocked(preferences.dimensionsLocked()); editor.dimensionsSnap.set(preferences.dimensionsSnap()); editor.dimensionSnapRadius.set(preferences.dimensionSnapRadius()); this.schedule(); });
+    effect(() => { editor.dimensionsVisible.set(preferences.dimensionsVisible()); editor.setDimensionsLocked(preferences.dimensionsLocked()); editor.dimensionsSnap.set(preferences.dimensionsSnap()); editor.dimensionSnapRadius.set(preferences.dimensionSnapRadius()); editor.pivotVisible.set(preferences.pivotVisible()); editor.pivotLocked.set(preferences.pivotLocked()); editor.pivotSnap.set(preferences.pivotSnap()); editor.areaSelectionMode.set(preferences.areaSelectionMode()); this.schedule(); });
     effect(() => { editor.setGuidesLocked(preferences.guidesLocked()); });
     effect(() => {
       editor.snapAngle.set(preferences.snapAngle());
