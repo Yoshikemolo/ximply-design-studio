@@ -33,6 +33,7 @@ import {
 import { FormsModule } from "@angular/forms";
 import { EditorService, ContextAction, ContextTarget } from "./editor.service";
 import { ContextMenuComponent, ContextMenuEntry } from "./context-menu.component";
+import { SmartTableComponent } from "./smart-table.component";
 import { TOOLS, ToolId, TOOL_FAMILIES, ToolFamily } from "./tools";
 import { translate } from "./i18n";
 import { BLENDS, Layer, StrokeStyle, defaultStrokeStyle } from "../../../../packages/domain/src/document";
@@ -100,7 +101,7 @@ const LEAF_TYPE_LABELS: Record<string, string> = { swing: "Hinged", sliding: "Sl
 @Component({
   selector: "xds-root",
   standalone: true,
-  imports: [FormsModule, ContextMenuComponent],
+  imports: [FormsModule, ContextMenuComponent, SmartTableComponent],
   templateUrl: "./app.component.html",
 })
 export class AppComponent implements AfterViewInit, OnDestroy {
@@ -957,6 +958,11 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     this.dismissMenus();
     this.exportTabs.set([this.editor.activeTabId()]);
     this.exportDialog.set(true);
+  }
+  /** The export list as table data: one row per open document, named and tagged. */
+  exportColumns() { return [{ key: "name", label: this.t("Document"), noteKey: "note" }]; }
+  exportRows() {
+    return this.editor.tabs().map((tab) => ({ id: tab.id, name: tab.name, note: tab.active ? this.t("Current document") : "" }));
   }
   toggleExportTab(id: string, checked: boolean) {
     this.exportTabs.update((ids) => (checked ? [...new Set([...ids, id])] : ids.filter((entry) => entry !== id)));

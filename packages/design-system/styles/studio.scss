@@ -559,24 +559,51 @@ hr {
   max-height: 180px;
   overflow-y: auto;
 }
-.export-documents .wide-label {
-  margin: 0;
-  gap: 8px;
-  /* The box and the name read as one line from the left edge of the row. */
-  justify-content: flex-start;
-  padding: 6px 8px;
-  border-radius: 4px;
+/* One table for the lists of the shell: values on the left, the selection column last. */
+.smart-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11px;
 }
-/* Alternating rows keep a long list of documents readable. */
-.export-documents .wide-label:nth-child(odd) {
+.smart-table th {
+  text-align: left;
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--muted);
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--border);
+}
+.smart-table td {
+  padding: 7px 10px;
+  border-bottom: 1px solid var(--border);
+}
+/* Alternating rows keep a long list readable. */
+.smart-table tbody tr:nth-child(odd) {
   background: var(--panel-raised);
 }
-.export-documents .wide-label:nth-child(even) {
-  background: var(--input);
+.smart-table tbody tr.chosen {
+  background: var(--selected);
 }
-.export-documents input[type="checkbox"] {
+.smart-table th.select-column,
+.smart-table td.select-column {
+  width: 34px;
+  text-align: right;
+  padding-right: 10px;
+}
+.smart-table th.end,
+.smart-table td.end {
+  text-align: right;
+}
+.smart-table input[type="checkbox"] {
   margin: 0;
-  flex: 0 0 auto;
+  vertical-align: middle;
+}
+.smart-table .cell-note {
+  margin-left: 8px;
+  color: var(--muted);
+  font-size: 9px;
 }
 .export-documents small {
   margin-left: auto;

@@ -1551,10 +1551,17 @@
     <h2>{{ t('Export') }}</h2>
     <label class="wide-label">{{ t('Format') }}<select [value]="exportFormat()" (change)="exportFormat.set($any(text($event)))">@for (format of exportFormats; track format.id) {<option [value]="format.id">{{ t(format.label) }}</option>}</select></label>
     <div class="section-label">{{ t('Documents') }}</div>
-    <div class="export-documents" role="group" [attr.aria-label]="t('Documents')">
-      @for (tab of editor.tabs(); track tab.id) {
-        <label class="wide-label"><input type="checkbox" [checked]="exportTabs().includes(tab.id)" (change)="toggleExportTab(tab.id, $any($event.target).checked)" />{{ tab.name }}@if (tab.active) {<small>{{ t('Current document') }}</small>}</label>
-      }
+    <div class="export-documents">
+      <xds-smart-table
+        [columns]="exportColumns()"
+        [rows]="exportRows()"
+        [selected]="exportTabs()"
+        [selectable]="true"
+        [label]="t('Documents')"
+        [selectionLabel]="t('Export')"
+        [selectAllLabel]="t('Select all')"
+        (selectedChange)="exportTabs.set($event)"
+      ></xds-smart-table>
     </div>
     <p class="typography-note">{{ t(exportFormat() === 'pdf' ? 'A PDF collects the chosen documents as one page each.' : 'One file per chosen document.') }}</p>
     <div class="dialog-actions"><button type="button" (click)="exportDialog.set(false)">{{ t('Cancel') }}</button><button type="button" [disabled]="!exportTabs().length" (click)="printSelection()">{{ t('Print') }}</button><button type="submit" [disabled]="!exportTabs().length">{{ t('Export') }}</button></div>

@@ -28,7 +28,7 @@ None.
 - Duplicate in series with Ctrl+Shift+D: a linear series with its own step, turn and relative size per copy; a circular series around the pivot, with the copies turning with it or keeping their rotation; and a grid series with its columns, rows and gaps.
 - Copy, cut and paste artwork, with paste in front and paste in back, which keep the coordinates of the copy and place it immediately above or below the selected object. Copy is Ctrl+C, cut Ctrl+X, paste Ctrl+V, paste in front Ctrl+F and paste in back Ctrl+B.
 - Show or hide the bounding box of the selection, the frame with its handles and the rotation knob, with Ctrl+Shift+B.
-- Give the list of documents in the export dialog alternating rows, with the box and the name aligned on the left.
+- Lay the list of documents in the export dialog out as a table with a heading, the document name on the left and its selection box on the right, alternating rows and a box that chooses or clears them all. The table is a component of its own, with multiple selection as a feature, so other lists can be built on it.
 - Offer the clipboard actions, the duplicate and the bounding box on the selected objects in the context menu, each with its key.
 - Add a copy and paste group to the tool rail beside the import action, with copy, cut, the three pastes, the duplicate and the duplication in series in its list of subtools, each enabled only when it applies.
 - Export as PDF, with the vector geometry of the drawing rather than a picture of it: paths keep their curves, strokes keep their dashes and text keeps its characters, drawn with the standard font.
