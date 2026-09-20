@@ -354,8 +354,8 @@ class Document(BaseModel):
     format: Literal['ximply-document']
     version: Literal[1, 2]
     name: Annotated[str, Field(max_length=150)]
-    width: Annotated[int, Field(ge=16, le=4096)]
-    height: Annotated[int, Field(ge=16, le=4096)]
+    width: Annotated[int, Field(ge=16, le=8192)]
+    height: Annotated[int, Field(ge=16, le=8192)]
     background: Paint
     layers: Annotated[list[Layer], Field(max_length=150)]
     blends: Annotated[list[ObjectBlend], Field(max_length=150)] | None = None

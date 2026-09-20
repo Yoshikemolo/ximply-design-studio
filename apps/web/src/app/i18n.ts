@@ -71,7 +71,7 @@ const ES: Record<string, string> = {
   "Bottom": "Inferior",
   "Add space on each edge; the artwork moves with the page.": "Añade espacio en cada borde; el dibujo se mueve con la página.",
   "Remove space on each edge; the artwork keeps its position on what remains.": "Quita espacio en cada borde; el dibujo mantiene su posición en lo que queda.",
-  "The page must stay between 16 and 4096 pixels.": "La página debe medir entre 16 y 4096 píxeles.",
+  "The page must stay between 16 and 8192 pixels.": "La página debe medir entre 16 y 8192 píxeles.",
   "The registration marks do not fit inside this page.": "Las marcas de registro no caben en esta página.",
   "Document dimensions updated": "Dimensiones del documento actualizadas",
   "Document expanded": "Documento expandido",

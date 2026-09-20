@@ -126,6 +126,34 @@ describe('transform pivot', () => {
     expect(e.resetPivotAt({ x: 100, y: 100 })).toBe(false);
   });
 
+  it('brings the pivot back with undo and forward again with redo', () => {
+    const e = withSquare();
+    e.setTool('select');
+    e.setPivot({ x: 100, y: 100 });
+    // Moving the artwork carries the pivot; undo returns both.
+    e.start({ x: 120, y: 120 });
+    e.move({ x: 220, y: 120 });
+    e.end();
+    expect(e.pivot()).toEqual({ x: 200, y: 100 });
+    e.undo();
+    expect(e.document().layers[0].x).toBe(100);
+    expect(e.pivot()).toEqual({ x: 100, y: 100 });
+    e.redo();
+    expect(e.document().layers[0].x).toBe(200);
+    expect(e.pivot()).toEqual({ x: 200, y: 100 });
+    // Placing the pivot is a step of its own, with the artwork untouched.
+    const artwork = structuredClone(e.document().layers);
+    e.start({ x: 200, y: 100 });
+    e.move({ x: 330, y: 230 });
+    e.end();
+    expect(e.pivot()).toEqual({ x: 330, y: 230 });
+    e.undo();
+    expect(e.pivot()).toEqual({ x: 200, y: 100 });
+    expect(e.document().layers).toEqual(artwork);
+    e.redo();
+    expect(e.pivot()).toEqual({ x: 330, y: 230 });
+  });
+
   it('snaps the pivot to the selection box, its centre and the vertices of other artwork', () => {
     const e = withSquare();
     e.document.update((document) => ({ ...document, layers: [...document.layers, { ...newLayer('rectangle', 'other', { x: 300, y: 300 }), width: 60, height: 60 }] }));

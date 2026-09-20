@@ -571,7 +571,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   }
   setPageEdge(key: "top" | "right" | "bottom" | "left", event: Event) {
     const value = this.distanceInput(event);
-    if (!Number.isFinite(value) || value < 0 || value > 4096) return;
+    if (!Number.isFinite(value) || value < 0 || value > 8192) return;
     this.pageEdges.update((edges) => ({ ...edges, [key]: value }));
   }
   applyPageDialog() {

@@ -217,7 +217,7 @@ export class EditorService {
         return { ...doc, layers };
       });
     }
-    this.history.commit(before);
+    this.commitStep(before);
     this.changed();
     return true;
   }
@@ -332,7 +332,7 @@ export class EditorService {
     const before = this.document(), first = before.layers.findIndex((layer) => ids.has(layer.id));
     const layers = before.layers.filter((layer) => !ids.has(layer.id)); layers.splice(first, 0, ...block);
     const next = syncBlends({ ...before, layers, blends: [...(before.blends ?? []), blend] });
-    this.history.commit(before); this.document.set(next);
+    this.commitStep(before); this.document.set(next);
     this.selectedIds.set(block.map((layer) => layer.id)); this.selectedId.set(front.at(-1)!.id);
     this.changed(); return true;
   }
@@ -353,7 +353,7 @@ export class EditorService {
     const layers = before.layers.filter((layer) => !oldGenerated.has(layer.id));
     const position = layers.findIndex((layer) => layer.id === blend.frontIds[0]); layers.splice(position, 0, ...generated);
     const next = syncBlends({ ...before, layers, blends: before.blends!.map((item) => item.id === blend.id ? nextBlend : item) });
-    this.history.commit(before);
+    this.commitStep(before);
     this.document.set(next);
     const remaining = new Set(this.document().layers.map((layer) => layer.id));
     this.selectedIds.update((ids) => ids.filter((id) => remaining.has(id)));
@@ -363,7 +363,7 @@ export class EditorService {
   expandBlend(): boolean {
     const blend = this.selectedBlend();
     if (!blend || !this.canEditBlend()) return false;
-    this.history.commit(this.document());
+    this.commitStep(this.document());
     this.document.update((doc) => ({ ...doc, blends: doc.blends!.filter((item) => item.id !== blend.id) }));
     this.changed(); return true;
   }
@@ -371,7 +371,7 @@ export class EditorService {
     const blend = this.selectedBlend();
     if (!blend || !this.canEditBlend()) return false;
     const generated = new Set(blend.stepIds.flat()), endpoints = new Set([...blend.backIds, ...blend.frontIds]);
-    this.history.commit(this.document());
+    this.commitStep(this.document());
     this.document.update((doc) => ({ ...doc, blends: doc.blends!.filter((item) => item.id !== blend.id), layers: doc.layers.filter((layer) => !generated.has(layer.id)).map((layer) => endpoints.has(layer.id) ? { ...layer, groupPath: (layer.groupPath ?? []).filter((id) => id !== blend.groupId) } : layer) }));
     this.selectedIds.set([...endpoints]); this.selectedId.set(blend.frontIds.at(-1) ?? null);
     this.changed(); return true;
@@ -395,7 +395,7 @@ export class EditorService {
     const layer=this.selected();if(!layer?.procedural||this.isEffectivelyLocked(layer))return false;
     const procedural=this.proceduralPatch(layer.procedural,patch);if(!validProcedural(procedural))return false;
     let next:StudioDocument;try{next=syncProcedurals({...this.document(),layers:this.document().layers.map(l=>l.id===layer.id?{...l,procedural}:l)});parseDocument(JSON.stringify(next));}catch{return false;}
-    this.history.commit(this.document());this.document.set(next);const defaults=structuredClone(procedural);if(defaults.type==='door'||defaults.type==='window')delete defaults.host;
+    this.commitStep(this.document());this.document.set(next);const defaults=structuredClone(procedural);if(defaults.type==='door'||defaults.type==='window')delete defaults.host;
     this.proceduralDefaults.update(all=>({...all,[procedural.type]:defaults}));this.changed();return true;
   }
   /** Point where the next wall of a run starts; cleared when the run ends. */
@@ -433,7 +433,7 @@ export class EditorService {
   createProcedural(type:Procedural['type'],start:Point,end?:Point):boolean {
     if(this.document().layers.length>=150)return false;
     let layer:Layer,next:StudioDocument;try{layer=this.proceduralLayer(type,start,end);next=syncProcedurals({...this.document(),layers:[...this.document().layers,layer]});parseDocument(JSON.stringify(next));}catch{return false;}
-    this.history.commit(this.document());this.document.set(next);this.selectedId.set(layer.id);this.selectedIds.set([layer.id]);this.changed();return true;
+    this.commitStep(this.document());this.document.set(next);this.selectedId.set(layer.id);this.selectedIds.set([layer.id]);this.changed();return true;
   }
   private startProcedural(type:Procedural['type'],point:Point) {
     if(type==='door'||type==='window'){this.createProcedural(type,this.snap(point));return;}
@@ -577,7 +577,7 @@ export class EditorService {
       :layer);
     if(JSON.stringify(layers)===JSON.stringify(before.layers))return false;
     try{parseDocument(JSON.stringify({...before,layers}));}catch{return false;}
-    this.history.commit(before);this.document.set({...before,layers});this.dimensionDefaults.set({...format});this.changed();return true;
+    this.commitStep(before);this.document.set({...before,layers});this.dimensionDefaults.set({...format});this.changed();return true;
   }
   readonly lineEnds = signal<LineEnds>(structuredClone(defaultLineEnds));
   readonly dimensionDraft = signal<{kind:'linear'|'angular'|'chain'|'radius'|'diameter';points:Point[];cursor:Point;ready?:boolean} | null>(null);
@@ -605,7 +605,7 @@ export class EditorService {
     const before=this.document();
     let next:StudioDocument;
     try{next=syncProcedurals({...before,layers:[...before.layers,...layers]});parseDocument(JSON.stringify(next));}catch{return false;}
-    this.history.commit(before);this.document.set(next);
+    this.commitStep(before);this.document.set(next);
     this.selectedIds.set(layers.map(l=>l.id));this.selectedId.set(layers.at(-1)!.id);this.changed();return true;
   }
   private startChainDimension(point:Point) {
@@ -657,14 +657,14 @@ export class EditorService {
     if(this.document().layers.length>=150)return false;
     const layer=this.buildDimension(kind,anchors,labelPosition,crypto.randomUUID());if(!layer)return false;
     try{parseDocument(JSON.stringify({...this.document(),layers:[...this.document().layers,layer]}));}catch{return false;}
-    this.history.commit(this.document());this.document.update(d=>({...d,layers:[...d.layers,layer]}));this.selectedId.set(layer.id);this.selectedIds.set([layer.id]);this.changed();return true;
+    this.commitStep(this.document());this.document.update(d=>({...d,layers:[...d.layers,layer]}));this.selectedId.set(layer.id);this.selectedIds.set([layer.id]);this.changed();return true;
   }
   updateDimension(patch:Partial<Dimension>) {
     const selected=this.selected();if(!selected?.dimension||this.isEffectivelyLocked(selected))return;
     const dimension={...selected.dimension,...patch};
     try{parseDocument(JSON.stringify({...this.document(),layers:this.document().layers.map(l=>l.id===selected.id?{...l,dimension}:l)}));}catch{return;}
     if(JSON.stringify(dimension)===JSON.stringify(selected.dimension))return;
-    this.history.commit(this.document());this.setLayer(selected.id,{dimension});this.dimensionDefaults.set({...dimension.format});this.changed();
+    this.commitStep(this.document());this.setLayer(selected.id,{dimension});this.dimensionDefaults.set({...dimension.format});this.changed();
     if(patch.format&&this.unifyDimensionFormat())this.applyFormatToDimensions(dimension.format);
   }
   setLineEnds(patch:Partial<LineEnds>) {
@@ -764,7 +764,7 @@ export class EditorService {
     const ids = new Set(this.selectedLayers().filter((layer) => !this.isEffectivelyLocked(layer) && !layer.guide).map((layer) => layer.id));
     const changes = this.document().layers.some((layer) => ids.has(layer.id) && Object.entries(patch).some(([key, value]) => layer[key as keyof Layer] !== value));
     if (!changes) return;
-    this.history.commit(this.document());
+    this.commitStep(this.document());
     this.expandGeneratedForIds(ids);
     this.document.update((doc) => ({ ...doc, layers: doc.layers.map((layer) => ids.has(layer.id) ? { ...layer, ...patch } : layer) }));
     this.changed();
@@ -780,7 +780,7 @@ export class EditorService {
     const before = this.document();
     const layers = before.layers.map((layer) => ids.has(layer.id) ? { ...layer, strokeStyle: { ...defaultStrokeStyle, ...layer.strokeStyle, ...patch } } : layer);
     if (JSON.stringify(layers) === JSON.stringify(before.layers)) return;
-    this.history.commit(before); this.expandGeneratedForIds(ids); this.document.set({ ...this.document(), layers }); this.changed();
+    this.commitStep(before); this.expandGeneratedForIds(ids); this.document.set({ ...this.document(), layers }); this.changed();
   }
   private scopedStyle(fill: string, stroke: string, strokeWidth: number, strokeStyle: StrokeStyle, lineEnds: LineEnds = this.lineEnds()): Partial<Layer> {
     const scope = this.styleScope();
@@ -790,7 +790,7 @@ export class EditorService {
     const before = this.document();
     const layers = before.layers.map((layer) => ids.has(layer.id) ? { ...layer, ...structuredClone(patch) } : layer);
     if (JSON.stringify(layers) === JSON.stringify(before.layers)) return false;
-    this.history.commit(before);
+    this.commitStep(before);
     this.expandGeneratedForIds(ids);
     this.document.set({ ...this.document(), layers });
     this.changed();
@@ -863,7 +863,7 @@ export class EditorService {
     if (this.guidesLocked() && gesture.before.layers.some((layer) => layer.id === gesture.id)) { this.cancelGuideDrag(); return; }
     if (!inside) this.document.update((doc) => ({ ...doc, layers: doc.layers.filter((layer) => layer.id !== gesture.id) }));
     if (JSON.stringify(gesture.before) !== JSON.stringify(this.document())) {
-      this.history.commit(gesture.before);
+      this.commitStep(gesture.before);
       this.changed();
     }
     if (!inside && this.selectedId() === gesture.id) {
@@ -896,7 +896,7 @@ export class EditorService {
     const index = placement === "before" ? targetIndices[0] : targetIndices.at(-1)! + 1;
     remaining.splice(index, 0, ...moving);
     if (remaining.every((layer, index) => layer.id === original[index].id)) return;
-    this.history.commit(this.document());
+    this.commitStep(this.document());
     this.document.update((doc) => ({ ...doc, layers: remaining }));
     this.changed();
   }
@@ -1144,7 +1144,7 @@ export class EditorService {
     const before = this.document();
     const layers = before.layers.map((layer) => ids.has(layer.id) ? this.reflowText(update(layer)) : layer);
     if (JSON.stringify(layers) === JSON.stringify(before.layers)) return;
-    this.history.commit(before);
+    this.commitStep(before);
     this.document.set({ ...before, layers });
     this.changed();
   }
@@ -1183,7 +1183,7 @@ export class EditorService {
   updateLayer(patch: Partial<Layer>) {
     let layer = this.selected();
     if (!layer || this.isEffectivelyLocked(layer) || layer.guide) return;
-    this.history.commit(this.document());
+    this.commitStep(this.document());
     if(["x","y","width","height","rotation","skewX","flipX","flipY"].some(key=>key in patch))layer=this.detachOpening(layer);
     if (patch.width !== undefined || patch.height !== undefined)
       patch = {
@@ -1198,13 +1198,13 @@ export class EditorService {
     this.changed();
   }
   toggle(id: string, key: "visible" | "locked") {
-    this.history.commit(this.document());
+    this.commitStep(this.document());
     const layer = this.document().layers.find((l) => l.id === id)!;
     this.setLayer(id, { [key]: !layer[key] });
     this.changed();
   }
   rename(name: string) {
-    this.history.commit(this.document());
+    this.commitStep(this.document());
     this.document.update((d) => ({ ...d, name: name.slice(0, 150) }));
     this.changed();
   }
@@ -1271,7 +1271,7 @@ export class EditorService {
       let next: StudioDocument;
       try { next = resizePage(gesture.before, edges); parseDocument(JSON.stringify(next)); }
       catch (error) { this.status.set(error instanceof Error ? error.message : "The page cannot be resized."); return; }
-      this.history.commit(gesture.before);
+      this.commitStep(gesture.before);
       this.document.set(next);
       this.changed();
       this.status.set("Document cropped");
@@ -1281,7 +1281,7 @@ export class EditorService {
     if (JSON.stringify(gesture.before) === JSON.stringify(this.document())) return;
     const applied = this.document();
     this.document.set(gesture.before);
-    this.history.commit(gesture.before);
+    this.commitStep(gesture.before);
     this.document.set(applied);
     this.changed();
     this.status.set("Document dimensions updated");
@@ -1298,7 +1298,7 @@ export class EditorService {
   applyPageSetup(setup: { size?: PageSize; background?: string; margins?: MarginGuides; marks?: RegistrationMarks }): boolean {
     const before = this.document();
     const size = setup.size ?? { width: before.width, height: before.height };
-    if (!pageSizeFits(size)) { this.status.set("The page must stay between 16 and 4096 pixels."); return false; }
+    if (!pageSizeFits(size)) { this.status.set("The page must stay between 16 and 8192 pixels."); return false; }
     if (setup.marks && setup.marks !== "none" && !registrationFits(setup.marks, size)) { this.status.set("The registration marks do not fit inside this page."); return false; }
     let layers = before.layers.filter((layer) => !layer.name.startsWith(MARGIN_GUIDE_PREFIX) && layer.name !== REGISTRATION_LAYER_NAME);
     if (setup.margins) {
@@ -1312,7 +1312,7 @@ export class EditorService {
     if (layers.length > 150) { this.status.set("Close a document before opening another."); return false; }
     const next = { ...before, width: size.width, height: size.height, background: setup.background ?? before.background, layers };
     try { parseDocument(JSON.stringify(next)); } catch { this.status.set("The page settings cannot be applied."); return false; }
-    this.history.commit(before);
+    this.commitStep(before);
     this.document.set(next);
     this.selectedIds.update((ids) => ids.filter((id) => next.layers.some((layer) => layer.id === id)));
     if (!next.layers.some((layer) => layer.id === this.selectedId())) this.selectedId.set(null);
@@ -1331,14 +1331,14 @@ export class EditorService {
     let next: StudioDocument;
     try { next = resizePage(before, applied); parseDocument(JSON.stringify(next)); }
     catch (error) { this.status.set(error instanceof Error ? error.message : "The page cannot be resized."); return false; }
-    this.history.commit(before);
+    this.commitStep(before);
     this.document.set(next);
     this.changed();
     this.status.set(sign > 0 ? "Document expanded" : "Document cropped");
     return true;
   }
   background(value: string) {
-    this.history.commit(this.document());
+    this.commitStep(this.document());
     this.document.update((d) => ({ ...d, background: value }));
     this.changed();
   }
@@ -1359,7 +1359,7 @@ export class EditorService {
         .map((l) => l.id),
     );
     if (!ids.size) return;
-    this.history.commit(this.document());
+    this.commitStep(this.document());
     this.document.update((d) => ({
       ...d,
       layers: d.layers.filter((l) => !ids.has(l.id)),
@@ -1372,7 +1372,7 @@ export class EditorService {
     const layers = this.selectedLayers();
     if (!layers.length || this.document().layers.length + layers.length > 150)
       return;
-    this.history.commit(this.document());
+    this.commitStep(this.document());
     const groups = new Map<string, string>();
     const copies = layers.map((layer) => ({
       ...structuredClone(layer),
@@ -1403,23 +1403,38 @@ export class EditorService {
     this.selectedId.set(copies.at(-1)!.id);
     this.changed();
   }
+  /**
+   * Every history step carries the pivot it was taken with, so undo and redo return the
+   * pivot of that step together with the artwork it belongs to.
+   */
+  private commitStep(before: StudioDocument, pivot = this.pivotOverride()) {
+    this.history.commit(before, pivot);
+  }
+  private restorePivot() {
+    const restored = this.history.restored as { key: string; point: Point } | null;
+    this.pivotOverride.set(restored ?? null);
+  }
   undo() {
     this.penId.set(null);
     this.cancel();
-    this.document.set(this.history.undo(this.document()));
+    if (!this.history.canUndo) return;
+    this.document.set(this.history.undo(this.document(), this.pivotOverride()));
+    this.restorePivot();
     this.changed();
   }
   redo() {
     this.penId.set(null);
     this.cancel();
-    this.document.set(this.history.redo(this.document()));
+    if (!this.history.canRedo) return;
+    this.document.set(this.history.redo(this.document(), this.pivotOverride()));
+    this.restorePivot();
     this.changed();
   }
   /** Clears the active document to a blank one; undoable, and the result counts as unmodified. */
   reset() {
     this.finishPath();
     this.cancel();
-    this.history.commit(this.document());
+    this.commitStep(this.document());
     this.document.set({ ...blankDocument(), name: this.document().name });
     this.activeNodes.set([]);
     this.selectedId.set(null);
@@ -1431,7 +1446,7 @@ export class EditorService {
   open(text: string) {
     this.finishPath();
     const doc = parseDocument(text);
-    this.history.commit(this.document());
+    this.commitStep(this.document());
     this.document.set(doc);
     this.activeNodes.set([]);
     this.selectedId.set(null);
@@ -1926,9 +1941,16 @@ export class EditorService {
   }
   end() {
     if (this.pageGesture) { this.endPageGesture(); return; }
-    if (this.pivotGesture) { this.pivotGesture = undefined; this.revision.update((x) => x + 1); return; }
-    if(this.proceduralGesture){const g=this.proceduralGesture;this.proceduralGesture=undefined;const drawn=this.document().layers.find(l=>l.id===g.id);if(drawn){this.history.commit(g.before);this.changed();if(g.type==='wall'&&drawn.procedural?.type==='wall')this.wallChain.set(worldPoint(drawn,drawn.procedural.end));}return;}
-    if(this.dimensionLabelGesture){this.history.commit(this.dimensionLabelGesture.before);this.dimensionLabelGesture=undefined;this.changed();return;}
+    if (this.pivotGesture) {
+      const before = this.pivotGesture.before;
+      this.pivotGesture = undefined;
+      // The artwork is untouched, so the step exists only to bring this pivot back.
+      this.commitStep(this.document(), before);
+      this.revision.update((x) => x + 1);
+      return;
+    }
+    if(this.proceduralGesture){const g=this.proceduralGesture;this.proceduralGesture=undefined;const drawn=this.document().layers.find(l=>l.id===g.id);if(drawn){this.commitStep(g.before);this.changed();if(g.type==='wall'&&drawn.procedural?.type==='wall')this.wallChain.set(worldPoint(drawn,drawn.procedural.end));}return;}
+    if(this.dimensionLabelGesture){this.commitStep(this.dimensionLabelGesture.before);this.dimensionLabelGesture=undefined;this.changed();return;}
     if (this.areaGesture) {
       if (!this.areaGesture.moved && !this.areaGesture.shift) { this.selectedId.set(null); this.selectedIds.set([]); this.activeNodes.set([]); }
       this.areaGesture = undefined; this.areaSelection.set(null); return;
@@ -1949,7 +1971,7 @@ export class EditorService {
       this.setLayer(g.id, {
         source: this.painting.canvas.toDataURL("image/png"),
       });
-    this.history.commit(g.before);
+    this.commitStep(g.before, this.movePivot ? { key: this.selectionKey(), point: this.movePivot } : this.pivotOverride());
     this.gesture = undefined;
     this.movePivot = undefined;
     this.painting = undefined;
@@ -1979,7 +2001,7 @@ export class EditorService {
     if (!layers.length) return;
     const pivot = this.pivot(),
       ids = new Set(layers.map((l) => l.id));
-    this.history.commit(this.document());
+    this.commitStep(this.document());
     this.document.update((d) => ({
       ...d,
       layers: d.layers.map((l) =>
@@ -2025,7 +2047,7 @@ export class EditorService {
         mode: "transform",
         ids: this.selectedLayers().filter((l) => !l.guide).map((l) => l.id),
       };
-    this.history.commit(before);
+    this.commitStep(before);
     this.transformSelection(g, this.aroundPivot(source, {
       ...source,
       width: source.width * scale,
@@ -2103,7 +2125,7 @@ export class EditorService {
     const layers = this.regroupMembers(this.selectedLayers());
     if (!layers.length) return;
     const ids = new Set(layers.map((layer) => layer.id));
-    this.history.commit(this.document());
+    this.commitStep(this.document());
     this.document.update((doc) => ({ ...doc, layers: doc.layers.map((layer) => {
       if (!ids.has(layer.id)) return layer;
       const { regroupPath, ...rest } = layer;
@@ -2117,7 +2139,7 @@ export class EditorService {
     const layers = prefix?.length ? this.document().layers.filter((layer) => this.inGroup(layer, prefix) && !layer.guide) : this.groupingMembers(this.selectedLayers(), ungroup);
     if (!layers.length || layers.some((layer) => this.isEffectivelyLocked(layer)) || (!ungroup && layers.length < 2)) return;
     if (!ungroup && layers.some((layer) => (layer.groupPath?.length ?? 0) >= 16)) return;
-    this.history.commit(this.document());
+    this.commitStep(this.document());
     const ids = new Set(layers.map((layer) => layer.id)), group = crypto.randomUUID();
     this.document.update((doc) => ({
       ...doc,
@@ -2146,7 +2168,7 @@ export class EditorService {
           : undefined,
       ),
       map = new Map(changed.map((l) => [l.id, this.detachOpening(l)]));
-    this.history.commit(this.document());
+    this.commitStep(this.document());
     this.document.update((d) => ({
       ...d,
       layers: d.layers.map((l) => map.get(l.id) ?? l),
@@ -2164,7 +2186,7 @@ export class EditorService {
       const result = booleanLayers(layers, operation, crypto.randomUUID()),
         ids = new Set(layers.map((l) => l.id)),
         index = this.document().layers.findIndex((l) => l.id === layers[0].id);
-      this.history.commit(this.document());
+      this.commitStep(this.document());
       const remaining = this.document().layers.filter((l) => !ids.has(l.id));
       remaining.splice(index, 0, result);
       this.document.update((d) => ({ ...d, layers: remaining }));
@@ -2284,7 +2306,7 @@ export class EditorService {
     ) {
       path.closed = true;
       this.setLayer(layer.id, { curves });
-      this.history.commit(before);
+      this.commitStep(before);
       this.penId.set(null);
       this.changed();
       return;
@@ -2393,7 +2415,7 @@ export class EditorService {
     const curves = this.editableCurves(layer),
       p = localPoint(layer, point);
     if (tool === "smooth") {
-      this.history.commit(before);
+      this.commitStep(before);
       this.setLayer(
         layer.id,
         fitCurves(
@@ -2436,7 +2458,7 @@ export class EditorService {
           );
         }
       }
-      this.history.commit(before);
+      this.commitStep(before);
       this.setLayer(layer.id, { kind: "path", curves });
       this.changed();
       return;
@@ -2449,7 +2471,7 @@ export class EditorService {
     const key = hit.path + ":" + hit.index;
     if (tool === "deleteAnchor") {
       curves[hit.path].nodes.splice(hit.index, 1);
-      this.history.commit(before);
+      this.commitStep(before);
       this.setLayer(layer.id, { curves: curves.filter((c) => c.nodes.length) });
       this.activeNodes.set([]);
       this.changed();
@@ -2463,7 +2485,7 @@ export class EditorService {
         const smoothed = smoothPath(curves[hit.path]);
         curves[hit.path].nodes[hit.index] = smoothed.nodes[hit.index];
       }
-      this.history.commit(before);
+      this.commitStep(before);
       this.setLayer(layer.id, { curves });
       this.changed();
       return;
@@ -2554,7 +2576,7 @@ export class EditorService {
       this.tool.set("pen");
       return;
     }
-    this.history.commit(this.document());
+    this.commitStep(this.document());
     if (action === "close")
       curves = curves.map((c) => ({ ...c, closed: !c.closed }));
     if (action === "smooth") curves = curves.map((c) => smoothPath(c));
@@ -2609,7 +2631,7 @@ export class EditorService {
     let next: StudioDocument;
     try { next = syncProcedurals({ ...before, layers: remaining }); parseDocument(JSON.stringify(next)); }
     catch { this.status.set("The operation leaves no wall."); return true; }
-    this.history.commit(before);
+    this.commitStep(before);
     this.document.set(next);
     this.selectedIds.set(built.map((layer) => layer.id));
     this.selectedId.set(built.at(-1)!.id);
@@ -2660,7 +2682,7 @@ export class EditorService {
     }
     next={...next,layers:next.layers.map(layer=>ids.has(layer.id)?this.detachUnselectedHost(layer,ids):layer)};
     try{next=syncProcedurals(next);parseDocument(JSON.stringify(next));}catch{return false;}
-    this.history.commit(before);this.expandGeneratedForIds(ids);this.document.set({...next,blends:this.document().blends});this.changed();return true;
+    this.commitStep(before);this.expandGeneratedForIds(ids);this.document.set({...next,blends:this.document().blends});this.changed();return true;
   }
   displaceSelection(dx:number,dy:number):boolean {
     if(!Number.isFinite(dx)||!Number.isFinite(dy)||Math.abs(dx)>1e6||Math.abs(dy)>1e6||(!dx&&!dy))return false;
@@ -2675,7 +2697,7 @@ export class EditorService {
   nudge(dx: number, dy: number) {
     const layer = this.selected();
     if (!layer || this.isEffectivelyLocked(layer) || layer.guide) return;
-    this.history.commit(this.document());
+    this.commitStep(this.document());
     if (this.tool() === "direct" && layer.curves && this.activeNodes().length) {
       const curves = structuredClone(layer.curves);
       curves.forEach((c, i) =>
@@ -2742,7 +2764,7 @@ export class EditorService {
     if (!layer || this.isEffectivelyLocked(layer) || layer.guide || layer.dimension || layer.procedural) return;
     const symbols = this.document().symbols ?? [];
     if (symbols.length >= 100) return;
-    this.history.commit(this.document());
+    this.commitStep(this.document());
     const id = crypto.randomUUID(),
       template = structuredClone(layer);
     delete template.symbolId;
@@ -2763,7 +2785,7 @@ export class EditorService {
       (s) => s.id === this.activeSymbol(),
     );
     if (!symbol || this.document().layers.length >= 150) return;
-    this.history.commit(this.document());
+    this.commitStep(this.document());
     this.addInstance(point);
     this.changed();
   }
@@ -2799,7 +2821,7 @@ export class EditorService {
     if (!layer || this.isEffectivelyLocked(layer) || layer.guide || layer.dimension || layer.procedural) return;
     const symbol = this.document().symbols?.find((s) => s.id === id);
     if (!symbol && action !== "expand") return;
-    this.history.commit(this.document());
+    this.commitStep(this.document());
     if (action === "expand") {
       const copy = { ...layer };
       delete copy.symbolId;
@@ -2902,7 +2924,7 @@ export class EditorService {
       current = this.document().symbols ?? [];
     if (current.length + imported.length > 100)
       throw new Error("Symbol library limit exceeded");
-    this.history.commit(this.document());
+    this.commitStep(this.document());
     this.document.update((d) => ({
       ...d,
       symbols: [
@@ -3035,7 +3057,7 @@ export class EditorService {
         y: (p.y * source.height) / canvas.height,
       })),
     }));
-    this.history.commit(current);
+    this.commitStep(current);
     this.document.set({
       ...current,
       layers: [
@@ -3052,7 +3074,7 @@ export class EditorService {
     const selected = this.selected(),
       id = selected?.traceSourceId ?? selected?.id;
     if (!id) return;
-    this.history.commit(this.document());
+    this.commitStep(this.document());
     if (action === "release")
       this.document.update((d) => ({
         ...d,
@@ -3094,7 +3116,7 @@ export class EditorService {
     layer.source = canvas.toDataURL("image/png");
     if (this.document().layers.length >= 150)
       throw new Error("Preview limit: 150 layers");
-    this.history.commit(this.document());
+    this.commitStep(this.document());
     this.document.update((d) => ({ ...d, layers: [...d.layers, layer] }));
     this.selectedId.set(layer.id);
     this.tool.set("select");

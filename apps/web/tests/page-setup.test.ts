@@ -22,8 +22,12 @@ describe('page formats', () => {
 
   it('reports the sizes the native format cannot store', () => {
     expect(pageSizeFits(pageSize(format('a4'), 300, 'portrait'))).toBe(true);
-    // A3 at 300 dpi is 4961 pixels tall, beyond the 4096 limit; UHD still fits.
-    expect(pageSizeFits(pageSize(format('a3'), 300, 'portrait'))).toBe(false);
+    // A3 at 300 dpi is 4961 pixels tall and A2 is 7016, both inside the 8192 limit.
+    expect(pageSize(format('a3'), 300, 'portrait')).toEqual({ width: 3508, height: 4961 });
+    expect(pageSizeFits(pageSize(format('a3'), 300, 'portrait'))).toBe(true);
+    expect(pageSizeFits(pageSize(format('a2'), 300, 'portrait'))).toBe(true);
+    // A1 at 300 dpi needs 9933 pixels, which the native format still refuses.
+    expect(pageSizeFits(pageSize(format('a1'), 300, 'portrait'))).toBe(false);
     expect(pageSizeFits(pageSize(format('screen-uhd'), 96, 'landscape'))).toBe(true);
     expect(pageSizeFits({ width: 10, height: 100 })).toBe(false);
   });
@@ -65,8 +69,8 @@ describe('page setup on a document', () => {
 
   it('refuses a page or marks that do not fit', () => {
     const e = new EditorService();
-    expect(e.applyPageSetup({ size: { width: 5000, height: 400 } })).toBe(false);
-    expect(e.status()).toContain('16 and 4096');
+    expect(e.applyPageSetup({ size: { width: 9000, height: 400 } })).toBe(false);
+    expect(e.status()).toContain('16 and 8192');
     expect(registrationFits('file8', { width: 400, height: 400 })).toBe(false);
     expect(e.applyPageSetup({ size: { width: 400, height: 400 }, marks: 'file8' })).toBe(false);
     expect(e.document().width).toBe(1200);

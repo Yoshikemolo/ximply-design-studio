@@ -5,7 +5,7 @@ import { fromPixels, toPixels, Unit } from './measurements';
 
 /** Document limits of the native format; a page outside them cannot be stored. */
 export const PAGE_MINIMUM = 16;
-export const PAGE_MAXIMUM = 4096;
+export const PAGE_MAXIMUM = 8192;
 export type PageCategory = 'paper' | 'screen' | 'animation';
 export interface PageFormat {
   id: string;

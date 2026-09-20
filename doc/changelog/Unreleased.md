@@ -16,7 +16,7 @@ capability_status: "local-preview"
 
 # Unreleased — Pending changes
 
-No pending changes; everything delivered so far is recorded in the published notes.
+Corrections on top of 0.4.0, kept at that version number until the next release.
 
 ## Breaking changes
 
@@ -28,11 +28,11 @@ None.
 
 ## Improvements
 
-None.
+- Raise the document size ceiling from 4096 to 8192 pixels, so A3 and A2 at 300 dots per inch can be set up and stored. A1 and A0 at that resolution stay out of range.
 
 ## Fixes
 
-None.
+- Bring the transform pivot back with undo and forward with redo: each history step now carries the pivot it was taken with, and placing the pivot is a step of its own that leaves the artwork untouched.
 
 ## Security
 
@@ -40,4 +40,4 @@ None.
 
 ## Engineering
 
-None.
+- Let the document history carry the session state of each step beside the document, which is how the pivot travels with undo and redo.
