@@ -35,6 +35,7 @@ Corrections on top of 0.4.0, kept at that version number until the next release.
 - Choose what to export from one dialog: the format, and which of the open documents are included, with the current one chosen to begin with. A PDF collects them as one page each; SVG and PNG write one file per document.
 - Print the chosen documents through the printing dialog of the browser, one page each, from the File menu or the export dialog.
 - Cut paths with two clicks: the scissors open a path at two of its own points, leaving independent open paths, and the knife divides the closed shapes its line crosses into two independent closed shapes. Both draw the cut in progress, both are undone in one step, and Escape forgets a cut that was started.
+- Close an imported path that carries a fill, which is what a drawing means by it: a shape left open in Illustrator arrives filled rather than empty, while a contour that is only stroked keeps its ends apart and one that is both filled and stroked arrives as the closed fill and the open stroke.
 - Import Illustrator and PDF drawings: the page of the file is read and its paths, colours and stroke widths arrive as editable layers, with the page turned upright and measured in pixels. Text, placed objects, inline images, gradients and clipping paths are reported instead of approximated.
 - Import ASCII DXF drawings: lines, polylines, circles, arcs, ellipses, points and text, with each drawing layer kept as a group and the drawing mirrored into document coordinates.
 

@@ -189,20 +189,31 @@ export function pdfArtwork(content: string, page: PdfPageRef, options: { name?: 
     nodes.push(next);
     current = end;
   };
+  const build = (contours: CurvePath[], fill: boolean, stroke: boolean) => {
+    nodeCount += contours.reduce((total, path) => total + path.nodes.length, 0);
+    if (nodeCount > limits.maxNodes) throw new Error('The drawing exceeds the import node limit.');
+    if (layers.length >= limits.maxElements) throw new Error('The drawing exceeds the import element limit.');
+    const layer = newLayer('path', crypto.randomUUID(), { x: 0, y: 0 });
+    layer.name = 'Path';
+    layer.fill = fill ? state.fill : 'none';
+    layer.stroke = stroke ? state.stroke : 'none';
+    layer.strokeWidth = stroke ? Math.max(0.1, state.width * scaleOf(state.ctm)) : 0;
+    if (stroke && state.dash.length) layer.strokeStyle = { cap: 'butt', join: 'miter', alignment: 'center', dash: state.dash.map((value) => value * scaleOf(state.ctm)) };
+    layer.groupPath = [group];
+    layers.push(fitCurves(layer, contours));
+  };
   const paint = (fill: boolean, stroke: boolean) => {
     flush();
     if (paths.length && (fill || stroke)) {
-      nodeCount += paths.reduce((total, path) => total + path.nodes.length, 0);
-      if (nodeCount > limits.maxNodes) throw new Error('The drawing exceeds the import node limit.');
-      if (layers.length >= limits.maxElements) throw new Error('The drawing exceeds the import element limit.');
-      const layer = newLayer('path', crypto.randomUUID(), { x: 0, y: 0 });
-      layer.name = 'Path';
-      layer.fill = fill ? state.fill : 'none';
-      layer.stroke = stroke ? state.stroke : 'none';
-      layer.strokeWidth = stroke ? Math.max(0.1, state.width * scaleOf(state.ctm)) : 0;
-      if (stroke && state.dash.length) layer.strokeStyle = { cap: 'butt', join: 'miter', alignment: 'center', dash: state.dash.map((value) => value * scaleOf(state.ctm)) };
-      layer.groupPath = [group];
-      layers.push(fitCurves(layer, paths));
+      // Filling closes every subpath, which is what the page means and what the editor
+      // needs to paint them; a stroke keeps the contour open as it was drawn.
+      const open = paths.some((path) => !path.closed);
+      if (fill && stroke && open) {
+        build(paths.map((path) => ({ ...path, closed: true })), true, false);
+        build(paths, false, true);
+      } else {
+        build(fill ? paths.map((path) => ({ ...path, closed: true })) : paths, fill, stroke);
+      }
     }
     paths = [];
   };

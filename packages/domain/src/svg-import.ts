@@ -407,6 +407,11 @@ function shapeLayer(node: XmlNode, matrix: Matrix, appearance: Appearance, state
     return textLayer(node, matrix, appearance, state);
   }
   if (!curves.length) return null;
+  // A filled shape is painted as a closed contour, which is what the drawing means even
+  // when the path was left open; a shape that is only stroked keeps its ends apart.
+  if (appearance.fill !== 'none' && curves.some((path) => !path.closed) && node.name === 'path') {
+    curves = curves.map((path) => ({ ...path, closed: true }));
+  }
   const nodes = curves.reduce((total, path) => total + path.nodes.length, 0);
   state.nodes += nodes;
   if (state.nodes > state.limits.maxNodes) throw new Error('The drawing exceeds the import node limit.');

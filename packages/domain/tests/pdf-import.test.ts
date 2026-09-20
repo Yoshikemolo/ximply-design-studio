@@ -65,6 +65,23 @@ describe('pdf reader', () => {
     expect(Math.round(rectangle.width)).toBe(Math.round(40 * POINTS));
   });
 
+  it('closes a path that is filled, and keeps the stroked contour open', () => {
+    // Three points and no closing operator: filling means the shape closes itself.
+    const filled = pdfArtwork('0 0 1 rg 10 10 m 110 10 l 110 60 l f', page, {});
+    expect(filled.layers[0].curves![0].closed).toBe(true);
+    expect(filled.layers[0].fill).toBe('#0000ff');
+    const stroked = pdfArtwork('1 0 0 RG 10 10 m 110 10 l 110 60 l S', page, {});
+    expect(stroked.layers[0].curves![0].closed).toBe(false);
+    // Filled and stroked at once: the fill closes, the stroke stays as it was drawn.
+    const both = pdfArtwork('0 0 1 rg 1 0 0 RG 10 10 m 110 10 l 110 60 l B', page, {});
+    expect(both.layers).toHaveLength(2);
+    expect(both.layers[0].curves![0].closed).toBe(true);
+    expect(both.layers[0].stroke).toBe('none');
+    expect(both.layers[1].curves![0].closed).toBe(false);
+    expect(both.layers[1].fill).toBe('none');
+    expect(both.layers[1].stroke).toBe('#ff0000');
+  });
+
   it('turns colour operands into paints by how many there are', () => {
     expect(pdfColour([0])).toBe('#000000');
     expect(pdfColour([1])).toBe('#ffffff');
