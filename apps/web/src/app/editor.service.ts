@@ -54,6 +54,7 @@ import {
 import { Injectable, computed, signal } from "@angular/core";
 import { ImportResult, importSvg } from "../../../../packages/domain/src/svg-import";
 import { importDxf } from "../../../../packages/domain/src/dxf-import";
+import { pdfArtwork, pdfFirstPage, pdfObjects } from "../../../../packages/domain/src/pdf-import";
 import { knifeCut, scissorCut } from "../../../../packages/domain/src/cut";
 import { PdfImage, PdfPageSource, pdfDocument } from "../../../../packages/domain/src/pdf";
 import { ArraySettings, arraySteps, copyLayer, validArraySettings } from "../../../../packages/domain/src/array-copy";
@@ -64,6 +65,7 @@ import {
   validDashPattern,
   bounds,
   DocumentHistory,
+  MAX_LAYERS,
   Layer,
   localPoint,
   newLayer,
@@ -352,7 +354,7 @@ export class EditorService {
     const candidates = this.blendCandidates();
     if (!candidates || !this.validBlendOptions(steps, easing)) return false;
     const { back, front, parent } = candidates;
-    if (this.document().layers.length + steps * back.length > 150) return false;
+    if (this.document().layers.length + steps * back.length > MAX_LAYERS) return false;
     const blend: ObjectBlend = { id: crypto.randomUUID(), groupId: crypto.randomUUID(), backIds: back.map((layer) => layer.id), frontIds: front.map((layer) => layer.id), steps, easing, stepIds: Array.from({ length: steps }, () => back.map(() => crypto.randomUUID())) };
     const ids = new Set([...blend.backIds, ...blend.frontIds]);
     const insert = (layer: Layer) => ({ ...layer, groupPath: [...parent, blend.groupId, ...(layer.groupPath ?? []).slice(parent.length)] });
@@ -374,7 +376,7 @@ export class EditorService {
     const steps = patch.steps ?? blend.steps, easing = patch.easing ?? blend.easing;
     if (!this.validBlendOptions(steps, easing) || (steps === blend.steps && easing === blend.easing)) return false;
     const before = this.document(), oldGenerated = new Set(blend.stepIds.flat());
-    if (before.layers.length - oldGenerated.size + steps * blend.backIds.length > 150) return false;
+    if (before.layers.length - oldGenerated.size + steps * blend.backIds.length > MAX_LAYERS) return false;
     const nextBlend = { ...blend, steps, easing, stepIds: Array.from({ length: steps }, (_, index) => blend.stepIds[index] ?? blend.backIds.map(() => crypto.randomUUID())) };
     const source = before.layers.find((layer) => layer.id === blend.backIds[0])!;
     const parent = source.groupPath!.slice(0, source.groupPath!.indexOf(blend.groupId));
@@ -460,13 +462,13 @@ export class EditorService {
     layer.name=type[0].toUpperCase()+type.slice(1);layer.procedural=procedural;return generateProcedural(layer,this.document());
   }
   createProcedural(type:Procedural['type'],start:Point,end?:Point):boolean {
-    if(this.document().layers.length>=150)return false;
+    if(this.document().layers.length>=MAX_LAYERS)return false;
     let layer:Layer,next:StudioDocument;try{layer=this.proceduralLayer(type,start,end);next=syncProcedurals({...this.document(),layers:[...this.document().layers,layer]});parseDocument(JSON.stringify(next));}catch{return false;}
     this.commitStep(this.document());this.document.set(next);this.selectedId.set(layer.id);this.selectedIds.set([layer.id]);this.changed();return true;
   }
   private startProcedural(type:Procedural['type'],point:Point) {
     if(type==='door'||type==='window'){this.createProcedural(type,this.snap(point));return;}
-    if(this.document().layers.length>=150)return;
+    if(this.document().layers.length>=MAX_LAYERS)return;
     if(type==='wall'){
       const chain=this.wallChain(),target=this.wallTarget(this.wallChain(),point);
       if(chain&&Math.hypot(target.x-chain.x,target.y-chain.y)>=1){
@@ -631,7 +633,7 @@ export class EditorService {
   }
   /** One offset line shared by consecutive measurements, committed as a single history entry. */
   createChainDimension(points:Point[],labelPosition:Point):boolean {
-    if(points.length<3||this.document().layers.length+points.length-1>150)return false;
+    if(points.length<3||this.document().layers.length+points.length-1>MAX_LAYERS)return false;
     const layers:Layer[]=[];
     for(let i=0;i<points.length-1;i++){
       const layer=this.buildDimension('linear',[points[i],points[i+1]],labelPosition,crypto.randomUUID());
@@ -690,7 +692,7 @@ export class EditorService {
     return {...newLayer('path',id,{x,y},this.stroke(),this.stroke(),Math.min(this.size(),2)),name:kind==='linear'?'Linear dimension':kind==='angular'?'Angular dimension':kind==='radius'?'Radius dimension':'Diameter dimension',width:Math.max(1,...points.map(p=>p.x-x)),height:Math.max(1,...points.map(p=>p.y-y)),fontSize:14,points:anchors.map(local),lineEnds:{start:{kind:'triangle',placement:'tip',size:10},end:{kind:'triangle',placement:'tip',size:10},linked:true},dimension:{kind,anchors:anchors.map(local),labelPosition:local(labelPosition),text:'',labelSize:{width:160,height:40},format:{...this.dimensionDefaults()},extension:{stroke:this.stroke(),strokeWidth:1,gap:6,overshoot:8}}};
   }
   createDimension(kind:Dimension['kind'],anchors:Point[],labelPosition:Point):boolean {
-    if(this.document().layers.length>=150)return false;
+    if(this.document().layers.length>=MAX_LAYERS)return false;
     const layer=this.buildDimension(kind,anchors,labelPosition,crypto.randomUUID());if(!layer)return false;
     try{parseDocument(JSON.stringify({...this.document(),layers:[...this.document().layers,layer]}));}catch{return false;}
     this.commitStep(this.document());this.document.update(d=>({...d,layers:[...d.layers,layer]}));this.selectedId.set(layer.id);this.selectedIds.set([layer.id]);this.changed();return true;
@@ -885,7 +887,7 @@ export class EditorService {
     this.cancelGuideDrag();
     const doc = this.document();
     const existing = id ? doc.layers.find((layer) => layer.id === id && layer.guide === axis) : undefined;
-    if ((id && (this.guidesLocked() || !existing || existing.locked || !existing.visible)) || (!id && doc.layers.length >= 150)) return null;
+    if ((id && (this.guidesLocked() || !existing || existing.locked || !existing.visible)) || (!id && doc.layers.length >= MAX_LAYERS)) return null;
     const guide = existing ?? { ...newLayer("path", crypto.randomUUID(), { x: 0, y: 0 }, "none", "#00b8d9", 1), guide: axis, name: axis === "vertical" ? "Vertical guide" : "Horizontal guide", width: 1, height: 1 };
     this.guideGesture = { before: structuredClone(doc), id: guide.id, selectedId: this.selectedId(), selectedIds: [...this.selectedIds()] };
     if (!existing) this.document.update((value) => ({ ...value, layers: [...value.layers, guide] }));
@@ -1453,7 +1455,7 @@ export class EditorService {
   paste(where: "offset" | "front" | "back" = "offset"): boolean {
     if (!this.clipboard.length) return false;
     const document = this.document();
-    if (document.layers.length + this.clipboard.length > 150) { this.status.set("Preview limit: 150 layers"); return false; }
+    if (document.layers.length + this.clipboard.length > MAX_LAYERS) { this.status.set("The document cannot hold more layers."); return false; }
     const offset = where === "offset" ? 20 : 0;
     const copies = this.clipboard.map((layer) => ({
       ...structuredClone(layer),
@@ -1505,7 +1507,7 @@ export class EditorService {
     const layers = this.selectedLayers().filter((layer) => !layer.guide && !this.isEffectivelyLocked(layer));
     if (!last || !layers.length) { this.status.set("There is no transformation to repeat."); return false; }
     const document = this.document();
-    if (last.duplicate && document.layers.length + layers.length > 150) { this.status.set("Preview limit: 150 layers"); return false; }
+    if (last.duplicate && document.layers.length + layers.length > MAX_LAYERS) { this.status.set("The document cannot hold more layers."); return false; }
     // The recorded pivot is the origin of the repeat, not the pivot of whatever is selected now.
     const centre = last.pivot;
     const step = { dx: last.dx, dy: last.dy, rotation: last.rotation, scale: last.scale };
@@ -1542,7 +1544,7 @@ export class EditorService {
     const steps = arraySteps(settings, this.pivot(), centre);
     if (!steps.length) return false;
     const document = this.document();
-    if (document.layers.length + steps.length * layers.length > 150) { this.status.set("Preview limit: 150 layers"); return false; }
+    if (document.layers.length + steps.length * layers.length > MAX_LAYERS) { this.status.set("The document cannot hold more layers."); return false; }
     const copies = steps.flatMap((step) => layers.map((layer) => copyLayer(layer, step, centre, crypto.randomUUID())));
     this.commitStep(document);
     this.document.set({ ...document, layers: [...document.layers, ...copies] });
@@ -1556,7 +1558,7 @@ export class EditorService {
   }
   duplicate() {
     const layers = this.selectedLayers();
-    if (!layers.length || this.document().layers.length + layers.length > 150)
+    if (!layers.length || this.document().layers.length + layers.length > MAX_LAYERS)
       return;
     // Repeating a duplicate makes another copy the same distance away.
     const placed = this.pivotMoved() ? this.pivot() : null;
@@ -1835,8 +1837,8 @@ export class EditorService {
       }
       return;
     }
-    if (this.document().layers.length >= 150) {
-      this.status.set("Preview limit: 150 layers");
+    if (this.document().layers.length >= MAX_LAYERS) {
+      this.status.set("The document cannot hold more layers.");
       return;
     }
     if (tool === "eraser") {
@@ -2527,7 +2529,7 @@ export class EditorService {
       }
     }
     if (!layer) {
-      if (this.document().layers.length >= 150) return;
+      if (this.document().layers.length >= MAX_LAYERS) return;
       layer = newLayer(
         "path",
         crypto.randomUUID(),
@@ -3133,7 +3135,7 @@ export class EditorService {
     const symbol = this.document().symbols?.find(
       (s) => s.id === this.activeSymbol(),
     );
-    if (!symbol || this.document().layers.length >= 150) return;
+    if (!symbol || this.document().layers.length >= MAX_LAYERS) return;
     this.commitStep(this.document());
     this.addInstance(point);
     this.changed();
@@ -3142,7 +3144,7 @@ export class EditorService {
     const symbol = this.document().symbols?.find(
       (s) => s.id === this.activeSymbol(),
     );
-    if (!symbol || this.document().layers.length >= 150) return;
+    if (!symbol || this.document().layers.length >= MAX_LAYERS) return;
     const layer = {
       ...structuredClone(symbol.layer),
       id: crypto.randomUUID(),
@@ -3385,7 +3387,7 @@ export class EditorService {
     const retained = current.layers.filter(
       (l) => l.traceSourceId !== source.id,
     );
-    if (retained.length + regions.length > 150)
+    if (retained.length + regions.length > MAX_LAYERS)
       throw new Error("Trace exceeds the layer limit; reduce color levels");
     const traced = regions.map((region) => ({
       ...newLayer(
@@ -3463,8 +3465,8 @@ export class EditorService {
     layer.width = canvas.width;
     layer.height = canvas.height;
     layer.source = canvas.toDataURL("image/png");
-    if (this.document().layers.length >= 150)
-      throw new Error("Preview limit: 150 layers");
+    if (this.document().layers.length >= MAX_LAYERS)
+      throw new Error("The document cannot hold more layers.");
     this.commitStep(this.document());
     this.document.update((d) => ({ ...d, layers: [...d.layers, layer] }));
     this.selectedId.set(layer.id);
@@ -3488,14 +3490,48 @@ export class EditorService {
       return this.placeImport(importDxf(await file.text(), { name: file.name.slice(0, 80) }));
     }
     if (name.endsWith(".dwg")) throw new Error("DWG cannot be read; export the drawing as DXF and import that.");
-    if (name.endsWith(".ai") || name.endsWith(".pdf")) throw new Error("PDF and Illustrator files are not supported yet; export the artwork as SVG.");
+    if (name.endsWith(".ai") || name.endsWith(".pdf")) {
+      if (file.size > 20_000_000) throw new Error("Choose a drawing under 20 MB.");
+      return this.placeImport(await this.readPdf(new Uint8Array(await file.arrayBuffer()), file.name.slice(0, 80)));
+    }
     return this.importImage(file);
+  }
+  /**
+   * Reads the drawing of a PDF or Illustrator file. The streams are decompressed here,
+   * where the platform lives, and interpreted by the reader in the domain.
+   */
+  private async readPdf(bytes: Uint8Array, name: string): Promise<ImportResult> {
+    const objects = pdfObjects(bytes);
+    const page = pdfFirstPage(objects);
+    let content = "";
+    for (const id of page.contents) {
+      const stream = objects.get(id)?.stream;
+      if (!stream) continue;
+      content += await this.streamText(bytes.slice(stream.start, stream.end), stream.filter);
+    }
+    if (!content.trim()) throw new Error("The drawing of this file could not be read.");
+    return pdfArtwork(content, page, { name });
+  }
+  /** Decompresses a stream with the decompression the browser provides; raw data passes through. */
+  private async streamText(data: Uint8Array, filter: string): Promise<string> {
+    let bytes = data;
+    if (filter === "FlateDecode") {
+      const inflate = async (format: "deflate" | "deflate-raw") => {
+        const stream = new Blob([data.slice().buffer as ArrayBuffer]).stream().pipeThrough(new DecompressionStream(format));
+        return new Uint8Array(await new Response(stream).arrayBuffer());
+      };
+      try { bytes = await inflate("deflate"); }
+      catch { try { bytes = await inflate("deflate-raw"); } catch { throw new Error("The drawing of this file could not be read."); } }
+    } else if (filter) throw new Error("The drawing of this file could not be read.");
+    let text = "";
+    for (let index = 0; index < bytes.length; index++) text += String.fromCharCode(bytes[index]);
+    return text;
   }
   /** Places an imported drawing as one history step, reporting what the reader skipped. */
   private placeImport(result: ImportResult) {
     if (!result.layers.length) throw new Error("The drawing has no content this editor can place.");
     const document = this.document();
-    if (document.layers.length + result.layers.length > 150) throw new Error("Preview limit: 150 layers");
+    if (document.layers.length + result.layers.length > MAX_LAYERS) throw new Error("The document cannot hold more layers.");
     const next = { ...document, layers: [...document.layers, ...result.layers] };
     parseDocument(JSON.stringify(next));
     this.commitStep(document);

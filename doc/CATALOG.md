@@ -221,6 +221,7 @@ Generated titles and paths only; authoritative content remains in each linked do
 - [SC-0094 — SC-0094 — PDF export, printing and choosing documents](sc/SC-0094.md)
 - [SC-0095 — SC-0095 — Clipboard, stacked pastes and the bounding box](sc/SC-0095.md)
 - [SC-0096 — SC-0096 — Duplication in series](sc/SC-0096.md)
+- [SC-0097 — SC-0097 — Illustrator and PDF drawing import](sc/SC-0097.md)
 - [SEC-0001 — SEC-0001 — Identity and project isolation](sec/SEC-0001.md)
 - [SEC-0002 — SEC-0002 — Revocation and session lifetime](sec/SEC-0002.md)
 - [SEC-0003 — SEC-0003 — Plugin least privilege](sec/SEC-0003.md)

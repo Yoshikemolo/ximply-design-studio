@@ -100,3 +100,4 @@
 | [SC-0094 — PDF export, printing and choosing documents](SC-0094.md) |
 | [SC-0095 — Clipboard, stacked pastes and the bounding box](SC-0095.md) |
 | [SC-0096 — Duplication in series](SC-0096.md) |
+| [SC-0097 — Illustrator and PDF drawing import](SC-0097.md) |

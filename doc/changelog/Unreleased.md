@@ -10,7 +10,7 @@ source: ["Project change history and owner changelog requirements"]
 version: "Unreleased"
 date: null
 summary: "Pending changes"
-breaking_changes: false
+breaking_changes: true
 capability_status: "local-preview"
 ---
 
@@ -20,7 +20,7 @@ Corrections on top of 0.4.0, kept at that version number until the next release.
 
 ## Breaking changes
 
-None.
+- A document may now hold up to a thousand layers instead of a hundred and fifty, which drawings imported from other tools often need. Migration: a file with more than a hundred and fifty layers is refused by earlier versions of this editor and of the API; keep the original file if you need to open it there.
 
 ## New features
 
@@ -35,6 +35,7 @@ None.
 - Choose what to export from one dialog: the format, and which of the open documents are included, with the current one chosen to begin with. A PDF collects them as one page each; SVG and PNG write one file per document.
 - Print the chosen documents through the printing dialog of the browser, one page each, from the File menu or the export dialog.
 - Cut paths with two clicks: the scissors open a path at two of its own points, leaving independent open paths, and the knife divides the closed shapes its line crosses into two independent closed shapes. Both draw the cut in progress, both are undone in one step, and Escape forgets a cut that was started.
+- Import Illustrator and PDF drawings: the page of the file is read and its paths, colours and stroke widths arrive as editable layers, with the page turned upright and measured in pixels. Text, placed objects, inline images, gradients and clipping paths are reported instead of approximated.
 - Import ASCII DXF drawings: lines, polylines, circles, arcs, ellipses, points and text, with each drawing layer kept as a group and the drawing mirrored into document coordinates.
 
 ## Improvements

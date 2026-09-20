@@ -118,6 +118,8 @@ export function strokeBounds(layer: Layer) {
   const x = Math.min(...xs) - margin, y = Math.min(...ys) - margin;
   return { x, y, width: Math.max(...xs) + margin - x, height: Math.max(...ys) + margin - y };
 }
+/** Layers a document may hold; drawings imported from other tools are often in the hundreds. */
+export const MAX_LAYERS = 1000;
 export function newLayer(
   kind: LayerKind,
   id: string,
@@ -386,7 +388,7 @@ export function parseDocument(text: string): StudioDocument {
     !finite(value["height"], 16, 8192) ||
     !paint(value["background"], value["version"]) ||
     !Array.isArray(value["layers"]) ||
-    value["layers"].length > 150
+    value["layers"].length > MAX_LAYERS
   )
     throw new Error("Invalid document or preview limits exceeded.");
   const symbols = value["symbols"];
