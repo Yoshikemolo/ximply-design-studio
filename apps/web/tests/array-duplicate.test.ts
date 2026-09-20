@@ -55,6 +55,15 @@ describe('duplicate in series', () => {
     expect(e.duplicateSeries(settings({}))).toBe(false);
   });
 
+  it('keeps the pivot of the series on the copies it made', () => {
+    const e = withSquare();
+    e.setPivot({ x: 100, y: 110 });
+    expect(e.duplicateSeries(settings({ mode: 'circular', copies: 1, sweep: 180 }))).toBe(true);
+    // The copies inherit the point the series turned around, so a second one repeats it.
+    expect(e.pivot()).toEqual({ x: 100, y: 110 });
+    expect(e.pivotMoved()).toBe(true);
+  });
+
   it('is bound to its own key and offered on the selected objects', () => {
     const e = withSquare();
     expect(defaultShortcuts()['duplicateSeries']).toEqual(['Mod+Shift+D']);

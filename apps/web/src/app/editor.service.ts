@@ -504,6 +504,13 @@ export class EditorService {
     return override && override.key === this.selectionKey() ? override.point : this.transformationCenter();
   });
   readonly pivotMoved = computed(() => this.pivotOverride()?.key === this.selectionKey());
+  /**
+   * Carries a pivot placed by hand to the selection that replaces the old one, so a copy
+   * keeps turning and scaling around the point its original did.
+   */
+  private carryPivot(point: Point | null) {
+    if (point) this.setPivot(point);
+  }
   setPivot(point: Point) {
     if (!Number.isFinite(point.x) || !Number.isFinite(point.y) || !this.selectedLayers().length) return;
     this.pivotOverride.set({ key: this.selectionKey(), point });
@@ -1475,15 +1482,17 @@ export class EditorService {
    * The last transformation of the selection, kept so it can be repeated: how far it moved,
    * how much it turned and grew, and whether it left a copy behind.
    */
-  readonly lastTransform = signal<{ dx: number; dy: number; rotation: number; scale: number; duplicate: boolean } | null>(null);
+  readonly lastTransform = signal<{ dx: number; dy: number; rotation: number; scale: number; duplicate: boolean; pivot: Point } | null>(null);
   /** True while a drag will duplicate on release, which the cursor shows. */
   readonly duplicatingDrag = signal(false);
   /** Keeps the cursor honest while Alt is pressed or released without moving the pointer. */
   setDuplicatingDrag(alt: boolean) {
     if (this.gesture && ["move", "rotate", "scale"].includes(this.gesture.mode)) this.duplicatingDrag.set(alt);
   }
-  private recordTransform(step: { dx?: number; dy?: number; rotation?: number; scale?: number; duplicate?: boolean }) {
-    const value = { dx: step.dx ?? 0, dy: step.dy ?? 0, rotation: step.rotation ?? 0, scale: step.scale ?? 1, duplicate: !!step.duplicate };
+  private recordTransform(step: { dx?: number; dy?: number; rotation?: number; scale?: number; duplicate?: boolean; pivot?: Point }) {
+    // The pivot belongs to the transformation: a repeat turns and scales around the same point.
+    const pivot = step.pivot ?? this.pivot();
+    const value = { dx: step.dx ?? 0, dy: step.dy ?? 0, rotation: step.rotation ?? 0, scale: step.scale ?? 1, duplicate: !!step.duplicate, pivot: { ...pivot } };
     if (!value.dx && !value.dy && !value.rotation && value.scale === 1 && !value.duplicate) return;
     this.lastTransform.set(value);
   }
@@ -1497,7 +1506,8 @@ export class EditorService {
     if (!last || !layers.length) { this.status.set("There is no transformation to repeat."); return false; }
     const document = this.document();
     if (last.duplicate && document.layers.length + layers.length > 150) { this.status.set("Preview limit: 150 layers"); return false; }
-    const centre = this.pivot();
+    // The recorded pivot is the origin of the repeat, not the pivot of whatever is selected now.
+    const centre = last.pivot;
     const step = { dx: last.dx, dy: last.dy, rotation: last.rotation, scale: last.scale };
     const ids = new Set(layers.map((layer) => layer.id));
     let next: StudioDocument;
@@ -1515,6 +1525,8 @@ export class EditorService {
     this.document.set(next);
     this.selectedIds.set(selection);
     this.selectedId.set(selection[0]);
+    // The repeat keeps its origin, so the next one turns around the same point.
+    this.carryPivot(centre);
     this.status.set(last.duplicate ? "Transformed again with a copy." : "Transformed again.");
     this.changed();
     return true;
@@ -1525,6 +1537,8 @@ export class EditorService {
     if (!layers.length || !validArraySettings(settings)) return false;
     const box = selectionBounds(layers);
     const centre = { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+    // The pivot of the series is read before the copies replace the selection.
+    const placed = this.pivotMoved() ? this.pivot() : null;
     const steps = arraySteps(settings, this.pivot(), centre);
     if (!steps.length) return false;
     const document = this.document();
@@ -1535,6 +1549,7 @@ export class EditorService {
     this.selectedIds.set(copies.map((layer) => layer.id));
     this.selectedId.set(copies[0].id);
     this.activeNodes.set([]);
+    this.carryPivot(placed);
     this.status.set(`Duplicated into ${steps.length} ${steps.length > 1 ? "copies" : "copy"}.`);
     this.changed();
     return true;
@@ -1544,6 +1559,7 @@ export class EditorService {
     if (!layers.length || this.document().layers.length + layers.length > 150)
       return;
     // Repeating a duplicate makes another copy the same distance away.
+    const placed = this.pivotMoved() ? this.pivot() : null;
     this.recordTransform({ dx: 20, dy: 20, duplicate: true });
     this.commitStep(this.document());
     const groups = new Map<string, string>();
@@ -1574,6 +1590,7 @@ export class EditorService {
     this.document.update((d) => ({ ...d, layers: [...d.layers, ...copies], ...(blends?.length ? { blends: [...(d.blends ?? []), ...blends] } : {}) }));
     this.selectedIds.set(copies.map((l) => l.id));
     this.selectedId.set(copies.at(-1)!.id);
+    this.carryPivot(placed);
     this.changed();
   }
   /**
@@ -2185,9 +2202,11 @@ export class EditorService {
         rotation: result.rotation - source.rotation,
         scale: source.width ? result.width / source.width : 1,
         duplicate,
+        pivot: pivotAtStart && pivotAtStart.key === this.selectionKey() ? pivotAtStart.point : this.pivot(),
       });
     }
     if (!duplicate || !after.length) { this.commitStep(g.before, pivotAtStart); return; }
+    const placed = this.pivotMoved() ? this.pivot() : null;
     const copies = after.map((layer) => ({ ...structuredClone(layer), id: crypto.randomUUID(), regroupPath: undefined }));
     const next = { ...g.before, layers: [...g.before.layers, ...copies] };
     try { parseDocument(JSON.stringify(next)); } catch { this.commitStep(g.before, pivotAtStart); return; }
@@ -2195,6 +2214,7 @@ export class EditorService {
     this.document.set(next);
     this.selectedIds.set(copies.map((layer) => layer.id));
     this.selectedId.set(copies[0].id);
+    this.carryPivot(placed);
     this.status.set(`Duplicated ${copies.length} object${copies.length > 1 ? "s" : ""} with the transformation.`);
   }
   cancel() {

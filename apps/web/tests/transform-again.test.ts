@@ -52,6 +52,25 @@ describe('transform again', () => {
     expect(scaled.document().layers[0].width).toBe(400);
   });
 
+  it('repeats around the pivot of the original transformation, not of the new copies', () => {
+    const e = withSquare();
+    // A turn of ninety degrees around the corner of the square, leaving a copy behind.
+    e.setPivot({ x: 100, y: 100 });
+    e.duplicate();
+    e.rotateSelection(90);
+    const first = e.selectedLayers()[0];
+    expect(e.lastTransform()?.pivot).toEqual({ x: 100, y: 100 });
+    // The copies have their own centre, but the repeat still turns around the same corner.
+    expect(e.transformAgain()).toBe(true);
+    const second = e.selectedLayers()[0];
+    const distance = (layer: { x: number; y: number; width: number; height: number }) =>
+      Math.hypot(layer.x + layer.width / 2 - 100, layer.y + layer.height / 2 - 100);
+    expect(distance(second)).toBeCloseTo(distance(first), 6);
+    expect(second.rotation).toBe(first.rotation + 90);
+    expect(e.transformAgain()).toBe(true);
+    expect(distance(e.selectedLayers()[0])).toBeCloseTo(distance(first), 6);
+  });
+
   it('says so when there is nothing to repeat', () => {
     const e = withSquare();
     expect(e.transformAgain()).toBe(false);
