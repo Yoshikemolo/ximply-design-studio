@@ -2159,10 +2159,39 @@ export class EditorService {
     this.end();
     this.penId.set(null);
   }
+  /** An open path whose first or last anchor is under the pointer, so drawing continues from it. */
+  penContinuation(point: Point): { layer: Layer; atStart: boolean } | null {
+    const radius = 10 / this.zoom();
+    for (const layer of [...this.document().layers].reverse()) {
+      if (layer.guide || layer.dimension || layer.procedural || !layer.visible || this.isEffectivelyLocked(layer)) continue;
+      const path = layer.curves?.[0];
+      if (!path || path.closed || path.nodes.length < 1 || layer.curves!.length !== 1) continue;
+      const ends = [{ node: path.nodes[0], atStart: true }, { node: path.nodes.at(-1)!, atStart: false }];
+      for (const end of ends) {
+        const world = worldPoint(layer, end.node.point);
+        if (Math.hypot(point.x - world.x, point.y - world.y) <= radius) return { layer, atStart: end.atStart };
+      }
+    }
+    return null;
+  }
   private startPen(point: Point, before: StudioDocument) {
     let layer = this.document().layers.find(
       (l) => l.id === this.penId() && !this.isEffectivelyLocked(l) && l.visible && !l.guide,
     );
+    if (!layer) {
+      // Clicking an end of an unlocked open path carries on with it instead of starting another object.
+      const continuation = this.penContinuation(point);
+      if (continuation) {
+        const curves = structuredClone(continuation.layer.curves!);
+        if (continuation.atStart) {
+          curves[0].nodes.reverse();
+          for (const node of curves[0].nodes) { const incoming = node.incoming; node.incoming = node.outgoing; node.outgoing = incoming; }
+          this.setLayer(continuation.layer.id, { curves });
+        }
+        this.penId.set(continuation.layer.id);
+        layer = this.document().layers.find((l) => l.id === continuation.layer.id);
+      }
+    }
     if (!layer) {
       if (this.document().layers.length >= 150) return;
       layer = newLayer(
