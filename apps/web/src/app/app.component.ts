@@ -3,6 +3,7 @@ import { Dimension, DimensionFormat, dimensionGeometry } from "../../../../packa
 import { defaultLineEnds, lineEndGeometry, LineEnd, LineEnds } from "../../../../packages/domain/src/line-endings";
 import { LeafType, LEAF_TYPES } from "../../../../packages/domain/src/procedural";
 import { BrushSettings, BrushType, BRUSH_TYPES, brushStamps, previewStroke } from "../../../../packages/domain/src/brush";
+import { ArraySettings, DEFAULT_ARRAY, validArraySettings } from "../../../../packages/domain/src/array-copy";
 import { defaultMarginGuides, MarginGuides, PAGE_FORMATS, PAGE_RESOLUTIONS, PageCategory, PageOrientation, pageSize, pageSizeFits, RegistrationMarks, REGISTRATION_MARKS, registrationFits } from "../../../../packages/domain/src/page-setup";
 import { BlendEasing } from "../../../../packages/domain/src/object-blend";
 import { FONT_FAMILIES, defaultTypography, defaultTextLayout, TextTypography, TextLayoutOptions } from "../../../../packages/domain/src/text-layout";
@@ -52,6 +53,11 @@ const DASH_PRESETS: { id: string; label: string; dash: number[] }[] = [
   { id: "custom", label: "Custom sequence", dash: [] },
 ];
 const DASH_FIELDS = [0, 1, 2, 3, 4, 5];
+const ARRAY_MODES = [
+  { id: "linear", label: "Linear series" },
+  { id: "circular", label: "Circular series" },
+  { id: "grid", label: "Grid series" },
+] as const;
 const BLEND_LIMIT_TIP = "Endpoints are excluded from the step count.";
 const BRUSH_TYPE_LABELS: Record<BrushType, string> = {
   round: "Round brush", flat: "Flat brush", calligraphy: "Calligraphy brush",
@@ -408,6 +414,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
       pasteInFront: { label: "Paste in front", section: "clipboard", command: "pasteInFront" },
       pasteInBack: { label: "Paste in back", section: "clipboard", command: "pasteInBack" },
       duplicate: { label: "Duplicate", section: "clipboard", command: "duplicate" },
+      duplicateSeries: { label: "Duplicate in series", section: "clipboard", command: "duplicateSeries" },
       toggleBoundingBox: { label: "Show or hide the bounding box", section: "view", command: "toggleBoundingBox" },
       displacement: { label: "Enter displacement", section: "transform", command: "displacement" },
       rotation: { label: "Enter rotation", section: "transform", command: "rotation" },
@@ -438,6 +445,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     const context = this.contextMenu();
     const enabled = context && this.contextEntries().some(entry => entry.id === action && !entry.disabled);
     this.dismissContext();
+    if (context && enabled && action === "duplicateSeries") { this.openArrayDialog(); return; }
     if (context && enabled && (action === "displacement" || action === "rotation")) { this.openTransformDialog(action); return; }
     if (context && enabled) this.editor.runContextAction(context.target, action as ContextAction);
   }
@@ -901,6 +909,31 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   canvasDoubleClick(event: MouseEvent) {
     if (event.button !== 0) return;
     if (this.editor.resetPivotAt(this.point(event))) event.preventDefault();
+  }
+  // Duplication in series: the dialog holds the settings until they are applied.
+  readonly arrayDialog = signal(false);
+  readonly arraySettings = signal<ArraySettings>({ ...DEFAULT_ARRAY });
+  get arrayModes() { return ARRAY_MODES; }
+  openArrayDialog() {
+    this.dismissMenus();
+    this.dismissContext();
+    if (!this.editor.selectedLayers().length) { this.editor.status.set("Select the objects to duplicate."); return; }
+    this.arrayDialog.set(true);
+  }
+  setArray<K extends keyof ArraySettings>(key: K, value: ArraySettings[K]) {
+    this.arraySettings.update((settings) => ({ ...settings, [key]: value }));
+  }
+  setArrayNumber(key: "copies" | "stepX" | "stepY" | "rotation" | "scale" | "sweep" | "columns" | "rows" | "gapX" | "gapY", event: Event) {
+    const value = this.number(event);
+    if (Number.isFinite(value)) this.setArray(key, value);
+  }
+  arrayValid() { return validArraySettings(this.arraySettings()); }
+  applyArray() {
+    if (!this.editor.duplicateSeries(this.arraySettings())) {
+      this.editor.status.set("The series cannot be created with these settings.");
+      return;
+    }
+    this.arrayDialog.set(false);
   }
   // Export and print: one dialog chooses the format and which open documents are included.
   readonly exportDialog = signal(false);
@@ -1751,6 +1784,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
       open: () => this.projectFile?.nativeElement.click(),
       new: () => this.newDocument(),
       duplicate: () => this.editor.duplicate(),
+      duplicateSeries: () => this.openArrayDialog(),
       copy: () => this.editor.copySelection(),
       cut: () => this.editor.cutSelection(),
       paste: () => this.editor.paste(),

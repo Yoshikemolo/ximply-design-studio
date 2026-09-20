@@ -1492,6 +1492,41 @@
   </section></div>
 }
 
+@if (arrayDialog()) {
+  @let array = arraySettings();
+  <div class="modal-backdrop"><form class="server-dialog array-dialog" role="dialog" aria-modal="true" [attr.aria-label]="t('Duplicate in series')" (submit)="$event.preventDefault(); applyArray()" (keydown.escape)="arrayDialog.set(false); $event.stopPropagation()">
+    <h2>{{ t('Duplicate in series') }}</h2>
+    <label class="wide-label">{{ t('Series') }}<select [value]="array.mode" (change)="setArray('mode', $any(text($event)))">@for (mode of arrayModes; track mode.id) {<option [value]="mode.id">{{ t(mode.label) }}</option>}</select></label>
+    @if (array.mode !== 'grid') {
+      <div class="property-grid">
+        <label>{{ t('Copies') }}<input type="number" min="1" max="200" step="1" [value]="array.copies" (change)="setArrayNumber('copies', $event)" /></label>
+        @if (array.mode === 'linear') {
+          <label>{{ t('Step X') }}<input type="number" step="any" [value]="array.stepX" (change)="setArrayNumber('stepX', $event)" /></label>
+          <label>{{ t('Step Y') }}<input type="number" step="any" [value]="array.stepY" (change)="setArrayNumber('stepY', $event)" /></label>
+        } @else {
+          <label>{{ t('Sweep') }}<input type="number" step="any" min="-3600" max="3600" [value]="array.sweep" (change)="setArrayNumber('sweep', $event)" /></label>
+        }
+      </div>
+    } @else {
+      <div class="property-grid">
+        <label>{{ t('Columns') }}<input type="number" min="1" max="40" step="1" [value]="array.columns" (change)="setArrayNumber('columns', $event)" /></label>
+        <label>{{ t('Rows') }}<input type="number" min="1" max="40" step="1" [value]="array.rows" (change)="setArrayNumber('rows', $event)" /></label>
+        <label>{{ t('Gap X') }}<input type="number" step="any" [value]="array.gapX" (change)="setArrayNumber('gapX', $event)" /></label>
+        <label>{{ t('Gap Y') }}<input type="number" step="any" [value]="array.gapY" (change)="setArrayNumber('gapY', $event)" /></label>
+      </div>
+    }
+    <div class="property-grid">
+      <label>{{ t('Rotation') }}<input type="number" step="any" [value]="array.rotation" (change)="setArrayNumber('rotation', $event)" /></label>
+      <label>{{ t('Scale') }} (%)<input type="number" step="any" min="1" max="1000" [value]="array.scale" (change)="setArrayNumber('scale', $event)" /></label>
+    </div>
+    @if (array.mode === 'circular') {
+      <label class="wide-label">{{ t('Turn the copies with the series') }}<input class="toggle-switch" type="checkbox" role="switch" [checked]="array.orient" (change)="setArray('orient', $any($event.target).checked)" /></label>
+      <p class="panel-tip"><img src="/assets/icons/tip.svg" alt="" /><span>{{ t('The copies turn around the pivot of the selection.') }}</span></p>
+    }
+    <div class="dialog-actions"><button type="button" (click)="arrayDialog.set(false)">{{ t('Cancel') }}</button><button type="submit" [disabled]="!arrayValid()">{{ t('Apply') }}</button></div>
+  </form></div>
+}
+
 @if (exportDialog()) {
   <div class="modal-backdrop"><form class="server-dialog export-dialog" role="dialog" aria-modal="true" [attr.aria-label]="t('Export')" (submit)="$event.preventDefault(); runExport()" (keydown.escape)="exportDialog.set(false); $event.stopPropagation()">
     <h2>{{ t('Export') }}</h2>

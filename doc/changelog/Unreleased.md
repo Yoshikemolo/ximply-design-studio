@@ -25,8 +25,10 @@ None.
 ## New features
 
 - Import SVG drawings as editable native layers, with their shapes, paths, text, colours, stroke widths, transforms and groups, and report in the status line whatever the reader could not represent.
+- Duplicate in series with Ctrl+Shift+D: a linear series with its own step, turn and relative size per copy; a circular series around the pivot, with the copies turning with it or keeping their rotation; and a grid series with its columns, rows and gaps.
 - Copy, cut and paste artwork, with paste in front and paste in back, which keep the coordinates of the copy and place it immediately above or below the selected object. Copy is Ctrl+C, cut Ctrl+X, paste Ctrl+V, paste in front Ctrl+F and paste in back Ctrl+B.
 - Show or hide the bounding box of the selection, the frame with its handles and the rotation knob, with Ctrl+Shift+B.
+- Give the list of documents in the export dialog alternating rows, with the box and the name aligned on the left.
 - Offer the clipboard actions, the duplicate and the bounding box on the selected objects in the context menu, each with its key.
 - Export as PDF, with the vector geometry of the drawing rather than a picture of it: paths keep their curves, strokes keep their dashes and text keeps its characters, drawn with the standard font.
 - Choose what to export from one dialog: the format, and which of the open documents are included, with the current one chosen to begin with. A PDF collects them as one page each; SVG and PNG write one file per document.
@@ -42,6 +44,7 @@ None.
 
 ## Fixes
 
+- Prepare the raster layers of a PDF with an image element instead of a network request, which a strict content security policy can refuse.
 - Bring the transform pivot back with undo and forward with redo: each history step now carries the pivot it was taken with, and placing the pivot is a step of its own that leaves the artwork untouched.
 
 ## Security

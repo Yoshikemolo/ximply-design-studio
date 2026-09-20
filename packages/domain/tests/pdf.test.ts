@@ -94,6 +94,25 @@ describe('pdf writer', () => {
     expect(() => pdfDocument([])).toThrow(/at least one page/);
   });
 
+  it('draws every visible layer of a document and leaves out guides and hidden work', () => {
+    const drawing = page([
+      { ...square(), id: 'shape' },
+      { ...newLayer('ellipse', 'round', { x: 200, y: 20 }), width: 60, height: 60, fill: '#00ff00' },
+      { ...newLayer('path', 'line', { x: 0, y: 0 }), points: [{ x: 5, y: 5 }, { x: 40, y: 60 }], stroke: '#000000', strokeWidth: 2 },
+      { ...newLayer('rectangle', 'hidden', { x: 0, y: 0 }), width: 10, height: 10, visible: false, fill: '#123456' },
+      { ...newLayer('rectangle', 'guide', { x: 0, y: 0 }), width: 10, height: 10, guide: true, fill: '#654321' },
+    ]);
+    const { data } = pdfDocument([{ document: drawing }]);
+    const content = data.slice(data.indexOf('stream'), data.indexOf('endstream'));
+    // The square, the ellipse and the line each paint; the hidden layer and the guide do not.
+    expect(content).toContain('1 0 0 rg');
+    expect(content).toContain('0 1 0 rg');
+    expect(content).toContain('5 5 m');
+    expect(content).not.toContain('0.071 0.204 0.337');
+    expect(content).not.toContain('0.396 0.263 0.129');
+    expect((content.match(/^(f\*|S) Q$/gm) ?? []).length).toBeGreaterThanOrEqual(4);
+  });
+
   it('writes contours as cubic segments in the order they are drawn', () => {
     const operators = pathOperators([{ closed: false, nodes: [
       { point: { x: 0, y: 0 }, incoming: { x: 0, y: 0 }, outgoing: { x: 10, y: 0 }, smooth: false },

@@ -56,6 +56,7 @@ import { ImportResult, importSvg } from "../../../../packages/domain/src/svg-imp
 import { importDxf } from "../../../../packages/domain/src/dxf-import";
 import { knifeCut, scissorCut } from "../../../../packages/domain/src/cut";
 import { PdfImage, PdfPageSource, pdfDocument } from "../../../../packages/domain/src/pdf";
+import { ArraySettings, arraySteps, copyLayer, validArraySettings } from "../../../../packages/domain/src/array-copy";
 import {
   blankDocument,
   defaultStrokeStyle,
@@ -78,7 +79,7 @@ import {
 import { CanvasRenderer } from "../../../../packages/renderer/src/canvas-renderer";
 import { ToolId } from "./tools";
 export type StyleScope = "fill" | "stroke" | "both";
-export type ContextAction = "copy" | "cut" | "paste" | "pasteInFront" | "pasteInBack" | "duplicate" | "toggleBoundingBox" | "displacement" | "rotation" | "group" | "ungroup" | "regroup" | "hide" | "show" | "delete" | "backward" | "forward" | "toBack" | "toFront" | "corner" | "smooth" | "collapseIncoming" | "collapseOutgoing" | "expandIncoming" | "expandOutgoing" | "deleteNode";
+export type ContextAction = "duplicateSeries" | "copy" | "cut" | "paste" | "pasteInFront" | "pasteInBack" | "duplicate" | "toggleBoundingBox" | "displacement" | "rotation" | "group" | "ungroup" | "regroup" | "hide" | "show" | "delete" | "backward" | "forward" | "toBack" | "toFront" | "corner" | "smooth" | "collapseIncoming" | "collapseOutgoing" | "expandIncoming" | "expandOutgoing" | "deleteNode";
 export type ContextTarget = { revision: number; layerId: string } & (
   { kind: "object"; groupPath?: string[]; selectionIds?: string[] } |
   { kind: "node"; path: number; index: number }
@@ -193,6 +194,7 @@ export class EditorService {
       { id: "pasteInFront", enabled: this.clipboard.length > 0 },
       { id: "pasteInBack", enabled: this.clipboard.length > 0 },
       { id: "duplicate", enabled: artwork && editable },
+      { id: "duplicateSeries", enabled: artwork && editable },
       { id: "toggleBoundingBox", enabled: true },
       ...grouping,
       {id:"displacement",enabled:editable && members.every(l=>!l.guide)}, {id:"rotation",enabled:editable && members.every(l=>!l.guide)},
@@ -205,7 +207,8 @@ export class EditorService {
     ];
   }
   runContextAction(target: ContextTarget, action: ContextAction): boolean {
-    if(action === "displacement" || action === "rotation")return false;
+    // The dialogs are opened by the shell, which owns them.
+    if(action === "displacement" || action === "rotation" || action === "duplicateSeries")return false;
     if (!this.contextActions(target).some((entry) => entry.id === action && entry.enabled)) return false;
     const members = this.contextMembers(target), ids = new Set(members.map((layer) => layer.id));
     // The clipboard actions work on the selection, so the target becomes the selection first.
@@ -1450,6 +1453,26 @@ export class EditorService {
     this.selectedId.set(copies[0].id);
     this.activeNodes.set([]);
     this.status.set(where === "front" ? "Pasted in front." : where === "back" ? "Pasted behind." : "Pasted.");
+    this.changed();
+    return true;
+  }
+  /** Duplicates the selection as a series: a line of copies, a turn around the pivot or a grid. */
+  duplicateSeries(settings: ArraySettings): boolean {
+    const layers = this.selectedLayers().filter((layer) => !layer.guide && !this.isEffectivelyLocked(layer));
+    if (!layers.length || !validArraySettings(settings)) return false;
+    const box = selectionBounds(layers);
+    const centre = { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+    const steps = arraySteps(settings, this.pivot(), centre);
+    if (!steps.length) return false;
+    const document = this.document();
+    if (document.layers.length + steps.length * layers.length > 150) { this.status.set("Preview limit: 150 layers"); return false; }
+    const copies = steps.flatMap((step) => layers.map((layer) => copyLayer(layer, step, centre, crypto.randomUUID())));
+    this.commitStep(document);
+    this.document.set({ ...document, layers: [...document.layers, ...copies] });
+    this.selectedIds.set(copies.map((layer) => layer.id));
+    this.selectedId.set(copies[0].id);
+    this.activeNodes.set([]);
+    this.status.set(`Duplicated into ${steps.length} ${steps.length > 1 ? "copies" : "copy"}.`);
     this.changed();
     return true;
   }
@@ -3391,18 +3414,21 @@ export class EditorService {
     for (const layer of document.layers) {
       if (layer.kind !== "image" || !layer.source || !layer.visible) continue;
       try {
-        const bitmap = await createImageBitmap(await (await fetch(layer.source)).blob());
+        // The source is decoded by an image element, which needs no network API and is
+        // therefore unaffected by the content security policy of the page.
+        const element = new Image();
+        element.src = layer.source;
+        await element.decode();
         const canvas = window.document.createElement("canvas");
-        canvas.width = bitmap.width;
-        canvas.height = bitmap.height;
+        canvas.width = Math.max(1, element.naturalWidth || Math.round(layer.width));
+        canvas.height = Math.max(1, element.naturalHeight || Math.round(layer.height));
         const context = canvas.getContext("2d")!;
-        // A PDF image carries no transparency here, so it is composed over white first.
+        // A JPEG carries no transparency, so the image is composed over white first.
         context.fillStyle = "#ffffff";
         context.fillRect(0, 0, canvas.width, canvas.height);
-        context.drawImage(bitmap, 0, 0);
-        bitmap.close();
+        context.drawImage(element, 0, 0, canvas.width, canvas.height);
         const encoded = canvas.toDataURL("image/jpeg", 0.92).split(",")[1] ?? "";
-        images[layer.id] = { data: atob(encoded), width: canvas.width, height: canvas.height };
+        if (encoded) images[layer.id] = { data: atob(encoded), width: canvas.width, height: canvas.height };
       } catch { /* A layer whose source cannot be read is reported by the writer. */ }
     }
     return images;

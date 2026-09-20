@@ -91,6 +91,7 @@ export const COMMANDS: Command[] = [
   { id: "open", label: "Open project", keys: ["Mod+O"] },
   { id: "new", label: "New document", keys: ["Mod+Alt+N"] },
   { id: "duplicate", label: "Duplicate", keys: ["Mod+D"] },
+  { id: "duplicateSeries", label: "Duplicate in series", keys: ["Mod+Shift+D"] },
   { id: "copy", label: "Copy", keys: ["Mod+C"] },
   { id: "cut", label: "Cut", keys: ["Mod+X"] },
   { id: "paste", label: "Paste", keys: ["Mod+V"] },

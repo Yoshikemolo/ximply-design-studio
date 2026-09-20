@@ -191,12 +191,14 @@
         "SC-0019",
         "SC-0020",
         "SC-0021",
-        "SC-0095"
+        "SC-0095",
+        "SC-0096"
       ],
       "implementation": [
         "apps/web/src/app/editor.service.ts",
         "packages/domain/src/document.ts",
-        "packages/domain/src/wall-boolean.ts"
+        "packages/domain/src/wall-boolean.ts",
+        "packages/domain/src/array-copy.ts"
       ],
       "tests": [
         "packages/domain/tests/document.test.ts",
@@ -206,7 +208,9 @@
         "apps/web/tests/wall-booleans.test.ts",
         "apps/web/tests/transforms.test.ts",
         "apps/web/tests/clipboard.test.ts",
-        "apps/web/tests/context-actions.test.ts"
+        "apps/web/tests/context-actions.test.ts",
+        "packages/domain/tests/array-copy.test.ts",
+        "apps/web/tests/array-duplicate.test.ts"
       ],
       "evidence": [
         "doc/implementation/PLAN-0002-0001.md",

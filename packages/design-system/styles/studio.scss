@@ -562,7 +562,21 @@ hr {
 .export-documents .wide-label {
   margin: 0;
   gap: 8px;
+  /* The box and the name read as one line from the left edge of the row. */
   justify-content: flex-start;
+  padding: 6px 8px;
+  border-radius: 4px;
+}
+/* Alternating rows keep a long list of documents readable. */
+.export-documents .wide-label:nth-child(odd) {
+  background: var(--panel-raised);
+}
+.export-documents .wide-label:nth-child(even) {
+  background: var(--input);
+}
+.export-documents input[type="checkbox"] {
+  margin: 0;
+  flex: 0 0 auto;
 }
 .export-documents small {
   margin-left: auto;
