@@ -101,3 +101,4 @@
 | [SC-0095 — Clipboard, stacked pastes and the bounding box](SC-0095.md) |
 | [SC-0096 — Duplication in series](SC-0096.md) |
 | [SC-0097 — Illustrator and PDF drawing import](SC-0097.md) |
+| [SC-0098 — Outline view and proportional corner resizing](SC-0098.md) |

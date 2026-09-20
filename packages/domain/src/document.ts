@@ -284,18 +284,23 @@ export function resizeFromCorner(
   layer: Layer,
   point: Point,
   corner: "tl" | "tr" | "bl" | "br" | "t" | "r" | "b" | "l",
-  snapAngle?: number,
+  options: { proportional?: boolean } = {},
 ): Layer {
   let p = localPoint(layer, point);
-  if (snapAngle && corner.length === 2)
-    p = snapDirection(
-      {
-        x: corner.endsWith("l") ? layer.width : 0,
-        y: corner.startsWith("t") ? layer.height : 0,
-      },
-      p,
-      snapAngle,
-    );
+  // A proportional corner drag keeps the shape of the layer: the larger of the two
+  // changes decides the factor and the opposite corner stays where it is.
+  if (options.proportional && corner.length === 2 && layer.width > 0 && layer.height > 0) {
+    const anchor = {
+      x: corner.endsWith("l") ? layer.width : 0,
+      y: corner.startsWith("t") ? layer.height : 0,
+    };
+    const factor = Math.max(Math.abs(p.x - anchor.x) / layer.width, Math.abs(p.y - anchor.y) / layer.height);
+    const towards = (value: number, from: number) => (value < from ? -1 : 1);
+    p = {
+      x: anchor.x + towards(p.x, anchor.x) * layer.width * factor,
+      y: anchor.y + towards(p.y, anchor.y) * layer.height * factor,
+    };
+  }
   const left = corner.endsWith("l") ? Math.min(p.x, layer.width - 1) : 0,
     top = corner.startsWith("t") ? Math.min(p.y, layer.height - 1) : 0;
   const right = corner.endsWith("r") ? Math.max(p.x, 1) : layer.width,

@@ -749,6 +749,13 @@ export class EditorService {
   readonly symbolRadius = signal(70);
   readonly symbolIntensity = signal(0.25);
   readonly showHandles = signal(true);
+  /** Outline view: the artwork is drawn as contours, which is how a drawing is checked. */
+  readonly outlineView = signal(false);
+  toggleOutlineView() {
+    this.outlineView.update((outline) => !outline);
+    this.status.set(this.outlineView() ? "Outline view" : "Preview view");
+    this.revision.update((x) => x + 1);
+  }
   /** The frame and handles around the selection, which can be hidden while drawing. */
   readonly boundingBoxVisible = signal(true);
   toggleBoundingBox() {
@@ -2064,7 +2071,7 @@ export class EditorService {
           g.original,
           point,
           g.mode.slice(7) as "tl" | "tr" | "bl" | "br" | "t" | "r" | "b" | "l",
-          modifiers.shift ? this.snapAngle() : undefined,
+          { proportional: !!modifiers.shift },
         ),
       );
     else if (g.mode === "rectangle" || g.mode === "ellipse") {

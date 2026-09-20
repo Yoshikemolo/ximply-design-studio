@@ -47,6 +47,10 @@ export class CanvasRenderer {
       showHandles?: boolean;
       /** The frame, the resizing handles and the rotation knob of the selection. */
       boundingBox?: boolean;
+      /** Outline view: the artwork is drawn as hairline contours without its paints. */
+      outline?: boolean;
+      /** Ink of the outline view, which the shell picks from the theme. */
+      outlineInk?: string;
       handleSize?: number;
     } = { zoom: 1, direct: false },
   ) {
@@ -58,13 +62,14 @@ export class CanvasRenderer {
       ctx.fillStyle = document.background;
       ctx.fillRect(0, 0, canvas.width, canvas.height);
     }
+    const hairline = 1 / Math.max(0.1, interaction.zoom || 1);
     for (const layer of materializeProcedural(document).layers)
       if (layer.visible && !layer.guide)
         this.layer(
           ctx,
-          layer,
+          interaction.outline ? this.asOutline(layer, hairline, interaction.outlineInk ?? "#20262f") : layer,
           ready,
-          painting?.id === layer.id ? painting.canvas : undefined,
+          interaction.outline ? undefined : painting?.id === layer.id ? painting.canvas : undefined,
         );
     const selected = document.layers.filter(
       (l) =>
@@ -196,6 +201,26 @@ export class CanvasRenderer {
     path();
     ctx.stroke();
     ctx.restore();
+  }
+  /**
+   * The outline view of a layer: its contours in one ink and no paint at all. An image has
+   * no contour of its own, so its frame stands for it, and a dimension keeps its drawing,
+   * since it is an annotation rather than artwork.
+   */
+  private asOutline(layer: Layer, hairline: number, ink: string): Layer {
+    if (layer.dimension) return layer;
+    const outlined: Layer = {
+      ...layer,
+      fill: "none",
+      stroke: ink,
+      strokeWidth: hairline,
+      strokeStyle: { cap: "butt", join: "miter", alignment: "center", dash: [] },
+      opacity: 1,
+      blend: "source-over",
+    };
+    if (layer.kind === "image") return { ...outlined, kind: "rectangle", source: "", curves: undefined };
+    if (layer.kind === "text") return { ...layer, fill: ink, stroke: "none", opacity: 1, blend: "source-over" };
+    return outlined;
   }
   private layer(
     ctx: CanvasRenderingContext2D,

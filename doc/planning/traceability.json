@@ -622,19 +622,22 @@
         "SC-0058",
         "SC-0059",
         "SC-0060",
-        "SC-0090"
+        "SC-0090",
+        "SC-0098"
       ],
       "implementation": [
         "apps/web/src/app/editor.service.ts",
         "packages/domain/src/document.ts",
         "apps/web/src/app/app.component.ts",
-        "packages/design-system/styles/studio.scss"
+        "packages/design-system/styles/studio.scss",
+        "packages/renderer/src/canvas-renderer.ts"
       ],
       "tests": [
         "packages/domain/tests/document.test.ts",
         "apps/web/tests/editor.test.ts",
         "apps/web/tests/shell-template.test.ts",
-        "apps/web/tests/typography-ui.test.ts"
+        "apps/web/tests/typography-ui.test.ts",
+        "apps/web/tests/outline-proportional.test.ts"
       ],
       "evidence": [
         "doc/implementation/PLAN-0002-0001.md",

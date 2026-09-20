@@ -378,6 +378,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
       this.temporarySelect();
       editor.showHandles();
       editor.boundingBoxVisible();
+      editor.outlineView();
       editor.handleSize();
       this.textEditing();
       this.textDraft();
@@ -886,6 +887,8 @@ export class AppComponent implements AfterViewInit, OnDestroy {
             ].includes(this.activeTool()),
             showHandles: this.editor.showHandles(),
             boundingBox: this.editor.boundingBoxVisible(),
+            outline: this.editor.outlineView(),
+            outlineInk: this.theme?.() === "light" ? "#202b3f" : "#e5e9f0",
             handleSize: this.editor.handleSize(),
           },
         );
@@ -1815,6 +1818,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
       pasteInFront: () => this.editor.paste("front"),
       pasteInBack: () => this.editor.paste("back"),
       toggleBoundingBox: () => this.editor.toggleBoundingBox(),
+      toggleOutline: () => this.editor.toggleOutlineView(),
       remove: () => this.editor.remove(),
       finish: () => this.editor.finishPath(),
       cancel: () => {

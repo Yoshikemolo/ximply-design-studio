@@ -57,6 +57,8 @@
             {{ t("Fit") }}<kbd>{{ shortcut("fit") }}</kbd></button
           ><button (click)="panels.set(!panels())">
             {{ t(panels() ? "Hide panels" : "Show panels") }}</button
+          ><button (click)="editor.toggleOutlineView()">
+            {{ editor.outlineView() ? "✓" : "○" }} {{ t("Outline view") }}<kbd>{{ shortcut("toggleOutline") }}</kbd></button
           ><button (click)="spatialPreview()">{{ t("Spatial preview") }}</button
           >
           <div class="layout-menu"><strong>{{ t("Layout") }}</strong>

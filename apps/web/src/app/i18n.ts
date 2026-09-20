@@ -1,4 +1,6 @@
 const ES: Record<string, string> = {
+  "Outline view": "Ver contornos",
+  "Preview view": "Ver previsualización",
   "Copy and paste": "Copiar y pegar",
   "Duplicate in series": "Duplicar en serie",
   Series: "Serie",
