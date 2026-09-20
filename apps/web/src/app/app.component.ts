@@ -1498,7 +1498,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   async imageInput(event: Event) {
     const input = event.target as HTMLInputElement;
     try {
-      if (input.files?.[0]) await this.editor.importImage(input.files[0]);
+      if (input.files?.[0]) await this.editor.importFile(input.files[0]);
     } catch (error) {
       this.notify(error);
     }
