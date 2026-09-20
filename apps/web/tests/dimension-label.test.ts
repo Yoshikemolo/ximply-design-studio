@@ -2,6 +2,7 @@
 import '@angular/compiler';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { EditorService } from '../src/app/editor.service';
+import { AppComponent } from '../src/app/app.component';
 import { snapDimensionPoint, snapDimensionOffset } from '../src/app/dimension-snapping';
 import { dimensionGeometry } from '../../../packages/domain/src/dimensions';
 import { fromPixels, measurementUnits } from '../../../packages/domain/src/measurements';
@@ -103,5 +104,22 @@ describe('magnetism between dimensions', () => {
     expect(e.dimensionOffsetPoint(anchors, { x: 500, y: line.a.y + 5 }).y).toBeCloseTo(line.a.y);
     e.dimensionsSnap.set(false);
     expect(e.dimensionOffsetPoint(anchors, { x: 500, y: line.a.y + 5 }).y).toBe(line.a.y + 5);
+  });
+});
+
+describe('extension colour control', () => {
+  it('shows a usable hexadecimal for the swatch and keeps alpha when picking', () => {
+    const e = withDimension();
+    const app = Object.create(AppComponent.prototype) as AppComponent;
+    Object.assign(app, { editor: e });
+    expect(app.colorValue('#112233')).toBe('#112233');
+    expect(app.colorValue('#11223344')).toBe('#112233');
+    expect(app.colorValue('none')).toBe('#000000');
+    e.updateDimension({ extension: { ...e.selected()!.dimension!.extension, stroke: '#11223344' } });
+    app.setDimensionExtensionColor({ target: { value: '#aabbcc' } } as unknown as Event);
+    expect(e.selected()!.dimension!.extension.stroke).toBe('#aabbcc44');
+    e.updateDimension({ extension: { ...e.selected()!.dimension!.extension, stroke: 'none' } });
+    app.setDimensionExtensionColor({ target: { value: '#445566' } } as unknown as Event);
+    expect(e.selected()!.dimension!.extension.stroke).toBe('#445566');
   });
 });

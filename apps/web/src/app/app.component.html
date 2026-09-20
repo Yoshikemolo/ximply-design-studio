@@ -804,19 +804,21 @@
                   @if (layer.dimension; as dimension) {
                     <div class="section-label">{{ t('Dimensions') }}</div>
                     <p class="typography-note">{{ t('Drag the label handle to reposition the dimension text.') }}</p>
-                    <label class="wide-label">{{ t('Scale') }}<input type="number" min="0.000001" max="1000000" step="any" [value]="dimension.format.scale" (change)="setDimensionFormat('scale', $event)" /></label>
-                    <label class="wide-label">{{ t('Units') }}<select [disabled]="dimension.kind === 'angular'" [value]="dimension.format.unit" (change)="setDimensionFormat('unit', $event)">@for (unit of units; track unit) {<option [value]="unit">{{ unit }}</option>}</select></label>
+                    <div class="property-grid">
+                      <label>{{ t('Scale') }}<input type="number" min="0.000001" max="1000000" step="any" [value]="dimension.format.scale" (change)="setDimensionFormat('scale', $event)" /></label>
+                      <label>{{ t('Units') }}<select [disabled]="dimension.kind === 'angular'" [value]="dimension.format.unit" (change)="setDimensionFormat('unit', $event)">@for (unit of units; track unit) {<option [value]="unit">{{ unit }}</option>}</select></label>
+                    </div>
                     <label class="wide-label toggle-row">{{ t('Unify scale factor') }}<input class="toggle-switch" type="checkbox" role="switch" [checked]="editor.unifyDimensionFormat()" (change)="editor.setUnifyDimensionFormat($any($event.target).checked)" [title]="t('Apply this scale and label format to every dimension in the document.')" /></label>
                     <div class="section-label">{{ t('Label') }}</div>
-                    <label class="wide-label">{{ t('Places') }}<input type="number" min="0" max="8" step="1" [value]="dimension.format.decimals" (change)="setDimensionFormat('decimals', $event)" /></label>
-                    <label class="wide-label">{{ t('Separator') }}<select [value]="dimension.format.separator" (change)="setDimensionFormat('separator', $event)"><option value=".">.</option><option value=",">,</option></select></label>
                     <div class="property-grid">
+                      <label>{{ t('Places') }}<input type="number" min="0" max="8" step="1" [value]="dimension.format.decimals" (change)="setDimensionFormat('decimals', $event)" /></label>
+                      <label>{{ t('Separator') }}<select [value]="dimension.format.separator" (change)="setDimensionFormat('separator', $event)"><option value=".">.</option><option value=",">,</option></select></label>
                       <label>{{ t('Width') }}<input type="number" [min]="displayDistance(1)" step="any" [value]="displayDistance(dimension.labelSize?.width ?? layer.width)" (change)="setDimensionLabelSize('width', $event)" /></label>
                       <label>{{ t('Height') }}<input type="number" [min]="displayDistance(1)" step="any" [value]="displayDistance(dimension.labelSize?.height ?? layer.height)" (change)="setDimensionLabelSize('height', $event)" /></label>
                     </div>
                     <label class="wide-label">{{ t('Position') }}<select [value]="dimension.labelPlacement ?? 'center'" (change)="setDimensionPlacement($event)"><option value="start">{{ t('Start') }}</option><option value="center">{{ t('Center') }}</option><option value="end">{{ t('End') }}</option></select></label>
                     <div class="section-label">{{ t('Extension lines') }}</div>
-                    <label class="wide-label">{{ t('Color') }}<input type="text" maxlength="9" [value]="dimension.extension.stroke" (change)="setDimensionExtension('stroke', $event)" [title]="t('Use a hex color with optional alpha, or none.')" /></label>
+                    <label class="wide-label color-row">{{ t('Color') }}<input class="color-value" type="text" maxlength="9" [value]="dimension.extension.stroke" (change)="setDimensionExtension('stroke', $event)" [title]="t('Use a hex color with optional alpha, or none.')" /><input class="color-swatch" type="color" [class.no-paint]="dimension.extension.stroke === 'none'" [value]="colorValue(dimension.extension.stroke)" (input)="setDimensionExtensionColor($event)" [attr.aria-label]="t('Color')" [title]="t('Color')" /></label>
                     <div class="property-grid">@for (field of ['strokeWidth', 'gap', 'overshoot']; track field) {<label>{{ t(field === 'strokeWidth' ? 'Width' : field === 'gap' ? 'Gap' : 'Overshoot') }}<input type="number" min="0" [max]="displayDistance(1000)" step="any" [value]="displayDistance($any(dimension.extension)[field])" (change)="setDimensionExtension($any(field), $event)" /></label>}</div>
                     <p class="typography-note">{{ t('Leave text empty to display the measured value. Angular dimensions use degrees.') }}</p>
                   }

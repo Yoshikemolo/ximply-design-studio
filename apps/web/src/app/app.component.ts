@@ -523,6 +523,13 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     const value = key === "unit" || key === "separator" ? this.text(event) : this.number(event);
     this.editor.updateDimension({ format: { ...dimension.format, [key]: value } });
   }
+  /** Hexadecimal value for a colour input; absent paint falls back to black without changing the stored value. */
+  colorValue(paint: string) { return /^#[0-9a-fA-F]{6}/.test(paint) ? paint.slice(0, 7) : "#000000"; }
+  setDimensionExtensionColor(event: Event) {
+    const dimension = this.editor.selected()?.dimension; if (!dimension) return;
+    const alpha = /^#[0-9a-fA-F]{8}$/.test(dimension.extension.stroke) ? dimension.extension.stroke.slice(7) : "";
+    this.editor.updateDimension({ extension: { ...dimension.extension, stroke: this.text(event) + alpha } });
+  }
   setDimensionExtension(key: "stroke" | "strokeWidth" | "gap" | "overshoot", event: Event) {
     const dimension = this.editor.selected()?.dimension; if (!dimension) return;
     this.editor.updateDimension({ extension: { ...dimension.extension, [key]: key === "stroke" ? this.text(event) : this.distanceInput(event) } });
