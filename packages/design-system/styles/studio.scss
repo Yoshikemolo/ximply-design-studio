@@ -460,6 +460,23 @@ hr {
   stroke-dasharray: none;
   fill: none;
 }
+.page-overlay { overflow: visible; }
+.page-overlay .page-shade {
+  fill: #0b0e14aa;
+  fill-rule: evenodd;
+  stroke: none;
+}
+.page-overlay .page-frame {
+  fill: none;
+  stroke: #1687ff;
+  stroke-width: 1.5;
+  stroke-dasharray: 5 3;
+}
+.page-overlay .page-handle {
+  fill: #ffffff;
+  stroke: #1687ff;
+  stroke-width: 1.5;
+}
 .dash-row {
   display: grid;
   grid-template-columns: repeat(4, 1fr);

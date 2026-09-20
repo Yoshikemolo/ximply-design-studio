@@ -1,6 +1,6 @@
 import { Procedural, defaultProcedural, generateProcedural, syncProcedurals, validProcedural } from "../../../../packages/domain/src/procedural";
 import { openingHost, wallSnapPoint, WallSnap } from "./procedural-placement";
-import { MarginGuides, MARGIN_GUIDE_PREFIX, marginGuidePositions, PageEdges, PageSize, pageSizeFits, RegistrationMarks, REGISTRATION_LAYER_NAME, registrationFits, registrationLayer, resizePage } from "../../../../packages/domain/src/page-setup";
+import { MarginGuides, MARGIN_GUIDE_PREFIX, marginGuidePositions, PageEdges, PageSize, PAGE_MAXIMUM, PAGE_MINIMUM, pageSizeFits, RegistrationMarks, REGISTRATION_LAYER_NAME, registrationFits, registrationLayer, resizePage } from "../../../../packages/domain/src/page-setup";
 import { Dimension, DimensionFormat, defaultDimensionFormat, dimensionGeometry } from "../../../../packages/domain/src/dimensions";
 import { LineEnds, defaultLineEnds, validLineEnds } from "../../../../packages/domain/src/line-endings";
 import { snapDimensionPoint, snapDimensionOffset, DimensionSnap } from "./dimension-snapping";
@@ -1133,6 +1133,92 @@ export class EditorService {
     this.document.update((d) => ({ ...d, name: name.slice(0, 150) }));
     this.changed();
   }
+  // Interactive page editing: corner handles resize the page, an area drag crops it.
+  readonly pageMode = signal<"resize" | "crop" | null>(null);
+  readonly pageCropArea = signal<{ x: number; y: number; width: number; height: number } | null>(null);
+  private pageGesture?: { before: StudioDocument; handle: string; start: Point };
+  setPageMode(mode: "resize" | "crop" | null) {
+    if (this.pageGesture) this.cancelPageGesture();
+    this.pageCropArea.set(null);
+    this.pageMode.set(mode);
+    if (mode) this.status.set(mode === "resize" ? "Drag a page handle; Escape cancels" : "Drag the area to keep; Escape cancels");
+  }
+  /** Handles are the four corners and the four edges of the page. */
+  readonly pageHandles = computed(() => {
+    if (this.pageMode() !== "resize") return [] as { id: string; x: number; y: number }[];
+    const { width, height } = this.document();
+    return [
+      { id: "nw", x: 0, y: 0 }, { id: "n", x: width / 2, y: 0 }, { id: "ne", x: width, y: 0 },
+      { id: "e", x: width, y: height / 2 }, { id: "se", x: width, y: height },
+      { id: "s", x: width / 2, y: height }, { id: "sw", x: 0, y: height }, { id: "w", x: 0, y: height / 2 },
+    ];
+  });
+  private beginPageGesture(point: Point): boolean {
+    const mode = this.pageMode();
+    if (!mode) return false;
+    if (mode === "crop") {
+      this.pageGesture = { before: structuredClone(this.document()), handle: "crop", start: this.snap(point) };
+      this.pageCropArea.set({ x: this.pageGesture.start.x, y: this.pageGesture.start.y, width: 0, height: 0 });
+      return true;
+    }
+    const handle = this.pageHandles().find((entry) => Math.hypot(point.x - entry.x, point.y - entry.y) <= 10 / this.zoom());
+    if (!handle) return false;
+    this.pageGesture = { before: structuredClone(this.document()), handle: handle.id, start: this.snap(point) };
+    return true;
+  }
+  private updatePageGesture(point: Point) {
+    const gesture = this.pageGesture;
+    if (!gesture) return;
+    const target = this.snap(point), before = gesture.before;
+    if (gesture.handle === "crop") {
+      const x = Math.min(gesture.start.x, target.x), y = Math.min(gesture.start.y, target.y);
+      this.pageCropArea.set({ x, y, width: Math.abs(target.x - gesture.start.x), height: Math.abs(target.y - gesture.start.y) });
+      return;
+    }
+    const edges = { top: 0, right: 0, bottom: 0, left: 0 };
+    if (gesture.handle.includes("n")) edges.top = -(target.y - 0);
+    if (gesture.handle.includes("s")) edges.bottom = target.y - before.height;
+    if (gesture.handle.includes("w")) edges.left = -(target.x - 0);
+    if (gesture.handle.includes("e")) edges.right = target.x - before.width;
+    const width = before.width + edges.left + edges.right, height = before.height + edges.top + edges.bottom;
+    if (width < PAGE_MINIMUM || height < PAGE_MINIMUM || width > PAGE_MAXIMUM || height > PAGE_MAXIMUM) return;
+    try { this.document.set(resizePage(before, edges)); this.revision.update((value) => value + 1); } catch { /* Keep the last valid page. */ }
+  }
+  private endPageGesture() {
+    const gesture = this.pageGesture;
+    if (!gesture) return;
+    this.pageGesture = undefined;
+    if (gesture.handle === "crop") {
+      const area = this.pageCropArea();
+      this.pageCropArea.set(null);
+      if (!area || area.width < PAGE_MINIMUM || area.height < PAGE_MINIMUM) { this.status.set("The crop area is smaller than the minimum page."); return; }
+      const edges = { top: -area.y, left: -area.x, bottom: area.y + area.height - gesture.before.height, right: area.x + area.width - gesture.before.width };
+      let next: StudioDocument;
+      try { next = resizePage(gesture.before, edges); parseDocument(JSON.stringify(next)); }
+      catch (error) { this.status.set(error instanceof Error ? error.message : "The page cannot be resized."); return; }
+      this.history.commit(gesture.before);
+      this.document.set(next);
+      this.changed();
+      this.status.set("Document cropped");
+      this.setPageMode(null);
+      return;
+    }
+    if (JSON.stringify(gesture.before) === JSON.stringify(this.document())) return;
+    const applied = this.document();
+    this.document.set(gesture.before);
+    this.history.commit(gesture.before);
+    this.document.set(applied);
+    this.changed();
+    this.status.set("Document dimensions updated");
+  }
+  private cancelPageGesture() {
+    const gesture = this.pageGesture;
+    if (!gesture) return;
+    this.pageGesture = undefined;
+    this.pageCropArea.set(null);
+    this.document.set(gesture.before);
+    this.revision.update((value) => value + 1);
+  }
   /** One page edit: size, background, margin guides and registration marks of the active document. */
   applyPageSetup(setup: { size?: PageSize; background?: string; margins?: MarginGuides; marks?: RegistrationMarks }): boolean {
     const before = this.document();
@@ -1284,6 +1370,7 @@ export class EditorService {
     override?: ToolId,
   ) {
     const tool = override ?? this.tool();
+    if (this.beginPageGesture(point)) return;
     if (this.startPivotDrag(point)) return;
     if(["wall","door","window","pillar","stair"].includes(tool)){this.startProcedural(tool as Procedural["type"],point);return;}
     if (tool === "dimensionChain") { this.startChainDimension(point); return; }
@@ -1582,6 +1669,7 @@ export class EditorService {
     };
   }
   move(point: Point, modifiers: { shift?: boolean; alt?: boolean; ctrl?: boolean } = {}) {
+    if (this.pageGesture) { this.updatePageGesture(point); return; }
     if (this.pivotGesture) { this.setPivot(this.pivotPoint(point)); return; }
     if(this.proceduralGesture){const g=this.proceduralGesture;const end=modifiers.shift?snapDirection(g.start,point,this.snapAngle()):(g.type==='wall'?this.wallTarget(g.start,point,g.id):this.snap(point));try{const layer=this.proceduralLayer(g.type,g.start,end,g.id);const next=syncProcedurals({...g.before,layers:[...g.before.layers,layer]});parseDocument(JSON.stringify(next));this.document.set(next);this.selectedId.set(layer.id);this.selectedIds.set([layer.id]);}catch{/* Keep the last valid preview. */}return;}
     if(this.dimensionLabelGesture){const layer=this.document().layers.find(l=>l.id===this.dimensionLabelGesture!.id)!;this.setLayer(layer.id,{dimension:{...layer.dimension!,labelPosition:localPoint(layer,point)}});return;}
@@ -1761,6 +1849,7 @@ export class EditorService {
     );
   }
   end() {
+    if (this.pageGesture) { this.endPageGesture(); return; }
     if (this.pivotGesture) { this.pivotGesture = undefined; this.revision.update((x) => x + 1); return; }
     if(this.proceduralGesture){const g=this.proceduralGesture;this.proceduralGesture=undefined;const drawn=this.document().layers.find(l=>l.id===g.id);if(drawn){this.history.commit(g.before);this.changed();if(g.type==='wall'&&drawn.procedural?.type==='wall')this.wallChain.set(worldPoint(drawn,drawn.procedural.end));}return;}
     if(this.dimensionLabelGesture){this.history.commit(this.dimensionLabelGesture.before);this.dimensionLabelGesture=undefined;this.changed();return;}
@@ -1790,6 +1879,7 @@ export class EditorService {
     this.changed();
   }
   cancel() {
+    if (this.pageGesture) { this.cancelPageGesture(); this.pageMode.set(null); this.status.set("Page editing cancelled"); }
     if (this.pivotGesture) { this.pivotOverride.set(this.pivotGesture.before); this.pivotGesture = undefined; }
     if(this.proceduralGesture){this.document.set(this.proceduralGesture.before);this.selectedId.set(this.proceduralGesture.selectedId);this.selectedIds.set(this.proceduralGesture.selectedIds);this.proceduralGesture=undefined;}
     this.finishWallRun();

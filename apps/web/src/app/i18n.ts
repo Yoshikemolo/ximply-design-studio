@@ -1,4 +1,8 @@
 const ES: Record<string, string> = {
+  "Drag a page handle; Escape cancels": "Arrastra un manejador de la página; Escape cancela",
+  "Drag the area to keep; Escape cancels": "Arrastra el área que quieres conservar; Escape cancela",
+  "Page editing cancelled": "Edición de la página cancelada",
+  "The crop area is smaller than the minimum page.": "El área de recorte es menor que la página mínima.",
   "Blueprint blue": "Azul de plano",
   "Chroma key": "Croma",
   "Transparency": "Transparencia",

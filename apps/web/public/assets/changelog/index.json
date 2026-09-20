@@ -53,6 +53,10 @@
         },
         {
           "type": "Feature",
+          "description": "Resize the page on the canvas by dragging handles on its corners and edges, with the rulers following live, or crop it by dragging the area to keep while the rest is dimmed. Escape cancels and one undo step restores the page."
+        },
+        {
+          "type": "Feature",
           "description": "Set up the document from the transform tools: paper, screen and animation formats with output resolution and orientation, ruler units, margin guides with their centres, background colour, registration marks as a locked layer, and expanding or cropping the page."
         },
         {
@@ -118,6 +122,10 @@
         {
           "type": "Improvement",
           "description": "Group both ruler tick switches under a single Snap to ruler ticks label in the unit settings."
+        },
+        {
+          "type": "Fix",
+          "description": "Open the document dimensions dialog from its toolbar button: the command was only registered for keyboard shortcuts, so the button did nothing."
         },
         {
           "type": "Fix",

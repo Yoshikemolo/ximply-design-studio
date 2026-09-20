@@ -533,6 +533,11 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   pageMarksFit() { return this.pageMarks() === "none" || registrationFits(this.pageMarks(), this.pagePixels()); }
   /** Guide distances are shown in the unit the rulers use. */
   marginDistance(value: number) { return this.displayDistance(value); }
+  /** Page editing on the canvas: drag the corner handles to resize, or drag an area to crop. */
+  startPageEditing(mode: "resize" | "crop") {
+    this.dismissMenus();
+    this.editor.setPageMode(mode);
+  }
   openPageDialog(mode: "format" | "expand" | "crop") {
     this.dismissMenus();
     const document = this.editor.document();
@@ -1101,6 +1106,9 @@ export class AppComponent implements AfterViewInit, OnDestroy {
       return;
     }
     const actions: Record<string, () => void> = {
+      documentFormat: () => this.openPageDialog("format"),
+      expandDocument: () => this.startPageEditing("resize"),
+      cropDocument: () => this.startPageEditing("crop"),
       selectAll: () => this.editor.selectAll(),
       mirrorH: () => this.editor.reflect("horizontal"),
       mirrorV: () => this.editor.reflect("vertical"),

@@ -338,6 +338,17 @@
               (pointercancel)="pointerCancel()"
               (lostpointercapture)="pointerLost()"
             ></canvas>
+            @if (editor.pageMode()) {
+              <svg class="dimension-overlay page-overlay" [attr.viewBox]="'0 0 ' + editor.document().width + ' ' + editor.document().height" aria-hidden="true">
+                @if (editor.pageCropArea(); as crop) {
+                  <path class="page-shade" [attr.d]="'M0,0H' + editor.document().width + 'V' + editor.document().height + 'H0Z M' + crop.x + ',' + crop.y + 'h' + crop.width + 'v' + crop.height + 'h' + (-crop.width) + 'Z'"></path>
+                  <rect class="page-frame" [attr.x]="crop.x" [attr.y]="crop.y" [attr.width]="crop.width" [attr.height]="crop.height" vector-effect="non-scaling-stroke"></rect>
+                }
+                @for (handle of editor.pageHandles(); track handle.id) {
+                  <rect class="page-handle" [attr.x]="handle.x - 5 / editor.zoom()" [attr.y]="handle.y - 5 / editor.zoom()" [attr.width]="10 / editor.zoom()" [attr.height]="10 / editor.zoom()" vector-effect="non-scaling-stroke"></rect>
+                }
+              </svg>
+            }
             @if (preferences.pivotVisible() && editor.selectedLayers().length) {
               @let pivot = editor.pivot();
               <svg class="dimension-overlay pivot-overlay" [attr.viewBox]="'0 0 ' + editor.document().width + ' ' + editor.document().height" aria-hidden="true">
