@@ -377,7 +377,8 @@ hr {
   flex-direction: column;
 }
 .document-tabs {
-  height: 39px;
+  /* One pixel above the tab height, so the strip never scrolls over its own content. */
+  height: 40px;
   display: flex;
   align-items: center;
   gap: 10px;
