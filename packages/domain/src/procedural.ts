@@ -282,7 +282,9 @@ export function validateProcedurals(doc: StudioDocument): void {
         }
     }
 }
-const worldPolygon = (layer: Layer, path: CurvePath): clipping.Polygon => [path.nodes.map(n => { const p = worldPoint(layer, n.point); return [p.x, p.y] as clipping.Pair; })];
+/** Rings handed to the clipper repeat their first point, which is also how its results come back. */
+const closeRing = (ring: clipping.Pair[]): clipping.Pair[] => ring.length && (ring[0][0] !== ring[ring.length - 1][0] || ring[0][1] !== ring[ring.length - 1][1]) ? [...ring, ring[0]] : ring;
+const worldPolygon = (layer: Layer, path: CurvePath): clipping.Polygon => [closeRing(path.nodes.map(n => { const p = worldPoint(layer, n.point); return [p.x, p.y] as clipping.Pair; }))];
 function openingCut(layer: Layer): clipping.Polygon {
     const p = layer.procedural as DoorProcedure | WindowProcedure, raw = openingPaths(p), bounds = pathBounds(raw), path = rectangle(-bounds.x, -bounds.y, p.width, p.depth);
     return worldPolygon(layer, path);
@@ -309,7 +311,7 @@ function wallJunctions(first:Layer,second:Layer):clipping.Polygon[] {
             const dx=target.x-origin.x,dy=target.y-origin.y,t=(dx*v.y-dy*v.x)/det,intersection={x:origin.x+u.x*t,y:origin.y+u.y*t};
             if(Math.hypot(intersection.x-joint.x,intersection.y-joint.y)<=Math.max(a.thickness,b.thickness)*5)points.push(intersection);
         }
-        result.push([convexHull(points).map(point=>[point.x,point.y] as clipping.Pair)]);
+        result.push([closeRing(convexHull(points).map(point=>[point.x,point.y] as clipping.Pair))]);
     }
     return result;
 }
@@ -371,7 +373,12 @@ export function materializeProcedural(document: StudioDocument): StudioDocument 
             }
         }
         geometry = combined;
-        const curves = geometry.flatMap(polygon => polygon.map(ring => polyline(ring.slice(0, -1).map(([x, y]) => ({ x, y })), true)));
+        const curves = geometry.flatMap(polygon => polygon.map(ring => {
+            const points = ring.map(([x, y]) => ({ x, y }));
+            // Only drop a repeated closing point; a ring without one keeps every vertex.
+            if (points.length > 1 && points[0].x === points[points.length - 1].x && points[0].y === points[points.length - 1].y) points.pop();
+            return polyline(points, true);
+        }));
         result.push({ ...l, x: 0, y: 0, rotation: 0, skewX: 0, flipX: false, flipY: false, width: document.width, height: document.height, curves, points: [], procedural: undefined });
     }
     return { ...synced, layers: result };
