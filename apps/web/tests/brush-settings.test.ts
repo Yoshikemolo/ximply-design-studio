@@ -2,6 +2,7 @@
 import '@angular/compiler';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { EditorService } from '../src/app/editor.service';
+import { AppComponent } from '../src/app/app.component';
 import { brushStamps, defaultBrush, previewStroke, validBrushSettings, BRUSH_TYPES } from '../../../packages/domain/src/brush';
 import { TOOLS, TOOL_FAMILIES } from '../src/app/tools';
 
@@ -74,5 +75,31 @@ describe('brush subtools', () => {
     expect(e.brushFor('eraser').diffusion).toBe(40);
     expect(e.brushFor('brush').diffusion).toBe(0);
     expect(e.updateBrush('brush', { cadence: 0 })).toBe(false);
+  });
+});
+
+describe('brush preview', () => {
+  it('modulates the sample stroke with the speed slider', () => {
+    localStorage.clear();
+    const editor = new EditorService();
+    const app = Object.create(AppComponent.prototype) as AppComponent;
+    Object.assign(app, { editor });
+    editor.setTool('brush');
+    const widths = () => {
+      const path = app.brushPreviewPath();
+      // Each stamp is written as an arc pair; the first radius of each pair is its half width.
+      return [...path.matchAll(/a([\d.]+),/g)].map((match) => Number(match[1]));
+    };
+    editor.updateBrush('brush', { speedVariation: 0 });
+    const even = widths();
+    expect(new Set(even.map((width) => width.toFixed(2))).size).toBe(1);
+    editor.updateBrush('brush', { speedVariation: -100 });
+    const thinning = widths();
+    expect(Math.min(...thinning)).toBeLessThan(even[0]);
+    expect(thinning[Math.floor(thinning.length / 2)]).toBeLessThan(thinning[0]);
+    editor.updateBrush('brush', { speedVariation: 100 });
+    const swelling = widths();
+    expect(Math.max(...swelling)).toBeGreaterThan(even[0]);
+    expect(swelling[Math.floor(swelling.length / 2)]).toBeGreaterThan(swelling[0]);
   });
 });

@@ -525,12 +525,14 @@ hr {
 }
 .speed-field .speed-mark {
   display: inline-block;
-  border-radius: 50%;
+  /* Two stroke marks: a thin one where speed thins the stroke, a thick one where it swells. */
+  width: 11px;
+  border-radius: 999px;
   background: var(--muted);
   flex-shrink: 0;
 }
-.speed-field .speed-mark.small { width: 5px; height: 5px; }
-.speed-field .speed-mark.large { width: 11px; height: 11px; }
+.speed-field .speed-mark.small { height: 2px; }
+.speed-field .speed-mark.large { height: 7px; }
 .brush-tips button {
   width: 27px;
   height: 27px;

@@ -658,7 +658,9 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     const size = Math.max(2, Math.min(18, this.editor.size()));
     let path = "";
     for (let index = 1; index < points.length; index++) {
-      const speed = Math.hypot(points[index].x - points[index - 1].x, points[index].y - points[index - 1].y) * (1 + index / points.length) * 3;
+      // A gesture that starts slowly, speeds up in the middle and eases out, so the slider shows its effect.
+      const progress = index / points.length;
+      const speed = size * 4 * Math.sin(Math.PI * progress);
       for (const stamp of brushStamps(points[index - 1], points[index], size, settings, speed)) {
         const rx = stamp.radiusX.toFixed(2), ry = stamp.radiusY.toFixed(2);
         path += `M${(stamp.center.x - stamp.radiusX).toFixed(2)},${stamp.center.y.toFixed(2)}a${rx},${ry} ${((stamp.angle * 180) / Math.PI).toFixed(1)} 1 0 ${(stamp.radiusX * 2).toFixed(2)},0a${rx},${ry} ${((stamp.angle * 180) / Math.PI).toFixed(1)} 1 0 ${(-stamp.radiusX * 2).toFixed(2)},0`;
