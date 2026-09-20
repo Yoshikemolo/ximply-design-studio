@@ -738,10 +738,15 @@ fieldset .property-row {
 .wide-label > input {
   margin-left: auto;
 }
+.wide-label input.toggle-switch,
+.server-dialog .wide-label input.toggle-switch,
 .toggle-switch {
   appearance: none;
   flex: 0 0 auto;
-  width: 32px;
+  /* Keeps the switch proportions; the surrounding rule stretches ordinary fields. */
+  width: 34px;
+  min-width: 34px;
+  max-width: 34px;
   height: 18px;
   padding: 0;
   border-radius: 9px;

@@ -34,4 +34,12 @@ describe('shell template', () => {
     const styles = readFileSync('packages/design-system/styles/studio.scss', 'utf-8');
     expect(styles).toContain('.guide-lock.active, .dimension-lock.active');
   });
+
+  it('keeps switch controls at switch proportions inside label rows', () => {
+    const styles = readFileSync('packages/design-system/styles/studio.scss', 'utf-8');
+    const rule = styles.slice(styles.indexOf('.wide-label input.toggle-switch'), styles.indexOf('.toggle-switch::after'));
+    expect(rule).toContain('max-width: 34px');
+    expect(rule).toContain('flex: 0 0 auto');
+    expect(template).toContain('class="toggle-switch"');
+  });
 });
