@@ -1,4 +1,5 @@
 const ES: Record<string, string> = {
+  "Normal": "Normal",
   "Zoom area": "Zoom a un área",
   "Pressure": "Presión",
   "Cadence": "Cadencia",

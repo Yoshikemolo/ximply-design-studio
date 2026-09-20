@@ -646,7 +646,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     const tool = this.paintingTool();
     if (tool && !this.editor.updateBrush(tool, patch)) this.notify(new Error("The brush settings cannot be applied."));
   }
-  setBrushNumber(key: "pressure" | "opacity" | "cadence" | "diffusion" | "angle", event: Event) {
+  setBrushNumber(key: "pressure" | "opacity" | "cadence" | "diffusion" | "angle" | "speedVariation", event: Event) {
     const value = this.number(event);
     if (Number.isFinite(value)) this.setBrush({ [key]: value });
   }

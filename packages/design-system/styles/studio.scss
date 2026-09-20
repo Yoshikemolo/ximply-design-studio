@@ -511,6 +511,14 @@ hr {
   font-size: 10px;
   max-width: 108px;
 }
+.speed-field .speed-mark {
+  display: inline-block;
+  border-radius: 50%;
+  background: var(--muted);
+  flex-shrink: 0;
+}
+.speed-field .speed-mark.small { width: 5px; height: 5px; }
+.speed-field .speed-mark.large { width: 11px; height: 11px; }
 .brush-tips button {
   width: 27px;
   height: 27px;

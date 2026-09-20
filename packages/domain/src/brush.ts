@@ -15,8 +15,8 @@ export interface BrushSettings {
   blend: Blend;
   /** Soft edge of the tip, as a percentage of its radius. */
   diffusion: number;
-  /** Thin the stroke as the pointer moves faster. */
-  speedVariation: boolean;
+  /** How speed changes the stroke, from -100 (thinner when fast) to 100 (thicker when fast); 0 keeps it even. */
+  speedVariation: number;
   /** Tip orientation in degrees; round tips ignore it. */
   angle: number;
 }
@@ -30,7 +30,7 @@ const TIP: Record<BrushType, { ratio: number; alpha: number; diffusion: number }
   pencil: { ratio: 0.75, alpha: 0.85, diffusion: 0.05 },
 };
 export const defaultBrush: BrushSettings = {
-  type: 'round', pressure: 100, opacity: 100, cadence: 25, blend: 'source-over', diffusion: 0, speedVariation: false, angle: 0,
+  type: 'round', pressure: 100, opacity: 100, cadence: 25, blend: 'source-over', diffusion: 0, speedVariation: 0, angle: 0,
 };
 export function validBrushSettings(value: unknown): value is BrushSettings {
   const v = value as BrushSettings;
@@ -41,7 +41,7 @@ export function validBrushSettings(value: unknown): value is BrushSettings {
     && percentage(v.opacity) && percentage(v.diffusion)
     && typeof v.cadence === 'number' && v.cadence >= 1 && v.cadence <= 100
     && (BLENDS as readonly string[]).includes(v.blend)
-    && typeof v.speedVariation === 'boolean'
+    && typeof v.speedVariation === 'number' && Number.isFinite(v.speedVariation) && v.speedVariation >= -100 && v.speedVariation <= 100
     && typeof v.angle === 'number' && Number.isFinite(v.angle) && v.angle >= 0 && v.angle <= 180;
 }
 
@@ -54,7 +54,9 @@ export function brushStamps(from: Point, to: Point, size: number, settings: Brus
   if (!(size > 0) || !validBrushSettings(settings)) return [];
   const tip = TIP[settings.type];
   const pressure = settings.pressure / 100;
-  const thinning = settings.speedVariation ? Math.max(0.35, 1 - Math.min(1, speed / (size * 4)) * 0.65) : 1;
+  // The nominal size is the middle of the range: speed thins the stroke below it and thickens it above.
+  const pace = Math.min(1, speed / (size * 4));
+  const thinning = 1 + (settings.speedVariation / 100) * pace * 0.65;
   const radius = Math.max(0.5, (size / 2) * pressure * thinning);
   const radiusY = Math.max(0.25, radius * tip.ratio);
   const alpha = Math.max(0, Math.min(1, (settings.opacity / 100) * tip.alpha));

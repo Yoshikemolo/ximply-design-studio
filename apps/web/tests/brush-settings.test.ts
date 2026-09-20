@@ -34,12 +34,14 @@ describe('brush tips', () => {
     // A round tip ignores the angle, and speed only thins the stroke when the option is on.
     expect(brushStamps(from, to, 20, { ...defaultBrush, angle: 90 })[0].angle).toBe(0);
     expect(brushStamps(from, to, 20, { ...defaultBrush }, 200)[0].radiusX).toBeCloseTo(base.radiusX);
-    expect(brushStamps(from, to, 20, { ...defaultBrush, speedVariation: true }, 200)[0].radiusX).toBeLessThan(base.radiusX);
+    expect(brushStamps(from, to, 20, { ...defaultBrush, speedVariation: -100 }, 200)[0].radiusX).toBeLessThan(base.radiusX);
+    // The nominal size sits in the middle of the range: a positive setting thickens the fast stroke.
+    expect(brushStamps(from, to, 20, { ...defaultBrush, speedVariation: 100 }, 200)[0].radiusX).toBeGreaterThan(base.radiusX);
   });
 
   it('rejects settings outside their range', () => {
     expect(validBrushSettings(defaultBrush)).toBe(true);
-    for (const invalid of [{ type: 'sponge' }, { pressure: 0 }, { opacity: 120 }, { cadence: 0 }, { angle: 200 }, { blend: 'glow' }, { speedVariation: 'yes' }]) {
+    for (const invalid of [{ type: 'sponge' }, { pressure: 0 }, { opacity: 120 }, { cadence: 0 }, { angle: 200 }, { blend: 'glow' }, { speedVariation: 200 }, { speedVariation: 'fast' }]) {
       expect(validBrushSettings({ ...defaultBrush, ...invalid })).toBe(false);
     }
     expect(brushStamps(from, to, 0, defaultBrush)).toEqual([]);

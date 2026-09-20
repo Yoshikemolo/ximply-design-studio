@@ -165,9 +165,13 @@
         <label class="brush-field">{{ t('Opacity') }}<input type="range" min="0" max="100" [value]="brush().opacity" (input)="setBrushNumber('opacity', $event)" /><small>{{ brush().opacity }}%</small></label>
         <label class="brush-field">{{ t('Cadence') }}<input type="range" min="1" max="100" [value]="brush().cadence" (input)="setBrushNumber('cadence', $event)" /><small>{{ brush().cadence }}%</small></label>
         <label class="brush-field">{{ t('Diffusion') }}<input type="range" min="0" max="100" [value]="brush().diffusion" (input)="setBrushNumber('diffusion', $event)" /><small>{{ brush().diffusion }}%</small></label>
-        <label class="brush-field">{{ t('Tip angle') }}<input type="range" min="0" max="180" [disabled]="brush().type === 'round'" [value]="brush().angle" (input)="setBrushNumber('angle', $event)" /><small>{{ brush().angle }}°</small></label>
-        <label class="brush-field">{{ t('Blend') }}<select [value]="brush().blend" (change)="setBrush({blend: $any(text($event))})">@for (mode of blends; track mode) {<option [value]="mode">{{ t(mode) }}</option>}</select></label>
-        <label class="brush-field brush-switch">{{ t('Speed variation') }}<input class="toggle-switch" type="checkbox" role="switch" [checked]="brush().speedVariation" (change)="setBrush({speedVariation: $any($event.target).checked})" /></label>
+        @if (brush().type !== 'round') {
+          <label class="brush-field">{{ t('Tip angle') }}<input type="range" min="0" max="180" [value]="brush().angle" (input)="setBrushNumber('angle', $event)" /><small>{{ brush().angle }}°</small></label>
+        }
+        @if (painting === 'brush') {
+          <label class="brush-field">{{ t('Blend') }}<select [value]="brush().blend" (change)="setBrush({blend: $any(text($event))})">@for (mode of blends; track mode) {<option [value]="mode">{{ mode === 'source-over' ? t('Normal') : mode }}</option>}</select></label>
+        }
+        <label class="brush-field speed-field">{{ t('Speed variation') }}<span class="speed-mark small" aria-hidden="true"></span><input type="range" min="-100" max="100" [value]="brush().speedVariation" (input)="setBrushNumber('speedVariation', $event)" /><span class="speed-mark large" aria-hidden="true"></span><small>{{ brush().speedVariation }}</small></label>
       </section>
     }
     @if (preferences.layoutBlocks().selection) {

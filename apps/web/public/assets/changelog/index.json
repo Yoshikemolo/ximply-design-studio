@@ -57,7 +57,7 @@
         },
         {
           "type": "Feature",
-          "description": "Add brush subtools for the round, flat, calligraphy, marker, airbrush and pencil tips, and a control bar for the brush and the eraser with pressure, opacity, cadence, blend mode, diffusion, speed variation and tip angle, plus a sample stroke that previews the result."
+          "description": "Add brush subtools for the round, flat, calligraphy, marker, airbrush and pencil tips, and a control bar for the brush and the eraser with pressure, opacity, cadence, diffusion and a speed variation slider that runs from thinner to thicker around the nominal size, plus a blend mode and tip angle where they apply and a sample stroke that previews the result."
         },
         {
           "type": "Feature",
