@@ -300,14 +300,16 @@ class NativeDrawingTests(unittest.TestCase):
         self.layer['symbolId'] = 'clear-symbol'
         self.assert_round_trip(self.document)
 
-    def test_transparent_paints_do_not_relax_background_or_color_contract(self):
+    def test_transparent_paints_do_not_relax_the_color_contract(self):
         for key in ('fill', 'stroke'):
             for value in ('transparent', 'NONE', '#fff0', '#fffffff', '#fffffffff', '#ffffffgg', '#fff', '', None, False):
                 with self.subTest(key=key, value=value):
                     document = copy.deepcopy(self.document)
                     document['layers'][0][key] = value
                     self.assert_invalid(document)
-        self.assert_invalid({**self.document, 'background': 'none'})
+        for background in ('transparent', '#fff0', '#fff', '', None, False):
+            with self.subTest(background=background):
+                self.assert_invalid({**self.document, 'background': background})
 
     def test_guides_reject_invalid_orientation_kind_and_grouping(self):
         for value in ('diagonal', '', None, False, 0):
@@ -365,8 +367,13 @@ class NativeDrawingTests(unittest.TestCase):
         self.layer['symbolId'] = 'alpha-symbol'
         self.assert_round_trip(self.document)
 
-    def test_alpha_paints_require_native_version_two_and_cannot_color_background(self):
-        self.assert_invalid({**self.document, 'background': '#ffffff80'})
+    def test_transparent_page_background_round_trips(self):
+        for background in ('#ffffff80', 'none'):
+            with self.subTest(background=background):
+                self.assert_round_trip({**copy.deepcopy(self.document), 'background': background})
+
+    def test_alpha_paints_require_native_version_two(self):
+        self.assert_invalid({**self.document, 'background': '#ffffffzz'})
         del self.layer['curves']
         self.document['version'] = 1
         for key in ('fill', 'stroke'):
@@ -503,6 +510,18 @@ class NativeDrawingTests(unittest.TestCase):
                     document = copy.deepcopy(self.document)
                     document['layers'][0]['strokeStyle'] = {'alignment': 'center', 'join': 'round', 'cap': 'butt', field: value}
                     self.assert_invalid(document)
+
+    def test_dash_patterns_round_trip(self):
+        document = copy.deepcopy(self.document)
+        document['layers'][0]['strokeStyle'] = {'alignment': 'center', 'join': 'round', 'cap': 'butt', 'dash': [24, 6, 4, 6]}
+        self.assert_round_trip(document)
+
+    def test_dash_patterns_reject_unusable_sequences(self):
+        for dash in ([], [0], [0, 4], [-1, 4], [1001, 2], [1, 2, 3, 4, 5, 6, 7], ['4', 2], None):
+            with self.subTest(dash=dash):
+                document = copy.deepcopy(self.document)
+                document['layers'][0]['strokeStyle'] = {'alignment': 'center', 'join': 'round', 'cap': 'butt', 'dash': dash}
+                self.assert_invalid(document)
 
     def test_stroke_style_is_native_v2_only_and_validated_inside_symbols(self):
         self.layer['strokeStyle'] = {'alignment': 'center', 'join': 'round', 'cap': 'butt'}
@@ -644,7 +663,7 @@ class NativeDrawingTests(unittest.TestCase):
 
     def test_dimension_format_bounds_and_types(self):
         for field, invalid in {'scale': [0, -1, 1000001, True, '2'],
-                               'unit': ['m', '', None], 'decimals': [-1, 9, 1.5, True, '2'],
+                               'unit': ['yd', '', None], 'decimals': [-1, 9, 1.5, True, '2'],
                                'separator': [';', '', None]}.items():
             for value in invalid:
                 with self.subTest(field=field, value=value):

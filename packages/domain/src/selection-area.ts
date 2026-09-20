@@ -23,6 +23,15 @@ function contains(points: Point[], p: Point): boolean {
 function ellipsePoints(center: Point, rx: number, ry: number): Point[] {
   return Array.from({length:64}, (_, i) => { const angle = i * Math.PI / 32; return {x:center.x + rx*Math.cos(angle), y:center.y + ry*Math.sin(angle)}; });
 }
+/** World-space contours of a layer, whatever kind it is. */
+function layerContours(layer: Layer): {points:Point[];closed:boolean}[] {
+  let contours: {points:Point[];closed:boolean}[];
+  if (layer.curves) contours = layer.curves.map(path => ({points:flatten(path),closed:path.closed}));
+  else if (layer.kind === "path") contours = [{points:layer.points,closed:false}];
+  else if (layer.kind === "ellipse") contours = [{points:ellipsePoints({x:layer.width/2,y:layer.height/2},layer.width/2,layer.height/2),closed:true}];
+  else contours = [{points:[{x:0,y:0},{x:layer.width,y:0},{x:layer.width,y:layer.height},{x:0,y:layer.height}],closed:true}];
+  return contours.map(contour => ({...contour,points:contour.points.map(p=>worldPoint(layer,p))}));
+}
 function box(points: Point[]) {
   return points.reduce((b,p)=>({left:Math.min(b.left,p.x),right:Math.max(b.right,p.x),top:Math.min(b.top,p.y),bottom:Math.max(b.bottom,p.y)}),{left:Infinity,right:-Infinity,top:Infinity,bottom:-Infinity});
 }
@@ -34,17 +43,19 @@ export function selectionAreaPolygon(area: SelectionArea): Point[] {
   const radius = Math.hypot(b.x-a.x,b.y-a.y);
   return ellipsePoints(a,radius,radius);
 }
+/** Every drawn point of the layer lies inside the area: the enclosing selection mode. */
+export function layerInsideArea(layer: Layer, area: SelectionArea): boolean {
+  if (!layer.visible || layer.locked || layer.guide) return false;
+  const polygon = selectionAreaPolygon(area);
+  if (polygon.length < 3) return false;
+  return layerContours(layer).every(contour => contour.points.every(point => contains(polygon, point)));
+}
 /** Crossing selection against transformed contours, with even-odd compound fills. */
 export function layerIntersectsArea(layer: Layer, area: SelectionArea): boolean {
   if (!layer.visible || layer.locked || layer.guide) return false;
   const polygon = selectionAreaPolygon(area);
   if (polygon.length < 3) return false;
-  let contours: {points:Point[];closed:boolean}[];
-  if (layer.curves) contours = layer.curves.map(path => ({points:flatten(path),closed:path.closed}));
-  else if (layer.kind === "path") contours = [{points:layer.points,closed:false}];
-  else if (layer.kind === "ellipse") contours = [{points:ellipsePoints({x:layer.width/2,y:layer.height/2},layer.width/2,layer.height/2),closed:true}];
-  else contours = [{points:[{x:0,y:0},{x:layer.width,y:0},{x:layer.width,y:layer.height},{x:0,y:layer.height}],closed:true}];
-  contours = contours.map(contour => ({...contour,points:contour.points.map(p=>worldPoint(layer,p))}));
+  const contours = layerContours(layer);
   const areaBounds = box(polygon);
   const areaEdges = polygon.map((a,index)=> { const b=polygon[(index+1)%polygon.length]; return {a,b,bounds:box([a,b])}; });
   if (!contours.some(contour=>boxesOverlap(box(contour.points), areaBounds))) return false;

@@ -9,6 +9,8 @@ export type AreaSelectionMode = "rectangle" | "ellipse" | "lasso";
 export interface MeasurementSettings {
   distanceUnit: Unit;
   fontUnit: Unit;
+  /** Decimal places used to display measurements; stored values keep their precision. */
+  displayDecimals: number;
   rulersVisible: boolean;
   guidesVisible: boolean;
   guidesLocked: boolean;
@@ -21,6 +23,14 @@ export interface MeasurementSettings {
   snapRulerMajor: boolean;
   snapRulerMinor: boolean;
   dimensionsVisible: boolean;
+  /** Show a checkerboard behind transparent areas, and the size of its squares. */
+  transparencyChecker: boolean;
+  transparencyCheckerSize: number;
+  /** Area selection takes touched objects or only enclosed ones. */
+  areaSelectionMode: "intersect" | "inside";
+  pivotVisible: boolean;
+  pivotLocked: boolean;
+  pivotSnap: boolean;
   dimensionsLocked: boolean;
   dimensionsSnap: boolean;
   dimensionSnapRadius: number;
@@ -29,20 +39,28 @@ export interface MeasurementSettings {
   guideSnapRadius: number;
   gridSnapRadius: number;
 }
-export type LayoutBlock = "appearance" | "workspace" | "measurement" | "dimensions";
+export type LayoutBlock = "appearance" | "workspace" | "measurement" | "dimensions" | "pivot" | "selection";
 const measurementDefaults: MeasurementSettings = {
-  distanceUnit: "px", fontUnit: "px", rulersVisible: false, guidesVisible: true, guidesLocked: false,
+  distanceUnit: "px", fontUnit: "px", displayDecimals: 2, rulersVisible: false, guidesVisible: true, guidesLocked: false,
   gridVisible: false, snapRulers: false, snapGuides: false, snapGrid: false,
   dimensionsVisible: true, dimensionsLocked: false, dimensionsSnap: true, dimensionSnapRadius: 8,
+  pivotVisible: true, pivotLocked: false, pivotSnap: true, areaSelectionMode: "intersect",
+  transparencyChecker: true, transparencyCheckerSize: 8,
   rulerMinorStep: 10, snapRulerMajor: true, snapRulerMinor: false,
   rulerStep: 100, gridSize: 20, rulerSnapRadius: 8, guideSnapRadius: 8, gridSnapRadius: 8,
 };
 function validateMeasurement<K extends keyof MeasurementSettings>(key: K, value: unknown): void {
   if (!Object.hasOwn(measurementDefaults, key)) throw new Error("Invalid measurement setting");
-  if (key === "distanceUnit" || key === "fontUnit") {
+  if (key === "transparencyCheckerSize") {
+    if (typeof value !== "number" || !Number.isInteger(value) || value < 2 || value > 64) throw new Error("Checker size must be a whole number between 2 and 64 pixels");
+  } else if (key === "areaSelectionMode") {
+    if (value !== "intersect" && value !== "inside") throw new Error("Invalid area selection mode");
+  } else if (key === "distanceUnit" || key === "fontUnit") {
     if (!isUnit(value)) throw new Error("Invalid measurement unit");
   } else if (typeof measurementDefaults[key] === "boolean") {
     if (typeof value !== "boolean") throw new Error("Invalid visibility or snapping setting");
+  } else if (key === "displayDecimals") {
+    if (typeof value !== "number" || !Number.isInteger(value) || value < 0 || value > 8) throw new Error("Decimal places must be a whole number between 0 and 8");
   } else if (typeof value !== "number" || !Number.isFinite(value) || value < (key.endsWith("Radius") ? 0 : 0.01) || value > 100000) {
     throw new Error("Measurement must be finite and within range");
   }
@@ -56,6 +74,13 @@ export class PreferencesService {
   readonly snapAngle = signal(45);
   readonly error = signal("");
   readonly distanceUnit = signal<Unit>(measurementDefaults.distanceUnit);
+  readonly displayDecimals = signal(measurementDefaults.displayDecimals);
+  readonly areaSelectionMode = signal(measurementDefaults.areaSelectionMode);
+  readonly transparencyChecker = signal(measurementDefaults.transparencyChecker);
+  readonly transparencyCheckerSize = signal(measurementDefaults.transparencyCheckerSize);
+  readonly pivotVisible = signal(measurementDefaults.pivotVisible);
+  readonly pivotLocked = signal(measurementDefaults.pivotLocked);
+  readonly pivotSnap = signal(measurementDefaults.pivotSnap);
   readonly fontUnit = signal<Unit>(measurementDefaults.fontUnit);
   readonly rulersVisible = signal(measurementDefaults.rulersVisible);
   readonly guidesVisible = signal(measurementDefaults.guidesVisible);
@@ -76,7 +101,7 @@ export class PreferencesService {
   readonly rulerSnapRadius = signal(measurementDefaults.rulerSnapRadius);
   readonly guideSnapRadius = signal(measurementDefaults.guideSnapRadius);
   readonly gridSnapRadius = signal(measurementDefaults.gridSnapRadius);
-  readonly layoutBlocks = signal<Record<LayoutBlock, boolean>>({ appearance: true, workspace: true, measurement: true, dimensions: true });
+  readonly layoutBlocks = signal<Record<LayoutBlock, boolean>>({ appearance: true, workspace: true, measurement: true, dimensions: true, pivot: true, selection: true });
   constructor() {
     try {
       const raw = localStorage.getItem("xds-input-settings");

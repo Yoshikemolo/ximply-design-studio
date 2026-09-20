@@ -11,6 +11,7 @@
         <div class="menu-popover">
           <button (click)="newDocument()">
             {{ t("New document") }}<kbd>{{ shortcut("new") }}</kbd></button
+          ><button (click)="clearDocument()">{{ t("Clear") }}</button
           ><button (click)="projectFile.click()">
             {{ t("Open project") }}<kbd>{{ shortcut("open") }}</kbd></button
           ><button (click)="editor.save()">
@@ -92,6 +93,7 @@
             track id
           ) {
             <button (click)="runCommand(id)">
+              @if (commandIcon(id)) {<img [src]="'/assets/icons/' + commandIcon(id) + '.svg'" alt="" />}
               {{ t(commandLabel(id)) }}<kbd>{{ shortcut(id) }}</kbd>
             </button>
           }
@@ -106,8 +108,11 @@
         </div>
       </details>
     </nav>
-    <span class="preview-badge">{{ t("Local preview") }}</span>
+    <button class="preview-badge" [title]="t('Local preview explanation')" [attr.aria-label]="t('Local preview') + ': ' + t('Local preview explanation')" (click)="openServerSettings()">{{ t("Local preview") }}</button>
     <div class="header-spacer"></div>
+    @if (preferences.layoutBlocks().workspace) {
+      <label class="header-workspace">{{ t("Workspace") }}<select [value]="workspace()" (change)="workspace.set(text($event)); editor.tool.set(workspace() === 'Retouching' ? 'brush' : 'select')"><option value="Drawing">{{ t("Drawing") }}</option><option value="Retouching">{{ t("Retouching") }}</option></select></label>
+    }
     <select
       class="language"
       aria-label="Language"
@@ -126,7 +131,7 @@
     @if (preferences.layoutBlocks().appearance) {
       <section class="context-block" [attr.aria-label]="t('Appearance')">
         <span>{{ t("Appearance") }}</span>
-        @for (target of paintTargets; track target) {
+        @for (target of (editor.tool() === 'brush' ? fillOnly : paintTargets); track target) {
           <button class="paint-trigger compact-paint" [class.no-paint]="paintColor(target) === 'none'" [style.--paint]="paintColor(target)" (click)="openPaint(target, $event)" [title]="t(target === 'fill' ? 'Fill' : 'Stroke')" [attr.aria-label]="t(target === 'fill' ? 'Fill' : 'Stroke')"><span [class.stroke-preview]="target === 'stroke'"></span></button>
         }
         <label>{{ t("Size") }} <input type="number" min="0" step="any" [value]="displayDistance(editor.size())" (change)="setToolSize($event)" /> {{ preferences.distanceUnit() }}</label>
@@ -138,9 +143,6 @@
         @for (scope of styleScopes; track scope.id) {<button [class.active]="editor.styleScope() === scope.id" [attr.aria-pressed]="editor.styleScope() === scope.id" [title]="t(scope.label)" [attr.aria-label]="t(scope.label)" (click)="setStyleScope(scope.id)"><img [src]="'/assets/icons/' + scope.icon + '.svg'" alt="" /></button>}
       </section>
     }
-    @if (preferences.layoutBlocks().workspace) {
-      <section class="context-block"><label>{{ t("Workspace") }} <select [value]="workspace()" (change)="workspace.set(text($event)); editor.tool.set(workspace() === 'Retouching' ? 'brush' : 'select')"><option value="Drawing">{{ t("Drawing") }}</option><option value="Retouching">{{ t("Retouching") }}</option></select></label></section>
-    }
     @if (preferences.layoutBlocks().measurement) {
       <section class="context-block measurement-controls" [attr.aria-label]="t('Measurement')">
         @for (aid of measurementAids; track aid.id) {
@@ -149,9 +151,45 @@
         }
       </section>
     }
+    @if (paintingTool(); as painting) {
+      <section class="context-block brush-controls" [attr.aria-label]="t(painting === 'brush' ? 'Brush' : 'Eraser')">
+        <svg class="brush-preview" viewBox="0 0 140 34" aria-hidden="true"><path [attr.d]="brushPreviewPath()" [attr.fill]="brushPreviewPaint()" fill-rule="nonzero" [attr.fill-opacity]="brush().opacity / 100"></path></svg>
+        @if (painting === 'brush') {
+          <div class="aid-pair brush-tips">
+            @for (type of brushTypes; track type) {
+              <button [class.active]="brush().type === type" [attr.aria-pressed]="brush().type === type" [title]="t(brushTypeLabels[type])" [attr.aria-label]="t(brushTypeLabels[type])" (click)="setBrush({type})"><img [src]="'/assets/icons/' + (type === 'round' ? 'brush' : type === 'pencil' ? 'pencil' : 'brush-' + type) + '.svg'" alt="" /></button>
+            }
+          </div>
+        }
+        <label class="brush-field">{{ t('Pressure') }}<input type="range" min="1" max="100" [value]="brush().pressure" (input)="setBrushNumber('pressure', $event)" /><small>{{ brush().pressure }}%</small></label>
+        <label class="brush-field">{{ t('Opacity') }}<input type="range" min="0" max="100" [value]="brush().opacity" (input)="setBrushNumber('opacity', $event)" /><small>{{ brush().opacity }}%</small></label>
+        <label class="brush-field">{{ t('Cadence') }}<input type="range" min="1" max="100" [value]="brush().cadence" (input)="setBrushNumber('cadence', $event)" /><small>{{ brush().cadence }}%</small></label>
+        <label class="brush-field">{{ t('Diffusion') }}<input type="range" min="0" max="100" [value]="brush().diffusion" (input)="setBrushNumber('diffusion', $event)" /><small>{{ brush().diffusion }}%</small></label>
+        @if (brush().type !== 'round') {
+          <label class="brush-field">{{ t('Tip angle') }}<input type="range" min="0" max="180" [value]="brush().angle" (input)="setBrushNumber('angle', $event)" /><small>{{ brush().angle }}°</small></label>
+        }
+        @if (painting === 'brush') {
+          <label class="brush-field">{{ t('Blend') }}<select [value]="brush().blend" (change)="setBrush({blend: $any(text($event))})">@for (mode of blends; track mode) {<option [value]="mode">{{ mode === 'source-over' ? t('Normal') : mode }}</option>}</select></label>
+        }
+        <label class="brush-field speed-field">{{ t('Speed variation') }}<span class="speed-mark small" aria-hidden="true"></span><input type="range" min="-100" max="100" [value]="brush().speedVariation" (input)="setBrushNumber('speedVariation', $event)" /><span class="speed-mark large" aria-hidden="true"></span><small>{{ brush().speedVariation }}</small></label>
+      </section>
+    }
+    @if (preferences.layoutBlocks().selection) {
+      <section class="context-block measurement-controls" [attr.aria-label]="t('Selection')">
+        <div class="aid-pair">
+          <button [class.active]="preferences.areaSelectionMode() === 'intersect'" [attr.aria-pressed]="preferences.areaSelectionMode() === 'intersect'" [title]="t('Intersection') + ' · ' + t('Select every object the area touches')" [attr.aria-label]="t('Intersection')" (click)="preferences.setMeasurement('areaSelectionMode', 'intersect')"><img src="/assets/icons/select-intersect.svg" alt="" /></button><button [class.active]="preferences.areaSelectionMode() === 'inside'" [attr.aria-pressed]="preferences.areaSelectionMode() === 'inside'" [title]="t('Inner') + ' · ' + t('Select only objects fully inside the area')" [attr.aria-label]="t('Inner')" (click)="preferences.setMeasurement('areaSelectionMode', 'inside')"><img src="/assets/icons/select-inner.svg" alt="" /></button>
+        </div>
+      </section>
+    }
+    @if (preferences.layoutBlocks().pivot) {
+      <section class="context-block measurement-controls" [attr.aria-label]="t('Pivot')">
+        <button class="dimension-lock" [class.active]="preferences.pivotLocked()" [attr.aria-pressed]="preferences.pivotLocked()" [title]="t(preferences.pivotLocked() ? 'Unlock pivot' : 'Lock pivot')" [attr.aria-label]="t(preferences.pivotLocked() ? 'Unlock pivot' : 'Lock pivot')" (click)="preferences.setMeasurement('pivotLocked', !preferences.pivotLocked())"><img [src]="preferences.pivotLocked() ? '/assets/icons/lock.svg' : '/assets/icons/unlock.svg'" alt="" /></button>
+        <div class="aid-pair"><button [class.active]="preferences.pivotVisible()" [attr.aria-pressed]="preferences.pivotVisible()" [title]="t('Show pivot')" [attr.aria-label]="t('Show pivot')" (click)="preferences.setMeasurement('pivotVisible', !preferences.pivotVisible())"><img src="/assets/icons/pivot.svg" alt="" /></button><button class="magnet-toggle" [class.active]="preferences.pivotSnap()" [attr.aria-pressed]="preferences.pivotSnap()" [title]="t('Snap the pivot')" [attr.aria-label]="t('Snap the pivot')" (click)="preferences.setMeasurement('pivotSnap', !preferences.pivotSnap())"><img src="/assets/icons/magnet.svg" alt="" /></button></div>
+      </section>
+    }
     @if (preferences.layoutBlocks().dimensions) {
       <section class="context-block measurement-controls" [attr.aria-label]="t('Dimensions')">
-        <button [class.active]="preferences.dimensionsLocked()" [attr.aria-pressed]="preferences.dimensionsLocked()" [title]="t(preferences.dimensionsLocked() ? 'Unlock dimensions' : 'Lock dimensions')" [attr.aria-label]="t(preferences.dimensionsLocked() ? 'Unlock dimensions' : 'Lock dimensions')" (click)="preferences.setMeasurement('dimensionsLocked', !preferences.dimensionsLocked())"><img [src]="'/assets/icons/' + (preferences.dimensionsLocked() ? 'lock' : 'unlock') + '.svg'" alt="" /></button>
+        <button class="dimension-lock" [class.active]="preferences.dimensionsLocked()" [attr.aria-pressed]="preferences.dimensionsLocked()" [title]="t(preferences.dimensionsLocked() ? 'Unlock dimensions' : 'Lock dimensions')" [attr.aria-label]="t(preferences.dimensionsLocked() ? 'Unlock dimensions' : 'Lock dimensions')" (click)="preferences.setMeasurement('dimensionsLocked', !preferences.dimensionsLocked())"><img [src]="'/assets/icons/' + (preferences.dimensionsLocked() ? 'lock' : 'unlock') + '.svg'" alt="" /></button>
         <div class="aid-pair"><button [class.active]="preferences.dimensionsVisible()" [attr.aria-pressed]="preferences.dimensionsVisible()" [title]="t('Show dimensions')" [attr.aria-label]="t('Show dimensions')" (click)="preferences.setMeasurement('dimensionsVisible', !preferences.dimensionsVisible())"><img src="/assets/icons/dimension-linear.svg" alt="" /></button><button class="magnet-toggle" [class.active]="preferences.dimensionsSnap()" [attr.aria-pressed]="preferences.dimensionsSnap()" [title]="t('Snap dimension points')" [attr.aria-label]="t('Snap dimension points')" (click)="preferences.setMeasurement('dimensionsSnap', !preferences.dimensionsSnap())"><img src="/assets/icons/magnet.svg" alt="" /></button></div>
       </section>
     }
@@ -249,22 +287,23 @@
           }
           <button class="swap-paint" (click)="editor.swapPaint()" [title]="t('Swap fill and stroke')" [attr.aria-label]="t('Swap fill and stroke')">⇄</button>
         </div>
-        @for (target of paintTargets; track target) {
-          <div class="quick-paints" [attr.aria-label]="t(target === 'fill' ? 'Fill' : 'Stroke')"><span>{{ t(target === 'fill' ? 'Fill' : 'Stroke') }}</span>@for (color of quickColors; track color.value) {<button [class.no-paint]="color.value === 'none'" [style.background]="color.value === 'none' ? '' : color.value" [title]="t(target === 'fill' ? 'Fill' : 'Stroke') + ': ' + t(color.label)" [attr.aria-label]="t(target === 'fill' ? 'Fill' : 'Stroke') + ': ' + t(color.label)" (click)="editor.setPaint(target, color.value)"></button>}</div>
-        }
-        <label class="rail-width">{{ t("Width") }}<input type="number" min="0" step="any" [value]="displayDistance(paintWidth())" (change)="setPaintWidth($event)" /><small>{{ preferences.distanceUnit() }}</small></label>
       </div>
     </aside>
     <section class="canvas-area">
-      <div class="document-tabs">
-        <div class="document-tab">
-          <img src="/assets/icons/document.svg" alt="" /><input
-            aria-label="Document name"
-            [value]="editor.document().name"
-            (change)="editor.rename(text($event))"
-          /><span class="modified-dot"></span>
-        </div>
-        <button (click)="newDocument()" [attr.aria-label]="t('New document')">
+      <div class="document-tabs" role="tablist" [attr.aria-label]="t('Documents')">
+        @for (tab of editor.tabs(); track tab.id) {
+          <div class="document-tab" role="tab" [class.active]="tab.active" [attr.aria-selected]="tab.active" (click)="switchDocument(tab.id)">
+            <img src="/assets/icons/document.svg" alt="" />
+            @if (tab.active) {
+              <input [attr.aria-label]="t('Document name')" [value]="tab.name" (change)="editor.rename(text($event))" />
+            } @else {
+              <span class="document-tab-name">{{ tab.name }}</span>
+            }
+            @if (tab.dirty) {<span class="modified-dot" [title]="t('Unsaved changes')"></span>}
+            <button class="document-tab-close" [title]="t('Close document')" [attr.aria-label]="t('Close document') + ': ' + tab.name" (click)="$event.stopPropagation(); closeDocument(tab.id)">×</button>
+          </div>
+        }
+        <button (click)="newDocument()" [title]="t('New document')" [attr.aria-label]="t('New document')">
           +
         </button>
         <div class="header-spacer"></div>
@@ -287,6 +326,8 @@
           <div class="artboard-label">{{ t("Document") }} 01</div>
           <div
             class="artboard"
+            [class.checkered]="preferences.transparencyChecker()"
+            [style.--checker-size.px]="preferences.transparencyCheckerSize()"
             [style.width.px]="editor.document().width * editor.zoom()"
             [style.height.px]="editor.document().height * editor.zoom()"
           >
@@ -313,17 +354,46 @@
               aria-label="Editable design canvas"
               [style.cursor]="toolCursor()"
               (pointerdown)="pointerDown($event)"
+              (dblclick)="canvasDoubleClick($event)"
               (contextmenu)="openCanvasContext($event)"
               (pointermove)="pointerMove($event)"
               (pointerleave)="cursorPoint.set(null)"
               (pointerup)="pointerUp()"
               (pointercancel)="pointerCancel()"
-              (lostpointercapture)="pointerCancel()"
+              (lostpointercapture)="pointerLost()"
             ></canvas>
+            @if (zoomArea(); as zoom) {
+              <div class="zoom-area-frame" aria-hidden="true" [style.left.px]="zoom.x" [style.top.px]="zoom.y" [style.width.px]="zoom.width" [style.height.px]="zoom.height"></div>
+            }
+            @if (editor.pageMode()) {
+              <svg class="dimension-overlay page-overlay" [attr.viewBox]="'0 0 ' + editor.document().width + ' ' + editor.document().height" aria-hidden="true">
+                @if (editor.pageCropArea(); as crop) {
+                  <path class="page-shade" [attr.d]="'M0,0H' + editor.document().width + 'V' + editor.document().height + 'H0Z M' + crop.x + ',' + crop.y + 'h' + crop.width + 'v' + crop.height + 'h' + (-crop.width) + 'Z'"></path>
+                  <rect class="page-frame" [attr.x]="crop.x" [attr.y]="crop.y" [attr.width]="crop.width" [attr.height]="crop.height" vector-effect="non-scaling-stroke"></rect>
+                }
+                @for (handle of editor.pageHandles(); track handle.id) {
+                  <rect class="page-handle" [attr.x]="handle.x - 5 / editor.zoom()" [attr.y]="handle.y - 5 / editor.zoom()" [attr.width]="10 / editor.zoom()" [attr.height]="10 / editor.zoom()" vector-effect="non-scaling-stroke"></rect>
+                }
+              </svg>
+            }
+            @if (preferences.pivotVisible() && editor.selectedLayers().length) {
+              @let pivot = editor.pivot();
+              <svg class="dimension-overlay pivot-overlay" [attr.viewBox]="'0 0 ' + editor.document().width + ' ' + editor.document().height" aria-hidden="true">
+                <circle class="pivot-mark" [class.moved]="editor.pivotMoved()" [class.grabbable]="editor.pivotGrabbable()" [attr.cx]="pivot.x" [attr.cy]="pivot.y" [attr.r]="5 / editor.zoom()" vector-effect="non-scaling-stroke"></circle>
+                <path class="pivot-cross" [attr.d]="'M' + (pivot.x - 9 / editor.zoom()) + ',' + pivot.y + 'H' + (pivot.x + 9 / editor.zoom()) + 'M' + pivot.x + ',' + (pivot.y - 9 / editor.zoom()) + 'V' + (pivot.y + 9 / editor.zoom())" vector-effect="non-scaling-stroke"></path>
+              </svg>
+            }
+            @if (editor.wallSnapTarget(); as wallTarget) {
+              <svg class="dimension-overlay" [attr.viewBox]="'0 0 ' + editor.document().width + ' ' + editor.document().height" aria-hidden="true">
+                @if (editor.wallChain(); as chain) {<path [attr.d]="'M' + chain.x + ',' + chain.y + 'L' + wallTarget.point.x + ',' + wallTarget.point.y" vector-effect="non-scaling-stroke"></path>}
+                <rect class="snap-marker" [attr.x]="wallTarget.point.x - 4 / editor.zoom()" [attr.y]="wallTarget.point.y - 4 / editor.zoom()" [attr.width]="8 / editor.zoom()" [attr.height]="8 / editor.zoom()" vector-effect="non-scaling-stroke"></rect>
+              </svg>
+            }
             @if (editor.dimensionDraft() || editor.dimensionSnapTarget() || (editor.selected()?.dimension && preferences.dimensionsVisible())) {
               <svg class="dimension-overlay" [attr.viewBox]="'0 0 ' + editor.document().width + ' ' + editor.document().height" aria-hidden="true">
                 @if (editor.dimensionDraft()) {<path [attr.d]="dimensionDraftPath()" vector-effect="non-scaling-stroke"></path>}
-                @if (editor.dimensionSnapTarget(); as target) {<circle [attr.cx]="target.point.x" [attr.cy]="target.point.y" [attr.r]="5 / editor.zoom()" vector-effect="non-scaling-stroke"></circle>}
+                @if (dimensionPreviewShape(); as preview) {<g class="dimension-preview"><path [attr.d]="preview.path" vector-effect="non-scaling-stroke"></path>@for (head of preview.heads; track $index) {<polygon [attr.points]="head"></polygon>}<text [attr.transform]="preview.transform" [attr.font-size]="preview.fontSize" text-anchor="middle" dominant-baseline="central">{{ preview.text }}</text></g>}
+                @if (editor.dimensionSnapTarget(); as target) {<rect class="snap-marker" [attr.x]="target.point.x - 4 / editor.zoom()" [attr.y]="target.point.y - 4 / editor.zoom()" [attr.width]="8 / editor.zoom()" [attr.height]="8 / editor.zoom()" vector-effect="non-scaling-stroke"></rect>}
                 @if (editor.selected(); as selected) {@if (selected.dimension && preferences.dimensionsVisible() && !preferences.dimensionsLocked()) {@let position = dimensionLabelPosition(selected);<rect [attr.x]="position.x - 4 / editor.zoom()" [attr.y]="position.y - 4 / editor.zoom()" [attr.width]="8 / editor.zoom()" [attr.height]="8 / editor.zoom()" vector-effect="non-scaling-stroke"></rect>}}
               </svg>
             }
@@ -387,7 +457,7 @@
     @if (panels()) {
       <aside class="inspector" aria-label="Editor panels">
         <details class="panel drawing-options" open>
-          <summary>{{ t("Drawing tools") }}</summary>
+          <summary><span>{{ t("Drawing tools") }}</span></summary>
           <div class="drawing-controls">
             <details>
               <summary>{{ t("Arrange selection") }}</summary>
@@ -456,21 +526,39 @@
                 <legend>{{ t(proceduralTool() ? 'Floor plan tool defaults' : 'Floor plan properties') }} · {{ preferences.distanceUnit() }}</legend>
                 @if (proceduralTool()) {<p class="typography-note">{{ t(proceduralHint()) }}</p>}
                 @if (procedural.type === 'wall') {
-                  <label>{{ t('Wall thickness') }}<input type="number" [min]="displayDistance(1)" [max]="displayDistance(16384)" step="any" [value]="displayDistance(procedural.thickness)" (change)="setProceduralNumber('thickness', $event)" /></label>
-                } @else {
+                  <label class="wide-label">{{ t('Wall alignment') }}<select [value]="procedural.align ?? 'center'" (change)="patchProcedural({align: text($event)})"><option value="center">{{ t('Centred on the line') }}</option><option value="left">{{ t('Left face on the line') }}</option><option value="right">{{ t('Right face on the line') }}</option></select></label>
+                  <label class="wide-label">{{ t('Wall thickness') }}<input type="number" [min]="displayDistance(1)" [max]="displayDistance(16384)" step="any" [value]="displayDistance(procedural.thickness)" (change)="setProceduralNumber('thickness', $event)" /></label>
+                }
+                @if (procedural.type === 'door' || procedural.type === 'window' || procedural.type === 'pillar') {
                   <div class="property-grid"><label>{{ t('Width') }}<input type="number" [min]="displayDistance(1)" [max]="displayDistance(16384)" step="any" [value]="displayDistance(procedural.width)" (change)="setProceduralNumber('width', $event)" /></label><label [title]="t((procedural.type === 'door' || procedural.type === 'window') && procedural.host ? 'Depth follows the host wall.' : 'Depth')">{{ t('Depth') }}<input type="number" [disabled]="(procedural.type === 'door' || procedural.type === 'window') && !!procedural.host" [min]="displayDistance(1)" [max]="displayDistance(16384)" step="any" [value]="displayDistance(procedural.depth)" (change)="setProceduralNumber('depth', $event)" /></label></div>
                 }
+                @if (procedural.type === 'stair') {
+                  <div class="property-grid"><label>{{ t('Flight width') }}<input type="number" [min]="displayDistance(1)" [max]="displayDistance(16384)" step="any" [value]="displayDistance(procedural.width)" (change)="setProceduralNumber('width', $event)" /></label><label>{{ t('Flight length') }}<input type="number" [min]="displayDistance(1)" [max]="displayDistance(16384)" step="any" [value]="displayDistance(procedural.length)" (change)="setProceduralNumber('length', $event)" /></label></div>
+                  <div class="property-grid"><label>{{ t('Number of steps') }}<input type="number" min="2" max="100" step="1" [value]="procedural.steps" (change)="setProceduralSteps($event)" /></label><label>{{ t('Walking direction') }}<select [value]="procedural.direction" (change)="patchProcedural({direction: text($event)})"><option value="up">{{ t('Up') }}</option><option value="down">{{ t('Down') }}</option></select></label></div>
+                }
                 @if (procedural.type === 'pillar') {
-                  <label>{{ t('Pillar shape') }}<select [value]="procedural.shape" (change)="setPillarShape($event)"><option value="rectangle">{{ t('Rectangular pillar') }}</option><option value="circle">{{ t('Circular pillar') }}</option></select></label>
+                  <label class="wide-label">{{ t('Pillar shape') }}<select [value]="procedural.shape" (change)="setPillarShape($event)"><option value="rectangle">{{ t('Rectangular pillar') }}</option><option value="circle">{{ t('Circular pillar') }}</option></select></label>
                 }
                 @if (procedural.type === 'door' || procedural.type === 'window') {
-                  <label>{{ t('Opening mechanism') }}<select [value]="procedural.operation" (change)="patchProcedural({operation: text($event)})"><option value="swing">{{ t('Hinged') }}</option><option value="sliding">{{ t('Sliding') }}</option>@if (procedural.type === 'window') {<option value="fixed">{{ t('Fixed glazing') }}</option>}</select></label>
-                  <label>{{ t('Number of leaves') }}<input type="number" min="1" [max]="procedural.type === 'door' ? 4 : 8" step="1" [value]="procedural.leafWidths.length" (change)="setProceduralLeafCount($event)" /></label>
-                  <div class="property-grid">@for (width of procedural.leafWidths; track $index) {<label>{{ t('Leaf') }} {{ $index + 1 }}<input type="number" [min]="displayDistance(1)" [max]="displayDistance(16384)" step="any" [value]="displayDistance(width)" (change)="setProceduralLeafWidth($index, $event)" /></label>}</div>
+                  <label class="wide-label">{{ t('Mechanism') }}<select [value]="procedural.operation" (change)="patchProcedural({operation: text($event), leafTypes: undefined})">@for (operation of (procedural.type === 'door' ? doorOperations : windowOperations); track operation) {<option [value]="operation">{{ t(leafTypeLabels[operation]) }}</option>}</select></label>
+                  <div class="section-label">{{ t('Leaves') }}</div>
+                  <label class="wide-label">{{ t('Number') }}<input type="number" min="1" [max]="procedural.type === 'door' ? 4 : 8" step="1" [value]="procedural.leafWidths.length" (change)="setProceduralLeafCount($event)" /></label>
+                  <div class="leaf-rows" [class.with-type]="procedural.operation !== 'opening'" role="group" [attr.aria-label]="t('Leaves')">
+                    <span class="leaf-heading">{{ t('Width') }} ({{ preferences.distanceUnit() }})</span>
+                    @if (procedural.operation !== 'opening') {<span class="leaf-heading">{{ t('Type') }}</span>}
+                    @for (width of procedural.leafWidths; track $index) {
+                      <input type="number" [min]="displayDistance(1)" [max]="displayDistance(16384)" step="any" [value]="displayDistance(width)" (change)="setProceduralLeafWidth($index, $event)" [attr.aria-label]="t('Leaf') + ' ' + ($index + 1) + ' · ' + t('Width')" />
+                      @if (procedural.operation !== 'opening') {
+                        <select [value]="leafType($index)" (change)="setLeafType($index, $event)" [attr.aria-label]="t('Leaf') + ' ' + ($index + 1) + ' · ' + t('Type')">@for (choice of leafTypeChoices(procedural.type); track choice) {<option [value]="choice">{{ t(leafTypeLabels[choice]) }}</option>}</select>
+                      }
+                    }
+                  </div>
                   <p class="typography-note">{{ t('Changing a leaf width updates the total opening width.') }}</p>
-                  @if (procedural.operation === 'swing') {
-                    <label>{{ t('Opening angle') }} (°)<input type="number" min="0" max="180" step="any" [value]="procedural.openingAngle" (change)="setProceduralNumber('openingAngle', $event)" /></label>
-                    <label>{{ t('Swing direction') }}<select [value]="procedural.swing" (change)="patchProcedural({swing: text($event)})"><option value="left">{{ t('Left') }}</option><option value="right">{{ t('Right') }}</option></select></label>
+                  @if (procedural.operation !== 'opening') {
+                    <label class="wide-label">{{ t('Angle') }} (°)<input type="number" min="0" max="180" step="any" [value]="procedural.openingAngle" (change)="setProceduralNumber('openingAngle', $event)" /></label>
+                    <label class="wide-label">{{ t('Hinge') }}<select [value]="procedural.swing" (change)="patchProcedural({swing: text($event)})"><option value="left">{{ t('Left') }}</option><option value="right">{{ t('Right') }}</option></select></label>
+                    <label class="wide-label">{{ t('Opening') }}<select [value]="procedural.side ?? 'front'" (change)="patchProcedural({side: text($event)})"><option value="front">{{ t('Front face') }}</option><option value="back">{{ t('Back face') }}</option></select></label>
+                    <p class="typography-note">{{ t('Leaf travel is drawn as a broken projection line.') }}</p>
                   }
                   @if (procedural.host) {<p class="typography-note">{{ t('Attached to a wall') }} · {{ t('Move or rotate the opening independently to detach it.') }}</p>} @else {<p class="typography-note">{{ t('Free-standing opening') }}</p>}
                 }
@@ -665,24 +753,21 @@
           </div>
         </details>
         <details class="panel blend-panel" open>
-          <summary>{{ t('Blend objects') }}</summary>
+          <summary><span>{{ t('Blend objects') }}</span></summary>
           <div class="blend-controls">
             <div class="blend-actions" role="group" [attr.aria-label]="t('Blend objects')">
               @for (action of blendActions; track action.id) {<button [disabled]="!commandEnabled(action.id)" (click)="runCommand(action.id)" [title]="t(action.hint)" [attr.aria-label]="t(action.label)"><img [src]="'/assets/icons/' + action.icon + '.svg'" alt="" /></button>}
             </div>
             <label>{{ t('Intermediate steps') }}<input type="number" min="1" [max]="blendStepLimit()" step="1" [value]="blendStepCount()" [disabled]="blendIsLocked() || blendStepLimit() < 1" (change)="setBlendSteps($event)" /></label>
             <label>{{ t('Interpolation easing') }}<select [value]="currentBlendEasing()" [disabled]="blendIsLocked()" (change)="setBlendEasing($event)">@for (option of blendEasings; track option.id) {<option [value]="option.id">{{ t(option.label) }}</option>}</select></label>
-            <p class="blend-hint">{{ t('Endpoints are excluded from the step count.') }} {{ t('Available step limit') }}: {{ blendStepLimit() }}.</p>
+            @if (blendTip(); as tip) {
+              <p class="panel-tip"><img src="/assets/icons/tip.svg" alt="" /><span>{{ t(tip) }}@if (tip === blendLimitTip) { {{ t('Available step limit') }}: {{ blendStepLimit() }}.}</span></p>
+            }
             @if (editor.selectedBlend()) {
               <div class="blend-endpoints" role="group" [attr.aria-label]="t('Edit endpoints')">
                 <button [disabled]="blendIsLocked()" (click)="editor.selectBlendEndpoint('back')" [title]="t('Select the back endpoint or endpoint group for editing.')" [attr.aria-label]="t('Edit back endpoint')"><img src="/assets/icons/blend-back.svg" alt="" /></button>
                 <button [disabled]="blendIsLocked()" (click)="editor.selectBlendEndpoint('front')" [title]="t('Select the front endpoint or endpoint group for editing.')" [attr.aria-label]="t('Edit front endpoint')"><img src="/assets/icons/blend-front.svg" alt="" /></button>
               </div>
-              <p class="blend-hint">{{ t('Edit either endpoint to update the linked steps. Expand to edit intermediate objects independently.') }}</p>
-              @if (blendIsLocked()) {<p class="blend-hint">{{ t('Unlock the blend objects before changing the blend.') }}</p>}
-            } @else if (!editor.canCreateBlend()) {
-              <p class="blend-hint">{{ t('Select two compatible unlocked objects or groups at the same hierarchy level.') }}</p>
-              <p class="blend-hint">{{ t('Use vector endpoints with matching contour counts and open or closed paths. Groups must contain the same number of objects.') }}</p>
             }
           </div>
         </details>
@@ -782,15 +867,25 @@
                     <div class="section-label">{{ t('Dimensions') }}</div>
                     <p class="typography-note">{{ t('Drag the label handle to reposition the dimension text.') }}</p>
                     <div class="property-grid">
-                      <label>{{ t('Measurement scale') }}<input type="number" min="0.000001" max="1000000" step="any" [value]="dimension.format.scale" (change)="setDimensionFormat('scale', $event)" /></label>
+                      <label>{{ t('Scale') }}<input type="number" min="0.000001" max="1000000" step="any" [value]="dimension.format.scale" (change)="setDimensionFormat('scale', $event)" /></label>
                       <label>{{ t('Units') }}<select [disabled]="dimension.kind === 'angular'" [value]="dimension.format.unit" (change)="setDimensionFormat('unit', $event)">@for (unit of units; track unit) {<option [value]="unit">{{ unit }}</option>}</select></label>
-                      <label>{{ t('Decimal places') }}<input type="number" min="0" max="8" step="1" [value]="dimension.format.decimals" (change)="setDimensionFormat('decimals', $event)" /></label>
-                      <label>{{ t('Decimal separator') }}<select [value]="dimension.format.separator" (change)="setDimensionFormat('separator', $event)"><option value=".">.</option><option value=",">,</option></select></label>
                     </div>
-                    <div class="property-grid"><label>{{ t('Label frame width') }}<input type="number" [min]="displayDistance(1)" step="any" [value]="displayDistance(dimension.labelSize?.width ?? layer.width)" (change)="setDimensionLabelSize('width', $event)" /></label><label>{{ t('Label frame height') }}<input type="number" [min]="displayDistance(1)" step="any" [value]="displayDistance(dimension.labelSize?.height ?? layer.height)" (change)="setDimensionLabelSize('height', $event)" /></label></div>
+                    <label class="wide-label toggle-row">{{ t('Unify scale factor') }}<input class="toggle-switch" type="checkbox" role="switch" [checked]="editor.unifyDimensionFormat()" (change)="editor.setUnifyDimensionFormat($any($event.target).checked)" [title]="t('Apply this scale and label format to every dimension in the document.')" /></label>
+                    <div class="section-label">{{ t('Label') }}</div>
+                    <div class="property-grid">
+                      <label>{{ t('Places') }}<input type="number" min="0" max="8" step="1" [value]="dimension.format.decimals" (change)="setDimensionFormat('decimals', $event)" /></label>
+                      <label>{{ t('Separator') }}<select [value]="dimension.format.separator" (change)="setDimensionFormat('separator', $event)"><option value=".">.</option><option value=",">,</option></select></label>
+                      <label>{{ t('Width') }}<input type="number" [min]="displayDistance(1)" step="any" [value]="displayDistance(dimension.labelSize?.width ?? layer.width)" (change)="setDimensionLabelSize('width', $event)" /></label>
+                      <label>{{ t('Height') }}<input type="number" [min]="displayDistance(1)" step="any" [value]="displayDistance(dimension.labelSize?.height ?? layer.height)" (change)="setDimensionLabelSize('height', $event)" /></label>
+                    </div>
+                    @if (dimension.kind === 'radius' || dimension.kind === 'diameter') {
+                      <label class="wide-label toggle-row">{{ t('Centre mark') }}<input class="toggle-switch" type="checkbox" role="switch" [checked]="dimension.centerMark === true" (change)="editor.updateDimension({centerMark: $any($event.target).checked})" /></label>
+                      <p class="typography-note">{{ t(dimension.kind === 'radius' ? 'The value is prefixed with R and measured from the centre to the arc.' : 'The value is prefixed with the diameter sign and measured through the centre.') }}</p>
+                    }
+                    <label class="wide-label">{{ t('Position') }}<select [value]="dimension.labelPlacement ?? 'center'" (change)="setDimensionPlacement($event)"><option value="start">{{ t('Start') }}</option><option value="center">{{ t('Center') }}</option><option value="end">{{ t('End') }}</option></select></label>
                     <div class="section-label">{{ t('Extension lines') }}</div>
-                    <label class="wide-label">{{ t('Color') }}<input type="text" maxlength="9" [value]="dimension.extension.stroke" (change)="setDimensionExtension('stroke', $event)" [title]="t('Use a hex color with optional alpha, or none.')" /></label>
-                    <div class="property-grid">@for (field of ['strokeWidth', 'gap', 'overshoot']; track field) {<label>{{ t(field === 'strokeWidth' ? 'Width' : field === 'gap' ? 'Extension gap' : 'Extension overshoot') }}<input type="number" min="0" [max]="displayDistance(1000)" step="any" [value]="displayDistance($any(dimension.extension)[field])" (change)="setDimensionExtension($any(field), $event)" /></label>}</div>
+                    <label class="wide-label color-row">{{ t('Color') }}<input class="color-value" type="text" maxlength="9" [value]="dimension.extension.stroke" (change)="setDimensionExtension('stroke', $event)" [title]="t('Use a hex color with optional alpha, or none.')" /><input class="color-swatch" type="color" [class.no-paint]="dimension.extension.stroke === 'none'" [value]="colorValue(dimension.extension.stroke)" (input)="setDimensionExtensionColor($event)" [attr.aria-label]="t('Color')" [title]="t('Color')" /></label>
+                    <div class="property-grid">@for (field of ['strokeWidth', 'gap', 'overshoot']; track field) {<label>{{ t(field === 'strokeWidth' ? 'Width' : field === 'gap' ? 'Gap' : 'Overshoot') }}<input type="number" min="0" [max]="displayDistance(1000)" step="any" [value]="displayDistance($any(dimension.extension)[field])" (change)="setDimensionExtension($any(field), $event)" /></label>}</div>
                     <p class="typography-note">{{ t('Leave text empty to display the measured value. Angular dimensions use degrees.') }}</p>
                   }
                   @if (layer.kind === "text" || layer.dimension) {
@@ -808,8 +903,8 @@
                     </div>
                     <label class="wide-label">{{ t('Font family') }}<select [value]="type.fontFamily" (change)="editor.updateTypography({fontFamily: $any(text($event))})">@for (family of fontFamilies; track family) {<option [value]="family">{{ family }}</option>}</select></label>
                     <div class="property-grid typography-fields">
-                      <label>{{ t('Size') }}<input type="number" [min]="displayFontSize(1)" [max]="displayFontSize(500)" step="any" [value]="displayFontSize(layer.fontSize)" (change)="patchNumber('fontSize', $event)" /></label>
-                      <label>{{ t('Weight') }}<select [value]="type.fontWeight" (change)="editor.updateTypography({fontWeight: number($event)})">@for (weight of fontWeights; track weight) {<option [value]="weight">{{ weight }}</option>}</select></label>
+                      <label [title]="t('Size')"><img class="field-icon" src="/assets/icons/text-size.svg" alt="" /><input type="number" [attr.aria-label]="t('Size')" [min]="displayFontSize(1)" [max]="displayFontSize(500)" step="any" [value]="displayFontSize(layer.fontSize)" (change)="patchNumber('fontSize', $event)" /></label>
+                      <label [title]="t('Weight')"><img class="field-icon" src="/assets/icons/text-weight.svg" alt="" /><select [attr.aria-label]="t('Weight')" [value]="type.fontWeight" (change)="editor.updateTypography({fontWeight: number($event)})">@for (weight of fontWeights; track weight) {<option [value]="weight">{{ weight }}</option>}</select></label>
                     </div>
                     <div class="typography-actions" role="group" [attr.aria-label]="t('Text style')">
                       <button [class.active]="type.fontStyle === 'italic'" [attr.aria-pressed]="type.fontStyle === 'italic'" [title]="t('Italic')" [attr.aria-label]="t('Italic')" (click)="toggleTextStyle('fontStyle', 'italic')"><img src="/assets/icons/text-italic.svg" alt="" /></button>
@@ -820,9 +915,9 @@
                       @for (align of textAlignments; track align) {<button [class.active]="type.align === align" [attr.aria-pressed]="type.align === align" [title]="t('Align ' + align)" [attr.aria-label]="t('Align ' + align)" (click)="editor.updateTypography({align})"><img [src]="'/assets/icons/text-align-' + align + '.svg'" alt="" /></button>}
                     </div>
                     <div class="property-grid typography-fields">
-                      @for (field of typographyFields; track field.key) {<label [title]="t(field.hint)">{{ t(field.label) }}<input type="number" step="any" [min]="displayFontSize(field.min)" [max]="displayFontSize(field.max)" [value]="displayFontSize(type[field.key])" (change)="setTypographyNumber(field.key, $event)" /></label>}
-                      <label>{{ t('Horizontal scale') }} (%)<input type="number" min="10" max="1000" step="any" [value]="type.horizontalScale * 100" (change)="setTextScale('horizontalScale', $event)" /></label>
-                      <label>{{ t('Vertical scale') }} (%)<input type="number" min="10" max="1000" step="any" [value]="type.verticalScale * 100" (change)="setTextScale('verticalScale', $event)" /></label>
+                      @for (field of typographyFields; track field.key) {<label [title]="t(field.label) + ' · ' + t(field.hint)"><img class="field-icon" [src]="'/assets/icons/' + field.icon + '.svg'" alt="" /><input type="number" [attr.aria-label]="t(field.label)" step="any" [min]="displayFontSize(field.min)" [max]="displayFontSize(field.max)" [value]="displayFontSize(type[field.key])" (change)="setTypographyNumber(field.key, $event)" /></label>}
+                      <label [title]="t('Horizontal scale') + ' (%)'"><img class="field-icon" src="/assets/icons/text-horizontal-scale.svg" alt="" /><input type="number" [attr.aria-label]="t('Horizontal scale')" min="10" max="1000" step="any" [value]="type.horizontalScale * 100" (change)="setTextScale('horizontalScale', $event)" /></label>
+                      <label [title]="t('Vertical scale') + ' (%)'"><img class="field-icon" src="/assets/icons/text-vertical-scale.svg" alt="" /><input type="number" [attr.aria-label]="t('Vertical scale')" min="10" max="1000" step="any" [value]="type.verticalScale * 100" (change)="setTextScale('verticalScale', $event)" /></label>
                     </div>
                     <label class="wide-label">{{ t('Text language') }}<select [value]="type.language" (change)="editor.updateTypography({language: $any(text($event))})"><option value="en">English</option><option value="es">Español</option></select></label>
                     @if (layout.fit) {<p class="typography-note">{{ t('Rendered size') }}: {{ displayFontSize(editor.textMetrics(layer).fontSize) }} {{ preferences.fontUnit() }}</p>}
@@ -883,14 +978,9 @@
                   <img src="/assets/icons/select.svg" alt="" />
                   <p>{{ t("Nothing selected") }}</p>
                 </div>
-                <div class="property-row">
-                  <label>{{ t("Background") }}</label
-                  ><input
-                    type="color"
-                    [value]="editor.document().background"
-                    (input)="editor.background(text($event))"
-                  />
-                </div>
+                <label class="wide-label color-row">{{ t("Background") }}<input class="color-value" type="text" maxlength="9" [value]="backgroundPaint()" (change)="setBackgroundPaint(text($event))" [title]="t('Use a hex color with optional alpha, or none.')" /><input class="color-swatch" type="color" [class.no-paint]="backgroundPaint() === 'none'" [value]="backgroundBase()" (input)="setBackgroundBase(text($event))" [attr.aria-label]="t('Background')" /></label>
+                <label class="wide-label">{{ t("Paint opacity") }}<input type="range" min="0" max="100" [value]="backgroundOpacity()" (input)="setBackgroundOpacity(number($event))" />{{ backgroundOpacity() }}%</label>
+                <div class="paint-options background-options">@for (swatch of backgroundSwatches; track swatch.value) {<button [class.active]="backgroundPaint() === swatch.value" [title]="t(swatch.label)" [attr.aria-label]="t(swatch.label)" (click)="setBackgroundPaint(swatch.value)"><span [class.no-paint]="swatch.value === 'none'" [style.background]="swatch.value === 'none' ? '' : swatch.value"></span>{{ t(swatch.label) }}</button>}</div>
               }
             } @else {
               <div class="layer-tools">
@@ -1002,7 +1092,7 @@
   #projectFile
   class="visually-hidden"
   type="file"
-  accept=".ximply,.json"
+  accept=".xds,.ximply,.json"
   (change)="projectInput($event)"
 />
 @if (about()) {
@@ -1125,7 +1215,7 @@
   #symbolFile
   class="visually-hidden"
   type="file"
-  accept=".ximply,.json"
+  accept=".xds,.ximply,.json"
   (change)="symbolsInput($event)"
 />
 @if (cursorPoint(); as cursor) {
@@ -1225,14 +1315,28 @@
         />°</label
       >
             }
+            @case ('appearance') {
+      <div class="measurement-settings">
+        <label>{{ t('Theme') }}<select [value]="theme()" (change)="theme.set(text($event))"><option value="dark">{{ t('Dark theme') }}</option><option value="light">{{ t('Light theme') }}</option></select></label>
+        <div class="tick-snapping">
+          <span class="tick-title">{{ t('Transparency') }}</span>
+          <label class="tick-row">{{ t('Checkerboard') }}<input class="toggle-switch" type="checkbox" role="switch" [checked]="preferences.transparencyChecker()" (change)="preferences.setMeasurement('transparencyChecker', !preferences.transparencyChecker())" /></label>
+        </div>
+        <label>{{ t('Checker size') }} (px)<input type="number" min="2" max="64" step="1" [disabled]="!preferences.transparencyChecker()" [value]="preferences.transparencyCheckerSize()" (change)="setCheckerSize($event)" /></label>
+      </div>
+            }
             @case ('measurement') {
       <div class="measurement-settings">
         <label>{{ t("Distance units") }}<select [value]="preferences.distanceUnit()" (change)="setUnit('distanceUnit', $event)">@for (unit of units; track unit) {<option [value]="unit">{{ unit }}</option>}</select></label>
         <label>{{ t("Font units") }}<select [value]="preferences.fontUnit()" (change)="setUnit('fontUnit', $event)">@for (unit of fontUnits; track unit) {<option [value]="unit">{{ unit }}</option>}</select></label>
+        <label>{{ t("Displayed decimal places") }}<input type="number" min="0" max="8" step="1" [value]="preferences.displayDecimals()" (change)="setDisplayDecimals($event)" /></label>
         <label>{{ t("Major ruler interval") }} ({{ preferences.distanceUnit() }})<input type="number" [min]="displayDistance(0.01)" step="any" [value]="displayDistance(preferences.rulerStep())" (change)="preferences.setMeasurement('rulerStep', distanceInput($event))" /></label>
         <label>{{ t('Minor ruler interval') }} ({{ preferences.distanceUnit() }})<input type="number" [min]="displayDistance(0.01)" step="any" [value]="displayDistance(preferences.rulerMinorStep())" (change)="preferences.setMeasurement('rulerMinorStep', distanceInput($event))" /></label>
-        <label>{{ t('Snap major ruler ticks') }}<input type="checkbox" [checked]="preferences.snapRulerMajor()" (change)="preferences.setMeasurement('snapRulerMajor', !preferences.snapRulerMajor())" /></label>
-        <label>{{ t('Snap minor ruler ticks') }}<input type="checkbox" [checked]="preferences.snapRulerMinor()" (change)="preferences.setMeasurement('snapRulerMinor', !preferences.snapRulerMinor())" /></label>
+        <div class="tick-snapping" role="group" [attr.aria-label]="t('Snap to ruler ticks')">
+          <span class="tick-title">{{ t('Snap to ruler ticks') }}</span>
+          <label class="tick-row">{{ t('Major') }}<input class="toggle-switch" type="checkbox" role="switch" [checked]="preferences.snapRulerMajor()" (change)="preferences.setMeasurement('snapRulerMajor', !preferences.snapRulerMajor())" /></label>
+          <label class="tick-row">{{ t('Minor') }}<input class="toggle-switch" type="checkbox" role="switch" [checked]="preferences.snapRulerMinor()" (change)="preferences.setMeasurement('snapRulerMinor', !preferences.snapRulerMinor())" /></label>
+        </div>
         <label>{{ t('Snap radius') }} · {{ t('Dimensions') }} (px)<input type="number" min="0" max="100" [value]="preferences.dimensionSnapRadius()" (change)="preferences.setMeasurement('dimensionSnapRadius', number($event))" /></label>
         <label>{{ t("Grid spacing") }} ({{ preferences.distanceUnit() }})<input type="number" [min]="displayDistance(0.01)" step="any" [value]="displayDistance(preferences.gridSize())" (change)="preferences.setMeasurement('gridSize', distanceInput($event))" /></label>
         @for (aid of measurementAids; track aid.id) {<label>{{ t('Snap radius') }} · {{ t(aid.label) }} (px)<input type="number" min="0" max="100" [value]="snapRadius(aid.id)" (change)="setSnapRadius(aid.id, number($event))" /></label>}
@@ -1318,6 +1422,7 @@
     }
     @for (id of flyoutActions(); track id) {
       <button role="menuitem" [disabled]="!commandEnabled(id)" (click)="runCommand(id)">
+        @if (commandIcon(id)) {<img [src]="'/assets/icons/' + commandIcon(id) + '.svg'" alt="" />}
         <span>{{ t(commandLabel(id)) }}</span
         ><kbd>{{ shortcut(id) }}</kbd>
       </button>
@@ -1340,6 +1445,16 @@
           }
         </div></fieldset>
       }
+      <fieldset class="dash-control"><legend>{{ t('Line type') }}</legend>
+        <div class="dash-row">
+          <select [attr.aria-label]="t('Line type')" [value]="dashPreset()" (change)="setDashPreset(text($event))">
+            @for (preset of dashPresets; track preset.id) {<option [value]="preset.id">{{ t(preset.label) }}</option>}
+          </select>
+          @for (field of dashFields; track field) {
+            <input type="number" min="0" max="1000" step="any" [value]="dashPattern()[field] ?? ''" [placeholder]="dashPlaceholder(field)" [attr.aria-label]="t(field % 2 === 0 ? 'Dash length' : 'Gap length') + ' ' + (field - (field % 2)) / 2" (change)="setDashValue(field, $event)" />
+          }
+        </div>
+      </fieldset>
       <fieldset class="line-ending-control"><legend>{{ t('Line endings') }}</legend>
         <div class="ending-columns">
           @for (side of lineEndSides; track side) {
@@ -1357,6 +1472,49 @@
 
 @if (contextMenu(); as context) {
   <xds-context-menu [entries]="contextEntries()" [label]="t(context.target.kind === 'node' ? 'Anchor actions' : 'Object actions')" [x]="context.x" [y]="context.y" (action)="executeContext($event)" (dismiss)="dismissContext()" />
+}
+
+@if (confirmation(); as pending) {
+  <div class="modal-backdrop"><section class="server-dialog confirm-dialog" role="alertdialog" aria-modal="true" aria-labelledby="confirm-title" aria-describedby="confirm-message" (keydown.escape)="confirmation.set(null); $event.stopPropagation()">
+    <h2 id="confirm-title">{{ t(pending.title) }}</h2>
+    <p id="confirm-message">{{ t(pending.message) }}</p>
+    <div class="dialog-actions"><button type="button" autofocus (click)="confirmation.set(null)">{{ t("Cancel") }}</button><button type="button" class="danger" (click)="confirm()">{{ t(pending.action) }}</button></div>
+  </section></div>
+}
+
+@if (pageDialog(); as pageMode) {
+  <div class="modal-backdrop"><form class="server-dialog page-dialog" role="dialog" aria-modal="true" [attr.aria-label]="t('Document dimensions')" (submit)="$event.preventDefault(); applyPageDialog()" (keydown.escape)="pageDialog.set(null); $event.stopPropagation()">
+    <h2>{{ t(pageMode === 'format' ? 'Document dimensions' : pageMode === 'expand' ? 'Expand document' : 'Crop document') }}</h2>
+    @if (pageMode === 'format') {
+      <label class="wide-label">{{ t('Format family') }}<select [value]="pageCategory()" (change)="setPageCategory($event)">@for (category of pageCategories; track category.id) {<option [value]="category.id">{{ t(category.label) }}</option>}</select></label>
+      <label class="wide-label">{{ t('Format') }}<select [value]="pageFormatId()" (change)="pageFormatId.set(text($event))">@for (format of pageFormats(); track format.id) {<option [value]="format.id">{{ format.label }}</option>}</select></label>
+      <label class="wide-label">{{ t('Resolution') }}<select [disabled]="pageFormat().unit === 'px'" [value]="pageResolution()" (change)="pageResolution.set(number($event))">@for (resolution of pageResolutions; track resolution) {<option [value]="resolution">{{ resolution }} dpi</option>}</select></label>
+      <label class="wide-label">{{ t('Orientation') }}<select [value]="pageOrientation()" (change)="pageOrientation.set($any(text($event)))"><option value="portrait">{{ t('Portrait') }}</option><option value="landscape">{{ t('Landscape') }}</option></select></label>
+      <label class="wide-label">{{ t('Ruler units') }}<select [value]="preferences.distanceUnit()" (change)="setUnit('distanceUnit', $event)">@for (unit of units; track unit) {<option [value]="unit">{{ unit }}</option>}</select></label>
+      <label class="wide-label color-row">{{ t('Background') }}<input class="color-value" type="text" maxlength="9" [value]="pageBackground()" (change)="pageBackground.set(text($event))" /><input class="color-swatch" type="color" [value]="colorValue(pageBackground())" (input)="pageBackground.set(text($event))" [attr.aria-label]="t('Background')" /></label>
+      <p class="typography-note">{{ t('Page') }}: {{ pagePixels().width }} x {{ pagePixels().height }} px @if (!pageFits()) {<strong>· {{ t('The page must stay between 16 and 4096 pixels.') }}</strong>}</p>
+      <div class="section-label">{{ t('Margin guides') }} · {{ preferences.distanceUnit() }}</div>
+      <div class="property-grid">
+        @for (edge of pageEdgeKeys; track edge) {
+          <label>{{ t(edge === 'top' ? 'Top' : edge === 'right' ? 'Right' : edge === 'bottom' ? 'Bottom' : 'Left') }}<input type="number" min="0" step="any" [value]="marginDistance(pageMargins()[edge])" (change)="setPageMargin(edge, $event)" /></label>
+        }
+      </div>
+      <label class="wide-label toggle-row">{{ t('Margin guides') }}<input class="toggle-switch" type="checkbox" role="switch" [checked]="pageMargins().edges" (change)="togglePageMargin('edges', $any($event.target).checked)" /></label>
+      <label class="wide-label toggle-row">{{ t('Vertical centre guide') }}<input class="toggle-switch" type="checkbox" role="switch" [checked]="pageMargins().centerX" (change)="togglePageMargin('centerX', $any($event.target).checked)" /></label>
+      <label class="wide-label toggle-row">{{ t('Horizontal centre guide') }}<input class="toggle-switch" type="checkbox" role="switch" [checked]="pageMargins().centerY" (change)="togglePageMargin('centerY', $any($event.target).checked)" /></label>
+      <label class="wide-label">{{ t('Registration marks') }}<select [value]="pageMarks()" (change)="pageMarks.set($any(text($event)))">@for (option of registrationOptions; track option) {<option [value]="option">{{ t(registrationLabels[option]) }}</option>}</select></label>
+      @if (!pageMarksFit()) {<p class="typography-note"><strong>{{ t('The registration marks do not fit inside this page.') }}</strong></p>}
+    } @else {
+      <p class="typography-note">{{ t(pageMode === 'expand' ? 'Add space on each edge; the artwork moves with the page.' : 'Remove space on each edge; the artwork keeps its position on what remains.') }}</p>
+      <div class="property-grid">
+        @for (edge of pageEdgeKeys; track edge) {
+          <label>{{ t(edge === 'top' ? 'Top' : edge === 'right' ? 'Right' : edge === 'bottom' ? 'Bottom' : 'Left') }}<input type="number" min="0" step="any" [value]="marginDistance(pageEdges()[edge])" (change)="setPageEdge(edge, $event)" /></label>
+        }
+      </div>
+      <p class="typography-note">{{ t('Page') }}: {{ editor.document().width }} x {{ editor.document().height }} px</p>
+    }
+    <div class="dialog-actions"><button type="button" (click)="pageDialog.set(null)">{{ t('Cancel') }}</button><button type="submit" [disabled]="pageMode === 'format' && (!pageFits() || !pageMarksFit())">{{ t('Apply') }}</button></div>
+  </form></div>
 }
 
 @if (transformDialog(); as mode) {

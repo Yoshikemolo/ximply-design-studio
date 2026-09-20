@@ -1,7 +1,7 @@
 /** Geometry remains in CSS pixels; units change presentation only. */
-export type Unit = "px" | "pt" | "mm" | "cm" | "in" | "ft";
-export const measurementUnits: readonly Unit[] = ["px", "pt", "mm", "cm", "in", "ft"];
-const pixelsPerUnit: Record<Unit, number> = { px: 1, pt: 96 / 72, mm: 96 / 25.4, cm: 96 / 2.54, in: 96, ft: 1152 };
+export type Unit = "px" | "pt" | "mm" | "cm" | "m" | "in" | "ft";
+export const measurementUnits: readonly Unit[] = ["px", "pt", "mm", "cm", "m", "in", "ft"];
+const pixelsPerUnit: Record<Unit, number> = { px: 1, pt: 96 / 72, mm: 96 / 25.4, cm: 96 / 2.54, m: 96 / 0.0254, in: 96, ft: 1152 };
 export function isUnit(value: unknown): value is Unit {
   return typeof value === "string" && measurementUnits.includes(value as Unit);
 }

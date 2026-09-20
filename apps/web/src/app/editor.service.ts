@@ -1,9 +1,12 @@
 import { Procedural, defaultProcedural, generateProcedural, syncProcedurals, validProcedural } from "../../../../packages/domain/src/procedural";
-import { openingHost } from "./procedural-placement";
+import { openingHost, wallSnapPoint, WallSnap } from "./procedural-placement";
+import { BrushSettings, BrushType, BRUSH_TYPES, brushStamps, defaultBrush, validBrushSettings } from "../../../../packages/domain/src/brush";
+import { wallAxis, wallBoolean, WallOperation } from "../../../../packages/domain/src/wall-boolean";
+import { MarginGuides, MARGIN_GUIDE_PREFIX, marginGuidePositions, PageEdges, PageSize, PAGE_MAXIMUM, PAGE_MINIMUM, pageSizeFits, RegistrationMarks, REGISTRATION_LAYER_NAME, registrationFits, registrationLayer, resizePage } from "../../../../packages/domain/src/page-setup";
 import { Dimension, DimensionFormat, defaultDimensionFormat, dimensionGeometry } from "../../../../packages/domain/src/dimensions";
 import { LineEnds, defaultLineEnds, validLineEnds } from "../../../../packages/domain/src/line-endings";
-import { snapDimensionPoint, DimensionSnap } from "./dimension-snapping";
-import { AreaSelectionKind, SelectionArea, layerIntersectsArea } from "../../../../packages/domain/src/selection-area";
+import { snapDimensionPoint, snapDimensionOffset, DimensionSnap } from "./dimension-snapping";
+import { AreaSelectionKind, SelectionArea, layerInsideArea, layerIntersectsArea } from "../../../../packages/domain/src/selection-area";
 import { blendCompatible, blendProgress, interpolateBlendLayer, syncBlends, ObjectBlend, BlendEasing } from "../../../../packages/domain/src/object-blend";
 import { defaultTypography, defaultTextLayout, FONT_FAMILIES, layoutText, TextLayoutOptions, TextTypography } from "../../../../packages/domain/src/text-layout";
 import { snapPoint, SnapConfig, rulerSnapSteps } from "../../../../packages/domain/src/measurements";
@@ -53,6 +56,7 @@ import {
   blankDocument,
   defaultStrokeStyle,
   StrokeStyle,
+  validDashPattern,
   bounds,
   DocumentHistory,
   Layer,
@@ -75,6 +79,14 @@ export type ContextTarget = { revision: number; layerId: string } & (
   { kind: "object"; groupPath?: string[]; selectionIds?: string[] } |
   { kind: "node"; path: number; index: number }
 );
+/** Walls within this angle of a 45 degree direction are drawn on it, which keeps plans orthogonal. */
+const WALL_ANGLE_TOLERANCE = 6 * Math.PI / 180;
+const WALL_POCHE = "#3f4753";
+const WALL_OUTLINE = "#161b22";
+const WORKSPACE_KEY = "xds-workspace";
+const MAX_TABS = 12;
+interface WorkspaceTab { document: StudioDocument; history: DocumentHistory; dirty: boolean; selectedId: string | null; selectedIds: string[] }
+
 @Injectable({ providedIn: "root" })
 export class EditorService {
   contextAt(point: Point): ContextTarget | null {
@@ -365,14 +377,16 @@ export class EditorService {
     this.changed(); return true;
   }
 
-  readonly proceduralDefaults = signal<Record<Procedural['type'],Procedural>>({wall:defaultProcedural('wall'),door:defaultProcedural('door'),window:defaultProcedural('window'),pillar:defaultProcedural('pillar')});
-  private proceduralGesture?: {before:StudioDocument;start:Point;type:'wall'|'pillar';id:string;selectedId:string|null;selectedIds:string[]};
+  readonly proceduralDefaults = signal<Record<Procedural['type'],Procedural>>({wall:defaultProcedural('wall'),door:defaultProcedural('door'),window:defaultProcedural('window'),pillar:defaultProcedural('pillar'),stair:defaultProcedural('stair')});
+  private proceduralGesture?: {before:StudioDocument;start:Point;type:'wall'|'pillar'|'stair';id:string;selectedId:string|null;selectedIds:string[]};
   updateProceduralDefaults(type:Procedural['type'],patch:Record<string,unknown>):boolean {
     const value=this.proceduralPatch(this.proceduralDefaults()[type],patch);if(!validProcedural(value))return false;
     this.proceduralDefaults.update(all=>({...all,[type]:value}));return true;
   }
   private proceduralPatch(value:Procedural,patch:Record<string,unknown>):Procedural {
     const next={...value,...patch,type:value.type} as Procedural;
+    // An explicit undefined clears an optional parameter instead of storing an empty key.
+    for(const key of Object.keys(patch))if(patch[key]===undefined)delete (next as unknown as Record<string,unknown>)[key];
     if((next.type==='door'||next.type==='window')&&(value.type==='door'||value.type==='window')&&patch['width']!==undefined&&patch['leafWidths']===undefined)next.leafWidths=value.leafWidths.map(w=>w*next.width/value.width);
     if(next.type==='pillar'&&next.shape==='circle'){if(patch['depth']!==undefined&&patch['width']===undefined)next.width=next.depth;else next.depth=next.width;}
     return next;
@@ -384,11 +398,35 @@ export class EditorService {
     this.history.commit(this.document());this.document.set(next);const defaults=structuredClone(procedural);if(defaults.type==='door'||defaults.type==='window')delete defaults.host;
     this.proceduralDefaults.update(all=>({...all,[procedural.type]:defaults}));this.changed();return true;
   }
+  /** Point where the next wall of a run starts; cleared when the run ends. */
+  readonly wallChain = signal<Point|null>(null);
+  readonly wallSnapTarget = signal<WallSnap|null>(null);
+  /** Wall ends and axes take priority over the ordinary grid snap so runs share exact joints. */
+  wallPoint(point:Point,exclude?:string):Point {
+    const target=wallSnapPoint(this.document().layers,point,12/this.zoom(),exclude);
+    this.wallSnapTarget.set(target);
+    return target?.point??this.snap(point);
+  }
+  hoverWall(point:Point) { if(this.tool()==='wall'&&!this.proceduralGesture)this.wallTarget(this.wallChain(),point); }
+  /** Where the wall being drawn ends: a wall joint when one is near, otherwise a point that leans to 45 degrees. */
+  wallTarget(start:Point|null,point:Point,exclude?:string):Point {
+    const snapped=this.wallPoint(point,exclude);
+    if(this.wallSnapTarget()||!start)return snapped;
+    const dx=point.x-start.x,dy=point.y-start.y;
+    if(Math.hypot(dx,dy)<1e-6)return snapped;
+    const step=Math.PI/4,angle=Math.atan2(dy,dx),nearest=Math.round(angle/step)*step;
+    let difference=Math.abs(angle-nearest);
+    if(difference>Math.PI)difference=Math.PI*2-difference;
+    return difference<=WALL_ANGLE_TOLERANCE?snapDirection(start,point,45):snapped;
+  }
   private proceduralLayer(type:Procedural['type'],start:Point,end?:Point,id:string=crypto.randomUUID()):Layer {
     let procedural=structuredClone(this.proceduralDefaults()[type]);
-    let layer={...newLayer('path',id,start,this.fill(),this.stroke(),this.size()),strokeStyle:{alignment:'center' as const,join:'miter' as const,cap:'butt' as const}};
+    // Architectural defaults: walls read as solid construction, openings as outlines.
+    const paint=type==='door'||type==='window'?{fill:'none',stroke:WALL_OUTLINE}:{fill:WALL_POCHE,stroke:WALL_OUTLINE};
+    let layer={...newLayer('path',id,start,paint.fill,paint.stroke,Math.min(this.size(),2)),strokeStyle:{alignment:'center' as const,join:'miter' as const,cap:'butt' as const}};
     if(type==='wall'&&procedural.type==='wall'){const b=end??{x:start.x+1,y:start.y};procedural={...procedural,start:{x:0,y:0},end:{x:b.x-start.x,y:b.y-start.y}};}
     if(type==='pillar'&&procedural.type==='pillar'&&end){const box=bounds(start,end);layer={...layer,...box};procedural={...procedural,width:Math.max(1,box.width),depth:Math.max(1,box.height)};if(procedural.shape==='circle')procedural.depth=procedural.width;}
+    if(type==='stair'&&procedural.type==='stair'&&end){const box=bounds(start,end);layer={...layer,...box};procedural={...procedural,width:Math.max(1,box.width),length:Math.max(1,box.height)};}
     if(procedural.type==='door'||procedural.type==='window'){const host=openingHost(this.document().layers,start,procedural.width,12/this.zoom());if(host)procedural.host=host;else delete procedural.host;layer.x=start.x-procedural.width/2;layer.y=start.y-procedural.depth/2;}
     layer.name=type[0].toUpperCase()+type.slice(1);layer.procedural=procedural;return generateProcedural(layer,this.document());
   }
@@ -398,10 +436,23 @@ export class EditorService {
     this.history.commit(this.document());this.document.set(next);this.selectedId.set(layer.id);this.selectedIds.set([layer.id]);this.changed();return true;
   }
   private startProcedural(type:Procedural['type'],point:Point) {
-    point=this.snap(point);if(type==='door'||type==='window'){this.createProcedural(type,point);return;}
+    if(type==='door'||type==='window'){this.createProcedural(type,this.snap(point));return;}
     if(this.document().layers.length>=150)return;
+    if(type==='wall'){
+      const chain=this.wallChain(),target=this.wallTarget(this.wallChain(),point);
+      if(chain&&Math.hypot(target.x-chain.x,target.y-chain.y)>=1){
+        if(this.createProcedural('wall',chain,target))this.wallChain.set(target);
+        return;
+      }
+      this.wallChain.set(target);
+      this.proceduralGesture={before:structuredClone(this.document()),start:target,type,id:crypto.randomUUID(),selectedId:this.selectedId(),selectedIds:[...this.selectedIds()]};
+      return;
+    }
+    point=this.snap(point);
     this.proceduralGesture={before:structuredClone(this.document()),start:point,type,id:crypto.randomUUID(),selectedId:this.selectedId(),selectedIds:[...this.selectedIds()]};
   }
+  /** Ends an open wall run without removing what it already drew. */
+  finishWallRun() { this.wallChain.set(null); this.wallSnapTarget.set(null); }
   private detachUnselectedHost(layer:Layer,ids:Set<string>):Layer {
     const p=layer.procedural;return (p?.type==='door'||p?.type==='window')&&p.host&&!ids.has(p.host.wallId)?this.detachOpening(layer):layer;
   }
@@ -409,33 +460,202 @@ export class EditorService {
     const p=layer.procedural;if((p?.type==='door'||p?.type==='window')&&p.host){const procedural={...p};delete procedural.host;return {...layer,procedural};}return layer;
   }
 
+  // Transform pivot: the point scaling, rotation and mirroring work about.
+  readonly pivotVisible = signal(true);
+  readonly pivotLocked = signal(false);
+  readonly pivotSnap = signal(true);
+  private readonly pivotOverride = signal<{ key: string; point: Point } | null>(null);
+  private pivotGesture?: { before: { key: string; point: Point } | null };
+  /** Where a pivot placed by hand stood when the current move started. */
+  private movePivot?: Point;
+  readonly selectionKey = computed(() => this.selectedLayers().map((layer) => layer.id).sort().join(","));
+  /** The moved pivot while the same objects stay selected; otherwise the geometric centre. */
+  readonly pivot = computed<Point>(() => {
+    const override = this.pivotOverride();
+    return override && override.key === this.selectionKey() ? override.point : this.transformationCenter();
+  });
+  readonly pivotMoved = computed(() => this.pivotOverride()?.key === this.selectionKey());
+  setPivot(point: Point) {
+    if (!Number.isFinite(point.x) || !Number.isFinite(point.y) || !this.selectedLayers().length) return;
+    this.pivotOverride.set({ key: this.selectionKey(), point });
+  }
+  resetPivot() { this.pivotOverride.set(null); }
+  /**
+   * Magnetism for the pivot: the centre of the selection, then the corners, edge middles
+   * and edges of its box, then vertices and edges of other artwork, then the active aids.
+   */
+  pivotPoint(point: Point): Point {
+    if (!this.pivotSnap()) return point;
+    const radius = this.dimensionSnapRadius() / this.zoom();
+    const distance = (candidate: Point) => Math.hypot(point.x - candidate.x, point.y - candidate.y);
+    const centre = this.transformationCenter();
+    if (distance(centre) <= radius) return centre;
+    const box = selectionBounds(this.selectedLayers().filter((layer) => !layer.guide));
+    const singular: Point[] = [];
+    if (box.width || box.height) {
+      const left = box.x, right = box.x + box.width, top = box.y, bottom = box.y + box.height;
+      const middleX = box.x + box.width / 2, middleY = box.y + box.height / 2;
+      singular.push(
+        { x: left, y: top }, { x: right, y: top }, { x: right, y: bottom }, { x: left, y: bottom },
+        { x: middleX, y: top }, { x: right, y: middleY }, { x: middleX, y: bottom }, { x: left, y: middleY },
+      );
+    }
+    const nearest = singular.filter((candidate) => distance(candidate) <= radius).sort((a, b) => distance(a) - distance(b))[0];
+    if (nearest) return nearest;
+    if (box.width || box.height) {
+      // The sides of the box attract as lines, not only at their singular points.
+      const edges: [Point, Point][] = [
+        [{ x: box.x, y: box.y }, { x: box.x + box.width, y: box.y }],
+        [{ x: box.x + box.width, y: box.y }, { x: box.x + box.width, y: box.y + box.height }],
+        [{ x: box.x + box.width, y: box.y + box.height }, { x: box.x, y: box.y + box.height }],
+        [{ x: box.x, y: box.y + box.height }, { x: box.x, y: box.y }],
+      ];
+      const projections = edges.map(([a, b]) => {
+        const dx = b.x - a.x, dy = b.y - a.y, squared = dx * dx + dy * dy || 1;
+        const t = Math.max(0, Math.min(1, ((point.x - a.x) * dx + (point.y - a.y) * dy) / squared));
+        return { x: a.x + dx * t, y: a.y + dy * t };
+      }).filter((candidate) => distance(candidate) <= radius).sort((a, b) => distance(a) - distance(b));
+      if (projections[0]) return projections[0];
+    }
+    const target = snapDimensionPoint(this.document().layers, point, radius, true);
+    return target?.point ?? this.snap(point);
+  }
+  /**
+   * The handle can be grabbed whenever it is shown, unlocked and something is selected, with the
+   * selection and transform tools. A locked pivot never takes a press, so the artwork moves.
+   */
+  readonly pivotGrabbable = computed(() =>
+    this.pivotVisible() && !this.pivotLocked() && this.selectedLayers().length > 0 &&
+    ["select", "rotate", "scale", "mirror"].includes(this.tool()));
+  /** Half the extent of the drawn mark, the box inside which a press belongs to the pivot. */
+  private pivotReach() { return 9 / this.zoom(); }
+  /**
+   * The pivot belongs to the selection, so a translation of the artwork carries it along; only a
+   * press on its own mark, which a locked pivot never takes, moves it away from the objects.
+   */
+  private shiftPivot(dx: number, dy: number) {
+    const override = this.pivotOverride();
+    if (!override || override.key !== this.selectionKey()) return;
+    this.pivotOverride.set({ key: override.key, point: { x: override.point.x + dx, y: override.point.y + dy } });
+  }
+  /**
+   * A double press on the mark returns the pivot to the geometric centre of the selection.
+   * Returns whether the press was taken, so the canvas leaves the artwork alone when it was.
+   */
+  resetPivotAt(point: Point): boolean {
+    if (!this.pivotGrabbable() || !this.pivotMoved()) return false;
+    const pivot = this.pivot();
+    if (Math.abs(point.x - pivot.x) > this.pivotReach() || Math.abs(point.y - pivot.y) > this.pivotReach()) return false;
+    this.resetPivot();
+    this.revision.update((x) => x + 1);
+    return true;
+  }
+  private startPivotDrag(point: Point): boolean {
+    if (!this.pivotGrabbable()) return false;
+    // A press inside the mark takes the pivot; anywhere else moves the artwork and the pivot with it.
+    const pivot = this.pivot();
+    if (Math.abs(point.x - pivot.x) > this.pivotReach() || Math.abs(point.y - pivot.y) > this.pivotReach()) return false;
+    this.pivotGesture = { before: this.pivotOverride() };
+    this.setPivot(this.pivotPoint(point));
+    return true;
+  }
   readonly dimensionsVisible = signal(true);
   readonly dimensionsLocked = signal(false);
   readonly dimensionsSnap = signal(true);
   readonly dimensionSnapRadius = signal(10);
   readonly dimensionDefaults = signal<DimensionFormat>({ ...defaultDimensionFormat });
+  /** While on, a measurement format edit applies to every dimension in the document. */
+  readonly unifyDimensionFormat = signal(false);
+  setUnifyDimensionFormat(value:boolean) {
+    this.unifyDimensionFormat.set(value);
+    if(value)this.applyFormatToDimensions(this.selected()?.dimension?.format??this.dimensionDefaults());
+  }
+  private applyFormatToDimensions(format:DimensionFormat):boolean {
+    const before=this.document();
+    const layers=before.layers.map(layer=>layer.dimension&&!this.isEffectivelyLocked(layer)
+      ?{...layer,dimension:{...layer.dimension,format:{...format,...(layer.dimension.kind==='angular'?{unit:layer.dimension.format.unit}:{})}}}
+      :layer);
+    if(JSON.stringify(layers)===JSON.stringify(before.layers))return false;
+    try{parseDocument(JSON.stringify({...before,layers}));}catch{return false;}
+    this.history.commit(before);this.document.set({...before,layers});this.dimensionDefaults.set({...format});this.changed();return true;
+  }
   readonly lineEnds = signal<LineEnds>(structuredClone(defaultLineEnds));
-  readonly dimensionDraft = signal<{kind:'linear'|'angular';points:Point[];cursor:Point} | null>(null);
+  readonly dimensionDraft = signal<{kind:'linear'|'angular'|'chain'|'radius'|'diameter';points:Point[];cursor:Point;ready?:boolean} | null>(null);
   readonly dimensionSnapTarget = signal<DimensionSnap | null>(null);
   private dimensionLabelGesture?: {before:StudioDocument;id:string};
   setDimensionsLocked(value:boolean) { this.dimensionsLocked.set(value); if(value&&this.dimensionLabelGesture)this.cancel(); }
+  /** Label placement lines up with a parallel dimension already in the drawing when magnetism is on. */
+  dimensionOffsetPoint(anchors:Point[],point:Point):Point {
+    if(!this.dimensionsSnap())return point;
+    return snapDimensionOffset(this.document().layers,anchors,point,this.dimensionSnapRadius()/this.zoom())??point;
+  }
   private dimensionPoint(point:Point,finalAnchor:boolean):Point {
     const target=this.dimensionsSnap()?snapDimensionPoint(this.document().layers,point,this.dimensionSnapRadius()/this.zoom(),finalAnchor):null;
     this.dimensionSnapTarget.set(target);return target?.point??this.snap(point);
   }
-  private startDimension(point:Point,kind:'linear'|'angular') {
+  /** One offset line shared by consecutive measurements, committed as a single history entry. */
+  createChainDimension(points:Point[],labelPosition:Point):boolean {
+    if(points.length<3||this.document().layers.length+points.length-1>150)return false;
+    const layers:Layer[]=[];
+    for(let i=0;i<points.length-1;i++){
+      const layer=this.buildDimension('linear',[points[i],points[i+1]],labelPosition,crypto.randomUUID());
+      if(!layer)return false;
+      layers.push(layer);
+    }
+    const before=this.document();
+    let next:StudioDocument;
+    try{next=syncProcedurals({...before,layers:[...before.layers,...layers]});parseDocument(JSON.stringify(next));}catch{return false;}
+    this.history.commit(before);this.document.set(next);
+    this.selectedIds.set(layers.map(l=>l.id));this.selectedId.set(layers.at(-1)!.id);this.changed();return true;
+  }
+  private startChainDimension(point:Point) {
+    const draft=this.dimensionDraft();
+    if(!draft||draft.kind!=='chain'){const p=this.dimensionPoint(point,true);this.dimensionDraft.set({kind:'chain',points:[p],cursor:p});return;}
+    if(draft.ready){
+      if(this.createChainDimension(draft.points,this.dimensionOffsetPoint(draft.points,point))){this.dimensionDraft.set(null);this.dimensionSnapTarget.set(null);}
+      return;
+    }
+    const p=this.dimensionPoint(point,true),last=draft.points.at(-1)!;
+    // Clicking the last point again closes the chain and asks for the offset.
+    if(Math.hypot(p.x-last.x,p.y-last.y)<1e-6){
+      if(draft.points.length>=3)this.dimensionDraft.set({...draft,ready:true,cursor:p});
+      return;
+    }
+    if(draft.points.length>=12)return;
+    this.dimensionDraft.set({...draft,points:[...draft.points,p],cursor:p});
+  }
+  private startDimension(point:Point,kind:'linear'|'angular'|'radius'|'diameter') {
     let draft=this.dimensionDraft();if(draft&&draft.kind!==kind)draft=null;
     const count=kind==='angular'?3:2;
-    if(!draft){const p=this.dimensionPoint(point,false);this.dimensionDraft.set({kind,points:[p],cursor:p});return;}
-    if(draft.points.length<count){const p=this.dimensionPoint(point,draft.points.length===count-1);if(draft.points.some(previous=>Math.hypot(p.x-previous.x,p.y-previous.y)<1e-6))return;this.dimensionDraft.set({...draft,points:[...draft.points,p],cursor:p});return;}
-    this.createDimension(kind,draft.points,point);this.dimensionDraft.set(null);this.dimensionSnapTarget.set(null);
+    if(!draft){const p=this.dimensionPoint(point,true);this.dimensionDraft.set({kind,points:[p],cursor:p});return;}
+    if(draft.points.length<count){const p=this.dimensionPoint(point,true);if(draft.points.some(previous=>Math.hypot(p.x-previous.x,p.y-previous.y)<1e-6))return;this.dimensionDraft.set({...draft,points:[...draft.points,p],cursor:p});return;}
+    this.createDimension(kind,draft.points,this.dimensionOffsetPoint(draft.points,point));this.dimensionDraft.set(null);this.dimensionSnapTarget.set(null);
   }
-  createDimension(kind:'linear'|'angular',anchors:Point[],labelPosition:Point):boolean {
-    if(anchors.length!==(kind==='angular'?3:2)||this.document().layers.length>=150||[...anchors,labelPosition].some(p=>!Number.isFinite(p.x)||!Number.isFinite(p.y)))return false;
-    if(Math.hypot(anchors[1].x-anchors[0].x,anchors[1].y-anchors[0].y)<1e-6)return false;
+  /** Snapped hover target while a dimension tool waits for an anchor; placement of the label is free. */
+  hoverDimension(point:Point) {
+    const draft=this.dimensionDraft(),count=draft?.kind==='chain'?Infinity:(draft?.kind==='angular'?3:2);
+    if(draft&&(draft.ready===true||draft.points.length>=count)){this.dimensionSnapTarget.set(null);return;}
+    this.dimensionPoint(point,true);
+  }
+  /** Live annotation shown once every anchor is fixed, so the offset and label side are visible before the last click. */
+  readonly dimensionPreview=computed<Layer|null>(()=>{
+    const draft=this.dimensionDraft();
+    if(!draft)return null;
+    if(draft.kind==='chain')return draft.ready?this.buildDimension('linear',[draft.points[0],draft.points.at(-1)!],draft.cursor,'__dimension_preview__'):null;
+    if(draft.points.length<(draft.kind==='angular'?3:2))return null;
+    return this.buildDimension(draft.kind,draft.points,draft.cursor,'__dimension_preview__');
+  });
+  private buildDimension(kind:Dimension['kind'],anchors:Point[],labelPosition:Point,id:string):Layer|null {
+    if(anchors.length!==(kind==='angular'?3:2)||[...anchors,labelPosition].some(p=>!Number.isFinite(p.x)||!Number.isFinite(p.y)))return null;
+    if(Math.hypot(anchors[1].x-anchors[0].x,anchors[1].y-anchors[0].y)<1e-6)return null;
     const points=[...anchors,labelPosition],x=Math.min(...points.map(p=>p.x)),y=Math.min(...points.map(p=>p.y));
     const local=(p:Point)=>({x:p.x-x,y:p.y-y});
-    const layer:Layer={...newLayer('path',crypto.randomUUID(),{x,y},this.stroke(),this.stroke(),Math.min(this.size(),2)),name:kind==='linear'?'Linear dimension':'Angular dimension',width:Math.max(1,...points.map(p=>p.x-x)),height:Math.max(1,...points.map(p=>p.y-y)),fontSize:14,points:anchors.map(local),lineEnds:{start:{kind:'triangle',placement:'tip',size:10},end:{kind:'triangle',placement:'tip',size:10},linked:true},dimension:{kind,anchors:anchors.map(local),labelPosition:local(labelPosition),text:'',labelSize:{width:160,height:40},format:{...this.dimensionDefaults()},extension:{stroke:this.stroke(),strokeWidth:1,gap:4,overshoot:6}}};
+    // Extension gap ~1.5 mm and overshoot ~2 mm at 96 ppi (ASME Y14.2 / ISO 129-1 practice).
+    return {...newLayer('path',id,{x,y},this.stroke(),this.stroke(),Math.min(this.size(),2)),name:kind==='linear'?'Linear dimension':kind==='angular'?'Angular dimension':kind==='radius'?'Radius dimension':'Diameter dimension',width:Math.max(1,...points.map(p=>p.x-x)),height:Math.max(1,...points.map(p=>p.y-y)),fontSize:14,points:anchors.map(local),lineEnds:{start:{kind:'triangle',placement:'tip',size:10},end:{kind:'triangle',placement:'tip',size:10},linked:true},dimension:{kind,anchors:anchors.map(local),labelPosition:local(labelPosition),text:'',labelSize:{width:160,height:40},format:{...this.dimensionDefaults()},extension:{stroke:this.stroke(),strokeWidth:1,gap:6,overshoot:8}}};
+  }
+  createDimension(kind:Dimension['kind'],anchors:Point[],labelPosition:Point):boolean {
+    if(this.document().layers.length>=150)return false;
+    const layer=this.buildDimension(kind,anchors,labelPosition,crypto.randomUUID());if(!layer)return false;
     try{parseDocument(JSON.stringify({...this.document(),layers:[...this.document().layers,layer]}));}catch{return false;}
     this.history.commit(this.document());this.document.update(d=>({...d,layers:[...d.layers,layer]}));this.selectedId.set(layer.id);this.selectedIds.set([layer.id]);this.changed();return true;
   }
@@ -445,6 +665,7 @@ export class EditorService {
     try{parseDocument(JSON.stringify({...this.document(),layers:this.document().layers.map(l=>l.id===selected.id?{...l,dimension}:l)}));}catch{return;}
     if(JSON.stringify(dimension)===JSON.stringify(selected.dimension))return;
     this.history.commit(this.document());this.setLayer(selected.id,{dimension});this.dimensionDefaults.set({...dimension.format});this.changed();
+    if(patch.format&&this.unifyDimensionFormat())this.applyFormatToDimensions(dimension.format);
   }
   setLineEnds(patch:Partial<LineEnds>) {
     const value={...this.lineEnds(),...patch};
@@ -523,9 +744,20 @@ export class EditorService {
     () =>
       this.document().layers.find((l) => l.id === this.selectedId()) ?? null,
   );
-  readonly history = new DocumentHistory();
+  history = new DocumentHistory();
   readonly renderer = new CanvasRenderer();
   painting?: { id: string; canvas: HTMLCanvasElement };
+  // Brush and eraser keep their own tip settings.
+  readonly brushSettings = signal<Record<"brush" | "eraser", BrushSettings>>({ brush: { ...defaultBrush }, eraser: { ...defaultBrush } });
+  brushFor(tool: "brush" | "eraser") { return this.brushSettings()[tool]; }
+  updateBrush(tool: "brush" | "eraser", patch: Partial<BrushSettings>): boolean {
+    const next = { ...this.brushSettings()[tool], ...patch };
+    if (!validBrushSettings(next)) return false;
+    this.brushSettings.update((all) => ({ ...all, [tool]: next }));
+    return true;
+  }
+  /** Brush subtools pick a tip shape and switch to the brush itself. */
+  setBrushType(type: BrushType) { if (BRUSH_TYPES.includes(type)) this.updateBrush("brush", { type }); }
   private guideGesture?: { before: StudioDocument; id: string; selectedId: string | null; selectedIds: string[] };
 
   private applyAppearance(patch: Partial<Layer>) {
@@ -538,6 +770,7 @@ export class EditorService {
     this.changed();
   }
   setStrokeStyle(patch: Partial<StrokeStyle>) {
+    if (patch.dash !== undefined && patch.dash.length && !validDashPattern(patch.dash)) return;
     if (patch.alignment !== undefined && !["center", "inside", "outside"].includes(patch.alignment)) return;
     if (patch.join !== undefined && !["round", "bevel", "miter"].includes(patch.join)) return;
     if (patch.cap !== undefined && !["butt", "square", "round"].includes(patch.cap)) return;
@@ -669,6 +902,8 @@ export class EditorService {
   }
   readonly lastAreaSelection = signal<AreaSelectionKind>("rectangle");
   readonly areaSelection = signal<SelectionArea | null>(null);
+  /** Objects the area touches, or only the ones it encloses. */
+  readonly areaSelectionMode = signal<"intersect" | "inside">("intersect");
   private areaGesture?: { ids: string[]; primary: string | null; nodes: string[]; shift: boolean; moved: boolean };
   private startAreaSelection(point: Point, kind: AreaSelectionKind, shift: boolean) {
     this.lastAreaSelection.set(kind);
@@ -693,7 +928,10 @@ export class EditorService {
     }
     const selected = new Set(gesture.shift ? gesture.ids : []);
     for (const members of units.values()) {
-      if (!members.some(layer => layerIntersectsArea(layer, area))) continue;
+      const covered = this.areaSelectionMode() === "inside"
+        ? members.every(layer => layerInsideArea(layer, area))
+        : members.some(layer => layerIntersectsArea(layer, area));
+      if (!covered) continue;
       const remove = gesture.shift && members.every(layer => gesture.ids.includes(layer.id));
       for (const layer of members) { if (remove) selected.delete(layer.id); else selected.add(layer.id); }
     }
@@ -711,33 +949,154 @@ export class EditorService {
     ids?: string[];
     deselectNodeOnClick?: string;
   };
+  // Open documents. The active one lives in `document`, `history` and the selection signals;
+  // inactive tabs keep their own snapshot so switching never mixes undo history or selection.
+  private readonly inactiveTabs = signal<Record<string, WorkspaceTab>>({});
+  readonly tabOrder = signal<string[]>([crypto.randomUUID()]);
+  readonly activeTabId = signal<string>(this.tabOrder()[0]);
+  /** Counts document edits only; `revision` also advances for redraw-only events such as cancel. */
+  private readonly edits = signal(0);
+  /** Edit count of the active document at its last save, open or creation; -1 means unsaved. */
+  private readonly savedEdits = signal(0);
+  readonly dirty = computed(() => this.edits() !== this.savedEdits());
+  readonly tabs = computed(() => this.tabOrder().map((id) => {
+    if (id === this.activeTabId()) return { id, name: this.document().name, dirty: this.dirty(), active: true };
+    const tab = this.inactiveTabs()[id];
+    return { id, name: tab?.document.name ?? "", dirty: !!tab?.dirty, active: false };
+  }));
   constructor() {
     try {
-      const draft = localStorage.getItem("xds-draft");
-      if (draft) this.document.set(parseDocument(draft));
+      this.restoreWorkspace();
     } catch {
       this.status.set(
         "Previous draft could not be restored. Open a saved project.",
       );
     }
   }
-  private changed() {
-    this.document.set(syncProcedurals(this.document()));
-    this.synchronizeBlends();
-    this.revision.update((x) => x + 1);
-    this.renderer.prune(this.document().layers);
-    try {
-      const text = JSON.stringify(this.document());
-      if (text.length < 4_000_000) localStorage.setItem("xds-draft", text);
-      else {
+  private restoreWorkspace() {
+    const index = localStorage.getItem(WORKSPACE_KEY);
+    if (!index) {
+      // Migrate the single-document autosave written by earlier previews.
+      const legacy = localStorage.getItem("xds-draft");
+      if (legacy) {
+        this.document.set(parseDocument(legacy));
+        if (this.document().layers.length) this.savedEdits.set(-1);
         localStorage.removeItem("xds-draft");
+        this.persistWorkspace();
+      }
+      return;
+    }
+    const saved = JSON.parse(index) as { version: number; active: string; tabs: { id: string; dirty: boolean }[] };
+    if (saved.version !== 1 || !Array.isArray(saved.tabs)) throw new Error("Invalid workspace");
+    const restored: { id: string; dirty: boolean; document: StudioDocument }[] = [];
+    for (const tab of saved.tabs.slice(0, MAX_TABS)) {
+      if (typeof tab?.id !== "string" || !/^[0-9a-f-]{36}$/.test(tab.id)) continue;
+      const text = localStorage.getItem(WORKSPACE_KEY + ":" + tab.id);
+      try { if (text) restored.push({ id: tab.id, dirty: tab.dirty === true, document: parseDocument(text) }); } catch { /* Skip an unreadable tab; the others still open. */ }
+    }
+    if (!restored.length) return;
+    const active = restored.find((tab) => tab.id === saved.active) ?? restored[0];
+    this.inactiveTabs.set(Object.fromEntries(restored.filter((tab) => tab !== active).map((tab) => [tab.id, { document: tab.document, history: new DocumentHistory(), dirty: tab.dirty, selectedId: null, selectedIds: [] }])));
+    this.tabOrder.set(restored.map((tab) => tab.id));
+    this.activeTabId.set(active.id);
+    this.document.set(active.document);
+    this.savedEdits.set(active.dirty ? -1 : this.edits());
+  }
+  private persistWorkspace() {
+    try {
+      const tabs = this.tabs().map(({ id, dirty }) => ({ id, dirty }));
+      const text = JSON.stringify(this.document());
+      if (text.length < 4_000_000) localStorage.setItem(WORKSPACE_KEY + ":" + this.activeTabId(), text);
+      else {
+        localStorage.removeItem(WORKSPACE_KEY + ":" + this.activeTabId());
         this.status.set(
           "Large project: save a project file to preserve your work.",
         );
       }
+      localStorage.setItem(WORKSPACE_KEY, JSON.stringify({ version: 1, active: this.activeTabId(), tabs }));
     } catch {
       this.status.set("Browser storage is full. Save a project file.");
     }
+  }
+  /** Marks the active document as matching its last save or open. */
+  markSaved() { this.savedEdits.set(this.edits()); this.persistWorkspace(); }
+  private stashActive(): WorkspaceTab {
+    this.finishPath();
+    this.cancel();
+    return { document: this.document(), history: this.history, dirty: this.dirty(), selectedId: this.selectedId(), selectedIds: this.selectedIds() };
+  }
+  private activate(id: string, tab: WorkspaceTab) {
+    this.activeTabId.set(id);
+    this.history = tab.history;
+    this.document.set(tab.document);
+    this.selectedId.set(tab.selectedId);
+    this.selectedIds.set(tab.selectedIds);
+    this.activeNodes.set([]);
+    this.penId.set(null);
+    this.renderer.prune(tab.document.layers);
+    this.revision.update((x) => x + 1);
+    this.savedEdits.set(tab.dirty ? -1 : this.edits());
+    this.persistWorkspace();
+  }
+  /** Opens a blank document in a new tab and makes it active. */
+  newDocument(): boolean {
+    if (this.tabOrder().length >= MAX_TABS) { this.status.set("Close a document before opening another."); return false; }
+    const previous = this.activeTabId(), id = crypto.randomUUID();
+    const names = new Set(this.tabs().map((tab) => tab.name));
+    this.inactiveTabs.update((tabs) => ({ ...tabs, [previous]: this.stashActive() }));
+    let name = "Untitled exploration", n = 2;
+    while (names.has(name)) name = `Untitled exploration ${n++}`;
+    this.tabOrder.update((order) => [...order.slice(0, order.indexOf(previous) + 1), id, ...order.slice(order.indexOf(previous) + 1)]);
+    this.activate(id, { document: { ...blankDocument(), name }, history: new DocumentHistory(), dirty: false, selectedId: null, selectedIds: [] });
+    this.status.set("New document");
+    return true;
+  }
+  switchDocument(id: string) {
+    const target = this.inactiveTabs()[id];
+    if (id === this.activeTabId() || !target) return;
+    const previous = this.activeTabId(), stash = this.stashActive();
+    this.inactiveTabs.update((tabs) => { const next = { ...tabs, [previous]: stash }; delete next[id]; return next; });
+    this.activate(id, target);
+  }
+  /** Closes a tab without asking; callers confirm unsaved changes first. The last tab is replaced by a blank one. */
+  closeDocument(id: string) {
+    const order = this.tabOrder();
+    if (!order.includes(id)) return;
+    localStorage.removeItem(WORKSPACE_KEY + ":" + id);
+    if (id !== this.activeTabId()) {
+      this.inactiveTabs.update((tabs) => { const next = { ...tabs }; delete next[id]; return next; });
+      this.tabOrder.set(order.filter((x) => x !== id));
+      this.persistWorkspace();
+      return;
+    }
+    this.finishPath();
+    this.cancel();
+    const remaining = order.filter((x) => x !== id);
+    if (!remaining.length) {
+      const fresh = crypto.randomUUID();
+      this.tabOrder.set([fresh]);
+      this.activate(fresh, { document: blankDocument(), history: new DocumentHistory(), dirty: false, selectedId: null, selectedIds: [] });
+      return;
+    }
+    const next = remaining[Math.min(order.indexOf(id), remaining.length - 1)], target = this.inactiveTabs()[next];
+    this.inactiveTabs.update((tabs) => { const copy = { ...tabs }; delete copy[next]; return copy; });
+    this.tabOrder.set(remaining);
+    this.activate(next, target);
+  }
+  isDocumentDirty(id: string) { return id === this.activeTabId() ? this.dirty() : !!this.inactiveTabs()[id]?.dirty; }
+  /** Opens a project in the active tab when that tab is an untouched blank document, otherwise in a new tab. */
+  openDocument(text: string) {
+    const doc = parseDocument(text);
+    if ((this.document().layers.length || this.dirty()) && !this.newDocument()) return;
+    this.open(JSON.stringify(doc));
+  }
+  private changed() {
+    this.document.set(syncProcedurals(this.document()));
+    this.synchronizeBlends();
+    this.revision.update((x) => x + 1);
+    this.edits.update((x) => x + 1);
+    this.renderer.prune(this.document().layers);
+    this.persistWorkspace();
   }
   previewDocument(): StudioDocument {
     try { return syncBlends(syncProcedurals(this.document())); } catch { return this.document(); }
@@ -849,6 +1208,135 @@ export class EditorService {
     this.document.update((d) => ({ ...d, name: name.slice(0, 150) }));
     this.changed();
   }
+  // Interactive page editing: corner handles resize the page, an area drag crops it.
+  readonly pageMode = signal<"resize" | "crop" | null>(null);
+  readonly pageCropArea = signal<{ x: number; y: number; width: number; height: number } | null>(null);
+  private pageGesture?: { before: StudioDocument; handle: string; start: Point };
+  setPageMode(mode: "resize" | "crop" | null) {
+    if (this.pageGesture) this.cancelPageGesture();
+    this.pageCropArea.set(null);
+    this.pageMode.set(mode);
+    if (mode) this.status.set(mode === "resize" ? "Drag a page handle; Escape cancels" : "Drag the area to keep; Escape cancels");
+  }
+  /** Handles are the four corners and the four edges of the page. */
+  readonly pageHandles = computed(() => {
+    if (this.pageMode() !== "resize") return [] as { id: string; x: number; y: number }[];
+    const { width, height } = this.document();
+    return [
+      { id: "nw", x: 0, y: 0 }, { id: "n", x: width / 2, y: 0 }, { id: "ne", x: width, y: 0 },
+      { id: "e", x: width, y: height / 2 }, { id: "se", x: width, y: height },
+      { id: "s", x: width / 2, y: height }, { id: "sw", x: 0, y: height }, { id: "w", x: 0, y: height / 2 },
+    ];
+  });
+  private beginPageGesture(point: Point): boolean {
+    const mode = this.pageMode();
+    if (!mode) return false;
+    if (mode === "crop") {
+      this.pageGesture = { before: structuredClone(this.document()), handle: "crop", start: this.snap(point) };
+      this.pageCropArea.set({ x: this.pageGesture.start.x, y: this.pageGesture.start.y, width: 0, height: 0 });
+      return true;
+    }
+    const handle = this.pageHandles().find((entry) => Math.hypot(point.x - entry.x, point.y - entry.y) <= 10 / this.zoom());
+    if (!handle) return false;
+    this.pageGesture = { before: structuredClone(this.document()), handle: handle.id, start: this.snap(point) };
+    return true;
+  }
+  private updatePageGesture(point: Point) {
+    const gesture = this.pageGesture;
+    if (!gesture) return;
+    const target = this.snap(point), before = gesture.before;
+    if (gesture.handle === "crop") {
+      const x = Math.min(gesture.start.x, target.x), y = Math.min(gesture.start.y, target.y);
+      this.pageCropArea.set({ x, y, width: Math.abs(target.x - gesture.start.x), height: Math.abs(target.y - gesture.start.y) });
+      return;
+    }
+    const edges = { top: 0, right: 0, bottom: 0, left: 0 };
+    if (gesture.handle.includes("n")) edges.top = -(target.y - 0);
+    if (gesture.handle.includes("s")) edges.bottom = target.y - before.height;
+    if (gesture.handle.includes("w")) edges.left = -(target.x - 0);
+    if (gesture.handle.includes("e")) edges.right = target.x - before.width;
+    const width = before.width + edges.left + edges.right, height = before.height + edges.top + edges.bottom;
+    if (width < PAGE_MINIMUM || height < PAGE_MINIMUM || width > PAGE_MAXIMUM || height > PAGE_MAXIMUM) return;
+    try { this.document.set(resizePage(before, edges)); this.revision.update((value) => value + 1); } catch { /* Keep the last valid page. */ }
+  }
+  private endPageGesture() {
+    const gesture = this.pageGesture;
+    if (!gesture) return;
+    this.pageGesture = undefined;
+    if (gesture.handle === "crop") {
+      const area = this.pageCropArea();
+      this.pageCropArea.set(null);
+      if (!area || area.width < PAGE_MINIMUM || area.height < PAGE_MINIMUM) { this.status.set("The crop area is smaller than the minimum page."); return; }
+      const edges = { top: -area.y, left: -area.x, bottom: area.y + area.height - gesture.before.height, right: area.x + area.width - gesture.before.width };
+      let next: StudioDocument;
+      try { next = resizePage(gesture.before, edges); parseDocument(JSON.stringify(next)); }
+      catch (error) { this.status.set(error instanceof Error ? error.message : "The page cannot be resized."); return; }
+      this.history.commit(gesture.before);
+      this.document.set(next);
+      this.changed();
+      this.status.set("Document cropped");
+      this.setPageMode(null);
+      return;
+    }
+    if (JSON.stringify(gesture.before) === JSON.stringify(this.document())) return;
+    const applied = this.document();
+    this.document.set(gesture.before);
+    this.history.commit(gesture.before);
+    this.document.set(applied);
+    this.changed();
+    this.status.set("Document dimensions updated");
+  }
+  private cancelPageGesture() {
+    const gesture = this.pageGesture;
+    if (!gesture) return;
+    this.pageGesture = undefined;
+    this.pageCropArea.set(null);
+    this.document.set(gesture.before);
+    this.revision.update((value) => value + 1);
+  }
+  /** One page edit: size, background, margin guides and registration marks of the active document. */
+  applyPageSetup(setup: { size?: PageSize; background?: string; margins?: MarginGuides; marks?: RegistrationMarks }): boolean {
+    const before = this.document();
+    const size = setup.size ?? { width: before.width, height: before.height };
+    if (!pageSizeFits(size)) { this.status.set("The page must stay between 16 and 4096 pixels."); return false; }
+    if (setup.marks && setup.marks !== "none" && !registrationFits(setup.marks, size)) { this.status.set("The registration marks do not fit inside this page."); return false; }
+    let layers = before.layers.filter((layer) => !layer.name.startsWith(MARGIN_GUIDE_PREFIX) && layer.name !== REGISTRATION_LAYER_NAME);
+    if (setup.margins) {
+      layers = [...layers, ...marginGuidePositions(size, setup.margins).map((guide) => ({
+        ...newLayer("path", crypto.randomUUID(), { x: guide.axis === "vertical" ? guide.position : 0, y: guide.axis === "horizontal" ? guide.position : 0 }, "none", "#00b8d9", 1),
+        guide: guide.axis, name: guide.name,
+      }))];
+    }
+    const marks = setup.marks && setup.marks !== "none" ? registrationLayer(setup.marks, size, crypto.randomUUID()) : null;
+    if (marks) layers = [...layers, marks];
+    if (layers.length > 150) { this.status.set("Close a document before opening another."); return false; }
+    const next = { ...before, width: size.width, height: size.height, background: setup.background ?? before.background, layers };
+    try { parseDocument(JSON.stringify(next)); } catch { this.status.set("The page settings cannot be applied."); return false; }
+    this.history.commit(before);
+    this.document.set(next);
+    this.selectedIds.update((ids) => ids.filter((id) => next.layers.some((layer) => layer.id === id)));
+    if (!next.layers.some((layer) => layer.id === this.selectedId())) this.selectedId.set(null);
+    this.changed();
+    this.status.set("Document dimensions updated");
+    return true;
+  }
+  /** Adds space on each edge and moves the artwork with the page. */
+  expandPage(edges: PageEdges): boolean { return this.resizePageBy(edges, 1); }
+  /** Removes space on each edge; artwork keeps its position relative to what remains. */
+  cropPage(edges: PageEdges): boolean { return this.resizePageBy(edges, -1); }
+  private resizePageBy(edges: PageEdges, sign: number): boolean {
+    const before = this.document();
+    const applied = { top: edges.top * sign, right: edges.right * sign, bottom: edges.bottom * sign, left: edges.left * sign };
+    if (!Object.values(applied).every((value) => Number.isFinite(value))) return false;
+    let next: StudioDocument;
+    try { next = resizePage(before, applied); parseDocument(JSON.stringify(next)); }
+    catch (error) { this.status.set(error instanceof Error ? error.message : "The page cannot be resized."); return false; }
+    this.history.commit(before);
+    this.document.set(next);
+    this.changed();
+    this.status.set(sign > 0 ? "Document expanded" : "Document cropped");
+    return true;
+  }
   background(value: string) {
     this.history.commit(this.document());
     this.document.update((d) => ({ ...d, background: value }));
@@ -927,13 +1415,18 @@ export class EditorService {
     this.document.set(this.history.redo(this.document()));
     this.changed();
   }
+  /** Clears the active document to a blank one; undoable, and the result counts as unmodified. */
   reset() {
     this.finishPath();
+    this.cancel();
     this.history.commit(this.document());
-    this.document.set(blankDocument());
+    this.document.set({ ...blankDocument(), name: this.document().name });
     this.activeNodes.set([]);
     this.selectedId.set(null);
+    this.selectedIds.set([]);
     this.changed();
+    this.markSaved();
+    this.status.set("Document cleared");
   }
   open(text: string) {
     this.finishPath();
@@ -943,6 +1436,7 @@ export class EditorService {
     this.activeNodes.set([]);
     this.selectedId.set(null);
     this.changed();
+    this.markSaved();
     this.status.set("Project opened");
   }
   start(
@@ -951,7 +1445,11 @@ export class EditorService {
     override?: ToolId,
   ) {
     const tool = override ?? this.tool();
-    if(["wall","door","window","pillar"].includes(tool)){this.startProcedural(tool as Procedural["type"],point);return;}
+    if (this.beginPageGesture(point)) return;
+    if (this.startPivotDrag(point)) return;
+    if(["wall","door","window","pillar","stair"].includes(tool)){this.startProcedural(tool as Procedural["type"],point);return;}
+    if (tool === "dimensionChain") { this.startChainDimension(point); return; }
+    if (tool === "dimensionRadius" || tool === "dimensionDiameter") { this.startDimension(point, tool === "dimensionRadius" ? "radius" : "diameter"); return; }
     if (["dimensionSmart", "dimensionLinear", "dimensionAngular"].includes(tool)) { this.startDimension(point, tool === "dimensionAngular" ? "angular" : "linear"); return; }
     const dimensionLayer=this.selected();
     if(tool === "select" && dimensionLayer?.dimension && !this.isEffectivelyLocked(dimensionLayer) && this.selectedLayers().length===1) {
@@ -1121,6 +1619,7 @@ export class EditorService {
             mode: "move",
             ids: this.selectedLayers().filter((l) => !l.guide).map((l) => l.id),
           };
+        if (active) this.movePivot = this.pivotMoved() ? this.pivot() : undefined;
       } else if (tool === "select") {
         this.startAreaSelection(point, this.lastAreaSelection(), !!modifiers.shift);
       } else if (!modifiers.shift) {
@@ -1246,15 +1745,19 @@ export class EditorService {
     };
   }
   move(point: Point, modifiers: { shift?: boolean; alt?: boolean; ctrl?: boolean } = {}) {
-    if(this.proceduralGesture){const g=this.proceduralGesture;const end=modifiers.shift?snapDirection(g.start,point,this.snapAngle()):this.snap(point);try{const layer=this.proceduralLayer(g.type,g.start,end,g.id);const next=syncProcedurals({...g.before,layers:[...g.before.layers,layer]});parseDocument(JSON.stringify(next));this.document.set(next);this.selectedId.set(layer.id);this.selectedIds.set([layer.id]);}catch{/* Keep the last valid preview. */}return;}
+    if (this.pageGesture) { this.updatePageGesture(point); return; }
+    if (this.pivotGesture) { this.setPivot(this.pivotPoint(point)); return; }
+    if(this.proceduralGesture){const g=this.proceduralGesture;const end=modifiers.shift?snapDirection(g.start,point,this.snapAngle()):(g.type==='wall'?this.wallTarget(g.start,point,g.id):this.snap(point));try{const layer=this.proceduralLayer(g.type,g.start,end,g.id);const next=syncProcedurals({...g.before,layers:[...g.before.layers,layer]});parseDocument(JSON.stringify(next));this.document.set(next);this.selectedId.set(layer.id);this.selectedIds.set([layer.id]);}catch{/* Keep the last valid preview. */}return;}
     if(this.dimensionLabelGesture){const layer=this.document().layers.find(l=>l.id===this.dimensionLabelGesture!.id)!;this.setLayer(layer.id,{dimension:{...layer.dimension!,labelPosition:localPoint(layer,point)}});return;}
-    const draft=this.dimensionDraft();if(draft){const count=draft.kind=== "angular"?3:2;this.dimensionDraft.set({...draft,cursor:draft.points.length<count?this.dimensionPoint(point,draft.points.length===count-1):point});return;}
+    const draft=this.dimensionDraft();if(draft){const count=draft.kind==="chain"?Infinity:(draft.kind==="angular"?3:2);const placing=draft.ready===true||draft.points.length>=count;this.dimensionDraft.set({...draft,cursor:placing?this.dimensionOffsetPoint(draft.points,point):this.dimensionPoint(point,true)});if(placing)this.dimensionSnapTarget.set(null);return;}
+    if(!this.gesture&&["dimensionSmart","dimensionLinear","dimensionAngular","dimensionChain","dimensionRadius","dimensionDiameter"].includes(this.tool())){this.hoverDimension(point);return;}
+    if(!this.gesture&&!this.proceduralGesture&&this.tool()==='wall'){this.hoverWall(modifiers.shift&&this.wallChain()?snapDirection(this.wallChain()!,point,this.snapAngle()):point);return;}
     if (this.areaGesture) { this.moveAreaSelection(point); return; }
     const g = this.gesture;
     if (!g) return;
     if (["rectangle", "ellipse", "line", "rounded", "polygon", "star", "arc", "spiral", "grid", "polar", "flare"].includes(g.mode) || g.mode.startsWith("resize:")) point = this.snap(point);
     if (g.mode === "rotate")
-      this.transformSelection(g, {
+      this.transformSelection(g, this.aroundPivot(g.original, {
         ...g.original,
         rotation: rotationFromDrag(
           g.original,
@@ -1263,19 +1766,19 @@ export class EditorService {
           modifiers.shift,
           this.snapAngle(),
         ),
-      });
+      }));
     else if (g.mode === "scale") {
       const factor = Math.max(
         0.05,
         Math.min(10, 1 + (point.x - g.start.x + point.y - g.start.y) / 200),
       );
-      this.transformSelection(g, {
+      this.transformSelection(g, this.aroundPivot(g.original, {
         ...g.original,
         width: g.original.width * factor,
         height: g.original.height * factor,
         x: g.original.x + (g.original.width * (1 - factor)) / 2,
         y: g.original.y + (g.original.height * (1 - factor)) / 2,
-      });
+      }));
     } else if (g.mode === "pen") {
       const curves = structuredClone(g.original.curves!),
         node = curves[0].nodes.at(-1)!,
@@ -1339,6 +1842,8 @@ export class EditorService {
         x: g.original.x + delta.x,
         y: g.original.y + delta.y,
       });
+      // A pivot placed by hand travels with the objects it belongs to.
+      if (this.movePivot) this.setPivot({ x: this.movePivot.x + delta.x, y: this.movePivot.y + delta.y });
     } else if (g.mode.startsWith("resize:"))
       this.transformSelection(
         g,
@@ -1398,20 +1903,18 @@ export class EditorService {
       painting.canvas.width / g.original.width,
       painting.canvas.height / g.original.height,
     );
-    ctx.globalCompositeOperation =
-      g.mode === "eraser" ? "destination-out" : "source-over";
-    ctx.strokeStyle = g.mode === "eraser" ? "#000000" : this.fill();
+    const settings = this.brushFor(g.mode === "eraser" ? "eraser" : "brush");
+    ctx.globalCompositeOperation = g.mode === "eraser" ? "destination-out" : settings.blend;
     ctx.fillStyle = g.mode === "eraser" ? "#000000" : this.fill();
-    ctx.lineWidth = this.size();
-    ctx.lineCap = "round";
-    ctx.lineJoin = "round";
-    ctx.beginPath();
-    ctx.moveTo(a.x, a.y);
-    ctx.lineTo(b.x, b.y);
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.arc(b.x, b.y, this.size() / 2, 0, Math.PI * 2);
-    ctx.fill();
+    for (const stamp of brushStamps(a, b, this.size(), settings, Math.hypot(b.x - a.x, b.y - a.y))) {
+      ctx.globalAlpha = stamp.alpha;
+      ctx.filter = stamp.blur > 0.1 ? `blur(${stamp.blur.toFixed(2)}px)` : "none";
+      ctx.beginPath();
+      ctx.ellipse(stamp.center.x, stamp.center.y, stamp.radiusX, stamp.radiusY, stamp.angle, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.filter = "none";
+    ctx.globalAlpha = 1;
     ctx.restore();
     this.revision.update((v) => v + 1);
   }
@@ -1422,7 +1925,9 @@ export class EditorService {
     );
   }
   end() {
-    if(this.proceduralGesture){const g=this.proceduralGesture;this.proceduralGesture=undefined;if(this.document().layers.some(l=>l.id===g.id)){this.history.commit(g.before);this.changed();}return;}
+    if (this.pageGesture) { this.endPageGesture(); return; }
+    if (this.pivotGesture) { this.pivotGesture = undefined; this.revision.update((x) => x + 1); return; }
+    if(this.proceduralGesture){const g=this.proceduralGesture;this.proceduralGesture=undefined;const drawn=this.document().layers.find(l=>l.id===g.id);if(drawn){this.history.commit(g.before);this.changed();if(g.type==='wall'&&drawn.procedural?.type==='wall')this.wallChain.set(worldPoint(drawn,drawn.procedural.end));}return;}
     if(this.dimensionLabelGesture){this.history.commit(this.dimensionLabelGesture.before);this.dimensionLabelGesture=undefined;this.changed();return;}
     if (this.areaGesture) {
       if (!this.areaGesture.moved && !this.areaGesture.shift) { this.selectedId.set(null); this.selectedIds.set([]); this.activeNodes.set([]); }
@@ -1446,11 +1951,15 @@ export class EditorService {
       });
     this.history.commit(g.before);
     this.gesture = undefined;
+    this.movePivot = undefined;
     this.painting = undefined;
     this.changed();
   }
   cancel() {
+    if (this.pageGesture) { this.cancelPageGesture(); this.pageMode.set(null); this.status.set("Page editing cancelled"); }
+    if (this.pivotGesture) { this.pivotOverride.set(this.pivotGesture.before); this.pivotGesture = undefined; }
     if(this.proceduralGesture){this.document.set(this.proceduralGesture.before);this.selectedId.set(this.proceduralGesture.selectedId);this.selectedIds.set(this.proceduralGesture.selectedIds);this.proceduralGesture=undefined;}
+    this.finishWallRun();
     this.dimensionDraft.set(null);this.dimensionSnapTarget.set(null);
     if(this.dimensionLabelGesture)this.document.set(this.dimensionLabelGesture.before);this.dimensionLabelGesture=undefined;
     this.cancelGuideDrag();
@@ -1459,6 +1968,7 @@ export class EditorService {
       this.areaGesture = undefined; this.areaSelection.set(null);
     }
     if (this.gesture) this.document.set(this.gesture.before);
+    if (this.movePivot) { this.setPivot(this.movePivot); this.movePivot = undefined; }
     this.gesture = undefined;
     this.painting = undefined;
     this.revision.update((x) => x + 1);
@@ -1467,7 +1977,7 @@ export class EditorService {
   reflect(axis: "horizontal" | "vertical") {
     const layers = this.selectedLayers().filter((l) => !this.isEffectivelyLocked(l) && !l.guide);
     if (!layers.length) return;
-    const bounds = selectionBounds(layers),
+    const pivot = this.pivot(),
       ids = new Set(layers.map((l) => l.id));
     this.history.commit(this.document());
     this.document.update((d) => ({
@@ -1480,11 +1990,11 @@ export class EditorService {
               ...(l.skewX !== undefined ? { skewX: -l.skewX } : {}),
               ...(axis === "horizontal"
                 ? {
-                    x: 2 * bounds.x + bounds.width - l.x - l.width,
+                    x: 2 * pivot.x - l.x - l.width,
                     flipX: !l.flipX,
                   }
                 : {
-                    y: 2 * bounds.y + bounds.height - l.y - l.height,
+                    y: 2 * pivot.y - l.y - l.height,
                     flipY: !l.flipY,
                   }),
             }
@@ -1516,14 +2026,14 @@ export class EditorService {
         ids: this.selectedLayers().filter((l) => !l.guide).map((l) => l.id),
       };
     this.history.commit(before);
-    this.transformSelection(g, {
+    this.transformSelection(g, this.aroundPivot(source, {
       ...source,
       width: source.width * scale,
       height: source.height * scale,
       x: source.x + (source.width * (1 - scale)) / 2,
       y: source.y + (source.height * (1 - scale)) / 2,
       rotation: source.rotation + rotation,
-    });
+    }));
     this.changed();
   }
   selectLayer(id: string, add = false) {
@@ -1644,8 +2154,11 @@ export class EditorService {
     this.changed();
   }
   boolean(operation: Parameters<typeof booleanLayers>[1]) {
-    if(this.selectedLayers().some(layer=>layer.dimension || layer.procedural))return;
-    const layers = this.selectedLayers().filter((l) => !this.isEffectivelyLocked(l) && !l.guide);
+    if(this.selectedLayers().some(layer=>layer.dimension))return;
+    if(this.booleanWalls(operation))return;
+    // Procedural objects contribute their generated outline; the result is a plain path, not a parametric object.
+    const layers = this.selectedLayers().filter((l) => !this.isEffectivelyLocked(l) && !l.guide)
+      .map((l) => l.procedural ? { ...l, procedural: undefined, name: l.name } : l);
     if (layers.length < 2) return;
     try {
       const result = booleanLayers(layers, operation, crypto.randomUUID()),
@@ -1699,7 +2212,10 @@ export class EditorService {
   }
 
   setTool(tool: ToolId) {
-    if (tool !== this.tool()) { this.finishPath(); this.dimensionDraft.set(null); this.dimensionSnapTarget.set(null); }
+    const brushTypes: Partial<Record<ToolId, BrushType>> = { brush: "round", brushFlat: "flat", brushCalligraphy: "calligraphy", brushMarker: "marker", brushAirbrush: "airbrush", brushPencil: "pencil" };
+    const brushType = brushTypes[tool];
+    if (brushType) { this.setBrushType(brushType); tool = "brush"; }
+    if (tool !== this.tool()) { this.finishPath(); this.dimensionDraft.set(null); this.dimensionSnapTarget.set(null); this.finishWallRun(); }
     this.activeNodes.set([]);
     this.tool.set(tool);
   }
@@ -1707,10 +2223,39 @@ export class EditorService {
     this.end();
     this.penId.set(null);
   }
+  /** An open path whose first or last anchor is under the pointer, so drawing continues from it. */
+  penContinuation(point: Point): { layer: Layer; atStart: boolean } | null {
+    const radius = 10 / this.zoom();
+    for (const layer of [...this.document().layers].reverse()) {
+      if (layer.guide || layer.dimension || layer.procedural || !layer.visible || this.isEffectivelyLocked(layer)) continue;
+      const path = layer.curves?.[0];
+      if (!path || path.closed || path.nodes.length < 1 || layer.curves!.length !== 1) continue;
+      const ends = [{ node: path.nodes[0], atStart: true }, { node: path.nodes.at(-1)!, atStart: false }];
+      for (const end of ends) {
+        const world = worldPoint(layer, end.node.point);
+        if (Math.hypot(point.x - world.x, point.y - world.y) <= radius) return { layer, atStart: end.atStart };
+      }
+    }
+    return null;
+  }
   private startPen(point: Point, before: StudioDocument) {
     let layer = this.document().layers.find(
       (l) => l.id === this.penId() && !this.isEffectivelyLocked(l) && l.visible && !l.guide,
     );
+    if (!layer) {
+      // Clicking an end of an unlocked open path carries on with it instead of starting another object.
+      const continuation = this.penContinuation(point);
+      if (continuation) {
+        const curves = structuredClone(continuation.layer.curves!);
+        if (continuation.atStart) {
+          curves[0].nodes.reverse();
+          for (const node of curves[0].nodes) { const incoming = node.incoming; node.incoming = node.outgoing; node.outgoing = incoming; }
+          this.setLayer(continuation.layer.id, { curves });
+        }
+        this.penId.set(continuation.layer.id);
+        layer = this.document().layers.find((l) => l.id === continuation.layer.id);
+      }
+    }
     if (!layer) {
       if (this.document().layers.length >= 150) return;
       layer = newLayer(
@@ -2045,6 +2590,57 @@ export class EditorService {
     this.activeNodes.set([]);
     this.changed();
   }
+  /** Walls combine as walls: the result is straight runs of the operands, still parametric. */
+  private booleanWalls(operation: WallOperation): boolean {
+    const layers = this.selectedLayers().filter((layer) => !this.isEffectivelyLocked(layer) && !layer.guide);
+    const axes = layers.map((layer) => wallAxis(layer));
+    if (layers.length < 2 || axes.some((axis) => !axis)) return false;
+    const results = wallBoolean(axes.filter((axis) => !!axis), operation);
+    if (!results.length) { this.status.set("The operation leaves no wall."); return true; }
+    const before = this.document();
+    const ids = new Set(layers.map((layer) => layer.id));
+    const index = before.layers.findIndex((layer) => ids.has(layer.id));
+    const built = results
+      .map((result) => this.buildWallLayer(result.source, result.start, result.end, result.source.procedural as { thickness: number; align?: "center" | "left" | "right" }))
+      .filter((layer): layer is Layer => !!layer);
+    if (!built.length) { this.status.set("The operation leaves no wall."); return true; }
+    const remaining = before.layers.filter((layer) => !ids.has(layer.id));
+    remaining.splice(index, 0, ...built);
+    let next: StudioDocument;
+    try { next = syncProcedurals({ ...before, layers: remaining }); parseDocument(JSON.stringify(next)); }
+    catch { this.status.set("The operation leaves no wall."); return true; }
+    this.history.commit(before);
+    this.document.set(next);
+    this.selectedIds.set(built.map((layer) => layer.id));
+    this.selectedId.set(built.at(-1)!.id);
+    this.changed();
+    return true;
+  }
+  private buildWallLayer(source: Layer, start: Point, end: Point, procedure: { thickness: number; align?: "center" | "left" | "right" }): Layer | null {
+    if (Math.hypot(end.x - start.x, end.y - start.y) < 1) return null;
+    const layer: Layer = {
+      ...source,
+      id: crypto.randomUUID(),
+      x: start.x, y: start.y, width: 1, height: 1,
+      rotation: 0, skewX: 0, flipX: false, flipY: false,
+      points: [],
+      procedural: { type: "wall", start: { x: 0, y: 0 }, end: { x: end.x - start.x, y: end.y - start.y }, thickness: procedure.thickness, ...(procedure.align ? { align: procedure.align } : {}) },
+    };
+    return generateProcedural(layer);
+  }
+  /** Shifts a transform that works about the selection centre so the pivot stays put instead. */
+  private aroundPivot(original: Layer, target: Layer): Layer {
+    const pivot = this.pivot();
+    const centre = { x: original.x + original.width / 2, y: original.y + original.height / 2 };
+    const dx = pivot.x - centre.x, dy = pivot.y - centre.y;
+    if (!dx && !dy) return target;
+    const scaleX = original.width ? target.width / original.width : 1;
+    const scaleY = original.height ? target.height / original.height : 1;
+    const angle = ((target.rotation ?? 0) - (original.rotation ?? 0)) * Math.PI / 180;
+    const cos = Math.cos(angle), sin = Math.sin(angle);
+    const mapped = { x: cos * dx * scaleX - sin * dy * scaleY, y: sin * dx * scaleX + cos * dy * scaleY };
+    return { ...target, x: target.x + dx - mapped.x, y: target.y + dy - mapped.y };
+  }
   transformationCenter(): Point {
     const layer=this.selected(),keys=new Set(this.activeNodes());
     const points=layer?.curves?.flatMap((p,i)=>p.nodes.filter((_,j)=>keys.has(i+':'+j)).map(n=>worldPoint(layer,n.point)))??[];
@@ -2070,7 +2666,7 @@ export class EditorService {
     if(!Number.isFinite(dx)||!Number.isFinite(dy)||Math.abs(dx)>1e6||Math.abs(dy)>1e6||(!dx&&!dy))return false;
     return this.numericTransform(p=>({x:p.x+dx,y:p.y+dy}));
   }
-  rotateSelection(angle:number,center:Point=this.transformationCenter()):boolean {
+  rotateSelection(angle:number,center:Point=this.pivot()):boolean {
     if(!Number.isFinite(angle)||!Number.isFinite(center.x)||!Number.isFinite(center.y)||Math.abs(angle)>36000||angle===0)return false;
     const radians=angle*Math.PI/180,c=Math.cos(radians),s=Math.sin(radians);
     return this.numericTransform(p=>({x:center.x+(p.x-center.x)*c-(p.y-center.y)*s,y:center.y+(p.x-center.x)*s+(p.y-center.y)*c}),angle);
@@ -2104,6 +2700,7 @@ export class EditorService {
           ids.has(l.id) ? { ...this.detachUnselectedHost(l,ids), x: l.x + dx, y: l.y + dy } : l,
         ),
       }));
+      this.shiftPivot(dx, dy);
     }
     this.changed();
   }
@@ -2297,7 +2894,7 @@ export class EditorService {
         ],
         { type: "application/json" },
       ),
-      "symbols.ximply",
+      "symbols.xds",
     );
   }
   importSymbols(text: string) {
@@ -2514,8 +3111,9 @@ export class EditorService {
   save() {
     this.download(
       new Blob([JSON.stringify(this.document())], { type: "application/json" }),
-      this.document().name + ".ximply",
+      this.document().name + ".xds",
     );
+    this.markSaved();
     this.status.set("Project file saved");
   }
   exportSvg() {

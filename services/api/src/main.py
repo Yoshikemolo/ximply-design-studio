@@ -89,6 +89,15 @@ class StrokeStyle(BaseModel):
     alignment: Literal['center', 'inside', 'outside']
     join: Literal['round', 'bevel', 'miter']
     cap: Literal['butt', 'square', 'round']
+    dash: Annotated[list[Annotated[Number, Field(ge=0, le=1000)]], Field(min_length=1, max_length=6)] | None = None
+
+    @model_validator(mode='after')
+    def dash_contract(self):
+        if 'dash' in self.model_fields_set and self.dash is None:
+            raise ValueError('Dash pattern cannot be null')
+        if self.dash is not None and not any(value > 0 for index, value in enumerate(self.dash) if index % 2 == 0):
+            raise ValueError('Dash pattern needs at least one dash longer than zero')
+        return self
 
 
 class LineEnd(BaseModel):
@@ -114,7 +123,7 @@ class DimensionPoint(BaseModel):
 class DimensionFormat(BaseModel):
     model_config = ConfigDict(extra='forbid')
     scale: Annotated[Number, Field(gt=0, le=1000000)]
-    unit: Literal['px', 'pt', 'mm', 'cm', 'in', 'ft']
+    unit: Literal['px', 'pt', 'mm', 'cm', 'm', 'in', 'ft']
     decimals: Annotated[Number, Field(ge=0, le=8, multiple_of=1)]
     separator: Literal['.', ',']
 
@@ -135,19 +144,25 @@ class DimensionLabelSize(BaseModel):
 
 class Dimension(BaseModel):
     model_config = ConfigDict(extra='forbid')
-    kind: Literal['linear', 'angular']
+    kind: Literal['linear', 'angular', 'radius', 'diameter']
     anchors: Annotated[list[DimensionPoint], Field(min_length=2, max_length=3)]
     labelPosition: DimensionPoint
     labelSize: DimensionLabelSize | None = None
+    labelPlacement: Literal['start', 'center', 'end'] | None = None
+    centerMark: bool | None = None
     text: Annotated[str, Field(max_length=10000)]
     format: DimensionFormat
     extension: DimensionExtension
 
     @model_validator(mode='after')
     def anchor_cardinality(self):
+        if 'centerMark' in self.model_fields_set and self.centerMark is None:
+            raise ValueError('Dimension centre mark cannot be null')
+        if 'labelPlacement' in self.model_fields_set and self.labelPlacement is None:
+            raise ValueError('Dimension label placement cannot be null')
         if 'labelSize' in self.model_fields_set and self.labelSize is None:
             raise ValueError('Dimension label size cannot be null')
-        if len(self.anchors) != (2 if self.kind == 'linear' else 3):
+        if len(self.anchors) != (3 if self.kind == 'angular' else 2):
             raise ValueError('Dimension anchors must match its kind')
         return self
 
@@ -167,12 +182,18 @@ class ProceduralWall(BaseModel):
     start: DimensionPoint
     end: DimensionPoint
     thickness: ProceduralLength
+    align: Literal['center', 'left', 'right'] | None = None
 
     @model_validator(mode='after')
     def nonzero_wall(self):
+        if 'align' in self.model_fields_set and self.align is None:
+            raise ValueError('Wall alignment cannot be null')
         if not 1 <= math.hypot(self.end.x - self.start.x, self.end.y - self.start.y) <= 16384:
             raise ValueError('Wall length must be between 1 and 16384')
         return self
+
+
+LeafType = Literal['swing', 'sliding', 'folding', 'pocket', 'fixed']
 
 
 class ProceduralOpening(BaseModel):
@@ -180,13 +201,18 @@ class ProceduralOpening(BaseModel):
     width: ProceduralLength
     depth: ProceduralLength
     leafWidths: Annotated[list[ProceduralLength], Field(min_length=1, max_length=8)]
+    leafTypes: Annotated[list[LeafType], Field(min_length=1, max_length=8)] | None = None
+    side: Literal['front', 'back'] | None = None
     openingAngle: Annotated[Number, Field(ge=0, le=180)]
     host: ProceduralHost | None = None
 
     @model_validator(mode='after')
     def opening_contract(self):
-        if 'host' in self.model_fields_set and self.host is None:
-            raise ValueError('Opening host cannot be null')
+        for optional in ('host', 'leafTypes', 'side'):
+            if optional in self.model_fields_set and getattr(self, optional) is None:
+                raise ValueError(f'Opening {optional} cannot be null')
+        if self.leafTypes is not None and len(self.leafTypes) != len(self.leafWidths):
+            raise ValueError('Leaf types must match the number of leaves')
         if abs(sum(self.leafWidths) - self.width) > 0.000001:
             raise ValueError('Opening leaves must sum to its width')
         return self
@@ -195,14 +221,24 @@ class ProceduralOpening(BaseModel):
 class ProceduralDoor(ProceduralOpening):
     type: Literal['door']
     leafWidths: Annotated[list[ProceduralLength], Field(min_length=1, max_length=4)]
-    operation: Literal['swing', 'sliding']
+    leafTypes: Annotated[list[LeafType], Field(min_length=1, max_length=4)] | None = None
+    operation: Literal['swing', 'sliding', 'folding', 'pocket', 'opening']
     swing: Literal['left', 'right']
 
 
 class ProceduralWindow(ProceduralOpening):
     type: Literal['window']
-    operation: Literal['fixed', 'sliding', 'swing']
+    operation: Literal['fixed', 'sliding', 'swing', 'opening']
     swing: Literal['left', 'right']
+
+
+class ProceduralStair(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    type: Literal['stair']
+    width: ProceduralLength
+    length: ProceduralLength
+    steps: Annotated[int, Field(ge=2, le=100)]
+    direction: Literal['up', 'down']
 
 
 class ProceduralPillar(BaseModel):
@@ -219,7 +255,7 @@ class ProceduralPillar(BaseModel):
         return self
 
 
-Procedural = Annotated[ProceduralWall | ProceduralDoor | ProceduralWindow | ProceduralPillar,
+Procedural = Annotated[ProceduralWall | ProceduralDoor | ProceduralWindow | ProceduralPillar | ProceduralStair,
                        Field(discriminator='type')]
 
 
@@ -320,7 +356,7 @@ class Document(BaseModel):
     name: Annotated[str, Field(max_length=150)]
     width: Annotated[int, Field(ge=16, le=4096)]
     height: Annotated[int, Field(ge=16, le=4096)]
-    background: Color
+    background: Paint
     layers: Annotated[list[Layer], Field(max_length=150)]
     blends: Annotated[list[ObjectBlend], Field(max_length=150)] | None = None
     symbols: Annotated[list[SymbolDefinition], Field(max_length=100)] | None = None

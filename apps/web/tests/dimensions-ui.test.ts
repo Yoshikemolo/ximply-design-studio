@@ -24,7 +24,7 @@ it('keeps invalid transforms open and preserves document and history', () => {
 });
 it('isolates modal Escape from editor actions and exposes smart dimension as default subtool', () => {
  app.openTransformDialog('displacement'); app.key(new KeyboardEvent('keydown',{key:'Escape',cancelable:true}));expect(app.transformDialog()).toBeNull();
- const family=TOOL_FAMILIES.find(f=>f.id==='dimensions')!;expect(family.tools).toEqual(['dimensionSmart','dimensionLinear','dimensionAngular']);expect(TOOLS.filter(t=>family.tools.includes(t.id))).toHaveLength(3);
+ const family=TOOL_FAMILIES.find(f=>f.id==='dimensions')!;expect(family.tools).toEqual(['dimensionSmart','dimensionLinear','dimensionAngular','dimensionChain','dimensionRadius','dimensionDiameter']);expect(TOOLS.filter(t=>family.tools.includes(t.id))).toHaveLength(6);
 });
 it('persists independent dimension visibility, locks, magnetism and radius', () => {
  app.preferences.setMeasurement('dimensionsVisible',false);app.preferences.setMeasurement('dimensionsLocked',true);app.preferences.setMeasurement('dimensionsSnap',false);app.preferences.setMeasurement('dimensionSnapRadius',16);app.preferences.toggleLayoutBlock('dimensions');

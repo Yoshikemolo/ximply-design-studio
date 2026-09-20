@@ -1,6 +1,9 @@
 import { Procedural, ProceduralKind } from "../../../../packages/domain/src/procedural";
 import { Dimension, DimensionFormat, dimensionGeometry } from "../../../../packages/domain/src/dimensions";
-import { defaultLineEnds, LineEnd, LineEnds } from "../../../../packages/domain/src/line-endings";
+import { defaultLineEnds, lineEndGeometry, LineEnd, LineEnds } from "../../../../packages/domain/src/line-endings";
+import { LeafType, LEAF_TYPES } from "../../../../packages/domain/src/procedural";
+import { BrushSettings, BrushType, BRUSH_TYPES, brushStamps, previewStroke } from "../../../../packages/domain/src/brush";
+import { defaultMarginGuides, MarginGuides, PAGE_FORMATS, PAGE_RESOLUTIONS, PageCategory, PageOrientation, pageSize, pageSizeFits, RegistrationMarks, REGISTRATION_MARKS, registrationFits } from "../../../../packages/domain/src/page-setup";
 import { BlendEasing } from "../../../../packages/domain/src/object-blend";
 import { FONT_FAMILIES, defaultTypography, defaultTextLayout, TextTypography, TextLayoutOptions } from "../../../../packages/domain/src/text-layout";
 import { measurementUnits, isUnit, snapPoint, fromPixels, toPixels, formatMeasurement, rulerTicks as makeRulerTicks, SnapConfig } from "../../../../packages/domain/src/measurements";
@@ -40,6 +43,52 @@ interface Release {
   markdown: string;
   breakingChanges: string[];
 }
+/** Dash presets offered beside the six dash and gap fields; the last choice is a custom sequence. */
+const DASH_PRESETS: { id: string; label: string; dash: number[] }[] = [
+  { id: "solid", label: "Solid line", dash: [] },
+  { id: "dashed", label: "Dashed line", dash: [12, 6] },
+  { id: "dotted", label: "Dotted line", dash: [1, 4] },
+  { id: "axis", label: "Axis line", dash: [24, 6, 4, 6] },
+  { id: "custom", label: "Custom sequence", dash: [] },
+];
+const DASH_FIELDS = [0, 1, 2, 3, 4, 5];
+const BLEND_LIMIT_TIP = "Endpoints are excluded from the step count.";
+const BRUSH_TYPE_LABELS: Record<BrushType, string> = {
+  round: "Round brush", flat: "Flat brush", calligraphy: "Calligraphy brush",
+  marker: "Marker", airbrush: "Airbrush", pencil: "Pencil brush",
+};
+const BACKGROUND_SWATCHES = [
+  { value: "#000000", label: "Black" },
+  { value: "#ffffff", label: "White" },
+  { value: "#1b4fa0", label: "Blueprint blue" },
+  { value: "#00b140", label: "Chroma key" },
+  { value: "none", label: "No color" },
+];
+const PAGE_EDGE_KEYS: ("top" | "right" | "bottom" | "left")[] = ["top", "right", "bottom", "left"];
+const REGISTRATION_LABELS: Record<string, string> = {
+  none: "No marks", file2: "Two filing holes", file4: "Four filing holes",
+  file6: "Six filing holes", file8: "Eight filing holes", animation: "Animation peg bar",
+};
+const PAGE_CATEGORIES: { id: PageCategory; label: string }[] = [
+  { id: "paper", label: "Paper sizes" },
+  { id: "screen", label: "Screen sizes" },
+  { id: "animation", label: "Animation templates" },
+];
+/** Command icons follow the shapes used by drawing programs for pathfinder, align and transform actions. */
+const COMMAND_ICONS: Record<string, string> = {
+  union: "union", subtract: "subtract", intersect: "intersect", exclude: "exclude",
+  alignLeft: "alignLeft", alignCenterX: "alignCenterX", alignRight: "alignRight",
+  alignTop: "alignTop", alignCenterY: "alignCenterY", alignBottom: "alignBottom",
+  distributeX: "distributeX", distributeY: "distributeY",
+  group: "group", ungroup: "ungroup",
+  makeBlend: "object-blend", expandBlend: "blend-expand", releaseBlend: "blend-release",
+  mirrorH: "mirror-h", mirrorV: "mirror-v", rotateCW: "rotate-cw", rotateCCW: "rotate-ccw",
+  scaleUp: "scale-up", scaleDown: "scale-down",
+  duplicate: "duplicate", remove: "delete", undo: "undo", redo: "redo",
+  layerUp: "layer-up", layerDown: "layer-down", fit: "fit-view", zoomIn: "zoom-in", zoomOut: "zoom-out",
+};
+const LEAF_TYPE_LABELS: Record<string, string> = { swing: "Hinged", sliding: "Sliding", folding: "Folding", pocket: "Pocket", fixed: "Fixed glazing", opening: "Passage without leaves" };
+
 @Component({
   selector: "xds-root",
   standalone: true,
@@ -78,11 +127,11 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   ] as const;
   readonly textAlignments = ["left", "center", "right", "justify"] as const;
   readonly typographyFields = [
-    { key: "lineHeight", label: "Leading", min: 0, max: 2000, hint: "Baseline spacing; zero uses automatic leading." },
-    { key: "letterSpacing", label: "Letter spacing", min: -100, max: 500, hint: "Extra space between characters." },
-    { key: "wordSpacing", label: "Word spacing", min: -100, max: 1000, hint: "Extra space between words." },
-    { key: "paragraphSpacing", label: "Paragraph spacing", min: 0, max: 2000, hint: "Extra space after an explicit line break." },
-    { key: "baselineShift", label: "Baseline shift", min: -1000, max: 1000, hint: "Positive values raise the text baseline." },
+    { key: "lineHeight", label: "Leading", icon: "text-leading", min: 0, max: 2000, hint: "Baseline spacing; zero uses automatic leading." },
+    { key: "letterSpacing", label: "Letter spacing", icon: "text-letter-spacing", min: -100, max: 500, hint: "Extra space between characters." },
+    { key: "wordSpacing", label: "Word spacing", icon: "text-word-spacing", min: -100, max: 1000, hint: "Extra space between words." },
+    { key: "paragraphSpacing", label: "Paragraph spacing", icon: "text-paragraph-spacing", min: 0, max: 2000, hint: "Extra space after an explicit line break." },
+    { key: "baselineShift", label: "Baseline shift", icon: "text-baseline-shift", min: -1000, max: 1000, hint: "Positive values raise the text baseline." },
   ] as const;
   readonly contextMenu = signal<{ target: ContextTarget; x: number; y: number } | null>(null);
   readonly units = measurementUnits;
@@ -92,6 +141,35 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     { id: "stroke", label: "Stroke only", icon: "style-stroke" },
     { id: "both", label: "Fill and stroke", icon: "style-both" },
   ] as const;
+  get pageEdgeKeys() { return PAGE_EDGE_KEYS; }
+  get registrationLabels() { return REGISTRATION_LABELS; }
+  get dashPresets() { return DASH_PRESETS; }
+  get dashFields() { return DASH_FIELDS; }
+  dashPattern() { return this.paintStrokeStyle().dash ?? []; }
+  dashPreset() {
+    const dash = this.dashPattern();
+    if (!dash.length) return "solid";
+    return this.dashPresets.find((preset) => preset.id !== "custom" && preset.dash.length === dash.length && preset.dash.every((value, index) => value === dash[index]))?.id ?? "custom";
+  }
+  /** Preset values are shown as placeholders so empty fields read as the pattern they produce. */
+  dashPlaceholder(index: number) {
+    const preset = this.dashPresets.find((item) => item.id === this.dashPreset());
+    return preset && preset.id !== "custom" ? (preset.dash[index] ?? "") : "";
+  }
+  setDashPreset(id: string) {
+    const preset = this.dashPresets.find((item) => item.id === id);
+    if (!preset) return;
+    this.editor.setStrokeStyle({ dash: preset.id === "custom" ? (this.dashPattern().length ? this.dashPattern() : [12, 6]) : preset.dash });
+  }
+  setDashValue(index: number, event: Event) {
+    const raw = (event.target as HTMLInputElement).value.trim(), value = Number(raw);
+    const dash = [...this.dashPattern()];
+    while (dash.length <= index) dash.push(0);
+    if (raw === "") dash.splice(index);
+    else if (Number.isFinite(value) && value >= 0 && value <= 1000) dash[index] = value;
+    else return;
+    this.editor.setStrokeStyle({ dash: dash.some((n, i) => i % 2 === 0 && n > 0) ? dash : [] });
+  }
   readonly strokeControls = [
     { key: "alignment", label: "Stroke alignment", choices: [
       { value: "center", label: "Centered stroke", hint: "Place half the stroke on each side of the path.", icon: "stroke-center" },
@@ -110,10 +188,12 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     ] },
   ] as const;
   readonly paintTargets = ["fill", "stroke"] as const;
+  /** The brush lays down fill only, so its appearance block hides the stroke. */
+  readonly fillOnly = ["fill"] as const;
   readonly quickColors = [{ value: "#000000", label: "Black" }, { value: "#ffffff", label: "White" }, { value: "none", label: "No color" }];
   readonly paintTarget = signal<"fill" | "stroke">("fill");
   readonly paintPicker = signal<{ x: number; y: number } | null>(null);
-  readonly contextBlocks = [{ id: "appearance", label: "Appearance" }, { id: "workspace", label: "Workspace" }, { id: "measurement", label: "Measurement" }, { id: "dimensions", label: "Dimensions" }] as const;
+  readonly contextBlocks = [{ id: "appearance", label: "Appearance" }, { id: "workspace", label: "Workspace" }, { id: "measurement", label: "Measurement" }, { id: "dimensions", label: "Dimensions" }, { id: "pivot", label: "Pivot" }, { id: "selection", label: "Selection" }] as const;
   readonly measurementAids = [{ id: "rulers", label: "Rulers" }, { id: "guides", label: "Guides" }, { id: "grid", label: "Grid" }] as const;
   readonly draggingGuideId = signal<string | null>(null);
   private guideDrag?: { axis: "vertical" | "horizontal"; pointerId: number; element: HTMLElement };
@@ -176,6 +256,12 @@ export class AppComponent implements AfterViewInit, OnDestroy {
       commands: ["union", "subtract", "intersect", "exclude"],
     },
     {
+      id: "document",
+      label: "Document dimensions",
+      icon: "document",
+      commands: ["documentFormat", "expandDocument", "cropDocument"],
+    },
+    {
       id: "align",
       label: "Align",
       icon: "align",
@@ -196,9 +282,10 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     { id: "cursor", label: "Cursor", icon: "select" },
     { id: "selection", label: "Selection and transforms", icon: "direct" },
     { id: "measurement", label: "Units and snapping", icon: "rulers" },
+    { id: "appearance", label: "Appearance", icon: "theme" },
     { id: "shortcuts", label: "Keyboard shortcuts", icon: "keyboard" },
   ] as const;
-  readonly settingsCategory = signal<"cursor" | "selection" | "measurement" | "shortcuts">("cursor");
+  readonly settingsCategory = signal<"cursor" | "selection" | "measurement" | "appearance" | "shortcuts">("cursor");
   readonly commandList = COMMANDS;
   readonly recording = signal<string | null>(null);
   readonly toolGroup = signal("Draw");
@@ -257,7 +344,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
       editor.snapConfig.set(config);
     });
     effect(() => { editor.lastAreaSelection.set(preferences.lastAreaSelection()); });
-    effect(() => { editor.dimensionsVisible.set(preferences.dimensionsVisible()); editor.setDimensionsLocked(preferences.dimensionsLocked()); editor.dimensionsSnap.set(preferences.dimensionsSnap()); editor.dimensionSnapRadius.set(preferences.dimensionSnapRadius()); this.schedule(); });
+    effect(() => { editor.dimensionsVisible.set(preferences.dimensionsVisible()); editor.setDimensionsLocked(preferences.dimensionsLocked()); editor.dimensionsSnap.set(preferences.dimensionsSnap()); editor.dimensionSnapRadius.set(preferences.dimensionSnapRadius()); editor.pivotVisible.set(preferences.pivotVisible()); editor.pivotLocked.set(preferences.pivotLocked()); editor.pivotSnap.set(preferences.pivotSnap()); editor.areaSelectionMode.set(preferences.areaSelectionMode()); this.schedule(); });
     effect(() => { editor.setGuidesLocked(preferences.guidesLocked()); });
     effect(() => {
       editor.snapAngle.set(preferences.snapAngle());
@@ -380,14 +467,14 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   }
   inlineMetrics(layer: Layer) { return this.editor.textMetrics(layer); }
   usesStyleDefaults() { return ["eyedropper", "paintBucket"].includes(this.editor.tool()); }
-  proceduralTool(): ProceduralKind | null { const tool = this.editor.tool(); return ["wall", "door", "window", "pillar"].includes(tool) ? tool as ProceduralKind : null; }
+  proceduralTool(): ProceduralKind | null { const tool = this.editor.tool(); return ["wall", "door", "window", "pillar", "stair"].includes(tool) ? tool as ProceduralKind : null; }
   proceduralProperties(): Procedural | undefined { const tool = this.proceduralTool(); return tool ? this.editor.proceduralDefaults()[tool] : this.editor.selected()?.procedural; }
   patchProcedural(patch: Record<string, unknown>) {
     const tool = this.proceduralTool();
     const applied = tool ? this.editor.updateProceduralDefaults(tool, patch) : this.editor.updateProcedural(patch);
     if (applied === false) this.notify(new Error("The floor plan parameters cannot be applied."));
   }
-  setProceduralNumber(key: "width" | "depth" | "thickness" | "openingAngle", event: Event) {
+  setProceduralNumber(key: "width" | "depth" | "thickness" | "length" | "openingAngle", event: Event) {
     const p = this.proceduralProperties(); if (!p) return;
     const value = key === "openingAngle" ? this.number(event) : this.distanceInput(event);
     if (!Number.isFinite(value) || value < (key === "openingAngle" ? 0 : 1) || value > (key === "openingAngle" ? 180 : 16384)) return;
@@ -396,10 +483,34 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     if (p.type === "pillar" && p.shape === "circle" && (key === "width" || key === "depth")) { patch['width'] = value; patch['depth'] = value; }
     this.patchProcedural(patch);
   }
+  get leafTypeLabels() { return LEAF_TYPE_LABELS; }
+  doorOperations = ["swing", "sliding", "folding", "pocket", "opening"];
+  windowOperations = ["fixed", "swing", "sliding", "opening"];
+  leafTypeChoices(type: "door" | "window") {
+    return (type === "door" ? this.doorOperations : this.windowOperations).filter((operation) => operation !== "opening");
+  }
+  /** Per-leaf mechanism; an unset leaf follows the opening mechanism. */
+  leafType(index: number) {
+    const p = this.proceduralProperties();
+    return p?.type === "door" || p?.type === "window" ? (p.leafTypes?.[index] ?? p.operation) : "";
+  }
+  setLeafType(index: number, event: Event) {
+    const p = this.proceduralProperties();
+    if (p?.type !== "door" && p?.type !== "window") return;
+    const value = this.text(event);
+    if (!(LEAF_TYPES as string[]).includes(value)) return;
+    const leafTypes = p.leafWidths.map((_, position) => (position === index ? value : (p.leafTypes?.[position] ?? (p.operation === "opening" ? "fixed" : p.operation)))) as LeafType[];
+    this.patchProcedural({ leafTypes: leafTypes.every((leaf) => leaf === leafTypes[0]) && leafTypes[0] === p.operation ? undefined : leafTypes });
+  }
+  setProceduralSteps(event: Event) {
+    const steps = Math.round(this.number(event));
+    if (Number.isFinite(steps) && steps >= 2 && steps <= 100) this.patchProcedural({ steps });
+  }
   setProceduralLeafCount(event: Event) {
     const p = this.proceduralProperties(); if (!p || (p.type !== "door" && p.type !== "window")) return;
     const count = this.number(event); if (!Number.isInteger(count) || count < 1 || count > (p.type === "door" ? 4 : 8)) return;
-    this.patchProcedural({ leafWidths: Array.from({length: count}, () => p.width / count) });
+    const previous = p.type === "door" || p.type === "window" ? p.leafTypes : undefined;
+    this.patchProcedural({ leafWidths: Array.from({length: count}, () => p.width / count), ...(previous ? { leafTypes: Array.from({length: count}, (_, index) => previous[index] ?? previous[previous.length - 1]) } : {}) });
   }
   setProceduralLeafWidth(index: number, event: Event) {
     const p = this.proceduralProperties(); if (!p || (p.type !== "door" && p.type !== "window")) return;
@@ -409,7 +520,67 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     this.patchProcedural({ leafWidths, width: total });
   }
   setPillarShape(event: Event) { const p = this.proceduralProperties(); if (p?.type !== "pillar") return; const shape = this.text(event); if (shape === "rectangle" || shape === "circle") this.patchProcedural({shape, ...(shape === "circle" ? {depth: p.width} : {})}); }
-  proceduralHint() { const tool = this.proceduralTool(); return tool === "wall" ? "Drag the wall centerline. Set its thickness before drawing." : tool === "pillar" ? "Drag to size the pillar footprint." : "Click near a wall to attach the opening, or click empty space for free placement."; }
+  proceduralHint() { const tool = this.proceduralTool(); return tool === "wall" ? "Click to continue the wall run; press Escape to end it." : tool === "pillar" ? "Drag to size the pillar footprint." : tool === "stair" ? "Drag to size the flight; the arrow follows the walking direction." : "Click near a wall to attach the opening, or click empty space for free placement."; }
+  /** Page setup: format, rulers, margins, background, registration marks, expand and crop. */
+  readonly pageDialog = signal<"format" | "expand" | "crop" | null>(null);
+  get pageCategories(): { id: PageCategory; label: string }[] { return PAGE_CATEGORIES; }
+  get pageResolutions() { return PAGE_RESOLUTIONS; }
+  get registrationOptions() { return REGISTRATION_MARKS; }
+  readonly pageCategory = signal<PageCategory>("paper");
+  readonly pageFormatId = signal("a4");
+  readonly pageResolution = signal(96);
+  readonly pageOrientation = signal<PageOrientation>("portrait");
+  readonly pageMargins = signal<MarginGuides>({ ...defaultMarginGuides });
+  readonly pageMarks = signal<RegistrationMarks>("none");
+  readonly pageBackground = signal("#ffffff");
+  readonly pageEdges = signal({ top: 0, right: 0, bottom: 0, left: 0 });
+  pageFormats() { return PAGE_FORMATS.filter((format) => format.category === this.pageCategory()); }
+  pageFormat() { return PAGE_FORMATS.find((format) => format.id === this.pageFormatId()) ?? PAGE_FORMATS[0]; }
+  pagePixels() { return pageSize(this.pageFormat(), this.pageResolution(), this.pageOrientation()); }
+  pageFits() { return pageSizeFits(this.pagePixels()); }
+  pageMarksFit() { return this.pageMarks() === "none" || registrationFits(this.pageMarks(), this.pagePixels()); }
+  /** Guide distances are shown in the unit the rulers use. */
+  marginDistance(value: number) { return this.displayDistance(value); }
+  /** Page editing on the canvas: drag the corner handles to resize, or drag an area to crop. */
+  startPageEditing(mode: "resize" | "crop") {
+    this.dismissMenus();
+    this.editor.setPageMode(mode);
+  }
+  openPageDialog(mode: "format" | "expand" | "crop") {
+    this.dismissMenus();
+    const document = this.editor.document();
+    this.pageBackground.set(document.background);
+    this.pageEdges.set({ top: 0, right: 0, bottom: 0, left: 0 });
+    const match = PAGE_FORMATS.find((format) => { const size = pageSize(format, this.pageResolution(), this.pageOrientation()); return size.width === document.width && size.height === document.height; });
+    if (match) { this.pageCategory.set(match.category); this.pageFormatId.set(match.id); }
+    this.pageDialog.set(mode);
+  }
+  setPageCategory(event: Event) {
+    const value = this.text(event) as PageCategory;
+    if (!PAGE_CATEGORIES.some((category) => category.id === value)) return;
+    this.pageCategory.set(value);
+    this.pageFormatId.set(this.pageFormats()[0].id);
+  }
+  setPageMargin(key: "top" | "right" | "bottom" | "left", event: Event) {
+    const value = this.distanceInput(event);
+    if (!Number.isFinite(value) || value < 0 || value > 2048) return;
+    this.pageMargins.update((margins) => ({ ...margins, [key]: value }));
+  }
+  togglePageMargin(key: "edges" | "centerX" | "centerY", enabled: boolean) {
+    this.pageMargins.update((margins) => ({ ...margins, [key]: enabled }));
+  }
+  setPageEdge(key: "top" | "right" | "bottom" | "left", event: Event) {
+    const value = this.distanceInput(event);
+    if (!Number.isFinite(value) || value < 0 || value > 4096) return;
+    this.pageEdges.update((edges) => ({ ...edges, [key]: value }));
+  }
+  applyPageDialog() {
+    const mode = this.pageDialog();
+    const applied = mode === "format"
+      ? this.editor.applyPageSetup({ size: this.pagePixels(), background: this.pageBackground(), margins: this.pageMargins(), marks: this.pageMarks() })
+      : mode === "expand" ? this.editor.expandPage(this.pageEdges()) : this.editor.cropPage(this.pageEdges());
+    if (applied) { this.pageDialog.set(null); this.fit(); }
+  }
   readonly transformDialog = signal<"displacement" | "rotation" | null>(null);
   transformX = 0; transformY = 0; numericAngle = 0; transformCenterX = 0; transformCenterY = 0;
   openTransformDialog(kind: "displacement" | "rotation") {
@@ -425,6 +596,11 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     const applied = this.transformDialog() === "displacement" ? this.editor.displaceSelection(toPixels(this.transformX, unit), toPixels(this.transformY, unit)) : this.editor.rotateSelection(this.numericAngle, { x: toPixels(this.transformCenterX, unit), y: toPixels(this.transformCenterY, unit) });
     if (applied) this.transformDialog.set(null);
     else this.notify(new Error("The transformation cannot be applied to this selection."));
+  }
+  commandIcon(id: string) { return COMMAND_ICONS[id] ?? ""; }
+  setDimensionPlacement(event: Event) {
+    const value = this.text(event);
+    if (["start", "center", "end"].includes(value)) this.editor.updateDimension({ labelPlacement: value as "start" | "center" | "end" });
   }
   setDimensionLabelSize(key: "width" | "height", event: Event) {
     const layer = this.editor.selected(); if (!layer?.dimension) return;
@@ -442,13 +618,81 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     const value = key === "unit" || key === "separator" ? this.text(event) : this.number(event);
     this.editor.updateDimension({ format: { ...dimension.format, [key]: value } });
   }
+  /** Hexadecimal value for a colour input; absent paint falls back to black without changing the stored value. */
+  /** Page background swatches: print black and white, blueprint blue, chroma key green and no colour. */
+  get backgroundSwatches() { return BACKGROUND_SWATCHES; }
+  backgroundPaint() { return this.editor.document().background; }
+  backgroundBase() { return this.colorValue(this.backgroundPaint()); }
+  backgroundOpacity() {
+    const paint = this.backgroundPaint();
+    return paint === "none" ? 0 : paint.length === 9 ? Math.round((parseInt(paint.slice(7), 16) / 255) * 100) : 100;
+  }
+  setBackgroundPaint(paint: string) { this.editor.background(paint); }
+  setBackgroundBase(color: string) {
+    const paint = this.backgroundPaint();
+    this.editor.background(color + (paint.length === 9 ? paint.slice(7) : ""));
+  }
+  setBackgroundOpacity(opacity: number) {
+    if (!Number.isFinite(opacity)) return;
+    const alpha = Math.round((Math.max(0, Math.min(100, opacity)) / 100) * 255).toString(16).padStart(2, "0");
+    this.editor.background(alpha === "00" ? "none" : this.backgroundBase() + (alpha === "ff" ? "" : alpha));
+  }
+  // Brush and eraser controls shown in the top bar while either tool is active.
+  get brushTypes() { return BRUSH_TYPES; }
+  get brushTypeLabels() { return BRUSH_TYPE_LABELS; }
+  paintingTool(): "brush" | "eraser" | null {
+    const tool = this.editor.tool();
+    return tool === "brush" || tool === "eraser" ? tool : null;
+  }
+  brush(): BrushSettings { return this.editor.brushFor(this.paintingTool() ?? "brush"); }
+  setBrush(patch: Partial<BrushSettings>) {
+    const tool = this.paintingTool();
+    if (tool && !this.editor.updateBrush(tool, patch)) this.notify(new Error("The brush settings cannot be applied."));
+  }
+  setBrushNumber(key: "pressure" | "opacity" | "cadence" | "diffusion" | "angle" | "speedVariation", event: Event) {
+    const value = this.number(event);
+    if (Number.isFinite(value)) this.setBrush({ [key]: value });
+  }
+  /** Sample stroke drawn with the current settings, so the choice is visible before painting. */
+  brushPreviewPath() {
+    const settings = this.brush(), points = previewStroke(140, 34);
+    const size = Math.max(2, Math.min(18, this.editor.size()));
+    let path = "";
+    for (let index = 1; index < points.length; index++) {
+      // A gesture that starts slowly, speeds up in the middle and eases out, so the slider shows its effect.
+      const progress = index / points.length;
+      const speed = size * 4 * Math.sin(Math.PI * progress);
+      for (const stamp of brushStamps(points[index - 1], points[index], size, settings, speed)) {
+        const rx = stamp.radiusX.toFixed(2), ry = stamp.radiusY.toFixed(2);
+        path += `M${(stamp.center.x - stamp.radiusX).toFixed(2)},${stamp.center.y.toFixed(2)}a${rx},${ry} ${((stamp.angle * 180) / Math.PI).toFixed(1)} 1 0 ${(stamp.radiusX * 2).toFixed(2)},0a${rx},${ry} ${((stamp.angle * 180) / Math.PI).toFixed(1)} 1 0 ${(-stamp.radiusX * 2).toFixed(2)},0`;
+      }
+    }
+    return path;
+  }
+  brushPreviewPaint() { return this.paintingTool() === "eraser" ? "var(--muted)" : this.editor.fill(); }
+  colorValue(paint: string) { return /^#[0-9a-fA-F]{6}/.test(paint) ? paint.slice(0, 7) : "#000000"; }
+  setDimensionExtensionColor(event: Event) {
+    const dimension = this.editor.selected()?.dimension; if (!dimension) return;
+    const alpha = /^#[0-9a-fA-F]{8}$/.test(dimension.extension.stroke) ? dimension.extension.stroke.slice(7) : "";
+    this.editor.updateDimension({ extension: { ...dimension.extension, stroke: this.text(event) + alpha } });
+  }
   setDimensionExtension(key: "stroke" | "strokeWidth" | "gap" | "overshoot", event: Event) {
     const dimension = this.editor.selected()?.dimension; if (!dimension) return;
     this.editor.updateDimension({ extension: { ...dimension.extension, [key]: key === "stroke" ? this.text(event) : this.distanceInput(event) } });
   }
   setLabelText(event: Event) { if (this.editor.selected()?.dimension) this.editor.updateDimension({ text: this.text(event) }); else this.editor.updateLayer({ text: this.text(event) }); }
   dimensionLabelPosition(layer: Layer) { return dimensionGeometry(layer).labelPosition; }
-  dimensionDraftPath() { const draft = this.editor.dimensionDraft(); return draft ? [...draft.points, draft.cursor].map((p, i) => `${i ? "L" : "M"}${p.x},${p.y}`).join(" ") : ""; }
+  dimensionDraftPath() { const draft = this.editor.dimensionDraft(); return draft && !this.editor.dimensionPreview() ? [...draft.points, draft.cursor].map((p, i) => `${i ? "L" : "M"}${p.x},${p.y}`).join(" ") : ""; }
+  /** Screen overlay for the annotation being placed: the same geometry as the committed Canvas/SVG output. */
+  dimensionPreviewShape() {
+    const layer = this.editor.dimensionPreview();
+    if (!layer) return null;
+    const g = dimensionGeometry(layer, (text, size, type) => this.editor.renderer.measureText(text, size, type));
+    const lines = g.lines.map((l) => `M${l.a.x},${l.a.y}L${l.b.x},${l.b.y}`).join("");
+    const arc = g.arc ? (() => { const a = g.arc!, s = { x: a.center.x + a.radius * Math.cos(a.startAngle), y: a.center.y + a.radius * Math.sin(a.startAngle) }, e = { x: a.center.x + a.radius * Math.cos(a.endAngle), y: a.center.y + a.radius * Math.sin(a.endAngle) }; return `M${s.x},${s.y}A${a.radius},${a.radius} 0 0 ${a.endAngle > a.startAngle ? 1 : 0} ${e.x},${e.y}`; })() : "";
+    const heads = g.ends.map((end) => lineEndGeometry(end.point, end.direction, end.style, end.spread).points.map((p) => `${p.x},${p.y}`).join(" "));
+    return { path: lines + arc, heads, text: g.text, fontSize: layer.fontSize, transform: `translate(${g.labelPosition.x} ${g.labelPosition.y}) rotate(${(g.labelAngle * 180) / Math.PI})` };
+  }
   paintStrokeStyle(): StrokeStyle {
     const layer = this.editor.selected();
     return !this.usesStyleDefaults() && layer && !layer.guide && layer.kind !== "image" ? { ...defaultStrokeStyle, ...layer.strokeStyle } : this.editor.strokeStyle();
@@ -497,7 +741,18 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     if (!(event.target instanceof Element) || !event.target.closest(".paint-popover,.paint-trigger")) this.paintPicker.set(null);
   }
   setUnit(key: "distanceUnit" | "fontUnit", event: Event) { const unit = this.text(event); if (isUnit(unit)) this.preferences.setMeasurement(key, unit); }
-  displayDistance(value: number) { return Number(fromPixels(value, this.preferences.distanceUnit()).toFixed(8)); }
+  /** Formatting only: measurements are shown with the configured decimal places, never stored rounded. */
+  setCheckerSize(event: Event) {
+    const size = Math.round(this.number(event));
+    if (Number.isFinite(size) && size >= 2 && size <= 64) this.preferences.setMeasurement("transparencyCheckerSize", size);
+  }
+  setDisplayDecimals(event: Event) {
+    const places = Math.round(this.number(event));
+    if (Number.isFinite(places) && places >= 0 && places <= 8) this.preferences.setMeasurement("displayDecimals", places);
+  }
+  displayDistance(value: number) { return Number(fromPixels(value, this.preferences.distanceUnit()).toFixed(this.preferences.displayDecimals())); }
+  /** Full precision, for comparisons and limits that must not be rounded. */
+  exactDistance(value: number) { return Number(fromPixels(value, this.preferences.distanceUnit()).toFixed(8)); }
   displayFontSize(value: number) { return Number(fromPixels(value, this.preferences.fontUnit()).toFixed(8)); }
   distanceInput(event: Event) { const value = this.number(event); return Number.isFinite(value) ? toPixels(value, this.preferences.distanceUnit()) : NaN; }
   setSymbolRadius(event: Event) { const value = this.distanceInput(event); if (Number.isFinite(value)) this.editor.symbolRadius.set(Math.max(5, Math.min(500, value))); }
@@ -631,10 +886,19 @@ export class AppComponent implements AfterViewInit, OnDestroy {
         rect.height,
     };
   }
+  /** True between a canvas press and its release; a capture lost afterwards is not a cancellation. */
+  private pointerActive = false;
+  /** A double press on the pivot mark sends it back to the centre of the selection. */
+  canvasDoubleClick(event: MouseEvent) {
+    if (event.button !== 0) return;
+    if (this.editor.resetPivotAt(this.point(event))) event.preventDefault();
+  }
   pointerDown(event: PointerEvent) {
     if (event.button !== 0) return;
     event.preventDefault();
     this.canvas!.nativeElement.setPointerCapture(event.pointerId);
+    this.pointerActive = true;
+    if (this.zoomAreaActive(event)) { this.beginZoomArea(event); return; }
     this.commitText();
     this.temporarySelect.set(event.ctrlKey);
     const tool = this.activeTool();
@@ -668,6 +932,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   }
   pointerMove(event: PointerEvent) {
     this.cursorPoint.set({ x: event.clientX, y: event.clientY });
+    if (this.zoomDrag) { this.updateZoomArea(event); return; }
     if (this.pan) {
       const view = this.viewport!.nativeElement;
       view.scrollLeft = this.pan.left - event.clientX + this.pan.x;
@@ -680,10 +945,18 @@ export class AppComponent implements AfterViewInit, OnDestroy {
       });
   }
   pointerUp() {
+    this.pointerActive = false;
+    if (this.zoomDrag) { this.endZoomArea(); return; }
     this.pan = undefined;
     this.editor.end();
   }
+  /** Browsers release capture after every pointerup; only an interrupted press cancels the gesture. */
+  pointerLost() {
+    if (this.pointerActive) this.pointerCancel();
+  }
   pointerCancel() {
+    this.pointerActive = false;
+    if (this.zoomDrag) { this.zoomDrag = undefined; this.zoomArea.set(null); return; }
     if (this.guideDrag) this.cancelGuide();
     this.pan = undefined;
     this.editor.cancel();
@@ -805,6 +1078,23 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   }
   blendStepCount() { return this.editor.selectedBlend()?.steps ?? Math.max(1, Math.min(this.blendSteps(), this.blendStepLimit())); }
   currentBlendEasing() { return this.editor.selectedBlend()?.easing ?? this.blendEasing(); }
+  get blendLimitTip() { return BLEND_LIMIT_TIP; }
+  /**
+   * The single piece of guidance the blend panel is worth showing right now, or null while the
+   * panel does what it offers: advice belongs where the user is blocked, not beside correct work.
+   */
+  blendTip(): string | null {
+    if (this.editor.selectedBlend()) {
+      if (this.blendIsLocked()) return "Unlock the blend objects before changing the blend.";
+      // Only say what the step count excludes when the count cannot grow any further.
+      return this.blendStepCount() >= this.blendStepLimit() ? this.blendLimitTip : null;
+    }
+    if (this.editor.canCreateBlend()) return this.blendStepLimit() < 1 ? this.blendLimitTip : null;
+    // Two or more objects are chosen, so the pair itself is what does not qualify.
+    return this.editor.selectedLayers().length >= 2
+      ? "Use vector endpoints with matching contour counts and open or closed paths. Groups must contain the same number of objects."
+      : "Select two compatible unlocked objects or groups at the same hierarchy level.";
+  }
   blendIsLocked() {
     const blend = this.editor.selectedBlend();
     if (!blend) return false;
@@ -883,6 +1173,9 @@ export class AppComponent implements AfterViewInit, OnDestroy {
       return;
     }
     const actions: Record<string, () => void> = {
+      documentFormat: () => this.openPageDialog("format"),
+      expandDocument: () => this.startPageEditing("resize"),
+      cropDocument: () => this.startPageEditing("crop"),
       selectAll: () => this.editor.selectAll(),
       mirrorH: () => this.editor.reflect("horizontal"),
       mirrorV: () => this.editor.reflect("vertical"),
@@ -1018,6 +1311,8 @@ export class AppComponent implements AfterViewInit, OnDestroy {
         [key]: Math.max(0.05, Math.min(200, key === "radius" ? toPixels(value, this.preferences.distanceUnit()) : value)),
       }));
   }
+  /** The badge states that this preview stores work locally; it opens the local service settings. */
+  openServerSettings() { this.dismissMenus(); this.dialog.set(true); void this.refreshProjects(); }
   openSettings() {
     this.settings.set(true);
     this.recording.set(null);
@@ -1026,7 +1321,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   activeSettingsCategory() {
     return this.settingsCategories.find(category => category.id === this.settingsCategory())!;
   }
-  selectSettingsCategory(id: "cursor" | "selection" | "measurement" | "shortcuts") {
+  selectSettingsCategory(id: "cursor" | "selection" | "measurement" | "appearance" | "shortcuts") {
     this.recording.set(null);
     this.settingsCategory.set(id);
     const panel = document.getElementById("settings-panel");
@@ -1095,6 +1390,42 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     void this.editor
       .traceImage(this.traceOptions())
       .catch((error) => this.notify(error));
+  }
+  /** Rectangle being dragged with the zoom area tool, in client coordinates. */
+  readonly zoomArea = signal<{ x: number; y: number; width: number; height: number } | null>(null);
+  private zoomDrag?: { start: { x: number; y: number } };
+  private zoomAreaActive(event: { ctrlKey: boolean; metaKey?: boolean }) {
+    return this.activeTool() === "zoomArea" || (this.spaceHeld && (event.ctrlKey || event.metaKey === true));
+  }
+  private beginZoomArea(event: PointerEvent) {
+    this.zoomDrag = { start: { x: event.clientX, y: event.clientY } };
+    this.zoomArea.set({ x: event.clientX, y: event.clientY, width: 0, height: 0 });
+  }
+  private updateZoomArea(event: PointerEvent) {
+    const drag = this.zoomDrag;
+    if (!drag) return;
+    this.zoomArea.set({
+      x: Math.min(drag.start.x, event.clientX), y: Math.min(drag.start.y, event.clientY),
+      width: Math.abs(event.clientX - drag.start.x), height: Math.abs(event.clientY - drag.start.y),
+    });
+  }
+  /** Fits the dragged rectangle into the visible workspace and centres it. */
+  private endZoomArea() {
+    const area = this.zoomArea(), view = this.viewport?.nativeElement;
+    this.zoomDrag = undefined;
+    this.zoomArea.set(null);
+    if (!area || !view || area.width < 8 || area.height < 8) return;
+    const zoom = this.editor.zoom();
+    const bounds = view.getBoundingClientRect();
+    const world = {
+      x: (area.x - bounds.left + view.scrollLeft) / zoom,
+      y: (area.y - bounds.top + view.scrollTop) / zoom,
+      width: area.width / zoom, height: area.height / zoom,
+    };
+    this.setZoom(Math.min(view.clientWidth / world.width, view.clientHeight / world.height));
+    const next = this.editor.zoom();
+    view.scrollLeft = (world.x + world.width / 2) * next - view.clientWidth / 2;
+    view.scrollTop = (world.y + world.height / 2) * next - view.clientHeight / 2;
   }
   fit() {
     const view = this.viewport?.nativeElement;
@@ -1179,7 +1510,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
       const file = input.files?.[0];
       if (file) {
         if (file.size > 35_000_000) throw new Error("Project exceeds 35 MB.");
-        this.editor.open(await file.text());
+        this.editor.openDocument(await file.text());
         this.fit();
       }
     } catch (error) {
@@ -1187,14 +1518,28 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     }
     input.value = "";
   }
+  /** In-app confirmation for destructive document actions; replaces native browser dialogs. */
+  readonly confirmation = signal<{ title: string; message: string; action: string; run: () => void } | null>(null);
+  confirm() { const pending = this.confirmation(); this.confirmation.set(null); pending?.run(); }
   newDocument() {
-    if (
-      this.editor.document().layers.length &&
-      !confirm("Create a new document? Save your current project first.")
-    )
-      return;
-    this.editor.reset();
+    this.commitText();
+    if (this.editor.newDocument()) this.fit();
+  }
+  clearDocument() {
+    this.dismissMenus();
+    const clear = () => { this.commitText(); this.editor.reset(); this.fit(); };
+    if (!this.editor.dirty()) { clear(); return; }
+    this.confirmation.set({ title: "Unsaved changes", message: "The current document has unsaved changes. Clearing it removes all of its content.", action: "Clear anyway", run: clear });
+  }
+  switchDocument(id: string) {
+    this.commitText();
+    this.editor.switchDocument(id);
     this.fit();
+  }
+  closeDocument(id: string) {
+    const close = () => { this.commitText(); this.editor.closeDocument(id); this.fit(); };
+    if (!this.editor.isDocumentDirty(id)) { close(); return; }
+    this.confirmation.set({ title: "Unsaved changes", message: "This document has unsaved changes. Closing it discards them.", action: "Close without saving", run: close });
   }
   sample() {
     this.commitText();
@@ -1254,6 +1599,10 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     );
   }
   @HostListener("window:keydown", ["$event"]) key(event: KeyboardEvent) {
+    if (this.confirmation?.()) {
+      if (event.key === "Escape") { this.confirmation.set(null); event.preventDefault(); }
+      return;
+    }
     if (this.transformDialog?.()) {
       if (event.key === "Escape") { this.transformDialog.set(null); event.preventDefault(); }
       return;
@@ -1329,6 +1678,9 @@ export class AppComponent implements AfterViewInit, OnDestroy {
       return;
     }
     const action: Record<string, () => void> = {
+      documentFormat: () => this.openPageDialog("format"),
+      expandDocument: () => this.openPageDialog("expand"),
+      cropDocument: () => this.openPageDialog("crop"),
       about: () => this.openAbout(),
       importImage: () => this.imageFile?.nativeElement.click(),
       exportPng: () => {
@@ -1503,6 +1855,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   async saveServer() {
     try {
       await this.serverRequest("projects", "POST", this.editor.document());
+      this.editor.markSaved();
       await this.refreshProjects();
       this.editor.status.set("Project saved to local server");
     } catch (error) {
@@ -1514,7 +1867,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
       const doc = await this.serverRequest(
         "projects/" + encodeURIComponent(id),
       );
-      this.editor.open(JSON.stringify(doc));
+      this.editor.openDocument(JSON.stringify(doc));
       this.dialog.set(false);
       this.fit();
     } catch (error) {
