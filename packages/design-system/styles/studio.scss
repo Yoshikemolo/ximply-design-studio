@@ -10,6 +10,9 @@
   --muted: #9099aa;
   --accent: #3979ff;
   --canvas: #10131a;
+  /* One scrollbar appearance across the shell, matching the canvas viewport. */
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
   --input: #141820;
   --selected: #283b5b;
   --icon: invert(88%) sepia(7%) saturate(247%) hue-rotate(177deg);
@@ -237,6 +240,8 @@ hr {
 }
 .contextbar {
   height: 45px;
+  /* Horizontal overflow would otherwise turn the vertical axis scrollable over a pixel of content. */
+  overflow-y: hidden;
   display: flex;
   align-items: center;
   gap: 20px;

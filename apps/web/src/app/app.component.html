@@ -1258,6 +1258,7 @@
       <div class="measurement-settings">
         <label>{{ t("Distance units") }}<select [value]="preferences.distanceUnit()" (change)="setUnit('distanceUnit', $event)">@for (unit of units; track unit) {<option [value]="unit">{{ unit }}</option>}</select></label>
         <label>{{ t("Font units") }}<select [value]="preferences.fontUnit()" (change)="setUnit('fontUnit', $event)">@for (unit of fontUnits; track unit) {<option [value]="unit">{{ unit }}</option>}</select></label>
+        <label>{{ t("Displayed decimal places") }}<input type="number" min="0" max="8" step="1" [value]="preferences.displayDecimals()" (change)="setDisplayDecimals($event)" /></label>
         <label>{{ t("Major ruler interval") }} ({{ preferences.distanceUnit() }})<input type="number" [min]="displayDistance(0.01)" step="any" [value]="displayDistance(preferences.rulerStep())" (change)="preferences.setMeasurement('rulerStep', distanceInput($event))" /></label>
         <label>{{ t('Minor ruler interval') }} ({{ preferences.distanceUnit() }})<input type="number" [min]="displayDistance(0.01)" step="any" [value]="displayDistance(preferences.rulerMinorStep())" (change)="preferences.setMeasurement('rulerMinorStep', distanceInput($event))" /></label>
         <label>{{ t('Snap major ruler ticks') }}<input type="checkbox" [checked]="preferences.snapRulerMajor()" (change)="preferences.setMeasurement('snapRulerMajor', !preferences.snapRulerMajor())" /></label>
@@ -1405,6 +1406,41 @@
     <p id="confirm-message">{{ t(pending.message) }}</p>
     <div class="dialog-actions"><button type="button" autofocus (click)="confirmation.set(null)">{{ t("Cancel") }}</button><button type="button" class="danger" (click)="confirm()">{{ t(pending.action) }}</button></div>
   </section></div>
+}
+
+@if (pageDialog(); as pageMode) {
+  <div class="modal-backdrop"><form class="server-dialog page-dialog" role="dialog" aria-modal="true" [attr.aria-label]="t('Document dimensions')" (submit)="$event.preventDefault(); applyPageDialog()" (keydown.escape)="pageDialog.set(null); $event.stopPropagation()">
+    <h2>{{ t(pageMode === 'format' ? 'Document dimensions' : pageMode === 'expand' ? 'Expand document' : 'Crop document') }}</h2>
+    @if (pageMode === 'format') {
+      <label class="wide-label">{{ t('Format family') }}<select [value]="pageCategory()" (change)="setPageCategory($event)">@for (category of pageCategories; track category.id) {<option [value]="category.id">{{ t(category.label) }}</option>}</select></label>
+      <label class="wide-label">{{ t('Format') }}<select [value]="pageFormatId()" (change)="pageFormatId.set(text($event))">@for (format of pageFormats(); track format.id) {<option [value]="format.id">{{ format.label }}</option>}</select></label>
+      <label class="wide-label">{{ t('Resolution') }}<select [disabled]="pageFormat().unit === 'px'" [value]="pageResolution()" (change)="pageResolution.set(number($event))">@for (resolution of pageResolutions; track resolution) {<option [value]="resolution">{{ resolution }} dpi</option>}</select></label>
+      <label class="wide-label">{{ t('Orientation') }}<select [value]="pageOrientation()" (change)="pageOrientation.set($any(text($event)))"><option value="portrait">{{ t('Portrait') }}</option><option value="landscape">{{ t('Landscape') }}</option></select></label>
+      <label class="wide-label">{{ t('Ruler units') }}<select [value]="preferences.distanceUnit()" (change)="setUnit('distanceUnit', $event)">@for (unit of units; track unit) {<option [value]="unit">{{ unit }}</option>}</select></label>
+      <label class="wide-label color-row">{{ t('Background') }}<input class="color-value" type="text" maxlength="9" [value]="pageBackground()" (change)="pageBackground.set(text($event))" /><input class="color-swatch" type="color" [value]="colorValue(pageBackground())" (input)="pageBackground.set(text($event))" [attr.aria-label]="t('Background')" /></label>
+      <p class="typography-note">{{ t('Page') }}: {{ pagePixels().width }} x {{ pagePixels().height }} px @if (!pageFits()) {<strong>· {{ t('The page must stay between 16 and 4096 pixels.') }}</strong>}</p>
+      <div class="section-label">{{ t('Margin guides') }} · {{ preferences.distanceUnit() }}</div>
+      <div class="property-grid">
+        @for (edge of pageEdgeKeys; track edge) {
+          <label>{{ t(edge === 'top' ? 'Top' : edge === 'right' ? 'Right' : edge === 'bottom' ? 'Bottom' : 'Left') }}<input type="number" min="0" step="any" [value]="marginDistance(pageMargins()[edge])" (change)="setPageMargin(edge, $event)" /></label>
+        }
+      </div>
+      <label class="wide-label toggle-row">{{ t('Margin guides') }}<input class="toggle-switch" type="checkbox" role="switch" [checked]="pageMargins().edges" (change)="togglePageMargin('edges', $any($event.target).checked)" /></label>
+      <label class="wide-label toggle-row">{{ t('Vertical centre guide') }}<input class="toggle-switch" type="checkbox" role="switch" [checked]="pageMargins().centerX" (change)="togglePageMargin('centerX', $any($event.target).checked)" /></label>
+      <label class="wide-label toggle-row">{{ t('Horizontal centre guide') }}<input class="toggle-switch" type="checkbox" role="switch" [checked]="pageMargins().centerY" (change)="togglePageMargin('centerY', $any($event.target).checked)" /></label>
+      <label class="wide-label">{{ t('Registration marks') }}<select [value]="pageMarks()" (change)="pageMarks.set($any(text($event)))">@for (option of registrationOptions; track option) {<option [value]="option">{{ t(registrationLabels[option]) }}</option>}</select></label>
+      @if (!pageMarksFit()) {<p class="typography-note"><strong>{{ t('The registration marks do not fit inside this page.') }}</strong></p>}
+    } @else {
+      <p class="typography-note">{{ t(pageMode === 'expand' ? 'Add space on each edge; the artwork moves with the page.' : 'Remove space on each edge; the artwork keeps its position on what remains.') }}</p>
+      <div class="property-grid">
+        @for (edge of pageEdgeKeys; track edge) {
+          <label>{{ t(edge === 'top' ? 'Top' : edge === 'right' ? 'Right' : edge === 'bottom' ? 'Bottom' : 'Left') }}<input type="number" min="0" step="any" [value]="marginDistance(pageEdges()[edge])" (change)="setPageEdge(edge, $event)" /></label>
+        }
+      </div>
+      <p class="typography-note">{{ t('Page') }}: {{ editor.document().width }} x {{ editor.document().height }} px</p>
+    }
+    <div class="dialog-actions"><button type="button" (click)="pageDialog.set(null)">{{ t('Cancel') }}</button><button type="submit" [disabled]="pageMode === 'format' && (!pageFits() || !pageMarksFit())">{{ t('Apply') }}</button></div>
+  </form></div>
 }
 
 @if (transformDialog(); as mode) {

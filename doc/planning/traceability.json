@@ -153,13 +153,15 @@
       ],
       "implementation": [
         "apps/web/src/app/editor.service.ts",
-        "packages/domain/src/document.ts"
+        "packages/domain/src/document.ts",
+        "packages/domain/src/page-setup.ts"
       ],
       "tests": [
         "packages/domain/tests/document.test.ts",
         "apps/web/tests/editor.test.ts",
         "apps/web/tests/document-tabs.test.ts",
-        "apps/web/tests/shell-template.test.ts"
+        "apps/web/tests/shell-template.test.ts",
+        "apps/web/tests/page-setup.test.ts"
       ],
       "evidence": [
         "doc/implementation/PLAN-0002-0001.md",

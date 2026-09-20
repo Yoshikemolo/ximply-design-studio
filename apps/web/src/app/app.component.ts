@@ -2,6 +2,7 @@ import { Procedural, ProceduralKind } from "../../../../packages/domain/src/proc
 import { Dimension, DimensionFormat, dimensionGeometry } from "../../../../packages/domain/src/dimensions";
 import { defaultLineEnds, lineEndGeometry, LineEnd, LineEnds } from "../../../../packages/domain/src/line-endings";
 import { LeafType, LEAF_TYPES } from "../../../../packages/domain/src/procedural";
+import { defaultMarginGuides, MarginGuides, PAGE_FORMATS, PAGE_RESOLUTIONS, PageCategory, PageOrientation, pageSize, pageSizeFits, RegistrationMarks, REGISTRATION_MARKS, registrationFits } from "../../../../packages/domain/src/page-setup";
 import { BlendEasing } from "../../../../packages/domain/src/object-blend";
 import { FONT_FAMILIES, defaultTypography, defaultTextLayout, TextTypography, TextLayoutOptions } from "../../../../packages/domain/src/text-layout";
 import { measurementUnits, isUnit, snapPoint, fromPixels, toPixels, formatMeasurement, rulerTicks as makeRulerTicks, SnapConfig } from "../../../../packages/domain/src/measurements";
@@ -50,6 +51,16 @@ const DASH_PRESETS: { id: string; label: string; dash: number[] }[] = [
   { id: "custom", label: "Custom sequence", dash: [] },
 ];
 const DASH_FIELDS = [0, 1, 2, 3, 4, 5];
+const PAGE_EDGE_KEYS: ("top" | "right" | "bottom" | "left")[] = ["top", "right", "bottom", "left"];
+const REGISTRATION_LABELS: Record<string, string> = {
+  none: "No marks", file2: "Two filing holes", file4: "Four filing holes",
+  file6: "Six filing holes", file8: "Eight filing holes", animation: "Animation peg bar",
+};
+const PAGE_CATEGORIES: { id: PageCategory; label: string }[] = [
+  { id: "paper", label: "Paper sizes" },
+  { id: "screen", label: "Screen sizes" },
+  { id: "animation", label: "Animation templates" },
+];
 /** Command icons follow the shapes used by drawing programs for pathfinder, align and transform actions. */
 const COMMAND_ICONS: Record<string, string> = {
   union: "union", subtract: "subtract", intersect: "intersect", exclude: "exclude",
@@ -117,6 +128,8 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     { id: "stroke", label: "Stroke only", icon: "style-stroke" },
     { id: "both", label: "Fill and stroke", icon: "style-both" },
   ] as const;
+  get pageEdgeKeys() { return PAGE_EDGE_KEYS; }
+  get registrationLabels() { return REGISTRATION_LABELS; }
   get dashPresets() { return DASH_PRESETS; }
   get dashFields() { return DASH_FIELDS; }
   dashPattern() { return this.paintStrokeStyle().dash ?? []; }
@@ -226,6 +239,12 @@ export class AppComponent implements AfterViewInit, OnDestroy {
       label: "Boolean operations",
       icon: "boolean",
       commands: ["union", "subtract", "intersect", "exclude"],
+    },
+    {
+      id: "document",
+      label: "Document dimensions",
+      icon: "document",
+      commands: ["documentFormat", "expandDocument", "cropDocument"],
     },
     {
       id: "align",
@@ -486,6 +505,61 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   }
   setPillarShape(event: Event) { const p = this.proceduralProperties(); if (p?.type !== "pillar") return; const shape = this.text(event); if (shape === "rectangle" || shape === "circle") this.patchProcedural({shape, ...(shape === "circle" ? {depth: p.width} : {})}); }
   proceduralHint() { const tool = this.proceduralTool(); return tool === "wall" ? "Click to continue the wall run; press Escape to end it." : tool === "pillar" ? "Drag to size the pillar footprint." : tool === "stair" ? "Drag to size the flight; the arrow follows the walking direction." : "Click near a wall to attach the opening, or click empty space for free placement."; }
+  /** Page setup: format, rulers, margins, background, registration marks, expand and crop. */
+  readonly pageDialog = signal<"format" | "expand" | "crop" | null>(null);
+  get pageCategories(): { id: PageCategory; label: string }[] { return PAGE_CATEGORIES; }
+  get pageResolutions() { return PAGE_RESOLUTIONS; }
+  get registrationOptions() { return REGISTRATION_MARKS; }
+  readonly pageCategory = signal<PageCategory>("paper");
+  readonly pageFormatId = signal("a4");
+  readonly pageResolution = signal(96);
+  readonly pageOrientation = signal<PageOrientation>("portrait");
+  readonly pageMargins = signal<MarginGuides>({ ...defaultMarginGuides });
+  readonly pageMarks = signal<RegistrationMarks>("none");
+  readonly pageBackground = signal("#ffffff");
+  readonly pageEdges = signal({ top: 0, right: 0, bottom: 0, left: 0 });
+  pageFormats() { return PAGE_FORMATS.filter((format) => format.category === this.pageCategory()); }
+  pageFormat() { return PAGE_FORMATS.find((format) => format.id === this.pageFormatId()) ?? PAGE_FORMATS[0]; }
+  pagePixels() { return pageSize(this.pageFormat(), this.pageResolution(), this.pageOrientation()); }
+  pageFits() { return pageSizeFits(this.pagePixels()); }
+  pageMarksFit() { return this.pageMarks() === "none" || registrationFits(this.pageMarks(), this.pagePixels()); }
+  /** Guide distances are shown in the unit the rulers use. */
+  marginDistance(value: number) { return this.displayDistance(value); }
+  openPageDialog(mode: "format" | "expand" | "crop") {
+    this.dismissMenus();
+    const document = this.editor.document();
+    this.pageBackground.set(document.background);
+    this.pageEdges.set({ top: 0, right: 0, bottom: 0, left: 0 });
+    const match = PAGE_FORMATS.find((format) => { const size = pageSize(format, this.pageResolution(), this.pageOrientation()); return size.width === document.width && size.height === document.height; });
+    if (match) { this.pageCategory.set(match.category); this.pageFormatId.set(match.id); }
+    this.pageDialog.set(mode);
+  }
+  setPageCategory(event: Event) {
+    const value = this.text(event) as PageCategory;
+    if (!PAGE_CATEGORIES.some((category) => category.id === value)) return;
+    this.pageCategory.set(value);
+    this.pageFormatId.set(this.pageFormats()[0].id);
+  }
+  setPageMargin(key: "top" | "right" | "bottom" | "left", event: Event) {
+    const value = this.distanceInput(event);
+    if (!Number.isFinite(value) || value < 0 || value > 2048) return;
+    this.pageMargins.update((margins) => ({ ...margins, [key]: value }));
+  }
+  togglePageMargin(key: "edges" | "centerX" | "centerY", enabled: boolean) {
+    this.pageMargins.update((margins) => ({ ...margins, [key]: enabled }));
+  }
+  setPageEdge(key: "top" | "right" | "bottom" | "left", event: Event) {
+    const value = this.distanceInput(event);
+    if (!Number.isFinite(value) || value < 0 || value > 4096) return;
+    this.pageEdges.update((edges) => ({ ...edges, [key]: value }));
+  }
+  applyPageDialog() {
+    const mode = this.pageDialog();
+    const applied = mode === "format"
+      ? this.editor.applyPageSetup({ size: this.pagePixels(), background: this.pageBackground(), margins: this.pageMargins(), marks: this.pageMarks() })
+      : mode === "expand" ? this.editor.expandPage(this.pageEdges()) : this.editor.cropPage(this.pageEdges());
+    if (applied) { this.pageDialog.set(null); this.fit(); }
+  }
   readonly transformDialog = signal<"displacement" | "rotation" | null>(null);
   transformX = 0; transformY = 0; numericAngle = 0; transformCenterX = 0; transformCenterY = 0;
   openTransformDialog(kind: "displacement" | "rotation") {
@@ -595,7 +669,14 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     if (!(event.target instanceof Element) || !event.target.closest(".paint-popover,.paint-trigger")) this.paintPicker.set(null);
   }
   setUnit(key: "distanceUnit" | "fontUnit", event: Event) { const unit = this.text(event); if (isUnit(unit)) this.preferences.setMeasurement(key, unit); }
-  displayDistance(value: number) { return Number(fromPixels(value, this.preferences.distanceUnit()).toFixed(8)); }
+  /** Formatting only: measurements are shown with the configured decimal places, never stored rounded. */
+  setDisplayDecimals(event: Event) {
+    const places = Math.round(this.number(event));
+    if (Number.isFinite(places) && places >= 0 && places <= 8) this.preferences.setMeasurement("displayDecimals", places);
+  }
+  displayDistance(value: number) { return Number(fromPixels(value, this.preferences.distanceUnit()).toFixed(this.preferences.displayDecimals())); }
+  /** Full precision, for comparisons and limits that must not be rounded. */
+  exactDistance(value: number) { return Number(fromPixels(value, this.preferences.distanceUnit()).toFixed(8)); }
   displayFontSize(value: number) { return Number(fromPixels(value, this.preferences.fontUnit()).toFixed(8)); }
   distanceInput(event: Event) { const value = this.number(event); return Number.isFinite(value) ? toPixels(value, this.preferences.distanceUnit()) : NaN; }
   setSymbolRadius(event: Event) { const value = this.distanceInput(event); if (Number.isFinite(value)) this.editor.symbolRadius.set(Math.max(5, Math.min(500, value))); }
@@ -1456,6 +1537,9 @@ export class AppComponent implements AfterViewInit, OnDestroy {
       return;
     }
     const action: Record<string, () => void> = {
+      documentFormat: () => this.openPageDialog("format"),
+      expandDocument: () => this.openPageDialog("expand"),
+      cropDocument: () => this.openPageDialog("crop"),
       about: () => this.openAbout(),
       importImage: () => this.imageFile?.nativeElement.click(),
       exportPng: () => {

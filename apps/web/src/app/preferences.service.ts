@@ -9,6 +9,8 @@ export type AreaSelectionMode = "rectangle" | "ellipse" | "lasso";
 export interface MeasurementSettings {
   distanceUnit: Unit;
   fontUnit: Unit;
+  /** Decimal places used to display measurements; stored values keep their precision. */
+  displayDecimals: number;
   rulersVisible: boolean;
   guidesVisible: boolean;
   guidesLocked: boolean;
@@ -31,7 +33,7 @@ export interface MeasurementSettings {
 }
 export type LayoutBlock = "appearance" | "workspace" | "measurement" | "dimensions";
 const measurementDefaults: MeasurementSettings = {
-  distanceUnit: "px", fontUnit: "px", rulersVisible: false, guidesVisible: true, guidesLocked: false,
+  distanceUnit: "px", fontUnit: "px", displayDecimals: 2, rulersVisible: false, guidesVisible: true, guidesLocked: false,
   gridVisible: false, snapRulers: false, snapGuides: false, snapGrid: false,
   dimensionsVisible: true, dimensionsLocked: false, dimensionsSnap: true, dimensionSnapRadius: 8,
   rulerMinorStep: 10, snapRulerMajor: true, snapRulerMinor: false,
@@ -43,6 +45,8 @@ function validateMeasurement<K extends keyof MeasurementSettings>(key: K, value:
     if (!isUnit(value)) throw new Error("Invalid measurement unit");
   } else if (typeof measurementDefaults[key] === "boolean") {
     if (typeof value !== "boolean") throw new Error("Invalid visibility or snapping setting");
+  } else if (key === "displayDecimals") {
+    if (typeof value !== "number" || !Number.isInteger(value) || value < 0 || value > 8) throw new Error("Decimal places must be a whole number between 0 and 8");
   } else if (typeof value !== "number" || !Number.isFinite(value) || value < (key.endsWith("Radius") ? 0 : 0.01) || value > 100000) {
     throw new Error("Measurement must be finite and within range");
   }
@@ -56,6 +60,7 @@ export class PreferencesService {
   readonly snapAngle = signal(45);
   readonly error = signal("");
   readonly distanceUnit = signal<Unit>(measurementDefaults.distanceUnit);
+  readonly displayDecimals = signal(measurementDefaults.displayDecimals);
   readonly fontUnit = signal<Unit>(measurementDefaults.fontUnit);
   readonly rulersVisible = signal(measurementDefaults.rulersVisible);
   readonly guidesVisible = signal(measurementDefaults.guidesVisible);

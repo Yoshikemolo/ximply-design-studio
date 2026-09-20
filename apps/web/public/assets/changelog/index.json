@@ -45,6 +45,14 @@
         },
         {
           "type": "Feature",
+          "description": "Set up the document from the transform tools: paper, screen and animation formats with output resolution and orientation, ruler units, margin guides with their centres, background colour, registration marks as a locked layer, and expanding or cropping the page."
+        },
+        {
+          "type": "Feature",
+          "description": "Choose how many decimal places measurements are shown with."
+        },
+        {
+          "type": "Feature",
           "description": "Draw the plan section of the frame at each side of a door or window."
         },
         {
@@ -74,6 +82,14 @@
         {
           "type": "Improvement",
           "description": "Show an icon beside each boolean, align, transform, blend and grouping action, and narrow the tool option list."
+        },
+        {
+          "type": "Improvement",
+          "description": "Give the dimension lock the same styled toggle as the guide lock, and explain the local preview badge, which now opens the local service settings."
+        },
+        {
+          "type": "Improvement",
+          "description": "Use one scrollbar appearance across the shell and stop the context bar from scrolling vertically over a pixel of content."
         },
         {
           "type": "Fix",

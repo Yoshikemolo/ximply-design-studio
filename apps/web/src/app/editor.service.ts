@@ -1,5 +1,6 @@
 import { Procedural, defaultProcedural, generateProcedural, syncProcedurals, validProcedural } from "../../../../packages/domain/src/procedural";
 import { openingHost, wallSnapPoint, WallSnap } from "./procedural-placement";
+import { MarginGuides, MARGIN_GUIDE_PREFIX, marginGuidePositions, PageEdges, PageSize, pageSizeFits, RegistrationMarks, REGISTRATION_LAYER_NAME, registrationFits, registrationLayer, resizePage } from "../../../../packages/domain/src/page-setup";
 import { Dimension, DimensionFormat, defaultDimensionFormat, dimensionGeometry } from "../../../../packages/domain/src/dimensions";
 import { LineEnds, defaultLineEnds, validLineEnds } from "../../../../packages/domain/src/line-endings";
 import { snapDimensionPoint, snapDimensionOffset, DimensionSnap } from "./dimension-snapping";
@@ -1089,6 +1090,49 @@ export class EditorService {
     this.history.commit(this.document());
     this.document.update((d) => ({ ...d, name: name.slice(0, 150) }));
     this.changed();
+  }
+  /** One page edit: size, background, margin guides and registration marks of the active document. */
+  applyPageSetup(setup: { size?: PageSize; background?: string; margins?: MarginGuides; marks?: RegistrationMarks }): boolean {
+    const before = this.document();
+    const size = setup.size ?? { width: before.width, height: before.height };
+    if (!pageSizeFits(size)) { this.status.set("The page must stay between 16 and 4096 pixels."); return false; }
+    if (setup.marks && setup.marks !== "none" && !registrationFits(setup.marks, size)) { this.status.set("The registration marks do not fit inside this page."); return false; }
+    let layers = before.layers.filter((layer) => !layer.name.startsWith(MARGIN_GUIDE_PREFIX) && layer.name !== REGISTRATION_LAYER_NAME);
+    if (setup.margins) {
+      layers = [...layers, ...marginGuidePositions(size, setup.margins).map((guide) => ({
+        ...newLayer("path", crypto.randomUUID(), { x: guide.axis === "vertical" ? guide.position : 0, y: guide.axis === "horizontal" ? guide.position : 0 }, "none", "#00b8d9", 1),
+        guide: guide.axis, name: guide.name,
+      }))];
+    }
+    const marks = setup.marks && setup.marks !== "none" ? registrationLayer(setup.marks, size, crypto.randomUUID()) : null;
+    if (marks) layers = [...layers, marks];
+    if (layers.length > 150) { this.status.set("Close a document before opening another."); return false; }
+    const next = { ...before, width: size.width, height: size.height, background: setup.background ?? before.background, layers };
+    try { parseDocument(JSON.stringify(next)); } catch { this.status.set("The page settings cannot be applied."); return false; }
+    this.history.commit(before);
+    this.document.set(next);
+    this.selectedIds.update((ids) => ids.filter((id) => next.layers.some((layer) => layer.id === id)));
+    if (!next.layers.some((layer) => layer.id === this.selectedId())) this.selectedId.set(null);
+    this.changed();
+    this.status.set("Document dimensions updated");
+    return true;
+  }
+  /** Adds space on each edge and moves the artwork with the page. */
+  expandPage(edges: PageEdges): boolean { return this.resizePageBy(edges, 1); }
+  /** Removes space on each edge; artwork keeps its position relative to what remains. */
+  cropPage(edges: PageEdges): boolean { return this.resizePageBy(edges, -1); }
+  private resizePageBy(edges: PageEdges, sign: number): boolean {
+    const before = this.document();
+    const applied = { top: edges.top * sign, right: edges.right * sign, bottom: edges.bottom * sign, left: edges.left * sign };
+    if (!Object.values(applied).every((value) => Number.isFinite(value))) return false;
+    let next: StudioDocument;
+    try { next = resizePage(before, applied); parseDocument(JSON.stringify(next)); }
+    catch (error) { this.status.set(error instanceof Error ? error.message : "The page cannot be resized."); return false; }
+    this.history.commit(before);
+    this.document.set(next);
+    this.changed();
+    this.status.set(sign > 0 ? "Document expanded" : "Document cropped");
+    return true;
   }
   background(value: string) {
     this.history.commit(this.document());
