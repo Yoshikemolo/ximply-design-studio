@@ -420,6 +420,32 @@ hr {
   overflow-x: auto;
   scrollbar-width: thin;
 }
+.leaf-rows {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 5px;
+  align-items: center;
+  margin: 4px 0 2px;
+}
+.leaf-rows.with-type {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr);
+}
+.leaf-heading {
+  font-size: 9px;
+  letter-spacing: .4px;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.leaf-rows input,
+.leaf-rows select {
+  width: 100%;
+  min-width: 0;
+  font-size: 11px;
+  padding: 6px;
+}
+.leaf-rows input {
+  text-align: right;
+}
 .dash-row {
   display: grid;
   grid-template-columns: repeat(4, 1fr);

@@ -42,4 +42,14 @@ describe('shell template', () => {
     expect(rule).toContain('flex: 0 0 auto');
     expect(template).toContain('class="toggle-switch"');
   });
+
+  it('groups opening leaves in their own block with short field names', () => {
+    const leaves = section("<div class=\"section-label\">{{ t('Leaves') }}</div>", 'Changing a leaf width');
+    expect(leaves).toContain("t('Number')");
+    expect(leaves).toContain('class="leaf-rows"');
+    expect(leaves).toContain("t('Type')");
+    expect(leaves).not.toContain("t('Number of leaves')");
+    expect(template).not.toContain("t('Leaf type')");
+    for (const field of ["t('Angle')", "t('Hinge')", "t('Opening')"]) expect(template).toContain(field);
+  });
 });

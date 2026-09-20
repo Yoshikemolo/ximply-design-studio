@@ -1,4 +1,11 @@
 const ES: Record<string, string> = {
+  "Mechanism": "Mecanismo",
+  "Leaves": "Hojas",
+  "Number": "Número",
+  "Type": "Tipo",
+  "Angle": "Ángulo",
+  "Hinge": "Bisagra",
+  "Opening": "Apertura",
   "Radius dimension": "Cota de radio",
   "Diameter dimension": "Cota de diámetro",
   "Centre mark": "Marca de centro",
