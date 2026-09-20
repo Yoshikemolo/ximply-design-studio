@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { AppComponent } from '../src/app/app.component';
 import { EditorService } from '../src/app/editor.service';
 import { blankDocument, newLayer, StudioDocument } from '../../../packages/domain/src/document';
+import { readFileSync } from 'node:fs';
 
 beforeEach(() => localStorage.clear());
 const rectangle = (id: string) => ({ ...newLayer('rectangle', id, { x: 10, y: 10 }), width: 40, height: 30 });
@@ -146,5 +147,18 @@ describe('unsaved changes confirmation', () => {
     expect(e.tabOrder()).toHaveLength(1);
     c.closeDocument(e.activeTabId());
     expect(c.confirmation()).toBeNull();
+  });
+});
+
+describe('project files', () => {
+  it('saves with the .xds extension and offers both extensions when opening', () => {
+    const e = new EditorService();
+    const saved: string[] = [];
+    e.download = (_content: Blob, name: string) => { saved.push(name); };
+    e.rename('House plan');
+    e.save();
+    expect(saved).toEqual(['House plan.xds']);
+    const template = readFileSync('apps/web/src/app/app.component.html', 'utf-8');
+    expect(template).toContain('accept=".xds,.ximply,.json"');
   });
 });

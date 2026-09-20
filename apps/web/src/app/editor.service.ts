@@ -2760,7 +2760,7 @@ export class EditorService {
         ],
         { type: "application/json" },
       ),
-      "symbols.ximply",
+      "symbols.xds",
     );
   }
   importSymbols(text: string) {
@@ -2977,7 +2977,7 @@ export class EditorService {
   save() {
     this.download(
       new Blob([JSON.stringify(this.document())], { type: "application/json" }),
-      this.document().name + ".ximply",
+      this.document().name + ".xds",
     );
     this.markSaved();
     this.status.set("Project file saved");

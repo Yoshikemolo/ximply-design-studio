@@ -36,7 +36,7 @@ keyboard shortcuts, cleanup and development commands.
 - Layer selection, movement, corner/edge resizing, rotation handles, ordering, visibility, locks,
   opacity and blend modes.
 - PNG/JPEG/WebP import, raster brush/eraser and non-destructive image adjustments.
-- Undo/redo, native .ximply save/open, PNG export and supported-vector SVG export.
+- Undo/redo, native .xds save/open, PNG export and supported-vector SVG export.
 - Rotate/Reflect/Scale tool families, triangular flyouts and numeric group transforms.
 - Configurable collision-checked shortcuts, Shift angle constraints and tool cursor badge.
 - Shared fill/stroke palette with independent alpha, no-color and quick swatches.
