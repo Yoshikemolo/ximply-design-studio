@@ -10,17 +10,17 @@ source: ["Project change history and owner changelog requirements"]
 version: "Unreleased"
 date: null
 summary: "Pending changes"
-breaking_changes: true
+breaking_changes: false
 capability_status: "local-preview"
 ---
 
 # Unreleased — Pending changes
 
-Engineering follow-up for incremental preview delivery.
+No pending changes; everything delivered so far is recorded in the published notes.
 
 ## Breaking changes
 
-- Extended native-v2 paints and guide metadata require the updated reader. Migration: preserve original files and use this version for new saves; older readers may reject or discard these extensions.
+None.
 
 ## New features
 
@@ -32,9 +32,7 @@ None.
 
 ## Fixes
 
-- Generated documentation navigation is identical on Windows and POSIX hosts, with forward-slash links and case-sensitive document order.
-- Load the full editor stylesheet directly in production so the Content Security Policy does not leave the interface unstyled. Rebuild the local containers to apply the correction.
-- Use localhost:8090 by default for the local editor to avoid conflicts with port 8080. Existing installations should set XDS_PORT=8090 in .env.local and restart; credentials and saved projects are preserved.
+None.
 
 ## Security
 
@@ -42,15 +40,4 @@ None.
 
 ## Engineering
 
-- The contribution check accepts GitHub merge button commits when GitHub verified the signature, the author is the owner and the pull request title used as message is a Conventional Commit; the web merges of PR #16, PR #17 and PR #18 join the pinned historical exemptions.
-- Add the GitHub web merges of PR #13 and PR #15 on dev to the pinned legacy-commit exemptions by exact SHA and reason, without rewriting history.
-- Temporarily pause the Sonar quality job at the owner's request, preserving its commented analysis steps and strict policy for reactivation; skipped analysis is not passing quality evidence.
-- Add a disposable SonarQube trial with pinned images, real coverage inputs, retained findings and automatic container/volume teardown. This diagnostic run does not replace the strict integration gate.
-- Exercise the actual trial image-resolution and teardown commands with regression tests, including preservation of unrelated containers. These tests do not claim a live scan.
-- Record incremental product checkpoints and explicit branch/version feedback as permanent project instructions.
-- Retry temporary connection resets while the disposable server starts; sanitize transport errors before writing diagnostic output.
-- Add native-v2 absent/alpha paints and nonprinting guide metadata with matching API validation, renderer tests and measurement preferences; interface integration is in progress.
-- Retain only dev, release, main and active work branches; close pending PRs and remove retired branches without promoting unverified code.
-- Validate proposed commit and PR wording before publication and identify failing commit revisions in contribution diagnostics; retain all existing policy restrictions.
-- Record the PR integration preflight and distinguish passing build checks from the required product quality gate.
-- The contribution check accepts two pinned historical GitHub merge commits on dev by exact SHA and reason, without rewriting history; all other commits remain fully checked.
+None.

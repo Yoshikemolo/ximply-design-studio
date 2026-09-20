@@ -92,3 +92,5 @@
 | [SC-0086 — Drafting-rule linear dimension presentation](SC-0086.md) |
 | [SC-0087 — Broken line types and leaf projections](SC-0087.md) |
 | [SC-0088 — Connected wall runs and plan tools](SC-0088.md) |
+| [SC-0089 — Painting controls and brush tips](SC-0089.md) |
+| [SC-0090 — Panel layout and contextual guidance](SC-0090.md) |

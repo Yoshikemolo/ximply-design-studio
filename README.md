@@ -2,10 +2,14 @@
 
 A layered vector and image editor by Ximplicity.
 
-**0.3.16-alpha.1 — single-user drawing workbench preview.** Work on several documents in tabs, draw floor plans with connected walls, openings, stairs and dimensions, draw editable cubic paths
-and construction shapes, refine paths, trace images, reuse symbols, edit text inline,
-transform layers, retouch images and save editable projects or PNG/SVG exports. The architecture for the broader professional platform
-remains documented; this alpha implements a bounded first slice.
+**0.4.0 — single-user drawing workbench preview.** Work on several documents in tabs, set
+the page up from paper, screen and animation formats, draw floor plans with connected walls,
+openings, stairs and drafting dimensions, draw editable cubic paths and construction shapes,
+refine paths, paint with brush tips and their own control bar, trace images, reuse symbols,
+edit text inline, transform layers about a movable pivot, retouch images and save editable
+.xds projects or PNG/SVG exports. The architecture for the broader professional platform
+remains documented; this preview implements a bounded first slice and has not passed the
+strict quality gate.
 
 ## Quick Start
 

@@ -5,6 +5,7 @@ Application data and bundled Markdown are generated; do not edit them.
 
 [Unreleased](doc/changelog/Unreleased.md)
 
+- [0.4.0 — Several documents in tabs, parametric construction tools, drafting dimensions, page setup, a movable transform pivot and brush controls](doc/changelog/0.4.0.md)
 - [0.3.16-alpha.1 — Connected wall runs, leaf mechanisms with opening side, stairs, chain dimensions and dashed line types](doc/changelog/0.3.16-alpha.1.md)
 - [0.3.15-alpha.1 — Multiple documents in tabs, File > Clear with unsaved-change protection and professional linear dimensions](doc/changelog/0.3.15-alpha.1.md)
 - [0.3.14-alpha.1 — Editable parametric walls, doors, windows and pillars](doc/changelog/0.3.14-alpha.1.md)
