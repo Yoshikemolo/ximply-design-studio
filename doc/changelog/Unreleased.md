@@ -25,6 +25,9 @@ None.
 ## New features
 
 - Import SVG drawings as editable native layers, with their shapes, paths, text, colours, stroke widths, transforms and groups, and report in the status line whatever the reader could not represent.
+- Export as PDF, with the vector geometry of the drawing rather than a picture of it: paths keep their curves, strokes keep their dashes and text keeps its characters, drawn with the standard font.
+- Choose what to export from one dialog: the format, and which of the open documents are included, with the current one chosen to begin with. A PDF collects them as one page each; SVG and PNG write one file per document.
+- Print the chosen documents through the printing dialog of the browser, one page each, from the File menu or the export dialog.
 - Cut paths with two clicks: the scissors open a path at two of its own points, leaving independent open paths, and the knife divides the closed shapes its line crosses into two independent closed shapes. Both draw the cut in progress, both are undone in one step, and Escape forgets a cut that was started.
 - Import ASCII DXF drawings: lines, polylines, circles, arcs, ellipses, points and text, with each drawing layer kept as a group and the drawing mirrored into document coordinates.
 

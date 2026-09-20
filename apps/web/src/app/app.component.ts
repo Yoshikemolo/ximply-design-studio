@@ -893,6 +893,55 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     if (event.button !== 0) return;
     if (this.editor.resetPivotAt(this.point(event))) event.preventDefault();
   }
+  // Export and print: one dialog chooses the format and which open documents are included.
+  readonly exportDialog = signal(false);
+  readonly exportFormat = signal<"png" | "svg" | "pdf">("pdf");
+  readonly exportTabs = signal<string[]>([]);
+  readonly exportFormats = [
+    { id: "pdf", label: "PDF document" },
+    { id: "svg", label: "SVG drawing" },
+    { id: "png", label: "PNG image" },
+  ];
+  openExport() {
+    this.dismissMenus();
+    this.exportTabs.set([this.editor.activeTabId()]);
+    this.exportDialog.set(true);
+  }
+  toggleExportTab(id: string, checked: boolean) {
+    this.exportTabs.update((ids) => (checked ? [...new Set([...ids, id])] : ids.filter((entry) => entry !== id)));
+  }
+  /** The chosen documents, in the order of the tab strip, or the active one on its own. */
+  private exportSelection() {
+    const chosen = this.editor.tabOrder().filter((id) => this.exportTabs().includes(id));
+    return chosen.length ? chosen : [this.editor.activeTabId()];
+  }
+  async runExport() {
+    const tabs = this.exportSelection();
+    this.exportDialog.set(false);
+    try {
+      await this.editor.exportAs(this.exportFormat(), tabs);
+    } catch (error) {
+      this.notify(error);
+    }
+  }
+  async exportAsPdf() {
+    this.dismissMenus();
+    try {
+      await this.editor.exportPdf([this.editor.activeTabId()]);
+    } catch (error) {
+      this.notify(error);
+    }
+  }
+  printSelection() {
+    const tabs = this.exportDialog() ? this.exportSelection() : [this.editor.activeTabId()];
+    this.dismissMenus();
+    this.exportDialog.set(false);
+    try {
+      this.editor.printDocuments(tabs);
+    } catch (error) {
+      this.notify(error);
+    }
+  }
   pointerDown(event: PointerEvent) {
     if (event.button !== 0) return;
     event.preventDefault();

@@ -55,6 +55,7 @@ import { Injectable, computed, signal } from "@angular/core";
 import { ImportResult, importSvg } from "../../../../packages/domain/src/svg-import";
 import { importDxf } from "../../../../packages/domain/src/dxf-import";
 import { knifeCut, scissorCut } from "../../../../packages/domain/src/cut";
+import { PdfImage, PdfPageSource, pdfDocument } from "../../../../packages/domain/src/pdf";
 import {
   blankDocument,
   defaultStrokeStyle,
@@ -3289,10 +3290,82 @@ export class EditorService {
     );
     this.status.set("SVG exported; raster layers remain embedded images");
   }
-  async exportPng() {
-    const canvas = await this.renderer.export(this.document());
+  async exportPng(document = this.document()) {
+    const canvas = await this.renderer.export(document);
     canvas.toBlob((blob) => {
-      if (blob) this.download(blob, this.document().name + ".png");
+      if (blob) this.download(blob, document.name + ".png");
     }, "image/png");
+  }
+  /** The document of any open tab, the active one included. */
+  documentOf(tabId: string): StudioDocument | null {
+    if (tabId === this.activeTabId()) return this.document();
+    return this.inactiveTabs()[tabId]?.document ?? null;
+  }
+  /**
+   * Raster layers are re-encoded as JPEG here, where the canvas lives, so the PDF writer
+   * receives bytes it can store and the domain stays free of the browser.
+   */
+  private async pdfImages(document: StudioDocument): Promise<Record<string, PdfImage>> {
+    const images: Record<string, PdfImage> = {};
+    for (const layer of document.layers) {
+      if (layer.kind !== "image" || !layer.source || !layer.visible) continue;
+      try {
+        const bitmap = await createImageBitmap(await (await fetch(layer.source)).blob());
+        const canvas = window.document.createElement("canvas");
+        canvas.width = bitmap.width;
+        canvas.height = bitmap.height;
+        const context = canvas.getContext("2d")!;
+        // A PDF image carries no transparency here, so it is composed over white first.
+        context.fillStyle = "#ffffff";
+        context.fillRect(0, 0, canvas.width, canvas.height);
+        context.drawImage(bitmap, 0, 0);
+        bitmap.close();
+        const encoded = canvas.toDataURL("image/jpeg", 0.92).split(",")[1] ?? "";
+        images[layer.id] = { data: atob(encoded), width: canvas.width, height: canvas.height };
+      } catch { /* A layer whose source cannot be read is reported by the writer. */ }
+    }
+    return images;
+  }
+  /** Writes the chosen documents as one PDF file, one page each. */
+  async exportPdf(tabIds: string[] = [this.activeTabId()]) {
+    const documents = tabIds.map((id) => this.documentOf(id)).filter((document): document is StudioDocument => !!document);
+    if (!documents.length) throw new Error("Choose at least one document to export.");
+    const sources: PdfPageSource[] = [];
+    for (const document of documents) sources.push({ document, images: await this.pdfImages(document) });
+    const result = pdfDocument(sources);
+    const bytes = new Uint8Array(result.data.length);
+    for (let index = 0; index < result.data.length; index++) bytes[index] = result.data.charCodeAt(index) & 0xff;
+    const name = documents.length === 1 ? documents[0].name : this.document().name + " and " + (documents.length - 1) + " more";
+    this.download(new Blob([bytes], { type: "application/pdf" }), name + ".pdf");
+    this.status.set(result.skipped.length
+      ? `PDF exported; not represented: ${result.skipped.join(", ")}.`
+      : `PDF exported with ${documents.length} page${documents.length > 1 ? "s" : ""}.`);
+  }
+  /** Exports the chosen documents in the chosen format; PDF collects them into one file. */
+  async exportAs(format: "png" | "svg" | "pdf", tabIds: string[] = [this.activeTabId()]) {
+    if (format === "pdf") return this.exportPdf(tabIds);
+    for (const id of tabIds) {
+      const document = this.documentOf(id);
+      if (!document) continue;
+      if (format === "svg") {
+        this.download(new Blob([svgExport(document, this.renderer.measureText)], { type: "image/svg+xml" }), document.name + ".svg");
+      } else await this.exportPng(document);
+    }
+    this.status.set(`Exported ${tabIds.length} document${tabIds.length > 1 ? "s" : ""} as ${format.toUpperCase()}.`);
+  }
+  /** Prints the chosen documents, one page each, through the printing dialog of the browser. */
+  printDocuments(tabIds: string[] = [this.activeTabId()], open = (target: string) => window.open("", target)) {
+    const documents = tabIds.map((id) => this.documentOf(id)).filter((document): document is StudioDocument => !!document);
+    if (!documents.length) throw new Error("Choose at least one document to print.");
+    const view = open("_blank");
+    if (!view) { this.status.set("Allow pop-up windows to print."); return false; }
+    const pages = documents.map((document) => `<section style="width:${document.width}px;height:${document.height}px">`
+      + svgExport(document, this.renderer.measureText) + "</section>").join("");
+    view.document.write(`<!DOCTYPE html><html><head><title>${documents[0].name}</title>`
+      + "<style>@page{margin:0}body{margin:0}section{break-after:page;overflow:hidden}svg{width:100%;height:100%}</style>"
+      + `</head><body onload="print()">${pages}</body></html>`);
+    view.document.close();
+    this.status.set(`Sent ${documents.length} document${documents.length > 1 ? "s" : ""} to the printing dialog.`);
+    return true;
   }
 }

@@ -551,6 +551,24 @@ hr {
   height: 27px;
   padding: 4px;
 }
+/* The export dialog lists every open document; the current one is chosen to begin with. */
+.export-documents {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 180px;
+  overflow-y: auto;
+}
+.export-documents .wide-label {
+  margin: 0;
+  gap: 8px;
+  justify-content: flex-start;
+}
+.export-documents small {
+  margin-left: auto;
+  color: var(--muted);
+  font-size: 9px;
+}
 /* The cut in progress: the first point and, for the knife, the line it will follow. */
 .cut-overlay .cut-mark {
   fill: #ffffff;

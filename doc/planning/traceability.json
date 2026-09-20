@@ -678,20 +678,24 @@
         "SC-0065",
         "SC-0066",
         "SC-0091",
-        "SC-0092"
+        "SC-0092",
+        "SC-0094"
       ],
       "implementation": [
         "apps/web/src/app/editor.service.ts",
         "packages/domain/src/document.ts",
         "packages/domain/src/svg-import.ts",
-        "packages/domain/src/dxf-import.ts"
+        "packages/domain/src/dxf-import.ts",
+        "packages/domain/src/pdf.ts"
       ],
       "tests": [
         "packages/domain/tests/document.test.ts",
         "apps/web/tests/editor.test.ts",
         "packages/domain/tests/svg-import.test.ts",
         "packages/domain/tests/dxf-import.test.ts",
-        "apps/web/tests/vector-import.test.ts"
+        "apps/web/tests/vector-import.test.ts",
+        "packages/domain/tests/pdf.test.ts",
+        "apps/web/tests/export-print.test.ts"
       ],
       "evidence": [
         "doc/implementation/PLAN-0002-0001.md",
