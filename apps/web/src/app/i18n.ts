@@ -1,4 +1,5 @@
 const ES: Record<string, string> = {
+  "Gap": "Separación",
   "Places": "Decimales",
   "Separator": "Separador",
   "Overshoot": "Prolongación",
