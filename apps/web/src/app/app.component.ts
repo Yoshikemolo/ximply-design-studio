@@ -50,6 +50,19 @@ const DASH_PRESETS: { id: string; label: string; dash: number[] }[] = [
   { id: "custom", label: "Custom sequence", dash: [] },
 ];
 const DASH_FIELDS = [0, 1, 2, 3, 4, 5];
+/** Command icons follow the shapes used by drawing programs for pathfinder, align and transform actions. */
+const COMMAND_ICONS: Record<string, string> = {
+  union: "union", subtract: "subtract", intersect: "intersect", exclude: "exclude",
+  alignLeft: "alignLeft", alignCenterX: "alignCenterX", alignRight: "alignRight",
+  alignTop: "alignTop", alignCenterY: "alignCenterY", alignBottom: "alignBottom",
+  distributeX: "distributeX", distributeY: "distributeY",
+  group: "group", ungroup: "ungroup",
+  makeBlend: "object-blend", expandBlend: "blend-expand", releaseBlend: "blend-release",
+  mirrorH: "mirror-h", mirrorV: "mirror-v", rotateCW: "rotate-cw", rotateCCW: "rotate-ccw",
+  scaleUp: "scale-up", scaleDown: "scale-down",
+  duplicate: "duplicate", remove: "delete", undo: "undo", redo: "redo",
+  layerUp: "layer-up", layerDown: "layer-down", fit: "fit-view", zoomIn: "zoom-in", zoomOut: "zoom-out",
+};
 const LEAF_TYPE_LABELS: Record<string, string> = { swing: "Hinged", sliding: "Sliding", folding: "Folding", pocket: "Pocket", fixed: "Fixed glazing", opening: "Passage without leaves" };
 
 @Component({
@@ -489,6 +502,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     if (applied) this.transformDialog.set(null);
     else this.notify(new Error("The transformation cannot be applied to this selection."));
   }
+  commandIcon(id: string) { return COMMAND_ICONS[id] ?? ""; }
   setDimensionPlacement(event: Event) {
     const value = this.text(event);
     if (["start", "center", "end"].includes(value)) this.editor.updateDimension({ labelPlacement: value as "start" | "center" | "end" });

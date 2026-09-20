@@ -1323,7 +1323,8 @@ textarea,
   z-index: 95;
   max-height: min(65dvh, 420px);
   overflow: auto;
-  min-width: 225px;
+  min-width: 178px;
+  max-width: 240px;
   padding: 6px;
   background: var(--panel);
   border: 1px solid var(--border);
@@ -1334,7 +1335,13 @@ textarea,
 .tool-flyout button {
   width: 100%;
   justify-content: flex-start;
-  padding: 8px;
+  padding: 7px 8px;
+  gap: 8px;
+}
+.tool-flyout button span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .tool-flyout kbd {
   margin-left: auto;

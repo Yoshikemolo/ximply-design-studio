@@ -37,6 +37,14 @@
         },
         {
           "type": "Feature",
+          "description": "Measure in metres, choose where the label sits along the dimension line, and unify the scale and label format of every dimension in the document with one switch."
+        },
+        {
+          "type": "Feature",
+          "description": "Combine walls with the boolean operations: crossing walls on separate layers can be united, subtracted, intersected or excluded into one ordinary object."
+        },
+        {
+          "type": "Feature",
           "description": "Draw the plan section of the frame at each side of a door or window."
         },
         {
@@ -54,6 +62,18 @@
         {
           "type": "Improvement",
           "description": "Give new walls and pillars a construction appearance and draw openings as outlines instead of using the current drawing colors."
+        },
+        {
+          "type": "Improvement",
+          "description": "Snap new dimensions to the anchors and extension ends of existing ones, and share their offset line when parallel, whenever dimension magnetism is on."
+        },
+        {
+          "type": "Improvement",
+          "description": "Shorten the dimension label form and group its settings under their own heading."
+        },
+        {
+          "type": "Improvement",
+          "description": "Show an icon beside each boolean, align, transform, blend and grouping action, and narrow the tool option list."
         },
         {
           "type": "Fix",

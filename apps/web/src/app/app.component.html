@@ -93,6 +93,7 @@
             track id
           ) {
             <button (click)="runCommand(id)">
+              @if (commandIcon(id)) {<img [src]="'/assets/icons/' + commandIcon(id) + '.svg'" alt="" />}
               {{ t(commandLabel(id)) }}<kbd>{{ shortcut(id) }}</kbd>
             </button>
           }
@@ -1346,6 +1347,7 @@
     }
     @for (id of flyoutActions(); track id) {
       <button role="menuitem" [disabled]="!commandEnabled(id)" (click)="runCommand(id)">
+        @if (commandIcon(id)) {<img [src]="'/assets/icons/' + commandIcon(id) + '.svg'" alt="" />}
         <span>{{ t(commandLabel(id)) }}</span
         ><kbd>{{ shortcut(id) }}</kbd>
       </button>

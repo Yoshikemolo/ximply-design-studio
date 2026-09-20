@@ -1895,8 +1895,10 @@ export class EditorService {
     this.changed();
   }
   boolean(operation: Parameters<typeof booleanLayers>[1]) {
-    if(this.selectedLayers().some(layer=>layer.dimension || layer.procedural))return;
-    const layers = this.selectedLayers().filter((l) => !this.isEffectivelyLocked(l) && !l.guide);
+    if(this.selectedLayers().some(layer=>layer.dimension))return;
+    // Procedural objects contribute their generated outline; the result is a plain path, not a parametric object.
+    const layers = this.selectedLayers().filter((l) => !this.isEffectivelyLocked(l) && !l.guide)
+      .map((l) => l.procedural ? { ...l, procedural: undefined, name: l.name } : l);
     if (layers.length < 2) return;
     try {
       const result = booleanLayers(layers, operation, crypto.randomUUID()),
