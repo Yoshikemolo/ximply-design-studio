@@ -354,6 +354,7 @@
               aria-label="Editable design canvas"
               [style.cursor]="toolCursor()"
               (pointerdown)="pointerDown($event)"
+              (dblclick)="canvasDoubleClick($event)"
               (contextmenu)="openCanvasContext($event)"
               (pointermove)="pointerMove($event)"
               (pointerleave)="cursorPoint.set(null)"

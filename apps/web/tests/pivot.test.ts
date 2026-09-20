@@ -71,18 +71,59 @@ describe('transform pivot', () => {
     e.end();
     expect(e.pivot()).toEqual({ x: 300, y: 180 });
     expect(e.document().layers[0].x).toBe(100);
-    // A press away from the mark still moves the artwork.
+    // A press away from the mark moves the artwork, and the pivot travels with it.
     e.start({ x: 120, y: 120 });
     e.move({ x: 140, y: 120 });
     e.end();
     expect(e.document().layers[0].x).toBe(120);
-    // A locked pivot stays where it was, whatever is pressed on it.
+    expect(e.pivot()).toEqual({ x: 320, y: 180 });
+    // A locked pivot takes no press: a press on the artwork moves it and the pivot travels along.
     e.pivotLocked.set(true);
-    e.start({ x: 300, y: 180 });
-    e.move({ x: 340, y: 180 });
+    e.start({ x: 140, y: 140 });
+    e.move({ x: 180, y: 140 });
     e.end();
-    e.selectLayer('art');
-    expect(e.pivot()).toEqual({ x: 300, y: 180 });
+    expect(e.document().layers[0].x).toBe(160);
+    expect(e.pivot()).toEqual({ x: 360, y: 180 });
+  });
+
+  it('carries a pivot placed by hand with the selection it belongs to', () => {
+    const e = withSquare();
+    e.setTool('select');
+    e.setPivot({ x: 100, y: 100 });
+    // Dragging the artwork keeps the pivot at the same place within the selection.
+    e.start({ x: 120, y: 120 });
+    e.move({ x: 170, y: 140 });
+    e.end();
+    expect(e.document().layers[0]).toMatchObject({ x: 150, y: 120 });
+    expect(e.pivot()).toEqual({ x: 150, y: 120 });
+    // The arrow keys move it the same way.
+    e.nudge(10, -20);
+    expect(e.pivot()).toEqual({ x: 160, y: 100 });
+    // A cancelled drag leaves the pivot where it started.
+    e.start({ x: 200, y: 160 });
+    e.move({ x: 300, y: 160 });
+    e.cancel();
+    expect(e.pivot()).toEqual({ x: 160, y: 100 });
+    // Rotating about the pivot leaves the pivot itself in place.
+    e.rotateSelection(90);
+    expect(e.pivot()).toEqual({ x: 160, y: 100 });
+  });
+
+  it('sends the pivot back to the centre when its mark is double pressed', () => {
+    const e = withSquare();
+    e.setTool('select');
+    e.setPivot({ x: 100, y: 100 });
+    expect(e.pivotMoved()).toBe(true);
+    // Away from the mark the double press belongs to the artwork.
+    expect(e.resetPivotAt({ x: 150, y: 150 })).toBe(false);
+    expect(e.resetPivotAt({ x: 101, y: 99 })).toBe(true);
+    expect(e.pivot()).toEqual({ x: 150, y: 150 });
+    expect(e.pivotMoved()).toBe(false);
+    // With the pivot at the centre already, and with it locked, there is nothing to undo.
+    expect(e.resetPivotAt({ x: 150, y: 150 })).toBe(false);
+    e.setPivot({ x: 100, y: 100 });
+    e.pivotLocked.set(true);
+    expect(e.resetPivotAt({ x: 100, y: 100 })).toBe(false);
   });
 
   it('snaps the pivot to the selection box, its centre and the vertices of other artwork', () => {

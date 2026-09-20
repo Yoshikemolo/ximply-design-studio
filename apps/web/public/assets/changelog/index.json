@@ -157,6 +157,14 @@
         },
         {
           "type": "Fix",
+          "description": "Carry a pivot placed by hand with the selection it belongs to: moving the objects by dragging or with the arrow keys keeps the pivot at the same place within them, and a cancelled drag returns it. Rotating, scaling and mirroring still leave the pivot itself in place, since they turn around it. Unlocking the pivot is therefore what allows moving it independently."
+        },
+        {
+          "type": "Fix",
+          "description": "Send the pivot back to the geometric centre of the selection by double clicking its mark, while the pivot is unlocked."
+        },
+        {
+          "type": "Fix",
           "description": "Show the guidance of the blend panel as a tip, marked by a bulb, and only where the panel is blocked: when a member is locked, when the step count has reached its limit, when fewer than two objects are selected and when the selected pair does not qualify. One tip at a time, and none at all while the blend can simply be made or edited. The note on editing endpoints is dropped; both endpoint buttons already explain themselves."
         },
         {

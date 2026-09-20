@@ -888,6 +888,11 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   }
   /** True between a canvas press and its release; a capture lost afterwards is not a cancellation. */
   private pointerActive = false;
+  /** A double press on the pivot mark sends it back to the centre of the selection. */
+  canvasDoubleClick(event: MouseEvent) {
+    if (event.button !== 0) return;
+    if (this.editor.resetPivotAt(this.point(event))) event.preventDefault();
+  }
   pointerDown(event: PointerEvent) {
     if (event.button !== 0) return;
     event.preventDefault();

@@ -466,6 +466,8 @@ export class EditorService {
   readonly pivotSnap = signal(true);
   private readonly pivotOverride = signal<{ key: string; point: Point } | null>(null);
   private pivotGesture?: { before: { key: string; point: Point } | null };
+  /** Where a pivot placed by hand stood when the current move started. */
+  private movePivot?: Point;
   readonly selectionKey = computed(() => this.selectedLayers().map((layer) => layer.id).sort().join(","));
   /** The moved pivot while the same objects stay selected; otherwise the geometric centre. */
   readonly pivot = computed<Point>(() => {
@@ -527,6 +529,27 @@ export class EditorService {
     ["select", "rotate", "scale", "mirror"].includes(this.tool()));
   /** Half the extent of the drawn mark, the box inside which a press belongs to the pivot. */
   private pivotReach() { return 9 / this.zoom(); }
+  /**
+   * The pivot belongs to the selection, so a translation of the artwork carries it along; only a
+   * press on its own mark, which a locked pivot never takes, moves it away from the objects.
+   */
+  private shiftPivot(dx: number, dy: number) {
+    const override = this.pivotOverride();
+    if (!override || override.key !== this.selectionKey()) return;
+    this.pivotOverride.set({ key: override.key, point: { x: override.point.x + dx, y: override.point.y + dy } });
+  }
+  /**
+   * A double press on the mark returns the pivot to the geometric centre of the selection.
+   * Returns whether the press was taken, so the canvas leaves the artwork alone when it was.
+   */
+  resetPivotAt(point: Point): boolean {
+    if (!this.pivotGrabbable() || !this.pivotMoved()) return false;
+    const pivot = this.pivot();
+    if (Math.abs(point.x - pivot.x) > this.pivotReach() || Math.abs(point.y - pivot.y) > this.pivotReach()) return false;
+    this.resetPivot();
+    this.revision.update((x) => x + 1);
+    return true;
+  }
   private startPivotDrag(point: Point): boolean {
     if (!this.pivotGrabbable()) return false;
     // A press inside the mark takes the pivot; anywhere else moves the artwork and the pivot with it.
@@ -1596,6 +1619,7 @@ export class EditorService {
             mode: "move",
             ids: this.selectedLayers().filter((l) => !l.guide).map((l) => l.id),
           };
+        if (active) this.movePivot = this.pivotMoved() ? this.pivot() : undefined;
       } else if (tool === "select") {
         this.startAreaSelection(point, this.lastAreaSelection(), !!modifiers.shift);
       } else if (!modifiers.shift) {
@@ -1818,6 +1842,8 @@ export class EditorService {
         x: g.original.x + delta.x,
         y: g.original.y + delta.y,
       });
+      // A pivot placed by hand travels with the objects it belongs to.
+      if (this.movePivot) this.setPivot({ x: this.movePivot.x + delta.x, y: this.movePivot.y + delta.y });
     } else if (g.mode.startsWith("resize:"))
       this.transformSelection(
         g,
@@ -1925,6 +1951,7 @@ export class EditorService {
       });
     this.history.commit(g.before);
     this.gesture = undefined;
+    this.movePivot = undefined;
     this.painting = undefined;
     this.changed();
   }
@@ -1941,6 +1968,7 @@ export class EditorService {
       this.areaGesture = undefined; this.areaSelection.set(null);
     }
     if (this.gesture) this.document.set(this.gesture.before);
+    if (this.movePivot) { this.setPivot(this.movePivot); this.movePivot = undefined; }
     this.gesture = undefined;
     this.painting = undefined;
     this.revision.update((x) => x + 1);
@@ -2672,6 +2700,7 @@ export class EditorService {
           ids.has(l.id) ? { ...this.detachUnselectedHost(l,ids), x: l.x + dx, y: l.y + dy } : l,
         ),
       }));
+      this.shiftPivot(dx, dy);
     }
     this.changed();
   }
