@@ -1,4 +1,8 @@
 const ES: Record<string, string> = {
+  "Choose a drawing under 20 MB.": "Elige un dibujo de menos de 20 MB.",
+  "DWG cannot be read; export the drawing as DXF and import that.": "No se puede leer un DWG; exporta el dibujo como DXF e impórtalo.",
+  "PDF and Illustrator files are not supported yet; export the artwork as SVG.": "Todavía no se admiten archivos PDF ni de Illustrator; exporta el dibujo como SVG.",
+  "The drawing has no content this editor can place.": "El dibujo no tiene contenido que este editor pueda colocar.",
   "Normal": "Normal",
   "Zoom area": "Zoom a un área",
   "Pressure": "Presión",

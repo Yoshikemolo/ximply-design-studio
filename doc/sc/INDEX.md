@@ -94,3 +94,5 @@
 | [SC-0088 — Connected wall runs and plan tools](SC-0088.md) |
 | [SC-0089 — Painting controls and brush tips](SC-0089.md) |
 | [SC-0090 — Panel layout and contextual guidance](SC-0090.md) |
+| [SC-0091 — SVG import as editable native layers](SC-0091.md) |
+| [SC-0092 — DXF import and the formats that are refused](SC-0092.md) |

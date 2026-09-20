@@ -24,10 +24,12 @@ None.
 
 ## New features
 
-None.
+- Import SVG drawings as editable native layers, with their shapes, paths, text, colours, stroke widths, transforms and groups, and report in the status line whatever the reader could not represent.
+- Import ASCII DXF drawings: lines, polylines, circles, arcs, ellipses, points and text, with each drawing layer kept as a group and the drawing mirrored into document coordinates.
 
 ## Improvements
 
+- Offer SVG and DXF beside the images in the import dialog, and refuse DWG, PDF and Illustrator files with the export that does work instead of a silent failure.
 - Raise the document size ceiling from 4096 to 8192 pixels, so A3 and A2 at 300 dots per inch can be set up and stored. A1 and A0 at that resolution stay out of range.
 
 ## Fixes

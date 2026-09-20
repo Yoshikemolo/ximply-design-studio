@@ -52,6 +52,8 @@ import {
   ShapeOptions,
 } from "../../../../packages/domain/src/shapes";
 import { Injectable, computed, signal } from "@angular/core";
+import { ImportResult, importSvg } from "../../../../packages/domain/src/svg-import";
+import { importDxf } from "../../../../packages/domain/src/dxf-import";
 import {
   blankDocument,
   defaultStrokeStyle,
@@ -3120,6 +3122,43 @@ export class EditorService {
     this.document.update((d) => ({ ...d, layers: [...d.layers, layer] }));
     this.selectedId.set(layer.id);
     this.tool.set("select");
+    this.changed();
+  }
+  /**
+   * Imports a drawing or an image. The file is data: vector readers parse it in the domain,
+   * every produced layer goes through the native validator, and an import that cannot be
+   * validated leaves the document untouched.
+   */
+  async importFile(file: File) {
+    const name = file.name.toLowerCase();
+    if (file.type.startsWith("image/") && file.type !== "image/svg+xml") return this.importImage(file);
+    if (name.endsWith(".svg") || file.type === "image/svg+xml") {
+      if (file.size > 20_000_000) throw new Error("Choose a drawing under 20 MB.");
+      return this.placeImport(importSvg(await file.text(), { name: file.name.slice(0, 80) }));
+    }
+    if (name.endsWith(".dxf")) {
+      if (file.size > 20_000_000) throw new Error("Choose a drawing under 20 MB.");
+      return this.placeImport(importDxf(await file.text(), { name: file.name.slice(0, 80) }));
+    }
+    if (name.endsWith(".dwg")) throw new Error("DWG cannot be read; export the drawing as DXF and import that.");
+    if (name.endsWith(".ai") || name.endsWith(".pdf")) throw new Error("PDF and Illustrator files are not supported yet; export the artwork as SVG.");
+    return this.importImage(file);
+  }
+  /** Places an imported drawing as one history step, reporting what the reader skipped. */
+  private placeImport(result: ImportResult) {
+    if (!result.layers.length) throw new Error("The drawing has no content this editor can place.");
+    const document = this.document();
+    if (document.layers.length + result.layers.length > 150) throw new Error("Preview limit: 150 layers");
+    const next = { ...document, layers: [...document.layers, ...result.layers] };
+    parseDocument(JSON.stringify(next));
+    this.commitStep(document);
+    this.document.set(next);
+    this.selectedIds.set(result.layers.map((layer) => layer.id));
+    this.selectedId.set(result.layers[0].id);
+    this.tool.set("select");
+    this.status.set(result.skipped.length
+      ? `Imported ${result.layers.length} objects; not supported: ${result.skipped.join(", ")}.`
+      : `Imported ${result.layers.length} objects.`);
     this.changed();
   }
   download(content: Blob, name: string) {
