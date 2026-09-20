@@ -1,6 +1,7 @@
 import { Procedural, defaultProcedural, generateProcedural, syncProcedurals, validProcedural } from "../../../../packages/domain/src/procedural";
 import { openingHost, wallSnapPoint, WallSnap } from "./procedural-placement";
 import { BrushSettings, BrushType, BRUSH_TYPES, brushStamps, defaultBrush, validBrushSettings } from "../../../../packages/domain/src/brush";
+import { wallAxis, wallBoolean, WallOperation } from "../../../../packages/domain/src/wall-boolean";
 import { MarginGuides, MARGIN_GUIDE_PREFIX, marginGuidePositions, PageEdges, PageSize, PAGE_MAXIMUM, PAGE_MINIMUM, pageSizeFits, RegistrationMarks, REGISTRATION_LAYER_NAME, registrationFits, registrationLayer, resizePage } from "../../../../packages/domain/src/page-setup";
 import { Dimension, DimensionFormat, defaultDimensionFormat, dimensionGeometry } from "../../../../packages/domain/src/dimensions";
 import { LineEnds, defaultLineEnds, validLineEnds } from "../../../../packages/domain/src/line-endings";
@@ -2090,6 +2091,7 @@ export class EditorService {
   }
   boolean(operation: Parameters<typeof booleanLayers>[1]) {
     if(this.selectedLayers().some(layer=>layer.dimension))return;
+    if(this.booleanWalls(operation))return;
     // Procedural objects contribute their generated outline; the result is a plain path, not a parametric object.
     const layers = this.selectedLayers().filter((l) => !this.isEffectivelyLocked(l) && !l.guide)
       .map((l) => l.procedural ? { ...l, procedural: undefined, name: l.name } : l);
@@ -2494,6 +2496,44 @@ export class EditorService {
     );
     this.activeNodes.set([]);
     this.changed();
+  }
+  /** Walls combine as walls: the result is straight runs of the operands, still parametric. */
+  private booleanWalls(operation: WallOperation): boolean {
+    const layers = this.selectedLayers().filter((layer) => !this.isEffectivelyLocked(layer) && !layer.guide);
+    const axes = layers.map((layer) => wallAxis(layer));
+    if (layers.length < 2 || axes.some((axis) => !axis)) return false;
+    const results = wallBoolean(axes.filter((axis) => !!axis), operation);
+    if (!results.length) { this.status.set("The operation leaves no wall."); return true; }
+    const before = this.document();
+    const ids = new Set(layers.map((layer) => layer.id));
+    const index = before.layers.findIndex((layer) => ids.has(layer.id));
+    const built = results
+      .map((result) => this.buildWallLayer(result.source, result.start, result.end, result.source.procedural as { thickness: number; align?: "center" | "left" | "right" }))
+      .filter((layer): layer is Layer => !!layer);
+    if (!built.length) { this.status.set("The operation leaves no wall."); return true; }
+    const remaining = before.layers.filter((layer) => !ids.has(layer.id));
+    remaining.splice(index, 0, ...built);
+    let next: StudioDocument;
+    try { next = syncProcedurals({ ...before, layers: remaining }); parseDocument(JSON.stringify(next)); }
+    catch { this.status.set("The operation leaves no wall."); return true; }
+    this.history.commit(before);
+    this.document.set(next);
+    this.selectedIds.set(built.map((layer) => layer.id));
+    this.selectedId.set(built.at(-1)!.id);
+    this.changed();
+    return true;
+  }
+  private buildWallLayer(source: Layer, start: Point, end: Point, procedure: { thickness: number; align?: "center" | "left" | "right" }): Layer | null {
+    if (Math.hypot(end.x - start.x, end.y - start.y) < 1) return null;
+    const layer: Layer = {
+      ...source,
+      id: crypto.randomUUID(),
+      x: start.x, y: start.y, width: 1, height: 1,
+      rotation: 0, skewX: 0, flipX: false, flipY: false,
+      points: [],
+      procedural: { type: "wall", start: { x: 0, y: 0 }, end: { x: end.x - start.x, y: end.y - start.y }, thickness: procedure.thickness, ...(procedure.align ? { align: procedure.align } : {}) },
+    };
+    return generateProcedural(layer);
   }
   /** Shifts a transform that works about the selection centre so the pivot stays put instead. */
   private aroundPivot(original: Layer, target: Layer): Layer {

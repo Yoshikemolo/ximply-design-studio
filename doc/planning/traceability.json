@@ -244,7 +244,8 @@
         "packages/domain/src/line-endings.ts",
         "apps/web/src/app/dimension-snapping.ts",
         "packages/domain/src/procedural.ts",
-        "apps/web/src/app/procedural-placement.ts"
+        "apps/web/src/app/procedural-placement.ts",
+        "packages/domain/src/wall-boolean.ts"
       ],
       "tests": [
         "packages/domain/tests/document.test.ts",
