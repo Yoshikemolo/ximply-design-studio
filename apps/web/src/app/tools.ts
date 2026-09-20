@@ -117,7 +117,7 @@ export const TOOLS: ToolPlugin[] = [
     label:
       (
         {
-          pen: "Pen",
+          pen: "Bézier",
           rounded: "Rounded rectangle",
           path: "Pencil",
           polar: "Polar grid",
@@ -196,7 +196,7 @@ export const TOOL_FAMILIES: ToolFamily[] = [
   { id: "direct", label: "Direct selection", tools: ["direct"] },
   {
     id: "pen",
-    label: "Pen tools",
+    label: "Bézier tools",
     tools: ["pen", "addAnchor", "deleteAnchor", "convertAnchor"],
   },
   {

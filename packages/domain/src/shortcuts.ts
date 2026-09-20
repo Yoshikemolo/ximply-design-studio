@@ -12,7 +12,7 @@ export const COMMANDS: Command[] = [
     zoom: ["Zoom", "Z"],
     select: ["Select", "V"],
     direct: ["Direct selection", "A"],
-    pen: ["Pen", "P"],
+    pen: ["Bézier", "P"],
     addAnchor: ["Add anchor", "+"],
     deleteAnchor: ["Delete anchor", "-"],
     convertAnchor: ["Convert anchor", "Shift+C"],

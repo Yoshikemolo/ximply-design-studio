@@ -1,5 +1,6 @@
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
+import { TOOLS, TOOL_FAMILIES } from '../src/app/tools';
 
 const template = readFileSync('apps/web/src/app/app.component.html', 'utf-8');
 const section = (start: string, end: string) => template.slice(template.indexOf(start), template.indexOf(end, template.indexOf(start)));
@@ -78,5 +79,15 @@ describe('shell template', () => {
     expect(header.indexOf('header-workspace')).toBeLessThan(header.indexOf('class="language"'));
     const appearance = section("t('Appearance')", "t('Style transfer scope')");
     expect(appearance).toContain("editor.tool() === 'brush' ? fillOnly : paintTargets");
+  });
+
+  it('keeps one icon per Bézier and brush subtool', () => {
+    for (const id of ['pen', 'addAnchor', 'deleteAnchor', 'convertAnchor', 'brush', 'brushFlat', 'brushCalligraphy', 'brushMarker', 'brushAirbrush', 'brushPencil']) {
+      const tool = TOOLS.find((entry) => entry.id === id)!;
+      expect(tool, id).toBeDefined();
+      expect(existsSync(`apps/web/public/assets/icons/${tool.icon}.svg`), tool.icon).toBe(true);
+    }
+    expect(TOOLS.find((tool) => tool.id === 'pen')!.label).toBe('Bézier');
+    expect(TOOL_FAMILIES.find((family) => family.id === 'pen')!.label).toBe('Bézier tools');
   });
 });

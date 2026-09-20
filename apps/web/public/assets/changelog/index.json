@@ -89,6 +89,14 @@
         },
         {
           "type": "Improvement",
+          "description": "Name the pen tool B\u00e9zier and give its subtools matching icons: the same pen with a plus, a minus or a square badge, and give each brush tip an icon drawn as the stroke it paints, the same language the control bar uses."
+        },
+        {
+          "type": "Improvement",
+          "description": "Carry on drawing an existing B\u00e9zier path: clicking either end of an unlocked open path with the pen continues it instead of starting another object, while a locked path still starts a new one."
+        },
+        {
+          "type": "Improvement",
           "description": "Save projects with the .xds extension, the native extension the documentation defines; files saved earlier as .ximply still open."
         },
         {
