@@ -62,7 +62,7 @@ describe('shell template', () => {
   });
 
   it('shows the painting controls with each field where it applies', () => {
-    const bar = section('class="brush-controls"', '</section>');
+    const bar = section('brush-controls', '</section>');
     for (const field of ["t('Pressure')", "t('Opacity')", "t('Cadence')", "t('Diffusion')", "t('Speed variation')"]) expect(bar).toContain(field);
     // The eraser always removes paint, and a round tip has no angle, so both fields are conditional.
     expect(bar.slice(bar.indexOf("t('Blend')") - 140, bar.indexOf("t('Blend')"))).toContain("painting === 'brush'");
