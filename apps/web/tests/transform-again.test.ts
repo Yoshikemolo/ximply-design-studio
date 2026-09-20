@@ -1,0 +1,106 @@
+// @vitest-environment happy-dom
+import '@angular/compiler';
+import { beforeEach, describe, expect, it } from 'vitest';
+import { EditorService } from '../src/app/editor.service';
+import { newLayer } from '../../../packages/domain/src/document';
+
+function withSquare() {
+  localStorage.clear();
+  const e = new EditorService();
+  e.document.update((document) => ({
+    ...document,
+    layers: [{ ...newLayer('rectangle', 'art', { x: 100, y: 100 }), width: 100, height: 100 }],
+  }));
+  e.selectLayer('art');
+  e.setTool('select');
+  return e;
+}
+const box = (e: EditorService, index = 0) => {
+  const layer = e.document().layers[index];
+  return [layer.x, layer.y];
+};
+
+beforeEach(() => localStorage.clear());
+describe('transform again', () => {
+  it('repeats the move that was just made', () => {
+    const e = withSquare();
+    e.start({ x: 120, y: 180 });
+    e.move({ x: 170, y: 210 });
+    e.end();
+    const [movedX, movedY] = box(e);
+    // The drag lands where the aids allow; the repeat applies the same step again.
+    const step = [movedX - 100, movedY - 100];
+    expect(step[0]).toBeGreaterThan(0);
+    expect(e.transformAgain()).toBe(true);
+    expect(box(e)).toEqual([movedX + step[0], movedY + step[1]]);
+    e.undo();
+    expect(box(e)).toEqual([movedX, movedY]);
+  });
+
+  it('repeats a turn around the pivot and a scaling', () => {
+    const e = withSquare();
+    e.setPivot({ x: 100, y: 100 });
+    e.rotateSelection(90);
+    expect(e.transformAgain()).toBe(true);
+    // Two quarter turns about the corner leave the square rotated by half a turn.
+    expect(e.document().layers[0].rotation).toBe(180);
+    const scaled = withSquare();
+    scaled.setPivot({ x: 100, y: 100 });
+    scaled.transformBy(0, 2);
+    expect(scaled.document().layers[0].width).toBe(200);
+    expect(scaled.transformAgain()).toBe(true);
+    expect(scaled.document().layers[0].width).toBe(400);
+  });
+
+  it('says so when there is nothing to repeat', () => {
+    const e = withSquare();
+    expect(e.transformAgain()).toBe(false);
+    expect(e.status()).toContain('no transformation to repeat');
+  });
+});
+
+describe('duplicating while transforming', () => {
+  it('leaves the original behind when Alt is held during the drag', () => {
+    const e = withSquare();
+    e.start({ x: 120, y: 180 });
+    e.move({ x: 220, y: 180 }, { alt: true });
+    expect(e.duplicatingDrag()).toBe(true);
+    e.end();
+    expect(e.duplicatingDrag()).toBe(false);
+    const layers = e.document().layers;
+    expect(layers).toHaveLength(2);
+    // The original stays where it was and the copy carries the move.
+    expect([layers[0].x, layers[0].y]).toEqual([100, 100]);
+    expect(layers[1].x).toBeGreaterThan(150);
+    expect(layers[1].y).toBe(100);
+    expect(e.selectedLayers().map((layer) => layer.id)).toEqual([layers[1].id]);
+    e.undo();
+    expect(e.document().layers).toHaveLength(1);
+    expect(box(e)).toEqual([100, 100]);
+  });
+
+  it('repeats the duplication with the same transformation', () => {
+    const e = withSquare();
+    e.start({ x: 120, y: 180 });
+    e.move({ x: 220, y: 180 }, { alt: true });
+    e.end();
+    expect(e.transformAgain()).toBe(true);
+    const layers = e.document().layers;
+    expect(layers).toHaveLength(3);
+    // Three squares evenly spaced: the original, the copy and the copy of the repeat.
+    const step = layers[1].x - layers[0].x;
+    expect(step).toBeGreaterThan(0);
+    expect(layers[2].x - layers[1].x).toBeCloseTo(step, 6);
+    expect(e.status()).toContain('with a copy');
+  });
+
+  it('keeps the drag ordinary while Alt is not held', () => {
+    const e = withSquare();
+    e.start({ x: 120, y: 180 });
+    e.move({ x: 170, y: 180 }, { alt: true });
+    e.move({ x: 170, y: 180 });
+    expect(e.duplicatingDrag()).toBe(false);
+    e.end();
+    expect(e.document().layers).toHaveLength(1);
+  });
+});

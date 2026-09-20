@@ -93,7 +93,7 @@ describe('clipboard in the tool rail', () => {
     const component = Object.create(AppComponent.prototype) as AppComponent;
     const source = readFileSync('apps/web/src/app/app.component.ts', 'utf-8');
     const group = source.slice(source.indexOf('readonly clipboardGroup'), source.indexOf('readonly actionGroups'));
-    for (const id of ['copy', 'cut', 'paste', 'pasteInFront', 'pasteInBack', 'duplicate', 'duplicateSeries']) {
+    for (const id of ['copy', 'cut', 'paste', 'pasteInFront', 'pasteInBack', 'duplicate', 'duplicateSeries', 'transformAgain']) {
       expect(group).toContain(`"${id}"`);
       expect(existsSync(`apps/web/public/assets/icons/${component.commandIcon(id)}.svg`)).toBe(true);
     }
@@ -108,7 +108,9 @@ describe('editing shortcuts', () => {
     expect(shortcuts['paste']).toEqual(['Mod+V']);
     expect(shortcuts['pasteInFront']).toEqual(['Mod+F']);
     expect(shortcuts['pasteInBack']).toEqual(['Mod+B']);
-    expect(shortcuts['duplicate']).toEqual(['Mod+D']);
+    // The plain combination repeats the last transformation, so duplication keeps its own.
+    expect(shortcuts['duplicate']).toEqual(['Mod+Alt+D']);
+    expect(shortcuts['transformAgain']).toEqual(['Mod+D']);
     expect(shortcuts['toggleBoundingBox']).toEqual(['Mod+Shift+B']);
   });
 

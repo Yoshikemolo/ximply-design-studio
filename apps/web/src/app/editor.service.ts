@@ -1456,6 +1456,50 @@ export class EditorService {
     this.changed();
     return true;
   }
+  /**
+   * The last transformation of the selection, kept so it can be repeated: how far it moved,
+   * how much it turned and grew, and whether it left a copy behind.
+   */
+  readonly lastTransform = signal<{ dx: number; dy: number; rotation: number; scale: number; duplicate: boolean } | null>(null);
+  /** True while a drag will duplicate on release, which the cursor shows. */
+  readonly duplicatingDrag = signal(false);
+  private recordTransform(step: { dx?: number; dy?: number; rotation?: number; scale?: number; duplicate?: boolean }) {
+    const value = { dx: step.dx ?? 0, dy: step.dy ?? 0, rotation: step.rotation ?? 0, scale: step.scale ?? 1, duplicate: !!step.duplicate };
+    if (!value.dx && !value.dy && !value.rotation && value.scale === 1 && !value.duplicate) return;
+    this.lastTransform.set(value);
+  }
+  /**
+   * Repeats the last transformation on the current selection, the copy it left behind
+   * included, as one history step.
+   */
+  transformAgain(): boolean {
+    const last = this.lastTransform();
+    const layers = this.selectedLayers().filter((layer) => !layer.guide && !this.isEffectivelyLocked(layer));
+    if (!last || !layers.length) { this.status.set("There is no transformation to repeat."); return false; }
+    const document = this.document();
+    if (last.duplicate && document.layers.length + layers.length > 150) { this.status.set("Preview limit: 150 layers"); return false; }
+    const centre = this.pivot();
+    const step = { dx: last.dx, dy: last.dy, rotation: last.rotation, scale: last.scale };
+    const ids = new Set(layers.map((layer) => layer.id));
+    let next: StudioDocument;
+    let selection: string[];
+    if (last.duplicate) {
+      const copies = layers.map((layer) => copyLayer(layer, step, centre, crypto.randomUUID()));
+      next = { ...document, layers: [...document.layers, ...copies] };
+      selection = copies.map((layer) => layer.id);
+    } else {
+      next = { ...document, layers: document.layers.map((layer) => ids.has(layer.id) ? copyLayer(layer, step, centre, layer.id) : layer) };
+      selection = [...ids];
+    }
+    try { parseDocument(JSON.stringify(next)); } catch { this.status.set("The transformation cannot be repeated here."); return false; }
+    this.commitStep(document);
+    this.document.set(next);
+    this.selectedIds.set(selection);
+    this.selectedId.set(selection[0]);
+    this.status.set(last.duplicate ? "Transformed again with a copy." : "Transformed again.");
+    this.changed();
+    return true;
+  }
   /** Duplicates the selection as a series: a line of copies, a turn around the pivot or a grid. */
   duplicateSeries(settings: ArraySettings): boolean {
     const layers = this.selectedLayers().filter((layer) => !layer.guide && !this.isEffectivelyLocked(layer));
@@ -1480,6 +1524,8 @@ export class EditorService {
     const layers = this.selectedLayers();
     if (!layers.length || this.document().layers.length + layers.length > 150)
       return;
+    // Repeating a duplicate makes another copy the same distance away.
+    this.recordTransform({ dx: 20, dy: 20, duplicate: true });
     this.commitStep(this.document());
     const groups = new Map<string, string>();
     const copies = layers.map((layer) => ({
@@ -1882,6 +1928,8 @@ export class EditorService {
     if (this.areaGesture) { this.moveAreaSelection(point); return; }
     const g = this.gesture;
     if (!g) return;
+    // Alt held during a transform leaves the original behind, which the cursor announces.
+    if (["move", "rotate", "scale"].includes(g.mode)) this.duplicatingDrag.set(!!modifiers.alt);
     if (["rectangle", "ellipse", "line", "rounded", "polygon", "star", "arc", "spiral", "grid", "polar", "flare"].includes(g.mode) || g.mode.startsWith("resize:")) point = this.snap(point);
     if (g.mode === "rotate")
       this.transformSelection(g, this.aroundPivot(g.original, {
@@ -2083,11 +2131,45 @@ export class EditorService {
       this.setLayer(g.id, {
         source: this.painting.canvas.toDataURL("image/png"),
       });
-    this.commitStep(g.before, this.movePivot ? { key: this.selectionKey(), point: this.movePivot } : this.pivotOverride());
+    const pivotAtStart = this.movePivot ? { key: this.selectionKey(), point: this.movePivot } : this.pivotOverride();
+    if (["move", "rotate", "scale"].includes(g.mode)) this.finishTransformDrag(g, pivotAtStart);
+    else this.commitStep(g.before, pivotAtStart);
     this.gesture = undefined;
     this.movePivot = undefined;
     this.painting = undefined;
+    this.duplicatingDrag.set(false);
     this.changed();
+  }
+  /**
+   * Closes a move, a rotation or a scaling: it remembers what the drag did so it can be
+   * repeated and, when Alt asked for it, restores the originals and keeps the result as
+   * copies of them.
+   */
+  private finishTransformDrag(g: { before: StudioDocument; id: string; ids?: string[]; mode: string }, pivotAtStart: { key: string; point: Point } | null) {
+    const ids = new Set(g.ids?.length ? g.ids : [g.id]);
+    const before = g.before.layers.filter((layer) => ids.has(layer.id));
+    const after = this.document().layers.filter((layer) => ids.has(layer.id));
+    const source = before.find((layer) => layer.id === g.id) ?? before[0];
+    const result = after.find((layer) => layer.id === g.id) ?? after[0];
+    const duplicate = this.duplicatingDrag();
+    if (source && result) {
+      this.recordTransform({
+        dx: (result.x + result.width / 2) - (source.x + source.width / 2),
+        dy: (result.y + result.height / 2) - (source.y + source.height / 2),
+        rotation: result.rotation - source.rotation,
+        scale: source.width ? result.width / source.width : 1,
+        duplicate,
+      });
+    }
+    if (!duplicate || !after.length) { this.commitStep(g.before, pivotAtStart); return; }
+    const copies = after.map((layer) => ({ ...structuredClone(layer), id: crypto.randomUUID(), regroupPath: undefined }));
+    const next = { ...g.before, layers: [...g.before.layers, ...copies] };
+    try { parseDocument(JSON.stringify(next)); } catch { this.commitStep(g.before, pivotAtStart); return; }
+    this.commitStep(g.before, pivotAtStart);
+    this.document.set(next);
+    this.selectedIds.set(copies.map((layer) => layer.id));
+    this.selectedId.set(copies[0].id);
+    this.status.set(`Duplicated ${copies.length} object${copies.length > 1 ? "s" : ""} with the transformation.`);
   }
   cancel() {
     if (this.pageGesture) { this.cancelPageGesture(); this.pageMode.set(null); this.status.set("Page editing cancelled"); }
@@ -2139,6 +2221,7 @@ export class EditorService {
     this.changed();
   }
   transformBy(rotation = 0, scale = 1) {
+    this.recordTransform({ rotation, scale });
     if (this.selectedLayers().some((layer) => this.isEffectivelyLocked(layer))) return;
     const source = this.selectionLayer();
     if (
@@ -2898,10 +2981,12 @@ export class EditorService {
   }
   displaceSelection(dx:number,dy:number):boolean {
     if(!Number.isFinite(dx)||!Number.isFinite(dy)||Math.abs(dx)>1e6||Math.abs(dy)>1e6||(!dx&&!dy))return false;
+    this.recordTransform({ dx, dy });
     return this.numericTransform(p=>({x:p.x+dx,y:p.y+dy}));
   }
   rotateSelection(angle:number,center:Point=this.pivot()):boolean {
     if(!Number.isFinite(angle)||!Number.isFinite(center.x)||!Number.isFinite(center.y)||Math.abs(angle)>36000||angle===0)return false;
+    this.recordTransform({ rotation: angle });
     const radians=angle*Math.PI/180,c=Math.cos(radians),s=Math.sin(radians);
     return this.numericTransform(p=>({x:center.x+(p.x-center.x)*c-(p.y-center.y)*s,y:center.y+(p.x-center.x)*s+(p.y-center.y)*c}),angle);
   }

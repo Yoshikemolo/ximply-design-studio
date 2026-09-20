@@ -90,7 +90,7 @@ const COMMAND_ICONS: Record<string, string> = {
   makeBlend: "object-blend", expandBlend: "blend-expand", releaseBlend: "blend-release",
   mirrorH: "mirror-h", mirrorV: "mirror-v", rotateCW: "rotate-cw", rotateCCW: "rotate-ccw",
   scaleUp: "scale-up", scaleDown: "scale-down",
-  duplicate: "duplicate", remove: "delete", undo: "undo", redo: "redo",
+  duplicate: "duplicate", transformAgain: "transform-again", remove: "delete", undo: "undo", redo: "redo",
   copy: "copy", cut: "cut", paste: "paste", pasteInFront: "paste-front", pasteInBack: "paste-back",
   duplicateSeries: "duplicate-series",
   layerUp: "layer-up", layerDown: "layer-down", fit: "fit-view", zoomIn: "zoom-in", zoomOut: "zoom-out",
@@ -249,7 +249,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     id: "clipboard",
     label: "Copy and paste",
     icon: "copy",
-    commands: ["copy", "cut", "paste", "pasteInFront", "pasteInBack", "duplicate", "duplicateSeries"],
+    commands: ["copy", "cut", "paste", "pasteInFront", "pasteInBack", "duplicate", "duplicateSeries", "transformAgain"],
   };
   readonly actionGroups = [
     {
@@ -1219,6 +1219,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     if (id === "expandBlend" || id === "releaseBlend") return !!this.editor.selectedBlend() && !this.blendIsLocked();
     // The clipboard actions say what they need: something selected, or something copied.
     if (["copy", "cut", "duplicate", "duplicateSeries"].includes(id)) return this.editor.selectedLayers().length > 0;
+    if (id === "transformAgain") return this.editor.selectedLayers().length > 0 && !!this.editor.lastTransform();
     if (["paste", "pasteInFront", "pasteInBack"].includes(id)) return this.editor.canPaste();
     return true;
   }
@@ -1359,6 +1360,8 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   }
   toolCursor() {
     if (this.preferences.cursorAxes()) return "none";
+    // The copy cursor is the sign that releasing now leaves the original behind.
+    if (this.editor.duplicatingDrag()) return "copy";
     return this.temporaryPan() || this.activeTool() === "hand"
       ? "grab"
       : this.activeTool() === "text"
@@ -1797,6 +1800,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
       new: () => this.newDocument(),
       duplicate: () => this.editor.duplicate(),
       duplicateSeries: () => this.openArrayDialog(),
+      transformAgain: () => this.editor.transformAgain(),
       copy: () => this.editor.copySelection(),
       cut: () => this.editor.cutSelection(),
       paste: () => this.editor.paste(),

@@ -210,7 +210,8 @@
         "apps/web/tests/clipboard.test.ts",
         "apps/web/tests/context-actions.test.ts",
         "packages/domain/tests/array-copy.test.ts",
-        "apps/web/tests/array-duplicate.test.ts"
+        "apps/web/tests/array-duplicate.test.ts",
+        "apps/web/tests/transform-again.test.ts"
       ],
       "evidence": [
         "doc/implementation/PLAN-0002-0001.md",
