@@ -71,6 +71,22 @@ describe('transform again', () => {
     expect(distance(e.selectedLayers()[0])).toBeCloseTo(distance(first), 6);
   });
 
+  it('records the pivot the selection had before the drag, not after it', () => {
+    const e = withSquare();
+    // The square spans 100 to 200, so its centre is at 150, 150 before it moves.
+    e.start({ x: 120, y: 180 });
+    e.move({ x: 220, y: 180 });
+    e.end();
+    expect(e.lastTransform()?.pivot).toEqual({ x: 150, y: 150 });
+    // A pivot placed by hand is the one that is kept instead.
+    const placed = withSquare();
+    placed.setPivot({ x: 100, y: 100 });
+    placed.start({ x: 120, y: 180 });
+    placed.move({ x: 220, y: 180 });
+    placed.end();
+    expect(placed.lastTransform()?.pivot).toEqual({ x: 100, y: 100 });
+  });
+
   it('says so when there is nothing to repeat', () => {
     const e = withSquare();
     expect(e.transformAgain()).toBe(false);

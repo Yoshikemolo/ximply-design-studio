@@ -2192,6 +2192,10 @@ export class EditorService {
     const ids = new Set(g.ids?.length ? g.ids : [g.id]);
     const before = g.before.layers.filter((layer) => ids.has(layer.id));
     const after = this.document().layers.filter((layer) => ids.has(layer.id));
+    const centreOf = (layers: Layer[]) => {
+      const box = selectionBounds(layers.filter((layer) => !layer.guide));
+      return { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+    };
     const source = before.find((layer) => layer.id === g.id) ?? before[0];
     const result = after.find((layer) => layer.id === g.id) ?? after[0];
     const duplicate = this.duplicatingDrag();
@@ -2202,7 +2206,9 @@ export class EditorService {
         rotation: result.rotation - source.rotation,
         scale: source.width ? result.width / source.width : 1,
         duplicate,
-        pivot: pivotAtStart && pivotAtStart.key === this.selectionKey() ? pivotAtStart.point : this.pivot(),
+        // The pivot of the drag is the one the selection had before it, not the one the
+        // transformed result has now: a repeat turns around the very same point.
+        pivot: pivotAtStart && pivotAtStart.key === this.selectionKey() ? pivotAtStart.point : centreOf(before),
       });
     }
     if (!duplicate || !after.length) { this.commitStep(g.before, pivotAtStart); return; }
