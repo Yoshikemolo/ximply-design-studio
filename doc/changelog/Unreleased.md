@@ -41,7 +41,7 @@ None.
 
 - Offer SVG and DXF beside the images in the import dialog, and refuse DWG, PDF and Illustrator files with the export that does work instead of a silent failure.
 - Repeat the last transformation with Ctrl+D: the move, the turn, the scaling or the duplication just applied is performed again on the selection, the copy it left behind included.
-- Leave the original behind while transforming: holding Alt during a move, a turn or a scaling duplicates the objects on release, and the cursor says so while the key is held.
+- Leave the original behind while transforming: holding Alt during a move, a turn or a scaling duplicates the objects on release. The original stays drawn in its place while the copy follows the pointer, the tool badge beside the cursor doubles and the cursor takes the copy sign, and the keys held at the moment of the release decide the outcome, so Alt can be pressed without moving the pointer again.
 - Raise the document size ceiling from 4096 to 8192 pixels, so A3 and A2 at 300 dots per inch can be set up and stored. A1 and A0 at that resolution stay out of range.
 
 ## Fixes

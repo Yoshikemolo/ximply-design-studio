@@ -379,7 +379,7 @@
               (contextmenu)="openCanvasContext($event)"
               (pointermove)="pointerMove($event)"
               (pointerleave)="cursorPoint.set(null)"
-              (pointerup)="pointerUp()"
+              (pointerup)="pointerUp($event)"
               (pointercancel)="pointerCancel()"
               (lostpointercapture)="pointerLost()"
             ></canvas>
@@ -1264,6 +1264,16 @@
       [style.left.px]="cursor.x + 14"
       [style.top.px]="cursor.y + 18"
     />
+    @if (editor.duplicatingDrag()) {
+      <img
+        class="cursor-tool-badge duplicating"
+        [src]="'/assets/icons/' + toolIcon() + '.svg'"
+        alt=""
+        aria-hidden="true"
+        [style.left.px]="cursor.x + 20"
+        [style.top.px]="cursor.y + 24"
+      />
+    }
   }
 }
 @if (settings()) {

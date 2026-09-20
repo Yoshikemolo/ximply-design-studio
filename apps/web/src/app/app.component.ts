@@ -1050,11 +1050,11 @@ export class AppComponent implements AfterViewInit, OnDestroy {
         ctrl: event.ctrlKey,
       });
   }
-  pointerUp() {
+  pointerUp(event?: PointerEvent) {
     this.pointerActive = false;
     if (this.zoomDrag) { this.endZoomArea(); return; }
     this.pan = undefined;
-    this.editor.end();
+    this.editor.end(event ? { alt: event.altKey } : undefined);
   }
   /** Browsers release capture after every pointerup; only an interrupted press cancels the gesture. */
   pointerLost() {
@@ -1365,9 +1365,9 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     this.cursorPoint.update((cursor) => (cursor ? { ...cursor } : null));
   }
   toolCursor() {
-    if (this.preferences.cursorAxes()) return "none";
     // The copy cursor is the sign that releasing now leaves the original behind.
     if (this.editor.duplicatingDrag()) return "copy";
+    if (this.preferences.cursorAxes()) return "none";
     return this.temporaryPan() || this.activeTool() === "hand"
       ? "grab"
       : this.activeTool() === "text"
@@ -1724,6 +1724,8 @@ export class AppComponent implements AfterViewInit, OnDestroy {
       return;
     }
     if (!event.isComposing) this.temporarySelect.set(event.ctrlKey);
+    // Alt pressed during a transform announces the duplication even without moving the pointer.
+    this.editor?.setDuplicatingDrag(event.altKey);
     if (
       event.key === "Escape" &&
       !event.isComposing &&
@@ -1855,6 +1857,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   }
   @HostListener("window:keyup", ["$event"]) keyUp(event: KeyboardEvent) {
     this.temporarySelect.set(event.ctrlKey);
+    this.editor?.setDuplicatingDrag(event.altKey);
     if (event.code === "Space") this.spaceHeld = false;
     if (event.code === this.panKey) {
       this.temporaryPan.set(false);

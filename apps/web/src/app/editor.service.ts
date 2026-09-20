@@ -1135,7 +1135,22 @@ export class EditorService {
     this.persistWorkspace();
   }
   previewDocument(): StudioDocument {
-    try { return syncBlends(syncProcedurals(this.document())); } catch { return this.document(); }
+    let base: StudioDocument;
+    try { base = syncBlends(syncProcedurals(this.document())); } catch { base = this.document(); }
+    const ghosts = this.duplicationGhosts();
+    return ghosts.length ? { ...base, layers: [...ghosts, ...base.layers] } : base;
+  }
+  /**
+   * While Alt turns a transform into a duplication, the untouched originals are drawn in
+   * their place behind the objects being dragged, which are the copies to come.
+   */
+  private duplicationGhosts(): Layer[] {
+    const g = this.gesture;
+    if (!this.duplicatingDrag() || !g || !["move", "rotate", "scale"].includes(g.mode)) return [];
+    const ids = new Set(g.ids?.length ? g.ids : [g.id]);
+    return g.before.layers
+      .filter((layer) => ids.has(layer.id) && layer.visible && !layer.guide)
+      .map((layer) => ({ ...layer, id: layer.id + "__origin", locked: true }));
   }
   private synchronizeBlends() {
     const doc = this.document();
@@ -1463,6 +1478,10 @@ export class EditorService {
   readonly lastTransform = signal<{ dx: number; dy: number; rotation: number; scale: number; duplicate: boolean } | null>(null);
   /** True while a drag will duplicate on release, which the cursor shows. */
   readonly duplicatingDrag = signal(false);
+  /** Keeps the cursor honest while Alt is pressed or released without moving the pointer. */
+  setDuplicatingDrag(alt: boolean) {
+    if (this.gesture && ["move", "rotate", "scale"].includes(this.gesture.mode)) this.duplicatingDrag.set(alt);
+  }
   private recordTransform(step: { dx?: number; dy?: number; rotation?: number; scale?: number; duplicate?: boolean }) {
     const value = { dx: step.dx ?? 0, dy: step.dy ?? 0, rotation: step.rotation ?? 0, scale: step.scale ?? 1, duplicate: !!step.duplicate };
     if (!value.dx && !value.dy && !value.rotation && value.scale === 1 && !value.duplicate) return;
@@ -2099,7 +2118,14 @@ export class EditorService {
       !!this.gesture?.mode.startsWith("node:")
     );
   }
-  end() {
+  /**
+   * Closes the gesture. The modifiers of the release decide the duplication, since a person
+   * may hold Alt without moving the pointer again before letting go.
+   */
+  end(modifiers?: { alt?: boolean }) {
+    if (modifiers && this.gesture && ["move", "rotate", "scale"].includes(this.gesture.mode)) {
+      this.duplicatingDrag.set(!!modifiers.alt);
+    }
     if (this.pageGesture) { this.endPageGesture(); return; }
     if (this.pivotGesture) {
       const before = this.pivotGesture.before;

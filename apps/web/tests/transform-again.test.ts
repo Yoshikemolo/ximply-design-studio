@@ -94,6 +94,39 @@ describe('duplicating while transforming', () => {
     expect(e.status()).toContain('with a copy');
   });
 
+  it('shows the original in its place while the copy is dragged', () => {
+    const e = withSquare();
+    e.start({ x: 120, y: 180 });
+    e.move({ x: 220, y: 180 }, { alt: true });
+    const preview = e.previewDocument().layers;
+    // Two shapes are drawn: the original where it was and the copy under the pointer.
+    expect(preview).toHaveLength(2);
+    expect([preview[0].x, preview[0].y]).toEqual([100, 100]);
+    expect(preview[0].id.endsWith('__origin')).toBe(true);
+    expect(preview[1].x).toBeGreaterThan(150);
+    // The document itself still holds one object until the button is released.
+    expect(e.document().layers).toHaveLength(1);
+    e.move({ x: 220, y: 180 });
+    expect(e.previewDocument().layers).toHaveLength(1);
+  });
+
+  it('decides the duplication with the keys held at the release', () => {
+    const e = withSquare();
+    e.start({ x: 120, y: 180 });
+    e.move({ x: 220, y: 180 });
+    // Alt pressed without moving the pointer again still duplicates.
+    e.setDuplicatingDrag(true);
+    expect(e.duplicatingDrag()).toBe(true);
+    e.end({ alt: true });
+    expect(e.document().layers).toHaveLength(2);
+    const other = withSquare();
+    other.start({ x: 120, y: 180 });
+    other.move({ x: 220, y: 180 }, { alt: true });
+    // Alt released before the button leaves an ordinary move.
+    other.end({ alt: false });
+    expect(other.document().layers).toHaveLength(1);
+  });
+
   it('keeps the drag ordinary while Alt is not held', () => {
     const e = withSquare();
     e.start({ x: 120, y: 180 });

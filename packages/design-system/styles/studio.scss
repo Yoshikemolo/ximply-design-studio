@@ -1518,6 +1518,10 @@ textarea {
   transform-origin: center;
   white-space: pre;
 }
+/* The second badge says that releasing now leaves the original behind. */
+.cursor-tool-badge.duplicating {
+  opacity: 0.8;
+}
 .cursor-tool-badge {
   position: fixed;
   z-index: 90;
