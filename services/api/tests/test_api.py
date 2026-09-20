@@ -40,6 +40,13 @@ class ApiTests(unittest.TestCase):
         self.assertEqual('A design', items[0]['name'])
         self.assertEqual([identifier+'.json'], [x.name for x in Path(self.folder.name).iterdir()])
 
+    def test_a3_at_three_hundred_dots_per_inch_is_stored(self):
+        document = copy.deepcopy(DOCUMENT)
+        document['width'], document['height'] = 3508, 4961
+        self.assertEqual(201, self.client.post('/api/projects', json=document, headers=self.headers).status_code)
+        document['width'], document['height'] = 3508, 9933
+        self.assertEqual(422, self.client.post('/api/projects', json=document, headers=self.headers).status_code)
+
     def test_invalid_documents_and_identifiers(self):
         for key, value in [('version', 3), ('width', 50000), ('background', 'url(secret)'), ('layers', [{}])]:
             document = copy.deepcopy(DOCUMENT)

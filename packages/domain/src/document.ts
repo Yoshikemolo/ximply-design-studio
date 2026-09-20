@@ -310,9 +310,16 @@ export function resizeFromCorner(
     y: center.y - height / 2,
   };
 }
+/** A step of the history: the document and the session state that belongs with it. */
+interface HistoryStep {
+  document: StudioDocument;
+  state: unknown;
+}
 export class DocumentHistory {
-  private past: StudioDocument[] = [];
-  private future: StudioDocument[] = [];
+  private past: HistoryStep[] = [];
+  private future: HistoryStep[] = [];
+  /** Session state of the step the last undo or redo restored, such as the transform pivot. */
+  restored: unknown = null;
   constructor(private limit = 24) {}
   get canUndo() {
     return this.past.length > 0;
@@ -320,26 +327,29 @@ export class DocumentHistory {
   get canRedo() {
     return this.future.length > 0;
   }
-  commit(before: StudioDocument) {
-    this.past.push(structuredClone(before));
+  commit(before: StudioDocument, state: unknown = null) {
+    this.past.push({ document: structuredClone(before), state });
     if (this.past.length > this.limit) this.past.shift();
     this.future = [];
   }
-  undo(current: StudioDocument): StudioDocument {
+  undo(current: StudioDocument, state: unknown = null): StudioDocument {
     const next = this.past.pop();
     if (!next) return current;
-    this.future.push(structuredClone(current));
-    return next;
+    this.future.push({ document: structuredClone(current), state });
+    this.restored = next.state;
+    return next.document;
   }
-  redo(current: StudioDocument): StudioDocument {
+  redo(current: StudioDocument, state: unknown = null): StudioDocument {
     const next = this.future.pop();
     if (!next) return current;
-    this.past.push(structuredClone(current));
-    return next;
+    this.past.push({ document: structuredClone(current), state });
+    this.restored = next.state;
+    return next.document;
   }
   clear() {
     this.past = [];
     this.future = [];
+    this.restored = null;
   }
 }
 function record(value: unknown): value is Record<string, unknown> {
@@ -372,8 +382,8 @@ export function parseDocument(text: string): StudioDocument {
   if (
     typeof value["name"] !== "string" ||
     value["name"].length > 150 ||
-    !finite(value["width"], 16, 4096) ||
-    !finite(value["height"], 16, 4096) ||
+    !finite(value["width"], 16, 8192) ||
+    !finite(value["height"], 16, 8192) ||
     !paint(value["background"], value["version"]) ||
     !Array.isArray(value["layers"]) ||
     value["layers"].length > 150
