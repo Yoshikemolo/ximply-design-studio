@@ -2,7 +2,7 @@ import { Procedural, defaultProcedural, generateProcedural, syncProcedurals, val
 import { openingHost, wallSnapPoint, WallSnap } from "./procedural-placement";
 import { Dimension, DimensionFormat, defaultDimensionFormat, dimensionGeometry } from "../../../../packages/domain/src/dimensions";
 import { LineEnds, defaultLineEnds, validLineEnds } from "../../../../packages/domain/src/line-endings";
-import { snapDimensionPoint, DimensionSnap } from "./dimension-snapping";
+import { snapDimensionPoint, snapDimensionOffset, DimensionSnap } from "./dimension-snapping";
 import { AreaSelectionKind, SelectionArea, layerIntersectsArea } from "../../../../packages/domain/src/selection-area";
 import { blendCompatible, blendProgress, interpolateBlendLayer, syncBlends, ObjectBlend, BlendEasing } from "../../../../packages/domain/src/object-blend";
 import { defaultTypography, defaultTextLayout, FONT_FAMILIES, layoutText, TextLayoutOptions, TextTypography } from "../../../../packages/domain/src/text-layout";
@@ -462,11 +462,31 @@ export class EditorService {
   readonly dimensionsSnap = signal(true);
   readonly dimensionSnapRadius = signal(10);
   readonly dimensionDefaults = signal<DimensionFormat>({ ...defaultDimensionFormat });
+  /** While on, a measurement format edit applies to every dimension in the document. */
+  readonly unifyDimensionFormat = signal(false);
+  setUnifyDimensionFormat(value:boolean) {
+    this.unifyDimensionFormat.set(value);
+    if(value)this.applyFormatToDimensions(this.selected()?.dimension?.format??this.dimensionDefaults());
+  }
+  private applyFormatToDimensions(format:DimensionFormat):boolean {
+    const before=this.document();
+    const layers=before.layers.map(layer=>layer.dimension&&!this.isEffectivelyLocked(layer)
+      ?{...layer,dimension:{...layer.dimension,format:{...format,...(layer.dimension.kind==='angular'?{unit:layer.dimension.format.unit}:{})}}}
+      :layer);
+    if(JSON.stringify(layers)===JSON.stringify(before.layers))return false;
+    try{parseDocument(JSON.stringify({...before,layers}));}catch{return false;}
+    this.history.commit(before);this.document.set({...before,layers});this.dimensionDefaults.set({...format});this.changed();return true;
+  }
   readonly lineEnds = signal<LineEnds>(structuredClone(defaultLineEnds));
   readonly dimensionDraft = signal<{kind:'linear'|'angular'|'chain';points:Point[];cursor:Point;ready?:boolean} | null>(null);
   readonly dimensionSnapTarget = signal<DimensionSnap | null>(null);
   private dimensionLabelGesture?: {before:StudioDocument;id:string};
   setDimensionsLocked(value:boolean) { this.dimensionsLocked.set(value); if(value&&this.dimensionLabelGesture)this.cancel(); }
+  /** Label placement lines up with a parallel dimension already in the drawing when magnetism is on. */
+  dimensionOffsetPoint(anchors:Point[],point:Point):Point {
+    if(!this.dimensionsSnap())return point;
+    return snapDimensionOffset(this.document().layers,anchors,point,this.dimensionSnapRadius()/this.zoom())??point;
+  }
   private dimensionPoint(point:Point,finalAnchor:boolean):Point {
     const target=this.dimensionsSnap()?snapDimensionPoint(this.document().layers,point,this.dimensionSnapRadius()/this.zoom(),finalAnchor):null;
     this.dimensionSnapTarget.set(target);return target?.point??this.snap(point);
@@ -490,7 +510,7 @@ export class EditorService {
     const draft=this.dimensionDraft();
     if(!draft||draft.kind!=='chain'){const p=this.dimensionPoint(point,true);this.dimensionDraft.set({kind:'chain',points:[p],cursor:p});return;}
     if(draft.ready){
-      if(this.createChainDimension(draft.points,point)){this.dimensionDraft.set(null);this.dimensionSnapTarget.set(null);}
+      if(this.createChainDimension(draft.points,this.dimensionOffsetPoint(draft.points,point))){this.dimensionDraft.set(null);this.dimensionSnapTarget.set(null);}
       return;
     }
     const p=this.dimensionPoint(point,true),last=draft.points.at(-1)!;
@@ -507,7 +527,7 @@ export class EditorService {
     const count=kind==='angular'?3:2;
     if(!draft){const p=this.dimensionPoint(point,true);this.dimensionDraft.set({kind,points:[p],cursor:p});return;}
     if(draft.points.length<count){const p=this.dimensionPoint(point,true);if(draft.points.some(previous=>Math.hypot(p.x-previous.x,p.y-previous.y)<1e-6))return;this.dimensionDraft.set({...draft,points:[...draft.points,p],cursor:p});return;}
-    this.createDimension(kind,draft.points,point);this.dimensionDraft.set(null);this.dimensionSnapTarget.set(null);
+    this.createDimension(kind,draft.points,this.dimensionOffsetPoint(draft.points,point));this.dimensionDraft.set(null);this.dimensionSnapTarget.set(null);
   }
   /** Snapped hover target while a dimension tool waits for an anchor; placement of the label is free. */
   hoverDimension(point:Point) {
@@ -543,6 +563,7 @@ export class EditorService {
     try{parseDocument(JSON.stringify({...this.document(),layers:this.document().layers.map(l=>l.id===selected.id?{...l,dimension}:l)}));}catch{return;}
     if(JSON.stringify(dimension)===JSON.stringify(selected.dimension))return;
     this.history.commit(this.document());this.setLayer(selected.id,{dimension});this.dimensionDefaults.set({...dimension.format});this.changed();
+    if(patch.format&&this.unifyDimensionFormat())this.applyFormatToDimensions(dimension.format);
   }
   setLineEnds(patch:Partial<LineEnds>) {
     const value={...this.lineEnds(),...patch};
@@ -1475,7 +1496,7 @@ export class EditorService {
   move(point: Point, modifiers: { shift?: boolean; alt?: boolean; ctrl?: boolean } = {}) {
     if(this.proceduralGesture){const g=this.proceduralGesture;const end=modifiers.shift?snapDirection(g.start,point,this.snapAngle()):(g.type==='wall'?this.wallTarget(g.start,point,g.id):this.snap(point));try{const layer=this.proceduralLayer(g.type,g.start,end,g.id);const next=syncProcedurals({...g.before,layers:[...g.before.layers,layer]});parseDocument(JSON.stringify(next));this.document.set(next);this.selectedId.set(layer.id);this.selectedIds.set([layer.id]);}catch{/* Keep the last valid preview. */}return;}
     if(this.dimensionLabelGesture){const layer=this.document().layers.find(l=>l.id===this.dimensionLabelGesture!.id)!;this.setLayer(layer.id,{dimension:{...layer.dimension!,labelPosition:localPoint(layer,point)}});return;}
-    const draft=this.dimensionDraft();if(draft){const count=draft.kind==="chain"?Infinity:(draft.kind==="angular"?3:2);const placing=draft.ready===true||draft.points.length>=count;this.dimensionDraft.set({...draft,cursor:placing?point:this.dimensionPoint(point,true)});if(placing)this.dimensionSnapTarget.set(null);return;}
+    const draft=this.dimensionDraft();if(draft){const count=draft.kind==="chain"?Infinity:(draft.kind==="angular"?3:2);const placing=draft.ready===true||draft.points.length>=count;this.dimensionDraft.set({...draft,cursor:placing?this.dimensionOffsetPoint(draft.points,point):this.dimensionPoint(point,true)});if(placing)this.dimensionSnapTarget.set(null);return;}
     if(!this.gesture&&["dimensionSmart","dimensionLinear","dimensionAngular","dimensionChain"].includes(this.tool())){this.hoverDimension(point);return;}
     if(!this.gesture&&!this.proceduralGesture&&this.tool()==='wall'){this.hoverWall(modifiers.shift&&this.wallChain()?snapDirection(this.wallChain()!,point,this.snapAngle()):point);return;}
     if (this.areaGesture) { this.moveAreaSelection(point); return; }

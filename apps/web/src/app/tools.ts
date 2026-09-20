@@ -4,6 +4,7 @@ export type ToolId =
   | "door"
   | "window"
   | "pillar"
+  | "stair"
   | "dimensionSmart"
   | "dimensionLinear"
   | "dimensionAngular"
@@ -61,6 +62,7 @@ export const TOOLS: ToolPlugin[] = [
   { id: "door", label: "Door", icon: "door", group: "Draw" },
   { id: "window", label: "Window", icon: "window", group: "Draw" },
   { id: "pillar", label: "Pillar", icon: "pillar", group: "Draw" },
+  { id: "stair", label: "Stair", icon: "stair", group: "Draw" },
   { id: "dimensionSmart", label: "Smart dimension", icon: "dimension-smart", group: "Draw" },
   { id: "dimensionLinear", label: "Linear dimension", icon: "dimension-linear", group: "Draw" },
   { id: "dimensionAngular", label: "Angular dimension", icon: "dimension-angular", group: "Draw" },
@@ -172,7 +174,7 @@ export interface ToolFamily {
   tools: ToolId[];
 }
 export const TOOL_FAMILIES: ToolFamily[] = [
-  { id: "architecture", label: "Floor plan tools", tools: ["wall", "door", "window", "pillar"] },
+  { id: "architecture", label: "Floor plan tools", tools: ["wall", "door", "window", "pillar", "stair"] },
   { id: "dimensions", label: "Dimensions", tools: ["dimensionSmart", "dimensionLinear", "dimensionAngular", "dimensionChain"] },
   { id: "selection", label: "Select", tools: ["select", "selectRectangle", "selectEllipse", "selectLasso"] },
   { id: "direct", label: "Direct selection", tools: ["direct"] },

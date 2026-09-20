@@ -489,6 +489,10 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     if (applied) this.transformDialog.set(null);
     else this.notify(new Error("The transformation cannot be applied to this selection."));
   }
+  setDimensionPlacement(event: Event) {
+    const value = this.text(event);
+    if (["start", "center", "end"].includes(value)) this.editor.updateDimension({ labelPlacement: value as "start" | "center" | "end" });
+  }
   setDimensionLabelSize(key: "width" | "height", event: Event) {
     const layer = this.editor.selected(); if (!layer?.dimension) return;
     const value = this.distanceInput(event); if (!Number.isFinite(value) || value < 1 || value > 1000000) return;

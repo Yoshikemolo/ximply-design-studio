@@ -4,7 +4,9 @@ import { fromPixels, isUnit, Unit } from './measurements';
 import { defaultLineEnds, LineEnd } from './line-endings';
 import { layoutText, TextLayoutResult, TextMeasurement } from './text-layout';
 export interface DimensionFormat { scale:number; unit:Unit; decimals:number; separator:'.'|',' }
-export interface Dimension { kind:'linear'|'angular'; anchors:Point[]; labelPosition:Point; labelSize?:{width:number;height:number}; text:string; format:DimensionFormat; extension:{stroke:string;strokeWidth:number;gap:number;overshoot:number} }
+/** Where the label sits along the dimension line; the default keeps it centred. */
+export type DimensionLabelPlacement = 'start'|'center'|'end';
+export interface Dimension { kind:'linear'|'angular'; anchors:Point[]; labelPosition:Point; labelSize?:{width:number;height:number}; labelPlacement?:DimensionLabelPlacement; text:string; format:DimensionFormat; extension:{stroke:string;strokeWidth:number;gap:number;overshoot:number} }
 export const defaultDimensionFormat:DimensionFormat={scale:1,unit:'mm',decimals:2,separator:'.'};
 /** How a linear annotation fits: the label inside a break of the dimension line, or beside an outer end. */
 export type DimensionPlacement = 'inside'|'outside'|'angular';
@@ -31,13 +33,13 @@ export function dimensionGeometry(layer:Layer,measure?:TextMeasurement):Dimensio
   const text=formatDimension(d,value),layout=dimensionLabelLayout(layer,text,measure);
   const offset=(placementPoint.x-a[0].x)*n.x+(placementPoint.y-a[0].y)*n.y;const p=a.map(v=>({x:v.x+n.x*offset,y:v.y+n.y*offset}));extend(a[0],p[0]);extend(a[1],p[1]);
   const size=Math.max(styles.start.size,styles.end.size),clearance=size/2,along=(t:number,from=p[0])=>({x:from.x+u.x*t,y:from.y+u.y*t});
-  const width=layout.width,inside=length>=width+4*size;let label:Point;
+  const width=layout.width,placement=d.labelPlacement??'center',inside=length>=width+4*size&&placement==='center';let label:Point;
   if(inside){
    const middle=length/2;label=along(middle);lines.push({a:p[0],b:along(middle-width/2-clearance),extension:false},{a:along(middle+width/2+clearance),b:p[1],extension:false});
    ends.push({point:p[0],direction:{x:-u.x,y:-u.y},style:styles.start,spread:DIMENSION_ARROW_SPREAD},{point:p[1],direction:u,style:styles.end,spread:DIMENSION_ARROW_SPREAD});
   }else{
    // Each outer arrow needs its own length plus one arrowhead of clear line beyond the extension line.
-   const towardEnd=(placementPoint.x-a[0].x)*u.x+(placementPoint.y-a[0].y)*u.y>length/2,tail=2*size;
+   const towardEnd=placement==='center'?(placementPoint.x-a[0].x)*u.x+(placementPoint.y-a[0].y)*u.y>length/2:placement==='end',tail=2*size;
    label=along(towardEnd?length+tail+clearance+width/2:-(tail+clearance+width/2));
    lines.push({a:along(-tail),b:along(length+tail),extension:false});
    ends.push({point:p[0],direction:u,style:styles.start,spread:DIMENSION_ARROW_SPREAD},{point:p[1],direction:{x:-u.x,y:-u.y},style:styles.end,spread:DIMENSION_ARROW_SPREAD});
@@ -52,7 +54,9 @@ export function dimensionGeometry(layer:Layer,measure?:TextMeasurement):Dimensio
 function formatDimension(d:Dimension,value:number):string { return d.text||`${value.toFixed(d.format.decimals).replace('.',d.format.separator)}${d.kind==='angular'?'°':` ${d.format.unit}`}`; }
 export function validDimension(value:unknown):boolean {
  const d=value as Dimension;const point=(p:Point)=>!!p&&Object.keys(p).length===2&&[p.x,p.y].every(n=>Number.isFinite(n)&&Math.abs(n)<=1e7);
- if(!d||typeof d!=='object'||Object.keys(d).length!==(d.labelSize === undefined ? 6 : 7)||!['linear','angular'].includes(d.kind)||!Array.isArray(d.anchors)||d.anchors.length!==(d.kind==='linear'?2:3)||!d.anchors.every(point)||!point(d.labelPosition)||typeof d.text!=='string'||d.text.length>10000)return false;
+ const optional=[d?.labelSize,d?.labelPlacement].filter(v=>v!==undefined).length;
+ if(d?.labelPlacement!==undefined&&!['start','center','end'].includes(d.labelPlacement))return false;
+ if(!d||typeof d!=='object'||Object.keys(d).length!==(6+optional)||!['linear','angular'].includes(d.kind)||!Array.isArray(d.anchors)||d.anchors.length!==(d.kind==='linear'?2:3)||!d.anchors.every(point)||!point(d.labelPosition)||typeof d.text!=='string'||d.text.length>10000)return false;
  if(d.labelSize!==undefined && (!d.labelSize || Object.keys(d.labelSize).length!==2 || ![d.labelSize.width,d.labelSize.height].every(n=>Number.isFinite(n)&&n>=1&&n<=1e6)))return false;
  const f=d.format,e=d.extension;return !!f&&Object.keys(f).length===4&&Number.isFinite(f.scale)&&f.scale>0&&f.scale<=1e6&&isUnit(f.unit)&&Number.isInteger(f.decimals)&&f.decimals>=0&&f.decimals<=8&&['.',','].includes(f.separator)&&!!e&&Object.keys(e).length===4&&typeof e.stroke==='string'&&/^(none|#[0-9a-fA-F]{6}([0-9a-fA-F]{2})?)$/.test(e.stroke)&&[e.strokeWidth,e.gap,e.overshoot].every(n=>Number.isFinite(n)&&n>=0&&n<=1000);
 }

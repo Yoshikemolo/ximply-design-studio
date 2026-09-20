@@ -1,4 +1,12 @@
 const ES: Record<string, string> = {
+  "Places": "Decimales",
+  "Separator": "Separador",
+  "Overshoot": "Prolongación",
+  "Label": "Etiqueta",
+  "Position": "Posición",
+  "Center": "Centro",
+  "Unify scale factor": "Unificar el factor de escala",
+  "Apply this scale and label format to every dimension in the document.": "Aplica esta escala y este formato de etiqueta a todas las cotas del documento.",
   "Drag to size the flight; the arrow follows the walking direction.": "Arrastra para dimensionar el tramo; la flecha sigue el sentido de subida.",
   "Stair": "Escalera",
   "Chain dimension": "Cota en cadena",
@@ -462,7 +470,7 @@ const ES: Record<string, string> = {
   "Use the resulting symbol without Shift":
     "Usa el símbolo resultante sin Mayús",
   Reflect: "Reflejar",
-  Scale: "Escalar",
+  Scale: "Escala",
   Zoom: "Zoom",
   Group: "Agrupar",
   Ungroup: "Desagrupar",

@@ -804,15 +804,21 @@
                     <div class="section-label">{{ t('Dimensions') }}</div>
                     <p class="typography-note">{{ t('Drag the label handle to reposition the dimension text.') }}</p>
                     <div class="property-grid">
-                      <label>{{ t('Measurement scale') }}<input type="number" min="0.000001" max="1000000" step="any" [value]="dimension.format.scale" (change)="setDimensionFormat('scale', $event)" /></label>
+                      <label>{{ t('Scale') }}<input type="number" min="0.000001" max="1000000" step="any" [value]="dimension.format.scale" (change)="setDimensionFormat('scale', $event)" /></label>
                       <label>{{ t('Units') }}<select [disabled]="dimension.kind === 'angular'" [value]="dimension.format.unit" (change)="setDimensionFormat('unit', $event)">@for (unit of units; track unit) {<option [value]="unit">{{ unit }}</option>}</select></label>
-                      <label>{{ t('Decimal places') }}<input type="number" min="0" max="8" step="1" [value]="dimension.format.decimals" (change)="setDimensionFormat('decimals', $event)" /></label>
-                      <label>{{ t('Decimal separator') }}<select [value]="dimension.format.separator" (change)="setDimensionFormat('separator', $event)"><option value=".">.</option><option value=",">,</option></select></label>
                     </div>
-                    <div class="property-grid"><label>{{ t('Label frame width') }}<input type="number" [min]="displayDistance(1)" step="any" [value]="displayDistance(dimension.labelSize?.width ?? layer.width)" (change)="setDimensionLabelSize('width', $event)" /></label><label>{{ t('Label frame height') }}<input type="number" [min]="displayDistance(1)" step="any" [value]="displayDistance(dimension.labelSize?.height ?? layer.height)" (change)="setDimensionLabelSize('height', $event)" /></label></div>
+                    <label class="wide-label">{{ t('Unify scale factor') }}<input type="checkbox" [checked]="editor.unifyDimensionFormat()" (change)="editor.setUnifyDimensionFormat($any($event.target).checked)" [title]="t('Apply this scale and label format to every dimension in the document.')" /></label>
+                    <div class="section-label">{{ t('Label') }}</div>
+                    <div class="property-grid">
+                      <label>{{ t('Places') }}<input type="number" min="0" max="8" step="1" [value]="dimension.format.decimals" (change)="setDimensionFormat('decimals', $event)" /></label>
+                      <label>{{ t('Separator') }}<select [value]="dimension.format.separator" (change)="setDimensionFormat('separator', $event)"><option value=".">.</option><option value=",">,</option></select></label>
+                      <label>{{ t('Width') }}<input type="number" [min]="displayDistance(1)" step="any" [value]="displayDistance(dimension.labelSize?.width ?? layer.width)" (change)="setDimensionLabelSize('width', $event)" /></label>
+                      <label>{{ t('Height') }}<input type="number" [min]="displayDistance(1)" step="any" [value]="displayDistance(dimension.labelSize?.height ?? layer.height)" (change)="setDimensionLabelSize('height', $event)" /></label>
+                    </div>
+                    <label class="wide-label">{{ t('Position') }}<select [value]="dimension.labelPlacement ?? 'center'" (change)="setDimensionPlacement($event)"><option value="start">{{ t('Start') }}</option><option value="center">{{ t('Center') }}</option><option value="end">{{ t('End') }}</option></select></label>
                     <div class="section-label">{{ t('Extension lines') }}</div>
                     <label class="wide-label">{{ t('Color') }}<input type="text" maxlength="9" [value]="dimension.extension.stroke" (change)="setDimensionExtension('stroke', $event)" [title]="t('Use a hex color with optional alpha, or none.')" /></label>
-                    <div class="property-grid">@for (field of ['strokeWidth', 'gap', 'overshoot']; track field) {<label>{{ t(field === 'strokeWidth' ? 'Width' : field === 'gap' ? 'Extension gap' : 'Extension overshoot') }}<input type="number" min="0" [max]="displayDistance(1000)" step="any" [value]="displayDistance($any(dimension.extension)[field])" (change)="setDimensionExtension($any(field), $event)" /></label>}</div>
+                    <div class="property-grid">@for (field of ['strokeWidth', 'gap', 'overshoot']; track field) {<label>{{ t(field === 'strokeWidth' ? 'Width' : field === 'gap' ? 'Extension gap' : 'Overshoot') }}<input type="number" min="0" [max]="displayDistance(1000)" step="any" [value]="displayDistance($any(dimension.extension)[field])" (change)="setDimensionExtension($any(field), $event)" /></label>}</div>
                     <p class="typography-note">{{ t('Leave text empty to display the measured value. Angular dimensions use degrees.') }}</p>
                   }
                   @if (layer.kind === "text" || layer.dimension) {

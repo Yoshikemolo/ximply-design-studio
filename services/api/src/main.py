@@ -123,7 +123,7 @@ class DimensionPoint(BaseModel):
 class DimensionFormat(BaseModel):
     model_config = ConfigDict(extra='forbid')
     scale: Annotated[Number, Field(gt=0, le=1000000)]
-    unit: Literal['px', 'pt', 'mm', 'cm', 'in', 'ft']
+    unit: Literal['px', 'pt', 'mm', 'cm', 'm', 'in', 'ft']
     decimals: Annotated[Number, Field(ge=0, le=8, multiple_of=1)]
     separator: Literal['.', ',']
 
@@ -148,12 +148,15 @@ class Dimension(BaseModel):
     anchors: Annotated[list[DimensionPoint], Field(min_length=2, max_length=3)]
     labelPosition: DimensionPoint
     labelSize: DimensionLabelSize | None = None
+    labelPlacement: Literal['start', 'center', 'end'] | None = None
     text: Annotated[str, Field(max_length=10000)]
     format: DimensionFormat
     extension: DimensionExtension
 
     @model_validator(mode='after')
     def anchor_cardinality(self):
+        if 'labelPlacement' in self.model_fields_set and self.labelPlacement is None:
+            raise ValueError('Dimension label placement cannot be null')
         if 'labelSize' in self.model_fields_set and self.labelSize is None:
             raise ValueError('Dimension label size cannot be null')
         if len(self.anchors) != (2 if self.kind == 'linear' else 3):

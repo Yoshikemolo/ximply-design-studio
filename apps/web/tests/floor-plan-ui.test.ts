@@ -15,8 +15,8 @@ beforeEach(()=>{
  app=Object.create(AppComponent.prototype) as AppComponent;
  Object.assign(app,{preferences:new PreferencesService(),editor:{tool,proceduralDefaults:()=>({door,wall:{type:'wall',start:{x:0,y:0},end:{x:100,y:0},thickness:16},pillar:{type:'pillar',shape:'circle',width:60,depth:60}}),selected:()=>({procedural:door}),updateProceduralDefaults:updateDefaults,updateProcedural:updateSelected}});
 });
-it('uses four distinct architecture tools and wall as initial family tool',()=>{
- const family=TOOL_FAMILIES.find(f=>f.id==='architecture')!;expect(family.tools).toEqual(['wall','door','window','pillar']);expect(TOOLS.filter(t=>family.tools.includes(t.id))).toHaveLength(4);
+it('uses five distinct architecture tools and wall as initial family tool',()=>{
+ const family=TOOL_FAMILIES.find(f=>f.id==='architecture')!;expect(family.tools).toEqual(['wall','door','window','pillar','stair']);expect(TOOLS.filter(t=>family.tools.includes(t.id))).toHaveLength(5);
 });
 it('preserves leaf proportions when resizing total width in display units',()=>{
  app.preferences.setMeasurement('distanceUnit','in');app.setProceduralNumber('width',input(2.5));

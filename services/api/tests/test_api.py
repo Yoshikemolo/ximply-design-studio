@@ -656,7 +656,7 @@ class NativeDrawingTests(unittest.TestCase):
 
     def test_dimension_format_bounds_and_types(self):
         for field, invalid in {'scale': [0, -1, 1000001, True, '2'],
-                               'unit': ['m', '', None], 'decimals': [-1, 9, 1.5, True, '2'],
+                               'unit': ['yd', '', None], 'decimals': [-1, 9, 1.5, True, '2'],
                                'separator': [';', '', None]}.items():
             for value in invalid:
                 with self.subTest(field=field, value=value):
