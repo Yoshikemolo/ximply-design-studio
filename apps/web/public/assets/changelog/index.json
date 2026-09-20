@@ -41,7 +41,7 @@
         },
         {
           "type": "Feature",
-          "description": "Add a transform pivot: scaling, rotation and mirroring work about it, it starts at the geometric centre of the selection and can be dragged with a transform tool. Its own controls in the top bar lock it, show it and switch its magnetism, which attracts it to the geometric centre, to vertices and edges, to dimensions and to the active rulers, guides and grid."
+          "description": "Add a transform pivot: scaling, rotation and mirroring work about it, it starts at the geometric centre of the selection and is dragged by pressing on its own mark, which always takes that press while the pivot is unlocked. A press anywhere outside the mark moves the selected objects and carries the pivot with them, and a locked pivot hands every press to the artwork. Its own controls in the top bar lock it, show it and switch its magnetism, which attracts it to the geometric centre, to vertices and edges, to dimensions and to the active rulers, guides and grid."
         },
         {
           "type": "Feature",
@@ -149,7 +149,7 @@
         },
         {
           "type": "Fix",
-          "description": "Grab the pivot mark itself while it is unlocked: pressing on the mark drags the pivot with the selection tool as well, and the dragged position snaps to the centre of the selection, to the corners, side middles and sides of the selection box, and to the vertices of other artwork within the snapping distance. A press on the artwork still moves the artwork."
+          "description": "Drag the pivot by its mark with the selection tool as well, wherever the mark rests: it used to give the press to the object under it, which made the pivot unreachable at its default place. The dragged position snaps to the centre of the selection, to the corners, side middles and sides of the selection box, and to the vertices of other artwork within the snapping distance."
         },
         {
           "type": "Fix",

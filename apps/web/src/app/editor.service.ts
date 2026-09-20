@@ -59,7 +59,6 @@ import {
   validDashPattern,
   bounds,
   DocumentHistory,
-  hitTest,
   Layer,
   localPoint,
   newLayer,
@@ -520,22 +519,19 @@ export class EditorService {
     return target?.point ?? this.snap(point);
   }
   /**
-   * The handle can be grabbed while it is shown, unlocked and something is selected, with the
-   * transform tools always and with the selection tool unless the mark still rests over the
-   * artwork at its default place, where a click belongs to the object under it.
+   * The handle can be grabbed whenever it is shown, unlocked and something is selected, with the
+   * selection and transform tools. A locked pivot never takes a press, so the artwork moves.
    */
-  readonly pivotGrabbable = computed(() => {
-    if (!this.pivotVisible() || this.pivotLocked() || !this.selectedLayers().length) return false;
-    if (!["select", "rotate", "scale", "mirror"].includes(this.tool())) return false;
-    if (["rotate", "scale", "mirror"].includes(this.tool()) || this.pivotMoved()) return true;
-    const pivot = this.pivot();
-    return !this.selectedLayers().some((layer) => hitTest(layer, pivot));
-  });
+  readonly pivotGrabbable = computed(() =>
+    this.pivotVisible() && !this.pivotLocked() && this.selectedLayers().length > 0 &&
+    ["select", "rotate", "scale", "mirror"].includes(this.tool()));
+  /** Half the extent of the drawn mark, the box inside which a press belongs to the pivot. */
+  private pivotReach() { return 9 / this.zoom(); }
   private startPivotDrag(point: Point): boolean {
     if (!this.pivotGrabbable()) return false;
-    // Only a click on the mark itself takes the pivot; anywhere else belongs to the artwork.
+    // A press inside the mark takes the pivot; anywhere else moves the artwork and the pivot with it.
     const pivot = this.pivot();
-    if (Math.hypot(point.x - pivot.x, point.y - pivot.y) > 7 / this.zoom()) return false;
+    if (Math.abs(point.x - pivot.x) > this.pivotReach() || Math.abs(point.y - pivot.y) > this.pivotReach()) return false;
     this.pivotGesture = { before: this.pivotOverride() };
     this.setPivot(this.pivotPoint(point));
     return true;

@@ -37,14 +37,22 @@ describe('transform pivot', () => {
     expect(e.pivot()).toEqual({ x: 200, y: 200 });
   });
 
-  it('leaves the artwork alone when another tool is active or the pivot is locked', () => {
+  it('moves the artwork from outside the mark and whenever the pivot is locked', () => {
     const e = withSquare();
     e.setTool('select');
-    e.start({ x: 150, y: 150 });
-    e.move({ x: 250, y: 150 });
+    // Outside the box of the mark the press belongs to the artwork, and the pivot travels with it.
+    e.start({ x: 180, y: 150 });
+    e.move({ x: 280, y: 150 });
     e.end();
     expect(e.document().layers[0].x).toBe(200);
+    expect(e.pivot()).toEqual({ x: 250, y: 150 });
     expect(e.pivotMoved()).toBe(false);
+    // A locked pivot hands even a press on the mark to the artwork.
+    e.pivotLocked.set(true);
+    e.start({ x: 250, y: 150 });
+    e.move({ x: 270, y: 150 });
+    e.end();
+    expect(e.document().layers[0].x).toBe(220);
     const locked = withSquare();
     locked.setTool('rotate');
     locked.pivotLocked.set(true);
@@ -54,19 +62,18 @@ describe('transform pivot', () => {
     expect(locked.pivot()).toEqual({ x: 150, y: 150 });
   });
 
-  it('takes the mark with the selection tool once the pivot rests away from the artwork', () => {
+  it('takes the mark with the selection tool even where it rests on the artwork', () => {
     const e = withSquare();
-    e.setPivot({ x: 260, y: 150 });
     e.setTool('select');
-    // A press on the mark drags the pivot, not the square.
-    e.start({ x: 260, y: 150 });
+    // The mark sits at the centre of the square: a press on it drags the pivot, not the square.
+    e.start({ x: 150, y: 150 });
     e.move({ x: 300, y: 180 });
     e.end();
     expect(e.pivot()).toEqual({ x: 300, y: 180 });
     expect(e.document().layers[0].x).toBe(100);
     // A press away from the mark still moves the artwork.
-    e.start({ x: 150, y: 150 });
-    e.move({ x: 170, y: 150 });
+    e.start({ x: 120, y: 120 });
+    e.move({ x: 140, y: 120 });
     e.end();
     expect(e.document().layers[0].x).toBe(120);
     // A locked pivot stays where it was, whatever is pressed on it.

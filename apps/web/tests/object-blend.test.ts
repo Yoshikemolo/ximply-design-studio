@@ -72,7 +72,8 @@ describe("live object blends", () => {
   });
   it("previews drag interpolation without changing the document or losing metadata", () => {
     const e = setup(); e.createBlend(1); e.selectBlendEndpoint("front");
-    e.start({ x: 225, y: 75 }); e.move({ x: 325, y: 75 });
+    // Inside the endpoint but clear of the pivot mark and of the resize handles.
+    e.start({ x: 212, y: 62 }); e.move({ x: 312, y: 62 });
     const beforePreview = structuredClone(e.document());
     expect(e.previewDocument().layers[1].x).toBe(150);
     expect(e.document()).toEqual(beforePreview); expect(e.document().blends).toHaveLength(1);
