@@ -91,6 +91,8 @@ const COMMAND_ICONS: Record<string, string> = {
   mirrorH: "mirror-h", mirrorV: "mirror-v", rotateCW: "rotate-cw", rotateCCW: "rotate-ccw",
   scaleUp: "scale-up", scaleDown: "scale-down",
   duplicate: "duplicate", remove: "delete", undo: "undo", redo: "redo",
+  copy: "copy", cut: "cut", paste: "paste", pasteInFront: "paste-front", pasteInBack: "paste-back",
+  duplicateSeries: "duplicate-series",
   layerUp: "layer-up", layerDown: "layer-down", fit: "fit-view", zoomIn: "zoom-in", zoomOut: "zoom-out",
 };
 const LEAF_TYPE_LABELS: Record<string, string> = { swing: "Hinged", sliding: "Sliding", folding: "Folding", pocket: "Pocket", fixed: "Fixed glazing", opening: "Passage without leaves" };
@@ -242,6 +244,13 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   readonly alignToArtboard = signal(false);
   readonly transformAngle = signal(90);
   readonly transformScale = signal(100);
+  /** The clipboard beside the import action, since both bring artwork into the document. */
+  readonly clipboardGroup = {
+    id: "clipboard",
+    label: "Copy and paste",
+    icon: "copy",
+    commands: ["copy", "cut", "paste", "pasteInFront", "pasteInBack", "duplicate", "duplicateSeries"],
+  };
   readonly actionGroups = [
     {
       id: "objectBlend",
@@ -1148,7 +1157,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   flyoutActions() {
     const id = this.flyout();
     return (
-      this.actionGroups.find((g) => g.id === id)?.commands ??
+      [...this.actionGroups, this.clipboardGroup].find((g) => g.id === id)?.commands ??
       (
         {
           rotate: ["rotateCW", "rotateCCW"],
@@ -1208,6 +1217,9 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   commandEnabled(id: string) {
     if (id === "makeBlend") return this.editor.canCreateBlend() && this.blendStepLimit() > 0;
     if (id === "expandBlend" || id === "releaseBlend") return !!this.editor.selectedBlend() && !this.blendIsLocked();
+    // The clipboard actions say what they need: something selected, or something copied.
+    if (["copy", "cut", "duplicate", "duplicateSeries"].includes(id)) return this.editor.selectedLayers().length > 0;
+    if (["paste", "pasteInFront", "pasteInBack"].includes(id)) return this.editor.canPaste();
     return true;
   }
   commandLabel(id: string) {

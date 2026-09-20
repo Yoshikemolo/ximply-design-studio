@@ -272,6 +272,25 @@
             </button>
           }
           @if (section.id === 'paint') {
+            <div class="tool-family">
+              <button
+                class="family-primary"
+                [title]="commandTitle('copy')"
+                [disabled]="!commandEnabled('copy')"
+                [attr.aria-label]="t(clipboardGroup.label)"
+                (click)="runCommand('copy')"
+              >
+                <img [src]="'/assets/icons/' + clipboardGroup.icon + '.svg'" alt="" /></button
+              ><button
+                class="family-expander"
+                [attr.aria-label]="t('More tools') + ' · ' + t(clipboardGroup.label)"
+                [attr.aria-expanded]="flyout() === clipboardGroup.id"
+                aria-haspopup="menu"
+                (click)="toggleFlyout(clipboardGroup.id, $event)"
+              >
+                <span></span>
+              </button>
+            </div>
             <button
               (click)="imageFile.click()"
               [title]="commandTitle('importImage')"

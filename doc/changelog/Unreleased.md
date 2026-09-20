@@ -30,6 +30,7 @@ None.
 - Show or hide the bounding box of the selection, the frame with its handles and the rotation knob, with Ctrl+Shift+B.
 - Give the list of documents in the export dialog alternating rows, with the box and the name aligned on the left.
 - Offer the clipboard actions, the duplicate and the bounding box on the selected objects in the context menu, each with its key.
+- Add a copy and paste group to the tool rail beside the import action, with copy, cut, the three pastes, the duplicate and the duplication in series in its list of subtools, each enabled only when it applies.
 - Export as PDF, with the vector geometry of the drawing rather than a picture of it: paths keep their curves, strokes keep their dashes and text keeps its characters, drawn with the standard font.
 - Choose what to export from one dialog: the format, and which of the open documents are included, with the current one chosen to begin with. A PDF collects them as one page each; SVG and PNG write one file per document.
 - Print the chosen documents through the printing dialog of the browser, one page each, from the File menu or the export dialog.

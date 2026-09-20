@@ -4,6 +4,8 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { EditorService } from '../src/app/editor.service';
 import { newLayer } from '../../../packages/domain/src/document';
 import { defaultShortcuts } from '../../../packages/domain/src/shortcuts';
+import { existsSync, readFileSync } from 'node:fs';
+import { AppComponent } from '../src/app/app.component';
 
 const square = (id: string, x: number) => ({ ...newLayer('rectangle', id, { x, y: 50 }), width: 40, height: 40 });
 function withThree() {
@@ -76,6 +78,25 @@ describe('bounding box', () => {
     expect(e.status()).toContain('hidden');
     e.toggleBoundingBox();
     expect(e.boundingBoxVisible()).toBe(true);
+  });
+});
+
+describe('clipboard in the tool rail', () => {
+  it('sits beside the import action with its own list of subtools', () => {
+    const template = readFileSync('apps/web/src/app/app.component.html', 'utf-8');
+    const start = template.indexOf("@if (section.id === 'paint')");
+    const paint = template.slice(start, template.indexOf('</aside>', start));
+    // The group is rendered before the import button of the same section.
+    expect(paint.indexOf('clipboardGroup')).toBeGreaterThan(-1);
+    expect(paint.indexOf('clipboardGroup')).toBeLessThan(paint.indexOf('imageFile.click()'));
+    expect(paint).toContain('toggleFlyout(clipboardGroup.id, $event)');
+    const component = Object.create(AppComponent.prototype) as AppComponent;
+    const source = readFileSync('apps/web/src/app/app.component.ts', 'utf-8');
+    const group = source.slice(source.indexOf('readonly clipboardGroup'), source.indexOf('readonly actionGroups'));
+    for (const id of ['copy', 'cut', 'paste', 'pasteInFront', 'pasteInBack', 'duplicate', 'duplicateSeries']) {
+      expect(group).toContain(`"${id}"`);
+      expect(existsSync(`apps/web/public/assets/icons/${component.commandIcon(id)}.svg`)).toBe(true);
+    }
   });
 });
 

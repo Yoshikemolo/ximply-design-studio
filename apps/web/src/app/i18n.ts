@@ -1,4 +1,5 @@
 const ES: Record<string, string> = {
+  "Copy and paste": "Copiar y pegar",
   "Duplicate in series": "Duplicar en serie",
   Series: "Serie",
   "Linear series": "Serie lineal",
