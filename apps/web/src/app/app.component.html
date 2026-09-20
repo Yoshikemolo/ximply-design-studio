@@ -1290,8 +1290,11 @@
         <label>{{ t("Displayed decimal places") }}<input type="number" min="0" max="8" step="1" [value]="preferences.displayDecimals()" (change)="setDisplayDecimals($event)" /></label>
         <label>{{ t("Major ruler interval") }} ({{ preferences.distanceUnit() }})<input type="number" [min]="displayDistance(0.01)" step="any" [value]="displayDistance(preferences.rulerStep())" (change)="preferences.setMeasurement('rulerStep', distanceInput($event))" /></label>
         <label>{{ t('Minor ruler interval') }} ({{ preferences.distanceUnit() }})<input type="number" [min]="displayDistance(0.01)" step="any" [value]="displayDistance(preferences.rulerMinorStep())" (change)="preferences.setMeasurement('rulerMinorStep', distanceInput($event))" /></label>
-        <label>{{ t('Snap major ruler ticks') }}<input type="checkbox" [checked]="preferences.snapRulerMajor()" (change)="preferences.setMeasurement('snapRulerMajor', !preferences.snapRulerMajor())" /></label>
-        <label>{{ t('Snap minor ruler ticks') }}<input type="checkbox" [checked]="preferences.snapRulerMinor()" (change)="preferences.setMeasurement('snapRulerMinor', !preferences.snapRulerMinor())" /></label>
+        <div class="tick-snapping" role="group" [attr.aria-label]="t('Snap to ruler ticks')">
+          <span class="tick-title">{{ t('Snap to ruler ticks') }}</span>
+          <label class="tick-row">{{ t('Major') }}<input class="toggle-switch" type="checkbox" role="switch" [checked]="preferences.snapRulerMajor()" (change)="preferences.setMeasurement('snapRulerMajor', !preferences.snapRulerMajor())" /></label>
+          <label class="tick-row">{{ t('Minor') }}<input class="toggle-switch" type="checkbox" role="switch" [checked]="preferences.snapRulerMinor()" (change)="preferences.setMeasurement('snapRulerMinor', !preferences.snapRulerMinor())" /></label>
+        </div>
         <label>{{ t('Snap radius') }} · {{ t('Dimensions') }} (px)<input type="number" min="0" max="100" [value]="preferences.dimensionSnapRadius()" (change)="preferences.setMeasurement('dimensionSnapRadius', number($event))" /></label>
         <label>{{ t("Grid spacing") }} ({{ preferences.distanceUnit() }})<input type="number" [min]="displayDistance(0.01)" step="any" [value]="displayDistance(preferences.gridSize())" (change)="preferences.setMeasurement('gridSize', distanceInput($event))" /></label>
         @for (aid of measurementAids; track aid.id) {<label>{{ t('Snap radius') }} · {{ t(aid.label) }} (px)<input type="number" min="0" max="100" [value]="snapRadius(aid.id)" (change)="setSnapRadius(aid.id, number($event))" /></label>}

@@ -1581,6 +1581,9 @@ textarea,
 .locked-guide { cursor: default; }
 .measurement-settings { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-bottom: 20px; }
 .measurement-settings label { display: flex; flex-direction: column; gap: 5px; }
+.tick-snapping { display: flex; flex-direction: column; gap: 5px; }
+.tick-title { font-size: 10px; color: var(--muted); }
+.tick-row { display: flex; flex-direction: row; align-items: center; justify-content: space-between; gap: 8px; font-size: 10px; min-height: 22px; }
 .layer-row[draggable=true] { cursor: grab; }
 
 .typography-actions { display: flex; flex-wrap: wrap; gap: 5px; margin: 9px 0; }

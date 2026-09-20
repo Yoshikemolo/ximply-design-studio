@@ -52,4 +52,13 @@ describe('shell template', () => {
     expect(template).not.toContain("t('Leaf type')");
     for (const field of ["t('Angle')", "t('Hinge')", "t('Opening')"]) expect(template).toContain(field);
   });
+
+  it('groups both ruler tick switches under one settings label', () => {
+    const group = section('class="tick-snapping"', '</div>');
+    expect(group).toContain("t('Snap to ruler ticks')");
+    expect(group).toContain("t('Major')");
+    expect(group).toContain("t('Minor')");
+    expect((group.match(/toggle-switch/g) ?? []).length).toBe(2);
+    expect(template).not.toContain("t('Snap major ruler ticks')");
+  });
 });

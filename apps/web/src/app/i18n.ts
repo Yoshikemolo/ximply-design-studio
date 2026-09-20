@@ -1,4 +1,7 @@
 const ES: Record<string, string> = {
+  "Snap to ruler ticks": "Ajustar a las marcas de la regla",
+  "Major": "Mayores",
+  "Minor": "Menores",
   "Pivot": "Pivote",
   "Lock pivot": "Bloquear el pivote",
   "Unlock pivot": "Desbloquear el pivote",

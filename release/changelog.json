@@ -61,6 +61,10 @@
         },
         {
           "type": "Feature",
+          "description": "Choose how the area selectors pick objects: every object the area touches, or only the ones it encloses."
+        },
+        {
+          "type": "Feature",
           "description": "Draw the plan section of the frame at each side of a door or window."
         },
         {
@@ -101,7 +105,11 @@
         },
         {
           "type": "Improvement",
-          "description": "Use one scrollbar appearance across the shell and stop the context bar from scrolling vertically over a pixel of content."
+          "description": "Use one scrollbar appearance across the shell and stop the context bar and the document tab strip from scrolling vertically over a pixel of content."
+        },
+        {
+          "type": "Improvement",
+          "description": "Group both ruler tick switches under a single Snap to ruler ticks label in the unit settings."
         },
         {
           "type": "Fix",
