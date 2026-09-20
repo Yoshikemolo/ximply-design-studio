@@ -54,6 +54,7 @@ import {
 import { Injectable, computed, signal } from "@angular/core";
 import { ImportResult, importSvg } from "../../../../packages/domain/src/svg-import";
 import { importDxf } from "../../../../packages/domain/src/dxf-import";
+import { knifeCut, scissorCut } from "../../../../packages/domain/src/cut";
 import {
   blankDocument,
   defaultStrokeStyle,
@@ -1505,13 +1506,16 @@ export class EditorService {
       this.startPen(point, before);
       return;
     }
+    if (tool === "scissors" || tool === "knife") {
+      this.cutClick(point, before, tool);
+      return;
+    }
     if (
       [
         "direct",
         "addAnchor",
         "deleteAnchor",
         "convertAnchor",
-        "scissors",
         "smooth",
         "pathEraser",
       ].includes(tool)
@@ -1763,6 +1767,7 @@ export class EditorService {
   }
   move(point: Point, modifiers: { shift?: boolean; alt?: boolean; ctrl?: boolean } = {}) {
     if (this.pageGesture) { this.updatePageGesture(point); return; }
+    if (this.cutPending()?.tool === "knife") this.cutPreview.set(point);
     if (this.pivotGesture) { this.setPivot(this.pivotPoint(point)); return; }
     if(this.proceduralGesture){const g=this.proceduralGesture;const end=modifiers.shift?snapDirection(g.start,point,this.snapAngle()):(g.type==='wall'?this.wallTarget(g.start,point,g.id):this.snap(point));try{const layer=this.proceduralLayer(g.type,g.start,end,g.id);const next=syncProcedurals({...g.before,layers:[...g.before.layers,layer]});parseDocument(JSON.stringify(next));this.document.set(next);this.selectedId.set(layer.id);this.selectedIds.set([layer.id]);}catch{/* Keep the last valid preview. */}return;}
     if(this.dimensionLabelGesture){const layer=this.document().layers.find(l=>l.id===this.dimensionLabelGesture!.id)!;this.setLayer(layer.id,{dimension:{...layer.dimension!,labelPosition:localPoint(layer,point)}});return;}
@@ -1981,6 +1986,7 @@ export class EditorService {
   }
   cancel() {
     if (this.pageGesture) { this.cancelPageGesture(); this.pageMode.set(null); this.status.set("Page editing cancelled"); }
+    this.clearCut();
     if (this.pivotGesture) { this.pivotOverride.set(this.pivotGesture.before); this.pivotGesture = undefined; }
     if(this.proceduralGesture){this.document.set(this.proceduralGesture.before);this.selectedId.set(this.proceduralGesture.selectedId);this.selectedIds.set(this.proceduralGesture.selectedIds);this.proceduralGesture=undefined;}
     this.finishWallRun();
@@ -2239,7 +2245,7 @@ export class EditorService {
     const brushTypes: Partial<Record<ToolId, BrushType>> = { brush: "round", brushFlat: "flat", brushCalligraphy: "calligraphy", brushMarker: "marker", brushAirbrush: "airbrush", brushPencil: "pencil" };
     const brushType = brushTypes[tool];
     if (brushType) { this.setBrushType(brushType); tool = "brush"; }
-    if (tool !== this.tool()) { this.finishPath(); this.dimensionDraft.set(null); this.dimensionSnapTarget.set(null); this.finishWallRun(); }
+    if (tool !== this.tool()) { this.finishPath(); this.dimensionDraft.set(null); this.dimensionSnapTarget.set(null); this.finishWallRun(); this.clearCut(); }
     this.activeNodes.set([]);
     this.tool.set(tool);
   }
@@ -2371,6 +2377,120 @@ export class EditorService {
     });
     return hit;
   }
+  /**
+   * The cutting tools work with two clicks, not a drag: the scissors open a path at two of
+   * its own points, the knife divides the closed shapes its line crosses. The first click
+   * is remembered and drawn until the second one lands or Escape cancels it.
+   */
+  readonly cutPending = signal<{ tool: "scissors" | "knife"; point: Point } | null>(null);
+  readonly cutPreview = signal<Point | null>(null);
+  private scissorMark?: { id: string; path: number; segment: number; t: number };
+  private cutClick(point: Point, before: StudioDocument, tool: "scissors" | "knife") {
+    if (tool === "scissors") this.scissorClick(point, before);
+    else this.knifeClick(point, before);
+  }
+  /** The path under the pointer, in a shape this editor can cut. */
+  private cuttableLayer(point: Point): Layer | null {
+    const candidates = [this.selected(), pick(this.document().layers, point)];
+    for (const candidate of candidates) {
+      if (!candidate || this.isEffectivelyLocked(candidate) || !candidate.visible || candidate.guide) continue;
+      if (candidate.dimension || candidate.procedural || ["image", "text"].includes(candidate.kind)) continue;
+      const curves = this.editableCurves(candidate);
+      if (!curves.length) continue;
+      const near = nearestSegment(curves, localPoint(candidate, point));
+      if (near && near.distance <= 12 / this.zoom()) return candidate;
+    }
+    return null;
+  }
+  private scissorClick(point: Point, before: StudioDocument) {
+    const layer = this.cuttableLayer(point);
+    if (!layer) { this.status.set("Click on a path to cut it."); return; }
+    const curves = this.editableCurves(layer);
+    const near = nearestSegment(curves, localPoint(layer, point))!;
+    const mark = this.scissorMark;
+    if (!mark || mark.id !== layer.id || mark.path !== near.path) {
+      this.scissorMark = { id: layer.id, path: near.path, segment: near.segment, t: near.t };
+      this.cutPending.set({ tool: "scissors", point });
+      this.status.set("Choose the second cut point on the same path.");
+      this.revision.update((x) => x + 1);
+      return;
+    }
+    const pieces = scissorCut(curves[near.path], { segment: mark.segment, t: mark.t }, { segment: near.segment, t: near.t });
+    this.clearCut();
+    if (!pieces || pieces.length < 2) { this.status.set("Both cuts fall on the same point."); return; }
+    const rest = curves.filter((_, index) => index !== near.path);
+    this.replaceWithPieces(before, layer, pieces, rest);
+    this.status.set(`Cut into ${pieces.length} open paths.`);
+  }
+  private knifeClick(point: Point, before: StudioDocument) {
+    const pending = this.cutPending();
+    if (!pending || pending.tool !== "knife") {
+      this.cutPending.set({ tool: "knife", point });
+      this.cutPreview.set(point);
+      this.status.set("Click again to cut along the line.");
+      this.revision.update((x) => x + 1);
+      return;
+    }
+    const from = pending.point;
+    this.clearCut();
+    const targets = (this.selectedLayers().length ? this.selectedLayers() : this.document().layers).filter(
+      (layer) => !this.isEffectivelyLocked(layer) && layer.visible && !layer.guide && !layer.dimension
+        && !layer.procedural && !["image", "text"].includes(layer.kind));
+    for (const layer of targets) {
+      const curves = this.editableCurves(layer);
+      const index = curves.findIndex((path) => path.closed
+        && !!knifeCut(this.worldCurve(layer, path), from, point));
+      if (index < 0) continue;
+      const pieces = knifeCut(this.worldCurve(layer, curves[index]), from, point)!;
+      const rest = curves.filter((_, other) => other !== index).map((path) => this.worldCurve(layer, path));
+      this.replaceWithPieces(before, layer, pieces, rest, true);
+      this.status.set("Cut into two closed shapes.");
+      return;
+    }
+    this.status.set("The knife needs a line that crosses a closed shape twice.");
+  }
+  /** Local geometry of a contour in document coordinates, which is where a cut is measured. */
+  private worldCurve(layer: Layer, path: CurvePath): CurvePath {
+    return {
+      closed: path.closed,
+      nodes: path.nodes.map((node) => ({
+        point: worldPoint(layer, node.point),
+        incoming: worldPoint(layer, node.incoming),
+        outgoing: worldPoint(layer, node.outgoing),
+        smooth: node.smooth,
+      })),
+    };
+  }
+  /**
+   * Replaces a layer with one layer per piece, keeping its appearance. Pieces arrive in the
+   * layer coordinates unless `world` says they are already in document coordinates.
+   */
+  private replaceWithPieces(before: StudioDocument, layer: Layer, pieces: CurvePath[], rest: CurvePath[], world = false) {
+    // A piece becomes its own layer with the appearance of the original and no transform of
+    // its own, since its geometry is already where the cut left it.
+    const build = (curves: CurvePath[]): Layer => {
+      const fresh = fitCurves({ ...newLayer("path", crypto.randomUUID(), { x: 0, y: 0 }), rotation: 0 },
+        world ? curves : curves.map((path) => this.worldCurve(layer, path)));
+      return { ...layer, ...fresh, id: fresh.id, kind: "path", rotation: 0, flipX: false, flipY: false, skewX: 0, points: [] };
+    };
+    const placed = pieces.map((piece) => build([piece]));
+    const kept = rest.length ? [build(rest)] : [];
+    this.commitStep(before);
+    this.document.update((document) => ({
+      ...document,
+      layers: document.layers.flatMap((item) => (item.id === layer.id ? [...kept, ...placed] : [item])),
+    }));
+    this.selectedIds.set(placed.map((piece) => piece.id));
+    this.selectedId.set(placed[0].id);
+    this.activeNodes.set([]);
+    this.changed();
+  }
+  /** Forgets a cut in progress, which Escape and a tool change both do. */
+  clearCut() {
+    this.scissorMark = undefined;
+    this.cutPending.set(null);
+    this.cutPreview.set(null);
+  }
   private startPathEdit(
     point: Point,
     before: StudioDocument,
@@ -2441,25 +2561,10 @@ export class EditorService {
       this.erasePath(point);
       return;
     }
-    if (tool === "addAnchor" || tool === "scissors") {
+    if (tool === "addAnchor") {
       const near = nearestSegment(curves, p);
       if (!near || near.distance > 12 / this.zoom()) return;
       curves[near.path] = splitSegment(curves[near.path], near.segment, near.t);
-      if (tool === "scissors") {
-        const c = curves[near.path],
-          at = near.segment + 1;
-        if (c.closed) {
-          c.nodes = [...c.nodes.slice(at), ...c.nodes.slice(0, at + 1)];
-          c.closed = false;
-        } else {
-          curves.splice(
-            near.path,
-            1,
-            { nodes: c.nodes.slice(0, at + 1), closed: false },
-            { nodes: c.nodes.slice(at), closed: false },
-          );
-        }
-      }
       this.commitStep(before);
       this.setLayer(layer.id, { kind: "path", curves });
       this.changed();

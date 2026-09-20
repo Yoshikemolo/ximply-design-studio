@@ -383,6 +383,14 @@
                 <path class="pivot-cross" [attr.d]="'M' + (pivot.x - 9 / editor.zoom()) + ',' + pivot.y + 'H' + (pivot.x + 9 / editor.zoom()) + 'M' + pivot.x + ',' + (pivot.y - 9 / editor.zoom()) + 'V' + (pivot.y + 9 / editor.zoom())" vector-effect="non-scaling-stroke"></path>
               </svg>
             }
+            @if (editor.cutPending(); as cut) {
+              <svg class="dimension-overlay cut-overlay" [attr.viewBox]="'0 0 ' + editor.document().width + ' ' + editor.document().height" aria-hidden="true">
+                @if (cut.tool === 'knife' && editor.cutPreview(); as end) {
+                  <path class="cut-line" [attr.d]="'M' + cut.point.x + ',' + cut.point.y + 'L' + end.x + ',' + end.y" vector-effect="non-scaling-stroke"></path>
+                }
+                <circle class="cut-mark" [attr.cx]="cut.point.x" [attr.cy]="cut.point.y" [attr.r]="4 / editor.zoom()" vector-effect="non-scaling-stroke"></circle>
+              </svg>
+            }
             @if (editor.wallSnapTarget(); as wallTarget) {
               <svg class="dimension-overlay" [attr.viewBox]="'0 0 ' + editor.document().width + ' ' + editor.document().height" aria-hidden="true">
                 @if (editor.wallChain(); as chain) {<path [attr.d]="'M' + chain.x + ',' + chain.y + 'L' + wallTarget.point.x + ',' + wallTarget.point.y" vector-effect="non-scaling-stroke"></path>}

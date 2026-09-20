@@ -217,6 +217,7 @@ Generated titles and paths only; authoritative content remains in each linked do
 - [SC-0090 — SC-0090 — Panel layout and contextual guidance](sc/SC-0090.md)
 - [SC-0091 — SC-0091 — SVG import as editable native layers](sc/SC-0091.md)
 - [SC-0092 — SC-0092 — DXF import and the formats that are refused](sc/SC-0092.md)
+- [SC-0093 — SC-0093 — Scissors and knife cutting tools](sc/SC-0093.md)
 - [SEC-0001 — SEC-0001 — Identity and project isolation](sec/SEC-0001.md)
 - [SEC-0002 — SEC-0002 — Revocation and session lifetime](sec/SEC-0002.md)
 - [SEC-0003 — SEC-0003 — Plugin least privilege](sec/SEC-0003.md)

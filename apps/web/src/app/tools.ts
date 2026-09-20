@@ -50,6 +50,7 @@ export type ToolId =
   | "flare"
   | "smooth"
   | "scissors"
+  | "knife"
   | "pathEraser"
   | "spray"
   | "symbolShift"
@@ -136,6 +137,7 @@ export const TOOLS: ToolPlugin[] = [
       "convertAnchor",
       "smooth",
       "scissors",
+      "knife",
       "pathEraser",
     ] as ToolId[]
   ).map((id) => ({
@@ -215,7 +217,7 @@ export const TOOL_FAMILIES: ToolFamily[] = [
     tools: ["path", "smooth", "pathEraser"],
   },
   { id: "text", label: "Text", tools: ["text"] },
-  { id: "scissors", label: "Scissors", tools: ["scissors"] },
+  { id: "scissors", label: "Scissors", tools: ["scissors", "knife"] },
   { id: "paint", label: "Brush", tools: ["brush", "brushFlat", "brushCalligraphy", "brushMarker", "brushAirbrush", "brushPencil"] },
   { id: "eraser", label: "Eraser", tools: ["eraser"] },
   { id: "style", label: "Style tools", tools: ["eyedropper", "paintBucket"] },
