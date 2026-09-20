@@ -357,6 +357,9 @@
               (pointercancel)="pointerCancel()"
               (lostpointercapture)="pointerLost()"
             ></canvas>
+            @if (zoomArea(); as zoom) {
+              <div class="zoom-area-frame" aria-hidden="true" [style.left.px]="zoom.x" [style.top.px]="zoom.y" [style.width.px]="zoom.width" [style.height.px]="zoom.height"></div>
+            }
             @if (editor.pageMode()) {
               <svg class="dimension-overlay page-overlay" [attr.viewBox]="'0 0 ' + editor.document().width + ' ' + editor.document().height" aria-hidden="true">
                 @if (editor.pageCropArea(); as crop) {

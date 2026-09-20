@@ -516,6 +516,13 @@ hr {
   height: 27px;
   padding: 4px;
 }
+.zoom-area-frame {
+  position: fixed;
+  z-index: 60;
+  border: 1px dashed #1687ff;
+  background: #1687ff1f;
+  pointer-events: none;
+}
 .dash-row {
   display: grid;
   grid-template-columns: repeat(4, 1fr);

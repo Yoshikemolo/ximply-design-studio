@@ -53,6 +53,10 @@
         },
         {
           "type": "Feature",
+          "description": "Add a zoom area subtool: drag a rectangle and it fills the visible workspace on release; Ctrl with Space and a drag does the same with any tool active."
+        },
+        {
+          "type": "Feature",
           "description": "Add brush subtools for the round, flat, calligraphy, marker, airbrush and pencil tips, and a control bar for the brush and the eraser with pressure, opacity, cadence, blend mode, diffusion, speed variation and tip angle, plus a sample stroke that previews the result."
         },
         {

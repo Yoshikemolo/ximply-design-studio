@@ -16,6 +16,7 @@ export type ToolId =
   | "mirror"
   | "scale"
   | "zoom"
+  | "zoomArea"
   | "select"
   | "selectRectangle"
   | "selectEllipse"
@@ -86,6 +87,7 @@ export const TOOLS: ToolPlugin[] = [
   { id: "mirror", label: "Reflect", icon: "mirror", group: "Select" },
   { id: "scale", label: "Scale", icon: "scale", group: "Select" },
   { id: "zoom", label: "Zoom", icon: "zoom", group: "Select" },
+  { id: "zoomArea", label: "Zoom area", icon: "zoom-area", group: "Select" },
   { id: "select", label: "Select", icon: "select", group: "Select" },
   { id: "selectRectangle", label: "Rectangular selection", icon: "select-rectangle", group: "Select" },
   { id: "selectEllipse", label: "Circular selection", icon: "select-circle", group: "Select" },
@@ -235,5 +237,5 @@ export const TOOL_FAMILIES: ToolFamily[] = [
     ],
   },
   { id: "hand", label: "Pan", tools: ["hand"] },
-  { id: "zoom", label: "Zoom", tools: ["zoom"] },
+  { id: "zoom", label: "Zoom", tools: ["zoom", "zoomArea"] },
 ];

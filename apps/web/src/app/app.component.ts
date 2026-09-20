@@ -888,6 +888,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     event.preventDefault();
     this.canvas!.nativeElement.setPointerCapture(event.pointerId);
     this.pointerActive = true;
+    if (this.zoomAreaActive(event)) { this.beginZoomArea(event); return; }
     this.commitText();
     this.temporarySelect.set(event.ctrlKey);
     const tool = this.activeTool();
@@ -921,6 +922,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   }
   pointerMove(event: PointerEvent) {
     this.cursorPoint.set({ x: event.clientX, y: event.clientY });
+    if (this.zoomDrag) { this.updateZoomArea(event); return; }
     if (this.pan) {
       const view = this.viewport!.nativeElement;
       view.scrollLeft = this.pan.left - event.clientX + this.pan.x;
@@ -934,6 +936,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   }
   pointerUp() {
     this.pointerActive = false;
+    if (this.zoomDrag) { this.endZoomArea(); return; }
     this.pan = undefined;
     this.editor.end();
   }
@@ -943,6 +946,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   }
   pointerCancel() {
     this.pointerActive = false;
+    if (this.zoomDrag) { this.zoomDrag = undefined; this.zoomArea.set(null); return; }
     if (this.guideDrag) this.cancelGuide();
     this.pan = undefined;
     this.editor.cancel();
@@ -1359,6 +1363,42 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     void this.editor
       .traceImage(this.traceOptions())
       .catch((error) => this.notify(error));
+  }
+  /** Rectangle being dragged with the zoom area tool, in client coordinates. */
+  readonly zoomArea = signal<{ x: number; y: number; width: number; height: number } | null>(null);
+  private zoomDrag?: { start: { x: number; y: number } };
+  private zoomAreaActive(event: { ctrlKey: boolean; metaKey?: boolean }) {
+    return this.activeTool() === "zoomArea" || (this.spaceHeld && (event.ctrlKey || event.metaKey === true));
+  }
+  private beginZoomArea(event: PointerEvent) {
+    this.zoomDrag = { start: { x: event.clientX, y: event.clientY } };
+    this.zoomArea.set({ x: event.clientX, y: event.clientY, width: 0, height: 0 });
+  }
+  private updateZoomArea(event: PointerEvent) {
+    const drag = this.zoomDrag;
+    if (!drag) return;
+    this.zoomArea.set({
+      x: Math.min(drag.start.x, event.clientX), y: Math.min(drag.start.y, event.clientY),
+      width: Math.abs(event.clientX - drag.start.x), height: Math.abs(event.clientY - drag.start.y),
+    });
+  }
+  /** Fits the dragged rectangle into the visible workspace and centres it. */
+  private endZoomArea() {
+    const area = this.zoomArea(), view = this.viewport?.nativeElement;
+    this.zoomDrag = undefined;
+    this.zoomArea.set(null);
+    if (!area || !view || area.width < 8 || area.height < 8) return;
+    const zoom = this.editor.zoom();
+    const bounds = view.getBoundingClientRect();
+    const world = {
+      x: (area.x - bounds.left + view.scrollLeft) / zoom,
+      y: (area.y - bounds.top + view.scrollTop) / zoom,
+      width: area.width / zoom, height: area.height / zoom,
+    };
+    this.setZoom(Math.min(view.clientWidth / world.width, view.clientHeight / world.height));
+    const next = this.editor.zoom();
+    view.scrollLeft = (world.x + world.width / 2) * next - view.clientWidth / 2;
+    view.scrollTop = (world.y + world.height / 2) * next - view.clientHeight / 2;
   }
   fit() {
     const view = this.viewport?.nativeElement;
