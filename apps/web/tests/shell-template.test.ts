@@ -61,6 +61,23 @@ describe('shell template', () => {
     expect(transparent).toEqual([]);
   });
 
+  it('lays out every panel header the same way, chevron and name first', () => {
+    // Each panel header carries its name in an element, so none of them drifts to the right edge.
+    for (const name of ['t("Drawing tools")', "t('Blend objects')"]) {
+      expect(template).toContain(`<summary><span>{{ ${name} }}</span></summary>`);
+    }
+    const styles = readFileSync('packages/design-system/styles/studio.scss', 'utf-8');
+    const header = styles.slice(styles.indexOf('.panel > summary,'), styles.indexOf('.panel-grip {'));
+    expect(header).toContain('align-items: center');
+    expect(header).not.toContain('justify-content: space-between');
+    expect(header).toContain('/assets/icons/panel-chevron.svg');
+    expect(header).toContain('margin-left: auto');
+    // An open panel is closed off by a rule, and its header sits on the raised band.
+    expect(header).toContain('background: var(--panel-raised)');
+    expect(header).toContain('.panel[open] > summary {');
+    expect(existsSync('apps/web/public/assets/icons/panel-chevron.svg')).toBe(true);
+  });
+
   it('gives the dimension lock the same styled toggle as the guide lock', () => {
     expect(template).toContain('class="dimension-lock"');
     const styles = readFileSync('packages/design-system/styles/studio.scss', 'utf-8');

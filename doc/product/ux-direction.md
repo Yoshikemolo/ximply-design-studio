@@ -27,7 +27,10 @@ hierarchy, restrained accent color and short labels. Ximplicity personality appe
 in the wordmark area, balanced spacing, crisp geometry and a controlled electric-blue
 accent, not glowing decoration around every panel. Avoid gradients behind data,
 oversized marketing cards in the editor, emoji icons and unexplained abbreviations.
-Use original approved vector icon assets consistently. Dense property rows may name a
+Use original approved vector icon assets consistently. Panel headers share one layout:
+the disclosure chevron and the panel name together on the left, anything else pushed to
+the right edge, on a single vertically centred line, and the header band plus the rule
+under an open header mark where each panel starts and ends. Dense property rows may name a
 field by its icon alone when the icon is unambiguous and the written name stays
 reachable as its tooltip and accessible name, with icon and control on one line; every
 control keeps the theme colors, including the option list a dropdown opens. Reserve strong color for

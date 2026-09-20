@@ -456,7 +456,7 @@
     @if (panels()) {
       <aside class="inspector" aria-label="Editor panels">
         <details class="panel drawing-options" open>
-          <summary>{{ t("Drawing tools") }}</summary>
+          <summary><span>{{ t("Drawing tools") }}</span></summary>
           <div class="drawing-controls">
             <details>
               <summary>{{ t("Arrange selection") }}</summary>
@@ -752,7 +752,7 @@
           </div>
         </details>
         <details class="panel blend-panel" open>
-          <summary>{{ t('Blend objects') }}</summary>
+          <summary><span>{{ t('Blend objects') }}</span></summary>
           <div class="blend-controls">
             <div class="blend-actions" role="group" [attr.aria-label]="t('Blend objects')">
               @for (action of blendActions; track action.id) {<button [disabled]="!commandEnabled(action.id)" (click)="runCommand(action.id)" [title]="t(action.hint)" [attr.aria-label]="t(action.label)"><img [src]="'/assets/icons/' + action.icon + '.svg'" alt="" /></button>}

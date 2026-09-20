@@ -741,28 +741,57 @@ canvas {
 .panel {
   border-bottom: 1px solid var(--border);
 }
-.panel > summary {
+/*
+ * One header for every panel: the chevron and the name together on the left, whatever the
+ * panel puts on its right edge pushed there, all on one centred line. The raised band and
+ * the rule under an open header say where each panel starts and ends.
+ */
+.panel > summary,
+.drawing-controls > details > summary {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  padding: 14px 15px;
+  gap: 8px;
+  min-height: 38px;
   font-size: 11px;
   font-weight: 600;
   letter-spacing: 0.2px;
   list-style: none;
-  background: var(--panel);
   user-select: none;
 }
-.panel > summary:before {
-  content: "⌄";
-  color: var(--muted);
-  margin-right: 8px;
+.panel > summary {
+  padding: 10px 15px;
+  background: var(--panel-raised);
+  border-bottom: 1px solid transparent;
 }
-.panel:not([open]) > summary:before {
-  content: "›";
+.panel[open] > summary {
+  border-bottom-color: var(--border);
 }
-.panel > summary span:first-of-type {
-  flex: 1;
+.panel > summary:hover {
+  background: var(--selected);
+}
+.panel > summary::-webkit-details-marker,
+.drawing-controls > details > summary::-webkit-details-marker {
+  display: none;
+}
+/* The chevron is the icon file, tinted with the text color and turned by the open state. */
+.panel > summary:before,
+.drawing-controls > details > summary:before {
+  content: "";
+  width: 13px;
+  height: 13px;
+  flex: 0 0 auto;
+  background-color: var(--muted);
+  mask: url("/assets/icons/panel-chevron.svg") no-repeat center / contain;
+  -webkit-mask: url("/assets/icons/panel-chevron.svg") no-repeat center / contain;
+  transition: transform 0.12s ease;
+}
+.panel:not([open]) > summary:before,
+.drawing-controls > details:not([open]) > summary:before {
+  transform: rotate(-90deg);
+}
+.panel > summary > :last-child:not(:first-child),
+.drawing-controls > details > summary > :last-child:not(:first-child) {
+  margin-left: auto;
 }
 .panel-grip {
   font-size: 12px;
@@ -1385,9 +1414,12 @@ textarea {
   line-height: 1.5;
   color: var(--muted);
 }
-.drawing-controls summary {
-  padding: 10px 0;
-  font-weight: 600;
+.drawing-controls > details > summary {
+  padding: 9px 0;
+  color: var(--muted);
+}
+.drawing-controls > details + details > summary {
+  border-top: 1px solid var(--border);
 }
 .drawing-controls button {
   font-size: 10px;

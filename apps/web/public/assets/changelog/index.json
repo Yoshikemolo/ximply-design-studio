@@ -157,6 +157,10 @@
         },
         {
           "type": "Fix",
+          "description": "Lay out every panel header in the right column the same way: the chevron and the name together on the left and whatever the header carries on its right edge pushed there, all on one vertically centred line. Drawing tools and Blend objects pushed their name to the right edge. Each header now sits on a raised band closed off by a rule while the panel is open, so where one panel ends and the next begins is visible, and the chevron is an icon that turns with the open state."
+        },
+        {
+          "type": "Fix",
           "description": "Draw the two speed variation marks as round concentric dots of a fixed size, centred with the slider; the larger one was stretched into an ellipse by the row."
         },
         {
