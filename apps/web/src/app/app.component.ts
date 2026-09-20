@@ -361,6 +361,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
       editor.tool();
       this.temporarySelect();
       editor.showHandles();
+      editor.boundingBoxVisible();
       editor.handleSize();
       this.textEditing();
       this.textDraft();
@@ -401,6 +402,13 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     const context = this.contextMenu();
     if (!context) return [];
     const definitions: Record<ContextAction, { label: string; section: string; command?: string }> = {
+      copy: { label: "Copy", section: "clipboard", command: "copy" },
+      cut: { label: "Cut", section: "clipboard", command: "cut" },
+      paste: { label: "Paste", section: "clipboard", command: "paste" },
+      pasteInFront: { label: "Paste in front", section: "clipboard", command: "pasteInFront" },
+      pasteInBack: { label: "Paste in back", section: "clipboard", command: "pasteInBack" },
+      duplicate: { label: "Duplicate", section: "clipboard", command: "duplicate" },
+      toggleBoundingBox: { label: "Show or hide the bounding box", section: "view", command: "toggleBoundingBox" },
       displacement: { label: "Enter displacement", section: "transform", command: "displacement" },
       rotation: { label: "Enter rotation", section: "transform", command: "rotation" },
       group: { label: "Group", section: "group", command: "group" },
@@ -859,6 +867,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
               "convertAnchor",
             ].includes(this.activeTool()),
             showHandles: this.editor.showHandles(),
+            boundingBox: this.editor.boundingBoxVisible(),
             handleSize: this.editor.handleSize(),
           },
         );
@@ -1742,6 +1751,12 @@ export class AppComponent implements AfterViewInit, OnDestroy {
       open: () => this.projectFile?.nativeElement.click(),
       new: () => this.newDocument(),
       duplicate: () => this.editor.duplicate(),
+      copy: () => this.editor.copySelection(),
+      cut: () => this.editor.cutSelection(),
+      paste: () => this.editor.paste(),
+      pasteInFront: () => this.editor.paste("front"),
+      pasteInBack: () => this.editor.paste("back"),
+      toggleBoundingBox: () => this.editor.toggleBoundingBox(),
       remove: () => this.editor.remove(),
       finish: () => this.editor.finishPath(),
       cancel: () => {

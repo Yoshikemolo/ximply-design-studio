@@ -190,7 +190,8 @@
       "scenarios": [
         "SC-0019",
         "SC-0020",
-        "SC-0021"
+        "SC-0021",
+        "SC-0095"
       ],
       "implementation": [
         "apps/web/src/app/editor.service.ts",
@@ -203,7 +204,9 @@
         "apps/web/tests/context-grouping.test.ts",
         "apps/web/tests/pivot.test.ts",
         "apps/web/tests/wall-booleans.test.ts",
-        "apps/web/tests/transforms.test.ts"
+        "apps/web/tests/transforms.test.ts",
+        "apps/web/tests/clipboard.test.ts",
+        "apps/web/tests/context-actions.test.ts"
       ],
       "evidence": [
         "doc/implementation/PLAN-0002-0001.md",

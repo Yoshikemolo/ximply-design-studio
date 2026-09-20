@@ -60,7 +60,8 @@ describe("object context actions", () => {
   it("allows visibility but prevents destructive changes to locked groups and rejects stale targets", () => {
     const e = setup(); e.toggle("c", "locked");
     const target = e.contextForLayer("a")!;
-    expect(e.contextActions(target).filter(item => item.enabled).map(item => item.id)).toEqual(["hide"]);
+    // Showing or hiding the bounding box changes no artwork, so it stays available.
+    expect(e.contextActions(target).filter(item => item.enabled).map(item => item.id)).toEqual(["toggleBoundingBox", "hide"]);
     expect(e.runContextAction(target, "delete")).toBe(false);
     expect(e.runContextAction(target, "hide")).toBe(true);
     expect(e.runContextAction(target, "show")).toBe(false);

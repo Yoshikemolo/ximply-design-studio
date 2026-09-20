@@ -45,6 +45,8 @@ export class CanvasRenderer {
       zoom: number;
       direct: boolean;
       showHandles?: boolean;
+      /** The frame, the resizing handles and the rotation knob of the selection. */
+      boundingBox?: boolean;
       handleSize?: number;
     } = { zoom: 1, direct: false },
   ) {
@@ -89,35 +91,38 @@ export class CanvasRenderer {
       ctx.strokeStyle = "#0d59f2";
       ctx.fillStyle = "#ffffff";
       ctx.lineWidth = 1.5 * unit;
-      ctx.setLineDash([5 * unit, 3 * unit]);
-      ctx.strokeRect(
-        -3 * unit,
-        -3 * unit,
-        layer.width + 6 * unit,
-        layer.height + 6 * unit,
-      );
-      ctx.setLineDash([]);
-      for (const [x, y] of [
-        [0, 0],
-        [layer.width, 0],
-        [0, layer.height],
-        [layer.width, layer.height],
-        [layer.width / 2, 0],
-        [layer.width / 2, layer.height],
-        [0, layer.height / 2],
-        [layer.width, layer.height / 2],
-      ]) {
-        ctx.fillRect(x - size, y - size, size * 2, size * 2);
-        ctx.strokeRect(x - size, y - size, size * 2, size * 2);
+      // The bounding box can be hidden to see the artwork without its frame and handles.
+      if (interaction.boundingBox !== false) {
+        ctx.setLineDash([5 * unit, 3 * unit]);
+        ctx.strokeRect(
+          -3 * unit,
+          -3 * unit,
+          layer.width + 6 * unit,
+          layer.height + 6 * unit,
+        );
+        ctx.setLineDash([]);
+        for (const [x, y] of [
+          [0, 0],
+          [layer.width, 0],
+          [0, layer.height],
+          [layer.width, layer.height],
+          [layer.width / 2, 0],
+          [layer.width / 2, layer.height],
+          [0, layer.height / 2],
+          [layer.width, layer.height / 2],
+        ]) {
+          ctx.fillRect(x - size, y - size, size * 2, size * 2);
+          ctx.strokeRect(x - size, y - size, size * 2, size * 2);
+        }
+        ctx.beginPath();
+        ctx.moveTo(layer.width / 2, 0);
+        ctx.lineTo(layer.width / 2, -28 * unit);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.arc(layer.width / 2, -28 * unit, 6 * unit, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
       }
-      ctx.beginPath();
-      ctx.moveTo(layer.width / 2, 0);
-      ctx.lineTo(layer.width / 2, -28 * unit);
-      ctx.stroke();
-      ctx.beginPath();
-      ctx.arc(layer.width / 2, -28 * unit, 6 * unit, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.stroke();
       if (interaction.direct && layer.curves && !layer.procedural && !layer.dimension)
         for (const path of layer.curves)
           for (const node of path.nodes) {

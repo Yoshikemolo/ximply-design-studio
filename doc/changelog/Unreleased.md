@@ -25,6 +25,9 @@ None.
 ## New features
 
 - Import SVG drawings as editable native layers, with their shapes, paths, text, colours, stroke widths, transforms and groups, and report in the status line whatever the reader could not represent.
+- Copy, cut and paste artwork, with paste in front and paste in back, which keep the coordinates of the copy and place it immediately above or below the selected object. Copy is Ctrl+C, cut Ctrl+X, paste Ctrl+V, paste in front Ctrl+F and paste in back Ctrl+B.
+- Show or hide the bounding box of the selection, the frame with its handles and the rotation knob, with Ctrl+Shift+B.
+- Offer the clipboard actions, the duplicate and the bounding box on the selected objects in the context menu, each with its key.
 - Export as PDF, with the vector geometry of the drawing rather than a picture of it: paths keep their curves, strokes keep their dashes and text keeps its characters, drawn with the standard font.
 - Choose what to export from one dialog: the format, and which of the open documents are included, with the current one chosen to begin with. A PDF collects them as one page each; SVG and PNG write one file per document.
 - Print the chosen documents through the printing dialog of the browser, one page each, from the File menu or the export dialog.
@@ -34,6 +37,7 @@ None.
 ## Improvements
 
 - Offer SVG and DXF beside the images in the import dialog, and refuse DWG, PDF and Illustrator files with the export that does work instead of a silent failure.
+- Duplicate with Ctrl+D, which places the copy offset towards the lower right; the previous combination is replaced.
 - Raise the document size ceiling from 4096 to 8192 pixels, so A3 and A2 at 300 dots per inch can be set up and stored. A1 and A0 at that resolution stay out of range.
 
 ## Fixes

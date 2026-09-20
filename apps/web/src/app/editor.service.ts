@@ -78,7 +78,7 @@ import {
 import { CanvasRenderer } from "../../../../packages/renderer/src/canvas-renderer";
 import { ToolId } from "./tools";
 export type StyleScope = "fill" | "stroke" | "both";
-export type ContextAction = "displacement" | "rotation" | "group" | "ungroup" | "regroup" | "hide" | "show" | "delete" | "backward" | "forward" | "toBack" | "toFront" | "corner" | "smooth" | "collapseIncoming" | "collapseOutgoing" | "expandIncoming" | "expandOutgoing" | "deleteNode";
+export type ContextAction = "copy" | "cut" | "paste" | "pasteInFront" | "pasteInBack" | "duplicate" | "toggleBoundingBox" | "displacement" | "rotation" | "group" | "ungroup" | "regroup" | "hide" | "show" | "delete" | "backward" | "forward" | "toBack" | "toFront" | "corner" | "smooth" | "collapseIncoming" | "collapseOutgoing" | "expandIncoming" | "expandOutgoing" | "deleteNode";
 export type ContextTarget = { revision: number; layerId: string } & (
   { kind: "object"; groupPath?: string[]; selectionIds?: string[] } |
   { kind: "node"; path: number; index: number }
@@ -185,7 +185,15 @@ export class EditorService {
     if (members.length > 1) grouping.push({ id: "group", enabled: groupable && members.every((layer) => (layer.groupPath?.length ?? 0) < 16) });
     if (members.some((layer) => layer.groupPath?.length)) grouping.push({ id: "ungroup", enabled: groups.length > 0 && groups.every((layer) => !this.isEffectivelyLocked(layer)) });
     if (members.some((layer) => layer.regroupPath?.length)) grouping.push({ id: "regroup", enabled: this.regroupMembers(members).length > 0 });
+    const artwork = members.every((layer) => !layer.guide);
     return [
+      { id: "copy", enabled: artwork && editable },
+      { id: "cut", enabled: artwork && editable },
+      { id: "paste", enabled: this.clipboard.length > 0 },
+      { id: "pasteInFront", enabled: this.clipboard.length > 0 },
+      { id: "pasteInBack", enabled: this.clipboard.length > 0 },
+      { id: "duplicate", enabled: artwork && editable },
+      { id: "toggleBoundingBox", enabled: true },
       ...grouping,
       {id:"displacement",enabled:editable && members.every(l=>!l.guide)}, {id:"rotation",enabled:editable && members.every(l=>!l.guide)},
       { id: members.some((layer) => layer.visible) ? "hide" : "show", enabled: true },
@@ -200,6 +208,20 @@ export class EditorService {
     if(action === "displacement" || action === "rotation")return false;
     if (!this.contextActions(target).some((entry) => entry.id === action && entry.enabled)) return false;
     const members = this.contextMembers(target), ids = new Set(members.map((layer) => layer.id));
+    // The clipboard actions work on the selection, so the target becomes the selection first.
+    if (["copy", "cut", "duplicate"].includes(action)) {
+      this.selectedIds.set([...ids]);
+      this.selectedId.set(target.layerId);
+      if (action === "copy") return this.copySelection();
+      if (action === "cut") return this.cutSelection();
+      this.duplicate();
+      return true;
+    }
+    if (action === "paste" || action === "pasteInFront" || action === "pasteInBack") {
+      if (action !== "paste") { this.selectedIds.set([...ids]); this.selectedId.set(target.layerId); }
+      return this.paste(action === "pasteInFront" ? "front" : action === "pasteInBack" ? "back" : "offset");
+    }
+    if (action === "toggleBoundingBox") { this.toggleBoundingBox(); return true; }
     if (action === "group" || action === "ungroup" || action === "regroup") {
       this.selectedIds.set([...ids]); this.selectedId.set(target.layerId);
       if (action === "regroup") this.regroup(); else this.group(action === "ungroup", target.kind === "object" ? target.groupPath : undefined);
@@ -715,6 +737,13 @@ export class EditorService {
   readonly symbolRadius = signal(70);
   readonly symbolIntensity = signal(0.25);
   readonly showHandles = signal(true);
+  /** The frame and handles around the selection, which can be hidden while drawing. */
+  readonly boundingBoxVisible = signal(true);
+  toggleBoundingBox() {
+    this.boundingBoxVisible.update((visible) => !visible);
+    this.status.set(this.boundingBoxVisible() ? "Bounding box shown" : "Bounding box hidden");
+    this.revision.update((x) => x + 1);
+  }
   readonly handleSize = signal(4);
   readonly document = signal<StudioDocument>(blankDocument());
   readonly selectedId = signal<string | null>(null);
@@ -1371,6 +1400,58 @@ export class EditorService {
     this.selectedId.set(null);
     this.selectedIds.set([]);
     this.changed();
+  }
+  /**
+   * Copied artwork lives in the session, not in the clipboard of the system: a drawing is
+   * pasted back as layers, which a text clipboard cannot carry faithfully.
+   */
+  private clipboard: Layer[] = [];
+  readonly canPaste = computed(() => { this.revision(); return this.clipboard.length > 0; });
+  copySelection(): boolean {
+    const layers = this.selectedLayers().filter((layer) => !layer.guide);
+    if (!layers.length) return false;
+    this.clipboard = structuredClone(layers);
+    this.status.set(`Copied ${layers.length} object${layers.length > 1 ? "s" : ""}.`);
+    this.revision.update((x) => x + 1);
+    return true;
+  }
+  cutSelection(): boolean {
+    if (!this.copySelection()) return false;
+    this.remove();
+    this.status.set("Cut to the clipboard.");
+    return true;
+  }
+  /**
+   * Pastes the copied artwork. `where` decides the place in the stack: in front of or behind
+   * the selection, or on top with a small offset, which is what a plain paste does.
+   */
+  paste(where: "offset" | "front" | "back" = "offset"): boolean {
+    if (!this.clipboard.length) return false;
+    const document = this.document();
+    if (document.layers.length + this.clipboard.length > 150) { this.status.set("Preview limit: 150 layers"); return false; }
+    const offset = where === "offset" ? 20 : 0;
+    const copies = this.clipboard.map((layer) => ({
+      ...structuredClone(layer),
+      id: crypto.randomUUID(),
+      x: layer.x + offset,
+      y: layer.y + offset,
+    }));
+    const selected = new Set(this.selectedLayers().map((layer) => layer.id));
+    const indexes = document.layers.map((layer, index) => (selected.has(layer.id) ? index : -1)).filter((index) => index >= 0);
+    // Without a selection the artwork goes to the front, which is where a plain paste lands.
+    const at = where === "front"
+      ? (indexes.length ? Math.max(...indexes) + 1 : document.layers.length)
+      : where === "back"
+        ? (indexes.length ? Math.min(...indexes) : 0)
+        : document.layers.length;
+    this.commitStep(document);
+    this.document.set({ ...document, layers: [...document.layers.slice(0, at), ...copies, ...document.layers.slice(at)] });
+    this.selectedIds.set(copies.map((layer) => layer.id));
+    this.selectedId.set(copies[0].id);
+    this.activeNodes.set([]);
+    this.status.set(where === "front" ? "Pasted in front." : where === "back" ? "Pasted behind." : "Pasted.");
+    this.changed();
+    return true;
   }
   duplicate() {
     const layers = this.selectedLayers();

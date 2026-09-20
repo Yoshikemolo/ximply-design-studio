@@ -98,3 +98,4 @@
 | [SC-0092 — DXF import and the formats that are refused](SC-0092.md) |
 | [SC-0093 — Scissors and knife cutting tools](SC-0093.md) |
 | [SC-0094 — PDF export, printing and choosing documents](SC-0094.md) |
+| [SC-0095 — Clipboard, stacked pastes and the bounding box](SC-0095.md) |
