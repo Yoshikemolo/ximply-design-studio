@@ -85,6 +85,10 @@
         },
         {
           "type": "Improvement",
+          "description": "Save projects with the .xds extension, the native extension the documentation defines; files saved earlier as .ximply still open."
+        },
+        {
+          "type": "Improvement",
           "description": "Draw leaf travel as a broken projection line in the editor and in SVG exports, scaled with the stroke width."
         },
         {
