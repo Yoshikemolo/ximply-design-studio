@@ -187,6 +187,8 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     ] },
   ] as const;
   readonly paintTargets = ["fill", "stroke"] as const;
+  /** The brush lays down fill only, so its appearance block hides the stroke. */
+  readonly fillOnly = ["fill"] as const;
   readonly quickColors = [{ value: "#000000", label: "Black" }, { value: "#ffffff", label: "White" }, { value: "none", label: "No color" }];
   readonly paintTarget = signal<"fill" | "stroke">("fill");
   readonly paintPicker = signal<{ x: number; y: number } | null>(null);

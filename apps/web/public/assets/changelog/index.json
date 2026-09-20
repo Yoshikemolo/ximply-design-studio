@@ -136,6 +136,10 @@
           "description": "Group both ruler tick switches under a single Snap to ruler ticks label in the unit settings."
         },
         {
+          "type": "Improvement",
+          "description": "Move the workspace choice to the header beside the language, and show only the fill in the appearance block while the brush is active."
+        },
+        {
           "type": "Fix",
           "description": "Let the pivot be dragged with any tool once it has been moved away from the centre; before it could only be repositioned with a transform tool."
         },

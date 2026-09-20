@@ -71,4 +71,12 @@ describe('shell template', () => {
     expect(bar).toContain('speed-mark small');
     expect(bar).toContain('speed-mark large');
   });
+
+  it('keeps the workspace choice in the header and the brush appearance on fill alone', () => {
+    const header = section('<header class="menubar">', '</header>');
+    expect(header).toContain('class="header-workspace"');
+    expect(header.indexOf('header-workspace')).toBeLessThan(header.indexOf('class="language"'));
+    const appearance = section("t('Appearance')", "t('Style transfer scope')");
+    expect(appearance).toContain("editor.tool() === 'brush' ? fillOnly : paintTargets");
+  });
 });

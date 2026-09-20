@@ -218,6 +218,17 @@ hr {
   padding: 4px 7px;
   border-radius: 4px;
 }
+.header-workspace {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 10px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.header-workspace select {
+  font-size: 11px;
+}
 .language {
   border: 0;
   background: transparent;

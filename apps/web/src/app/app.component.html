@@ -110,6 +110,9 @@
     </nav>
     <button class="preview-badge" [title]="t('Local preview explanation')" [attr.aria-label]="t('Local preview') + ': ' + t('Local preview explanation')" (click)="openServerSettings()">{{ t("Local preview") }}</button>
     <div class="header-spacer"></div>
+    @if (preferences.layoutBlocks().workspace) {
+      <label class="header-workspace">{{ t("Workspace") }}<select [value]="workspace()" (change)="workspace.set(text($event)); editor.tool.set(workspace() === 'Retouching' ? 'brush' : 'select')"><option value="Drawing">{{ t("Drawing") }}</option><option value="Retouching">{{ t("Retouching") }}</option></select></label>
+    }
     <select
       class="language"
       aria-label="Language"
@@ -128,7 +131,7 @@
     @if (preferences.layoutBlocks().appearance) {
       <section class="context-block" [attr.aria-label]="t('Appearance')">
         <span>{{ t("Appearance") }}</span>
-        @for (target of paintTargets; track target) {
+        @for (target of (editor.tool() === 'brush' ? fillOnly : paintTargets); track target) {
           <button class="paint-trigger compact-paint" [class.no-paint]="paintColor(target) === 'none'" [style.--paint]="paintColor(target)" (click)="openPaint(target, $event)" [title]="t(target === 'fill' ? 'Fill' : 'Stroke')" [attr.aria-label]="t(target === 'fill' ? 'Fill' : 'Stroke')"><span [class.stroke-preview]="target === 'stroke'"></span></button>
         }
         <label>{{ t("Size") }} <input type="number" min="0" step="any" [value]="displayDistance(editor.size())" (change)="setToolSize($event)" /> {{ preferences.distanceUnit() }}</label>
@@ -139,9 +142,6 @@
         <span>{{ t('Style transfer scope') }}</span>
         @for (scope of styleScopes; track scope.id) {<button [class.active]="editor.styleScope() === scope.id" [attr.aria-pressed]="editor.styleScope() === scope.id" [title]="t(scope.label)" [attr.aria-label]="t(scope.label)" (click)="setStyleScope(scope.id)"><img [src]="'/assets/icons/' + scope.icon + '.svg'" alt="" /></button>}
       </section>
-    }
-    @if (preferences.layoutBlocks().workspace) {
-      <section class="context-block"><label>{{ t("Workspace") }} <select [value]="workspace()" (change)="workspace.set(text($event)); editor.tool.set(workspace() === 'Retouching' ? 'brush' : 'select')"><option value="Drawing">{{ t("Drawing") }}</option><option value="Retouching">{{ t("Retouching") }}</option></select></label></section>
     }
     @if (preferences.layoutBlocks().measurement) {
       <section class="context-block measurement-controls" [attr.aria-label]="t('Measurement')">
