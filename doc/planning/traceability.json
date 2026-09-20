@@ -235,7 +235,8 @@
         "SC-0024",
         "SC-0086",
         "SC-0087",
-        "SC-0088"
+        "SC-0088",
+        "SC-0093"
       ],
       "implementation": [
         "apps/web/src/app/editor.service.ts",
@@ -253,7 +254,8 @@
         "apps/web/src/app/dimension-snapping.ts",
         "packages/domain/src/procedural.ts",
         "apps/web/src/app/procedural-placement.ts",
-        "packages/domain/src/wall-boolean.ts"
+        "packages/domain/src/wall-boolean.ts",
+        "packages/domain/src/cut.ts"
       ],
       "tests": [
         "packages/domain/tests/document.test.ts",
@@ -281,7 +283,9 @@
         "apps/web/tests/wall-booleans.test.ts",
         "apps/web/tests/dimension-label.test.ts",
         "apps/web/tests/radial-dimensions.test.ts",
-        "apps/web/tests/pen-continuation.test.ts"
+        "apps/web/tests/pen-continuation.test.ts",
+        "packages/domain/tests/cut.test.ts",
+        "apps/web/tests/cut-tools.test.ts"
       ],
       "evidence": [
         "doc/implementation/PLAN-0002-0001.md",

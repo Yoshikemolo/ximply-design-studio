@@ -96,3 +96,4 @@
 | [SC-0090 — Panel layout and contextual guidance](SC-0090.md) |
 | [SC-0091 — SVG import as editable native layers](SC-0091.md) |
 | [SC-0092 — DXF import and the formats that are refused](SC-0092.md) |
+| [SC-0093 — Scissors and knife cutting tools](SC-0093.md) |

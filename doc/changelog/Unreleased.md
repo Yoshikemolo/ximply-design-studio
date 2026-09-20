@@ -25,6 +25,7 @@ None.
 ## New features
 
 - Import SVG drawings as editable native layers, with their shapes, paths, text, colours, stroke widths, transforms and groups, and report in the status line whatever the reader could not represent.
+- Cut paths with two clicks: the scissors open a path at two of its own points, leaving independent open paths, and the knife divides the closed shapes its line crosses into two independent closed shapes. Both draw the cut in progress, both are undone in one step, and Escape forgets a cut that was started.
 - Import ASCII DXF drawings: lines, polylines, circles, arcs, ellipses, points and text, with each drawing layer kept as a group and the drawing mirrored into document coordinates.
 
 ## Improvements

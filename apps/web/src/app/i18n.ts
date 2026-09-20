@@ -1,4 +1,11 @@
 const ES: Record<string, string> = {
+  Knife: "Cuchilla",
+  "Click on a path to cut it.": "Haz clic sobre un trazado para cortarlo.",
+  "Choose the second cut point on the same path.": "Elige el segundo punto de corte en el mismo trazado.",
+  "Both cuts fall on the same point.": "Los dos cortes caen en el mismo punto.",
+  "Click again to cut along the line.": "Vuelve a hacer clic para cortar siguiendo la línea.",
+  "Cut into two closed shapes.": "Dividido en dos formas cerradas.",
+  "The knife needs a line that crosses a closed shape twice.": "La cuchilla necesita una línea que cruce dos veces una forma cerrada.",
   "Choose a drawing under 20 MB.": "Elige un dibujo de menos de 20 MB.",
   "DWG cannot be read; export the drawing as DXF and import that.": "No se puede leer un DWG; exporta el dibujo como DXF e impórtalo.",
   "PDF and Illustrator files are not supported yet; export the artwork as SVG.": "Todavía no se admiten archivos PDF ni de Illustrator; exporta el dibujo como SVG.",

@@ -551,6 +551,18 @@ hr {
   height: 27px;
   padding: 4px;
 }
+/* The cut in progress: the first point and, for the knife, the line it will follow. */
+.cut-overlay .cut-mark {
+  fill: #ffffff;
+  stroke: #ed3989;
+  stroke-width: 1.5;
+}
+.cut-overlay .cut-line {
+  fill: none;
+  stroke: #ed3989;
+  stroke-width: 1;
+  stroke-dasharray: 4 3;
+}
 .zoom-area-frame {
   position: fixed;
   z-index: 60;
