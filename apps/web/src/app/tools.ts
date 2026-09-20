@@ -9,6 +9,8 @@ export type ToolId =
   | "dimensionLinear"
   | "dimensionAngular"
   | "dimensionChain"
+  | "dimensionRadius"
+  | "dimensionDiameter"
   | "eyedropper"
   | "paintBucket"
   | "mirror"
@@ -67,6 +69,8 @@ export const TOOLS: ToolPlugin[] = [
   { id: "dimensionLinear", label: "Linear dimension", icon: "dimension-linear", group: "Draw" },
   { id: "dimensionAngular", label: "Angular dimension", icon: "dimension-angular", group: "Draw" },
   { id: "dimensionChain", label: "Chain dimension", icon: "dimension-chain", group: "Draw" },
+  { id: "dimensionRadius", label: "Radius dimension", icon: "dimension-radius", group: "Draw" },
+  { id: "dimensionDiameter", label: "Diameter dimension", icon: "dimension-diameter", group: "Draw" },
   { id: "eyedropper", label: "Eyedropper", icon: "eyedropper", group: "Paint" },
   { id: "paintBucket", label: "Paint bucket", icon: "paintBucket", group: "Paint" },
   { id: "mirror", label: "Reflect", icon: "mirror", group: "Select" },
@@ -175,7 +179,7 @@ export interface ToolFamily {
 }
 export const TOOL_FAMILIES: ToolFamily[] = [
   { id: "architecture", label: "Floor plan tools", tools: ["wall", "door", "window", "pillar", "stair"] },
-  { id: "dimensions", label: "Dimensions", tools: ["dimensionSmart", "dimensionLinear", "dimensionAngular", "dimensionChain"] },
+  { id: "dimensions", label: "Dimensions", tools: ["dimensionSmart", "dimensionLinear", "dimensionAngular", "dimensionChain", "dimensionRadius", "dimensionDiameter"] },
   { id: "selection", label: "Select", tools: ["select", "selectRectangle", "selectEllipse", "selectLasso"] },
   { id: "direct", label: "Direct selection", tools: ["direct"] },
   {

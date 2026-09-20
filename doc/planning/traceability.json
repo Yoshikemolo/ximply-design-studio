@@ -269,7 +269,8 @@
         "apps/web/tests/plan-tools.test.ts",
         "apps/web/tests/stroke-dash-ui.test.ts",
         "apps/web/tests/wall-booleans.test.ts",
-        "apps/web/tests/dimension-label.test.ts"
+        "apps/web/tests/dimension-label.test.ts",
+        "apps/web/tests/radial-dimensions.test.ts"
       ],
       "evidence": [
         "doc/implementation/PLAN-0002-0001.md",

@@ -479,7 +479,7 @@ export class EditorService {
     this.history.commit(before);this.document.set({...before,layers});this.dimensionDefaults.set({...format});this.changed();return true;
   }
   readonly lineEnds = signal<LineEnds>(structuredClone(defaultLineEnds));
-  readonly dimensionDraft = signal<{kind:'linear'|'angular'|'chain';points:Point[];cursor:Point;ready?:boolean} | null>(null);
+  readonly dimensionDraft = signal<{kind:'linear'|'angular'|'chain'|'radius'|'diameter';points:Point[];cursor:Point;ready?:boolean} | null>(null);
   readonly dimensionSnapTarget = signal<DimensionSnap | null>(null);
   private dimensionLabelGesture?: {before:StudioDocument;id:string};
   setDimensionsLocked(value:boolean) { this.dimensionsLocked.set(value); if(value&&this.dimensionLabelGesture)this.cancel(); }
@@ -523,7 +523,7 @@ export class EditorService {
     if(draft.points.length>=12)return;
     this.dimensionDraft.set({...draft,points:[...draft.points,p],cursor:p});
   }
-  private startDimension(point:Point,kind:'linear'|'angular') {
+  private startDimension(point:Point,kind:'linear'|'angular'|'radius'|'diameter') {
     let draft=this.dimensionDraft();if(draft&&draft.kind!==kind)draft=null;
     const count=kind==='angular'?3:2;
     if(!draft){const p=this.dimensionPoint(point,true);this.dimensionDraft.set({kind,points:[p],cursor:p});return;}
@@ -544,15 +544,15 @@ export class EditorService {
     if(draft.points.length<(draft.kind==='angular'?3:2))return null;
     return this.buildDimension(draft.kind,draft.points,draft.cursor,'__dimension_preview__');
   });
-  private buildDimension(kind:'linear'|'angular',anchors:Point[],labelPosition:Point,id:string):Layer|null {
+  private buildDimension(kind:Dimension['kind'],anchors:Point[],labelPosition:Point,id:string):Layer|null {
     if(anchors.length!==(kind==='angular'?3:2)||[...anchors,labelPosition].some(p=>!Number.isFinite(p.x)||!Number.isFinite(p.y)))return null;
     if(Math.hypot(anchors[1].x-anchors[0].x,anchors[1].y-anchors[0].y)<1e-6)return null;
     const points=[...anchors,labelPosition],x=Math.min(...points.map(p=>p.x)),y=Math.min(...points.map(p=>p.y));
     const local=(p:Point)=>({x:p.x-x,y:p.y-y});
     // Extension gap ~1.5 mm and overshoot ~2 mm at 96 ppi (ASME Y14.2 / ISO 129-1 practice).
-    return {...newLayer('path',id,{x,y},this.stroke(),this.stroke(),Math.min(this.size(),2)),name:kind==='linear'?'Linear dimension':'Angular dimension',width:Math.max(1,...points.map(p=>p.x-x)),height:Math.max(1,...points.map(p=>p.y-y)),fontSize:14,points:anchors.map(local),lineEnds:{start:{kind:'triangle',placement:'tip',size:10},end:{kind:'triangle',placement:'tip',size:10},linked:true},dimension:{kind,anchors:anchors.map(local),labelPosition:local(labelPosition),text:'',labelSize:{width:160,height:40},format:{...this.dimensionDefaults()},extension:{stroke:this.stroke(),strokeWidth:1,gap:6,overshoot:8}}};
+    return {...newLayer('path',id,{x,y},this.stroke(),this.stroke(),Math.min(this.size(),2)),name:kind==='linear'?'Linear dimension':kind==='angular'?'Angular dimension':kind==='radius'?'Radius dimension':'Diameter dimension',width:Math.max(1,...points.map(p=>p.x-x)),height:Math.max(1,...points.map(p=>p.y-y)),fontSize:14,points:anchors.map(local),lineEnds:{start:{kind:'triangle',placement:'tip',size:10},end:{kind:'triangle',placement:'tip',size:10},linked:true},dimension:{kind,anchors:anchors.map(local),labelPosition:local(labelPosition),text:'',labelSize:{width:160,height:40},format:{...this.dimensionDefaults()},extension:{stroke:this.stroke(),strokeWidth:1,gap:6,overshoot:8}}};
   }
-  createDimension(kind:'linear'|'angular',anchors:Point[],labelPosition:Point):boolean {
+  createDimension(kind:Dimension['kind'],anchors:Point[],labelPosition:Point):boolean {
     if(this.document().layers.length>=150)return false;
     const layer=this.buildDimension(kind,anchors,labelPosition,crypto.randomUUID());if(!layer)return false;
     try{parseDocument(JSON.stringify({...this.document(),layers:[...this.document().layers,layer]}));}catch{return false;}
@@ -1244,6 +1244,7 @@ export class EditorService {
     const tool = override ?? this.tool();
     if(["wall","door","window","pillar","stair"].includes(tool)){this.startProcedural(tool as Procedural["type"],point);return;}
     if (tool === "dimensionChain") { this.startChainDimension(point); return; }
+    if (tool === "dimensionRadius" || tool === "dimensionDiameter") { this.startDimension(point, tool === "dimensionRadius" ? "radius" : "diameter"); return; }
     if (["dimensionSmart", "dimensionLinear", "dimensionAngular"].includes(tool)) { this.startDimension(point, tool === "dimensionAngular" ? "angular" : "linear"); return; }
     const dimensionLayer=this.selected();
     if(tool === "select" && dimensionLayer?.dimension && !this.isEffectivelyLocked(dimensionLayer) && this.selectedLayers().length===1) {
@@ -1541,7 +1542,7 @@ export class EditorService {
     if(this.proceduralGesture){const g=this.proceduralGesture;const end=modifiers.shift?snapDirection(g.start,point,this.snapAngle()):(g.type==='wall'?this.wallTarget(g.start,point,g.id):this.snap(point));try{const layer=this.proceduralLayer(g.type,g.start,end,g.id);const next=syncProcedurals({...g.before,layers:[...g.before.layers,layer]});parseDocument(JSON.stringify(next));this.document.set(next);this.selectedId.set(layer.id);this.selectedIds.set([layer.id]);}catch{/* Keep the last valid preview. */}return;}
     if(this.dimensionLabelGesture){const layer=this.document().layers.find(l=>l.id===this.dimensionLabelGesture!.id)!;this.setLayer(layer.id,{dimension:{...layer.dimension!,labelPosition:localPoint(layer,point)}});return;}
     const draft=this.dimensionDraft();if(draft){const count=draft.kind==="chain"?Infinity:(draft.kind==="angular"?3:2);const placing=draft.ready===true||draft.points.length>=count;this.dimensionDraft.set({...draft,cursor:placing?this.dimensionOffsetPoint(draft.points,point):this.dimensionPoint(point,true)});if(placing)this.dimensionSnapTarget.set(null);return;}
-    if(!this.gesture&&["dimensionSmart","dimensionLinear","dimensionAngular","dimensionChain"].includes(this.tool())){this.hoverDimension(point);return;}
+    if(!this.gesture&&["dimensionSmart","dimensionLinear","dimensionAngular","dimensionChain","dimensionRadius","dimensionDiameter"].includes(this.tool())){this.hoverDimension(point);return;}
     if(!this.gesture&&!this.proceduralGesture&&this.tool()==='wall'){this.hoverWall(modifiers.shift&&this.wallChain()?snapDirection(this.wallChain()!,point,this.snapAngle()):point);return;}
     if (this.areaGesture) { this.moveAreaSelection(point); return; }
     const g = this.gesture;

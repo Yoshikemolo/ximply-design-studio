@@ -106,15 +106,24 @@ export function leafType(p: DoorProcedure | WindowProcedure, index: number): Lea
     return p.leafTypes?.[index] ?? p.operation;
 }
 interface OpeningCurve { path: CurvePath; projection: boolean }
+/** Leaf panel thickness as a share of the wall depth, so plans keep their proportion. */
+const LEAF_THICKNESS = 0.18;
+/** A closed panel running from `from` to `to` whose thickness grows towards the opening. */
+function leafPanel(from: Point, to: Point, thickness: number, inward: number): CurvePath {
+    const dx = to.x - from.x, dy = to.y - from.y, length = Math.hypot(dx, dy) || 1;
+    const u = { x: dx / length, y: dy / length };
+    const n = { x: -u.y * thickness * inward, y: u.x * thickness * inward };
+    return polyline([from, to, { x: to.x + n.x, y: to.y + n.y }, { x: from.x + n.x, y: from.y + n.y }], true);
+}
 /** Swing and folding arcs are projections of the leaf travel and are drawn as broken lines. */
 function openingCurves(p: DoorProcedure | WindowProcedure): OpeningCurve[] {
     const curves: OpeningCurve[] = [], center = p.depth / 2, face = p.side === 'back' ? 1 : -1;
     const solid = (path: CurvePath) => curves.push({ path, projection: false });
     const projected = (path: CurvePath) => curves.push({ path, projection: true });
-    // Each jamb is drawn as the plan section of its frame: a square as deep as the wall.
+    // Frames occupy the wall beside the clear opening, not the opening itself.
     const frame = Math.min(p.depth, p.width / 4);
-    solid(rectangle(0, 0, frame, p.depth));
-    solid(rectangle(p.width - frame, 0, frame, p.depth));
+    solid(rectangle(-frame, 0, frame, p.depth));
+    solid(rectangle(p.width, 0, frame, p.depth));
     let offset = 0;
     p.leafWidths.forEach((width, index) => {
         const type = leafType(p, index);
@@ -126,10 +135,12 @@ function openingCurves(p: DoorProcedure | WindowProcedure): OpeningCurve[] {
             const leaves = type === 'folding' ? 2 : 1, leaf = width / leaves;
             const start = reverse ? Math.PI : 0, direction = (reverse ? -1 : 1) * face, angle = direction * p.openingAngle * Math.PI / 180;
             const end = { x: hinge.x + leaf * Math.cos(start + angle), y: center + leaf * Math.sin(start + angle) };
-            solid(line(hinge, end));
+            // The leaf is a panel; its thickness grows towards the inside of the opening.
+            const inward = reverse ? -1 : 1;
+            solid(leafPanel(hinge, end, p.depth * LEAF_THICKNESS, inward));
             if (type === 'folding') {
                 const fold = { x: end.x + leaf * Math.cos(start), y: end.y + leaf * Math.sin(start) };
-                solid(line(end, fold));
+                solid(leafPanel(end, fold, p.depth * LEAF_THICKNESS, inward));
             }
             if (p.openingAngle > 0)
                 projected(arc(hinge, leaf, start, angle));

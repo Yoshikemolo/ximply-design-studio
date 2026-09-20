@@ -1,4 +1,9 @@
 const ES: Record<string, string> = {
+  "Radius dimension": "Cota de radio",
+  "Diameter dimension": "Cota de diámetro",
+  "Centre mark": "Marca de centro",
+  "The value is prefixed with R and measured from the centre to the arc.": "El valor lleva el prefijo R y se mide del centro al arco.",
+  "The value is prefixed with the diameter sign and measured through the centre.": "El valor lleva el símbolo de diámetro y se mide pasando por el centro.",
   "Displayed decimal places": "Decimales mostrados",
   "Document dimensions": "Dimensiones del documento",
   "Expand document": "Expandir documento",

@@ -816,6 +816,10 @@
                       <label>{{ t('Width') }}<input type="number" [min]="displayDistance(1)" step="any" [value]="displayDistance(dimension.labelSize?.width ?? layer.width)" (change)="setDimensionLabelSize('width', $event)" /></label>
                       <label>{{ t('Height') }}<input type="number" [min]="displayDistance(1)" step="any" [value]="displayDistance(dimension.labelSize?.height ?? layer.height)" (change)="setDimensionLabelSize('height', $event)" /></label>
                     </div>
+                    @if (dimension.kind === 'radius' || dimension.kind === 'diameter') {
+                      <label class="wide-label toggle-row">{{ t('Centre mark') }}<input class="toggle-switch" type="checkbox" role="switch" [checked]="dimension.centerMark === true" (change)="editor.updateDimension({centerMark: $any($event.target).checked})" /></label>
+                      <p class="typography-note">{{ t(dimension.kind === 'radius' ? 'The value is prefixed with R and measured from the centre to the arc.' : 'The value is prefixed with the diameter sign and measured through the centre.') }}</p>
+                    }
                     <label class="wide-label">{{ t('Position') }}<select [value]="dimension.labelPlacement ?? 'center'" (change)="setDimensionPlacement($event)"><option value="start">{{ t('Start') }}</option><option value="center">{{ t('Center') }}</option><option value="end">{{ t('End') }}</option></select></label>
                     <div class="section-label">{{ t('Extension lines') }}</div>
                     <label class="wide-label color-row">{{ t('Color') }}<input class="color-value" type="text" maxlength="9" [value]="dimension.extension.stroke" (change)="setDimensionExtension('stroke', $event)" [title]="t('Use a hex color with optional alpha, or none.')" /><input class="color-swatch" type="color" [class.no-paint]="dimension.extension.stroke === 'none'" [value]="colorValue(dimension.extension.stroke)" (input)="setDimensionExtensionColor($event)" [attr.aria-label]="t('Color')" [title]="t('Color')" /></label>

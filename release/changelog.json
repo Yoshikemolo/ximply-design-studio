@@ -37,6 +37,10 @@
         },
         {
           "type": "Feature",
+          "description": "Add radius and diameter dimensions with their standard prefixes, one arrow on the arc or two through the centre, and an optional centre mark."
+        },
+        {
+          "type": "Feature",
           "description": "Measure in metres, choose where the label sits along the dimension line, and unify the scale and label format of every dimension in the document with one switch."
         },
         {
@@ -58,6 +62,10 @@
         {
           "type": "Improvement",
           "description": "Draw leaf travel as a broken projection line in the editor and in SVG exports, scaled with the stroke width."
+        },
+        {
+          "type": "Improvement",
+          "description": "Draw door and window frames in the wall beside the clear opening instead of inside it, and draw hinged leaves as panels with thickness towards the opening."
         },
         {
           "type": "Improvement",

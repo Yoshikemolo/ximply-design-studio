@@ -67,4 +67,21 @@ describe('door and window leaves', () => {
     expect(Math.min(...single.curves![1].nodes.map((n) => n.point.x))).toBeGreaterThan(Math.max(...single.curves![0].nodes.map((n) => n.point.x)));
     expect(double.curves!.filter((path) => path.nodes.length === 2).length).toBeGreaterThan(single.curves!.filter((path) => path.nodes.length === 2).length);
   });
+
+  it('draws the frames outside the clear opening and the leaf as a panel', () => {
+    const door = opening();
+    const local = (index: number) => door.curves![index].nodes.map((node) => node.point);
+    const clear = door.procedural!.type === 'door' ? door.procedural.width : 0;
+    const frames = [local(0), local(1)].map((points) => points.map((point) => point.x));
+    // The generated geometry starts at the outer edge of the left frame, so the opening starts one frame in.
+    const frameWidth = Math.max(...frames[0]) - Math.min(...frames[0]);
+    expect(Math.max(...frames[0])).toBeCloseTo(frameWidth);
+    expect(Math.min(...frames[1])).toBeCloseTo(frameWidth + clear);
+    const leaf = door.curves!.find((path) => path.closed && path.nodes.length === 4 && path !== door.curves![0] && path !== door.curves![1])!;
+    expect(leaf).toBeDefined();
+    const xs = leaf.nodes.map((node) => node.point.x), ys = leaf.nodes.map((node) => node.point.y);
+    // A 90 degree leaf is a panel: as long as the leaf and as thick as a fraction of the wall.
+    expect(Math.max(...ys) - Math.min(...ys)).toBeCloseTo(clear);
+    expect(Math.max(...xs) - Math.min(...xs)).toBeCloseTo(16 * 0.18, 5);
+  });
 });

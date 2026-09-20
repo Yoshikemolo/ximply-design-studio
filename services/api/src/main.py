@@ -144,22 +144,25 @@ class DimensionLabelSize(BaseModel):
 
 class Dimension(BaseModel):
     model_config = ConfigDict(extra='forbid')
-    kind: Literal['linear', 'angular']
+    kind: Literal['linear', 'angular', 'radius', 'diameter']
     anchors: Annotated[list[DimensionPoint], Field(min_length=2, max_length=3)]
     labelPosition: DimensionPoint
     labelSize: DimensionLabelSize | None = None
     labelPlacement: Literal['start', 'center', 'end'] | None = None
+    centerMark: bool | None = None
     text: Annotated[str, Field(max_length=10000)]
     format: DimensionFormat
     extension: DimensionExtension
 
     @model_validator(mode='after')
     def anchor_cardinality(self):
+        if 'centerMark' in self.model_fields_set and self.centerMark is None:
+            raise ValueError('Dimension centre mark cannot be null')
         if 'labelPlacement' in self.model_fields_set and self.labelPlacement is None:
             raise ValueError('Dimension label placement cannot be null')
         if 'labelSize' in self.model_fields_set and self.labelSize is None:
             raise ValueError('Dimension label size cannot be null')
-        if len(self.anchors) != (2 if self.kind == 'linear' else 3):
+        if len(self.anchors) != (3 if self.kind == 'angular' else 2):
             raise ValueError('Dimension anchors must match its kind')
         return self
 
