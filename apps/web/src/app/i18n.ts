@@ -1,4 +1,9 @@
 const ES: Record<string, string> = {
+  "Blueprint blue": "Azul de plano",
+  "Chroma key": "Croma",
+  "Transparency": "Transparencia",
+  "Checkerboard": "Damero",
+  "Checker size": "Tamaño del damero",
   "Snap to ruler ticks": "Ajustar a las marcas de la regla",
   "Major": "Mayores",
   "Minor": "Menores",

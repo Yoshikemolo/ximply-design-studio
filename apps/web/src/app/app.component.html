@@ -303,6 +303,8 @@
           <div class="artboard-label">{{ t("Document") }} 01</div>
           <div
             class="artboard"
+            [class.checkered]="preferences.transparencyChecker()"
+            [style.--checker-size.px]="preferences.transparencyCheckerSize()"
             [style.width.px]="editor.document().width * editor.zoom()"
             [style.height.px]="editor.document().height * editor.zoom()"
           >
@@ -941,14 +943,9 @@
                   <img src="/assets/icons/select.svg" alt="" />
                   <p>{{ t("Nothing selected") }}</p>
                 </div>
-                <div class="property-row">
-                  <label>{{ t("Background") }}</label
-                  ><input
-                    type="color"
-                    [value]="editor.document().background"
-                    (input)="editor.background(text($event))"
-                  />
-                </div>
+                <label class="wide-label color-row">{{ t("Background") }}<input class="color-value" type="text" maxlength="9" [value]="backgroundPaint()" (change)="setBackgroundPaint(text($event))" [title]="t('Use a hex color with optional alpha, or none.')" /><input class="color-swatch" type="color" [class.no-paint]="backgroundPaint() === 'none'" [value]="backgroundBase()" (input)="setBackgroundBase(text($event))" [attr.aria-label]="t('Background')" /></label>
+                <label class="wide-label">{{ t("Paint opacity") }}<input type="range" min="0" max="100" [value]="backgroundOpacity()" (input)="setBackgroundOpacity(number($event))" />{{ backgroundOpacity() }}%</label>
+                <div class="paint-options background-options">@for (swatch of backgroundSwatches; track swatch.value) {<button [class.active]="backgroundPaint() === swatch.value" [title]="t(swatch.label)" [attr.aria-label]="t(swatch.label)" (click)="setBackgroundPaint(swatch.value)"><span [class.no-paint]="swatch.value === 'none'" [style.background]="swatch.value === 'none' ? '' : swatch.value"></span>{{ t(swatch.label) }}</button>}</div>
               }
             } @else {
               <div class="layer-tools">
@@ -1282,6 +1279,16 @@
           (change)="preferences.setSnapAngle(number($event))"
         />°</label
       >
+            }
+            @case ('appearance') {
+      <div class="measurement-settings">
+        <label>{{ t('Theme') }}<select [value]="theme()" (change)="theme.set(text($event))"><option value="dark">{{ t('Dark theme') }}</option><option value="light">{{ t('Light theme') }}</option></select></label>
+        <div class="tick-snapping">
+          <span class="tick-title">{{ t('Transparency') }}</span>
+          <label class="tick-row">{{ t('Checkerboard') }}<input class="toggle-switch" type="checkbox" role="switch" [checked]="preferences.transparencyChecker()" (change)="preferences.setMeasurement('transparencyChecker', !preferences.transparencyChecker())" /></label>
+        </div>
+        <label>{{ t('Checker size') }} (px)<input type="number" min="2" max="64" step="1" [disabled]="!preferences.transparencyChecker()" [value]="preferences.transparencyCheckerSize()" (change)="setCheckerSize($event)" /></label>
+      </div>
             }
             @case ('measurement') {
       <div class="measurement-settings">

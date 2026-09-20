@@ -34,8 +34,14 @@ describe("native paint and guide contracts", () => {
     const doc = { ...blankDocument(), layers: [newLayer("rectangle", "alpha", { x: 0, y: 0 }, "#ff000080", "#0000ff40", 4)] };
     expect(parseDocument(JSON.stringify(doc))).toEqual(doc);
     expect(svgExport(doc)).toContain(`fill="#ff0000" fill-opacity="${128 / 255}" stroke="#0000ff" stroke-opacity="${64 / 255}"`);
+    // The page background is a paint of its own: native-v2 accepts alpha and absence.
+    for (const background of ["#ffffff80", "none"]) {
+      const page = { ...doc, background };
+      expect(parseDocument(JSON.stringify(page))).toEqual(page);
+      expect(() => parseDocument(JSON.stringify({ ...page, version: 1, layers: [{ ...doc.layers[0], fill: "#ff0000", stroke: "#0000ff" }] }))).toThrow();
+    }
     for (const invalid of [
-      { ...doc, version: 1 }, { ...doc, background: "#ffffff80" },
+      { ...doc, version: 1 }, { ...doc, background: "#ffffffzz" },
       { ...doc, layers: [{ ...doc.layers[0], fill: "#fff8" }] },
       { ...doc, layers: [{ ...doc.layers[0], stroke: "#ff0000zz" }] },
     ]) expect(() => parseDocument(JSON.stringify(invalid))).toThrow();

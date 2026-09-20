@@ -356,7 +356,7 @@ class Document(BaseModel):
     name: Annotated[str, Field(max_length=150)]
     width: Annotated[int, Field(ge=16, le=4096)]
     height: Annotated[int, Field(ge=16, le=4096)]
-    background: Color
+    background: Paint
     layers: Annotated[list[Layer], Field(max_length=150)]
     blends: Annotated[list[ObjectBlend], Field(max_length=150)] | None = None
     symbols: Annotated[list[SymbolDefinition], Field(max_length=100)] | None = None

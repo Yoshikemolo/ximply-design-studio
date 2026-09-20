@@ -374,7 +374,7 @@ export function parseDocument(text: string): StudioDocument {
     value["name"].length > 150 ||
     !finite(value["width"], 16, 4096) ||
     !finite(value["height"], 16, 4096) ||
-    !color(value["background"]) ||
+    !paint(value["background"], value["version"]) ||
     !Array.isArray(value["layers"]) ||
     value["layers"].length > 150
   )

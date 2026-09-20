@@ -65,6 +65,14 @@
         },
         {
           "type": "Feature",
+          "description": "Paint the page background like any other fill: opacity, a colour picker and quick swatches for black, white, blueprint blue, chroma key green and no colour, which leaves the page transparent."
+        },
+        {
+          "type": "Feature",
+          "description": "Add an Appearance section to the settings with the theme and how transparency is displayed: checkerboard on or off and the size of its squares."
+        },
+        {
+          "type": "Feature",
           "description": "Draw the plan section of the frame at each side of a door or window."
         },
         {

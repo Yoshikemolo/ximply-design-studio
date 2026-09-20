@@ -51,6 +51,13 @@ const DASH_PRESETS: { id: string; label: string; dash: number[] }[] = [
   { id: "custom", label: "Custom sequence", dash: [] },
 ];
 const DASH_FIELDS = [0, 1, 2, 3, 4, 5];
+const BACKGROUND_SWATCHES = [
+  { value: "#000000", label: "Black" },
+  { value: "#ffffff", label: "White" },
+  { value: "#1b4fa0", label: "Blueprint blue" },
+  { value: "#00b140", label: "Chroma key" },
+  { value: "none", label: "No color" },
+];
 const PAGE_EDGE_KEYS: ("top" | "right" | "bottom" | "left")[] = ["top", "right", "bottom", "left"];
 const REGISTRATION_LABELS: Record<string, string> = {
   none: "No marks", file2: "Two filing holes", file4: "Four filing holes",
@@ -267,9 +274,10 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     { id: "cursor", label: "Cursor", icon: "select" },
     { id: "selection", label: "Selection and transforms", icon: "direct" },
     { id: "measurement", label: "Units and snapping", icon: "rulers" },
+    { id: "appearance", label: "Appearance", icon: "theme" },
     { id: "shortcuts", label: "Keyboard shortcuts", icon: "keyboard" },
   ] as const;
-  readonly settingsCategory = signal<"cursor" | "selection" | "measurement" | "shortcuts">("cursor");
+  readonly settingsCategory = signal<"cursor" | "selection" | "measurement" | "appearance" | "shortcuts">("cursor");
   readonly commandList = COMMANDS;
   readonly recording = signal<string | null>(null);
   readonly toolGroup = signal("Draw");
@@ -598,6 +606,24 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     this.editor.updateDimension({ format: { ...dimension.format, [key]: value } });
   }
   /** Hexadecimal value for a colour input; absent paint falls back to black without changing the stored value. */
+  /** Page background swatches: print black and white, blueprint blue, chroma key green and no colour. */
+  get backgroundSwatches() { return BACKGROUND_SWATCHES; }
+  backgroundPaint() { return this.editor.document().background; }
+  backgroundBase() { return this.colorValue(this.backgroundPaint()); }
+  backgroundOpacity() {
+    const paint = this.backgroundPaint();
+    return paint === "none" ? 0 : paint.length === 9 ? Math.round((parseInt(paint.slice(7), 16) / 255) * 100) : 100;
+  }
+  setBackgroundPaint(paint: string) { this.editor.background(paint); }
+  setBackgroundBase(color: string) {
+    const paint = this.backgroundPaint();
+    this.editor.background(color + (paint.length === 9 ? paint.slice(7) : ""));
+  }
+  setBackgroundOpacity(opacity: number) {
+    if (!Number.isFinite(opacity)) return;
+    const alpha = Math.round((Math.max(0, Math.min(100, opacity)) / 100) * 255).toString(16).padStart(2, "0");
+    this.editor.background(alpha === "00" ? "none" : this.backgroundBase() + (alpha === "ff" ? "" : alpha));
+  }
   colorValue(paint: string) { return /^#[0-9a-fA-F]{6}/.test(paint) ? paint.slice(0, 7) : "#000000"; }
   setDimensionExtensionColor(event: Event) {
     const dimension = this.editor.selected()?.dimension; if (!dimension) return;
@@ -670,6 +696,10 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   }
   setUnit(key: "distanceUnit" | "fontUnit", event: Event) { const unit = this.text(event); if (isUnit(unit)) this.preferences.setMeasurement(key, unit); }
   /** Formatting only: measurements are shown with the configured decimal places, never stored rounded. */
+  setCheckerSize(event: Event) {
+    const size = Math.round(this.number(event));
+    if (Number.isFinite(size) && size >= 2 && size <= 64) this.preferences.setMeasurement("transparencyCheckerSize", size);
+  }
   setDisplayDecimals(event: Event) {
     const places = Math.round(this.number(event));
     if (Number.isFinite(places) && places >= 0 && places <= 8) this.preferences.setMeasurement("displayDecimals", places);
@@ -1216,7 +1246,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   activeSettingsCategory() {
     return this.settingsCategories.find(category => category.id === this.settingsCategory())!;
   }
-  selectSettingsCategory(id: "cursor" | "selection" | "measurement" | "shortcuts") {
+  selectSettingsCategory(id: "cursor" | "selection" | "measurement" | "appearance" | "shortcuts") {
     this.recording.set(null);
     this.settingsCategory.set(id);
     const panel = document.getElementById("settings-panel");

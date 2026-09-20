@@ -52,7 +52,7 @@ export class CanvasRenderer {
     if (canvas.height !== document.height) canvas.height = document.height;
     const ctx = canvas.getContext("2d")!;
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-    if (!transparent) {
+    if (!transparent && document.background !== "none") {
       ctx.fillStyle = document.background;
       ctx.fillRect(0, 0, canvas.width, canvas.height);
     }

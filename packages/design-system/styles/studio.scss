@@ -530,7 +530,15 @@ hr {
   position: relative;
   flex-shrink: 0;
   box-shadow: 0 15px 65px #0004;
+  /* The page itself paints its background; this only shows through transparent areas. */
   background: #fff;
+}
+.artboard.checkered {
+  --checker-size: 8px;
+  background: repeating-conic-gradient(#d6d9de 0% 25%, #ffffff 0% 50%) 0 / calc(var(--checker-size) * 2) calc(var(--checker-size) * 2);
+}
+.background-options {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 .artboard-label {
   position: absolute;

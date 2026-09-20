@@ -54,8 +54,7 @@ describe('shell template', () => {
   });
 
   it('groups both ruler tick switches under one settings label', () => {
-    const group = section('class="tick-snapping"', '</div>');
-    expect(group).toContain("t('Snap to ruler ticks')");
+    const group = section("t('Snap to ruler ticks')", '</div>');
     expect(group).toContain("t('Major')");
     expect(group).toContain("t('Minor')");
     expect((group.match(/toggle-switch/g) ?? []).length).toBe(2);

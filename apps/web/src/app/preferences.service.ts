@@ -23,6 +23,9 @@ export interface MeasurementSettings {
   snapRulerMajor: boolean;
   snapRulerMinor: boolean;
   dimensionsVisible: boolean;
+  /** Show a checkerboard behind transparent areas, and the size of its squares. */
+  transparencyChecker: boolean;
+  transparencyCheckerSize: number;
   /** Area selection takes touched objects or only enclosed ones. */
   areaSelectionMode: "intersect" | "inside";
   pivotVisible: boolean;
@@ -42,12 +45,15 @@ const measurementDefaults: MeasurementSettings = {
   gridVisible: false, snapRulers: false, snapGuides: false, snapGrid: false,
   dimensionsVisible: true, dimensionsLocked: false, dimensionsSnap: true, dimensionSnapRadius: 8,
   pivotVisible: true, pivotLocked: false, pivotSnap: true, areaSelectionMode: "intersect",
+  transparencyChecker: true, transparencyCheckerSize: 8,
   rulerMinorStep: 10, snapRulerMajor: true, snapRulerMinor: false,
   rulerStep: 100, gridSize: 20, rulerSnapRadius: 8, guideSnapRadius: 8, gridSnapRadius: 8,
 };
 function validateMeasurement<K extends keyof MeasurementSettings>(key: K, value: unknown): void {
   if (!Object.hasOwn(measurementDefaults, key)) throw new Error("Invalid measurement setting");
-  if (key === "areaSelectionMode") {
+  if (key === "transparencyCheckerSize") {
+    if (typeof value !== "number" || !Number.isInteger(value) || value < 2 || value > 64) throw new Error("Checker size must be a whole number between 2 and 64 pixels");
+  } else if (key === "areaSelectionMode") {
     if (value !== "intersect" && value !== "inside") throw new Error("Invalid area selection mode");
   } else if (key === "distanceUnit" || key === "fontUnit") {
     if (!isUnit(value)) throw new Error("Invalid measurement unit");
@@ -70,6 +76,8 @@ export class PreferencesService {
   readonly distanceUnit = signal<Unit>(measurementDefaults.distanceUnit);
   readonly displayDecimals = signal(measurementDefaults.displayDecimals);
   readonly areaSelectionMode = signal(measurementDefaults.areaSelectionMode);
+  readonly transparencyChecker = signal(measurementDefaults.transparencyChecker);
+  readonly transparencyCheckerSize = signal(measurementDefaults.transparencyCheckerSize);
   readonly pivotVisible = signal(measurementDefaults.pivotVisible);
   readonly pivotLocked = signal(measurementDefaults.pivotLocked);
   readonly pivotSnap = signal(measurementDefaults.pivotSnap);

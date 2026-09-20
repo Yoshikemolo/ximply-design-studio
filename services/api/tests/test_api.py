@@ -300,14 +300,16 @@ class NativeDrawingTests(unittest.TestCase):
         self.layer['symbolId'] = 'clear-symbol'
         self.assert_round_trip(self.document)
 
-    def test_transparent_paints_do_not_relax_background_or_color_contract(self):
+    def test_transparent_paints_do_not_relax_the_color_contract(self):
         for key in ('fill', 'stroke'):
             for value in ('transparent', 'NONE', '#fff0', '#fffffff', '#fffffffff', '#ffffffgg', '#fff', '', None, False):
                 with self.subTest(key=key, value=value):
                     document = copy.deepcopy(self.document)
                     document['layers'][0][key] = value
                     self.assert_invalid(document)
-        self.assert_invalid({**self.document, 'background': 'none'})
+        for background in ('transparent', '#fff0', '#fff', '', None, False):
+            with self.subTest(background=background):
+                self.assert_invalid({**self.document, 'background': background})
 
     def test_guides_reject_invalid_orientation_kind_and_grouping(self):
         for value in ('diagonal', '', None, False, 0):
@@ -365,8 +367,13 @@ class NativeDrawingTests(unittest.TestCase):
         self.layer['symbolId'] = 'alpha-symbol'
         self.assert_round_trip(self.document)
 
-    def test_alpha_paints_require_native_version_two_and_cannot_color_background(self):
-        self.assert_invalid({**self.document, 'background': '#ffffff80'})
+    def test_transparent_page_background_round_trips(self):
+        for background in ('#ffffff80', 'none'):
+            with self.subTest(background=background):
+                self.assert_round_trip({**copy.deepcopy(self.document), 'background': background})
+
+    def test_alpha_paints_require_native_version_two(self):
+        self.assert_invalid({**self.document, 'background': '#ffffffzz'})
         del self.layer['curves']
         self.document['version'] = 1
         for key in ('fill', 'stroke'):
