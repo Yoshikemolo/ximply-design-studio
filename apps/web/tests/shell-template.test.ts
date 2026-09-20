@@ -60,4 +60,15 @@ describe('shell template', () => {
     expect((group.match(/toggle-switch/g) ?? []).length).toBe(2);
     expect(template).not.toContain("t('Snap major ruler ticks')");
   });
+
+  it('shows the painting controls with each field where it applies', () => {
+    const bar = section('class="brush-controls"', '</section>');
+    for (const field of ["t('Pressure')", "t('Opacity')", "t('Cadence')", "t('Diffusion')", "t('Speed variation')"]) expect(bar).toContain(field);
+    // The eraser always removes paint, and a round tip has no angle, so both fields are conditional.
+    expect(bar.slice(bar.indexOf("t('Blend')") - 140, bar.indexOf("t('Blend')"))).toContain("painting === 'brush'");
+    expect(bar.slice(bar.indexOf("t('Tip angle')") - 140, bar.indexOf("t('Tip angle')"))).toContain("brush().type !== 'round'");
+    expect(bar).toContain('class="brush-preview"');
+    expect(bar).toContain('speed-mark small');
+    expect(bar).toContain('speed-mark large');
+  });
 });
