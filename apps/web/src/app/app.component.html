@@ -759,17 +759,14 @@
             </div>
             <label>{{ t('Intermediate steps') }}<input type="number" min="1" [max]="blendStepLimit()" step="1" [value]="blendStepCount()" [disabled]="blendIsLocked() || blendStepLimit() < 1" (change)="setBlendSteps($event)" /></label>
             <label>{{ t('Interpolation easing') }}<select [value]="currentBlendEasing()" [disabled]="blendIsLocked()" (change)="setBlendEasing($event)">@for (option of blendEasings; track option.id) {<option [value]="option.id">{{ t(option.label) }}</option>}</select></label>
-            <p class="blend-hint">{{ t('Endpoints are excluded from the step count.') }} {{ t('Available step limit') }}: {{ blendStepLimit() }}.</p>
+            @if (blendTip(); as tip) {
+              <p class="panel-tip"><img src="/assets/icons/tip.svg" alt="" /><span>{{ t(tip) }}@if (tip === blendLimitTip) { {{ t('Available step limit') }}: {{ blendStepLimit() }}.}</span></p>
+            }
             @if (editor.selectedBlend()) {
               <div class="blend-endpoints" role="group" [attr.aria-label]="t('Edit endpoints')">
                 <button [disabled]="blendIsLocked()" (click)="editor.selectBlendEndpoint('back')" [title]="t('Select the back endpoint or endpoint group for editing.')" [attr.aria-label]="t('Edit back endpoint')"><img src="/assets/icons/blend-back.svg" alt="" /></button>
                 <button [disabled]="blendIsLocked()" (click)="editor.selectBlendEndpoint('front')" [title]="t('Select the front endpoint or endpoint group for editing.')" [attr.aria-label]="t('Edit front endpoint')"><img src="/assets/icons/blend-front.svg" alt="" /></button>
               </div>
-              <p class="blend-hint">{{ t('Edit either endpoint to update the linked steps. Expand to edit intermediate objects independently.') }}</p>
-              @if (blendIsLocked()) {<p class="blend-hint">{{ t('Unlock the blend objects before changing the blend.') }}</p>}
-            } @else if (!editor.canCreateBlend()) {
-              <p class="blend-hint">{{ t('Select two compatible unlocked objects or groups at the same hierarchy level.') }}</p>
-              <p class="blend-hint">{{ t('Use vector endpoints with matching contour counts and open or closed paths. Groups must contain the same number of objects.') }}</p>
             }
           </div>
         </details>

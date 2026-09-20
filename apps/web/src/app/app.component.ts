@@ -52,6 +52,7 @@ const DASH_PRESETS: { id: string; label: string; dash: number[] }[] = [
   { id: "custom", label: "Custom sequence", dash: [] },
 ];
 const DASH_FIELDS = [0, 1, 2, 3, 4, 5];
+const BLEND_LIMIT_TIP = "Endpoints are excluded from the step count.";
 const BRUSH_TYPE_LABELS: Record<BrushType, string> = {
   round: "Round brush", flat: "Flat brush", calligraphy: "Calligraphy brush",
   marker: "Marker", airbrush: "Airbrush", pencil: "Pencil brush",
@@ -1072,6 +1073,23 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   }
   blendStepCount() { return this.editor.selectedBlend()?.steps ?? Math.max(1, Math.min(this.blendSteps(), this.blendStepLimit())); }
   currentBlendEasing() { return this.editor.selectedBlend()?.easing ?? this.blendEasing(); }
+  get blendLimitTip() { return BLEND_LIMIT_TIP; }
+  /**
+   * The single piece of guidance the blend panel is worth showing right now, or null while the
+   * panel does what it offers: advice belongs where the user is blocked, not beside correct work.
+   */
+  blendTip(): string | null {
+    if (this.editor.selectedBlend()) {
+      if (this.blendIsLocked()) return "Unlock the blend objects before changing the blend.";
+      // Only say what the step count excludes when the count cannot grow any further.
+      return this.blendStepCount() >= this.blendStepLimit() ? this.blendLimitTip : null;
+    }
+    if (this.editor.canCreateBlend()) return this.blendStepLimit() < 1 ? this.blendLimitTip : null;
+    // Two or more objects are chosen, so the pair itself is what does not qualify.
+    return this.editor.selectedLayers().length >= 2
+      ? "Use vector endpoints with matching contour counts and open or closed paths. Groups must contain the same number of objects."
+      : "Select two compatible unlocked objects or groups at the same hierarchy level.";
+  }
   blendIsLocked() {
     const blend = this.editor.selectedBlend();
     if (!blend) return false;

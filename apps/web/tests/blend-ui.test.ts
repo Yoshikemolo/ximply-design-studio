@@ -20,6 +20,33 @@ describe('editable object blend UI routing', () => {
     Object.assign(app, { editor, preferences: new PreferencesService(), flyout: signal(null), blendSteps: signal(5), blendEasing: signal<BlendEasing>('linear'), blendEasings: [{ id: 'linear' }, { id: 'ease-in' }, { id: 'ease-out' }, { id: 'ease-in-out' }] });
   });
 
+  it('offers guidance only where the panel is blocked, never beside correct work', () => {
+    // Two compatible objects are selected and the blend can be made: nothing to advise.
+    expect(editor.canCreateBlend()).toBe(true);
+    expect(app.blendTip()).toBeNull();
+    app.setBlendSteps(input(2)); app.runCommand('makeBlend');
+    expect(app.blendTip()).toBeNull();
+    // A locked member blocks every change, which is worth saying.
+    const blend = editor.selectedBlend()!;
+    editor.toggle(blend.stepIds[0][0], 'locked');
+    expect(app.blendTip()).toBe('Unlock the blend objects before changing the blend.');
+    editor.toggle(blend.stepIds[0][0], 'locked');
+    // With the count against its limit, what the limit counts becomes relevant.
+    app.setBlendSteps(input(app.blendStepLimit()));
+    expect(app.blendTip()).toBe(app.blendLimitTip);
+    // One object alone cannot blend: say what to select.
+    editor.releaseBlend();
+    editor.selectLayer('back');
+    expect(app.blendTip()).toBe('Select two compatible unlocked objects or groups at the same hierarchy level.');
+    // Two selected objects that do not qualify: say what makes a pair compatible.
+    editor.setTool('wall'); editor.start({ x: 600, y: 100 }); editor.move({ x: 700, y: 100 }); editor.end();
+    const wall = editor.document().layers.at(-1)!.id;
+    editor.setTool('select'); editor.selectLayer('back'); editor.selectLayer(wall, true);
+    expect(editor.selectedLayers()).toHaveLength(2);
+    expect(editor.canCreateBlend()).toBe(false);
+    expect(app.blendTip()).toContain('Use vector endpoints');
+  });
+
   it('creates a blend from stacking order, updates linked settings, and exposes the actual active values', () => {
     app.preferences.setMeasurement('distanceUnit', 'in'); app.preferences.setMeasurement('fontUnit', 'pt');
     app.setBlendSteps(input(1)); expect(app.commandEnabled('makeBlend')).toBe(true);

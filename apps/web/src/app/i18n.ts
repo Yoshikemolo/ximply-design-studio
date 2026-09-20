@@ -236,7 +236,6 @@ const ES: Record<string, string> = {
   "Edit front endpoint": "Editar extremo del frente",
   "Select the back endpoint or endpoint group for editing.": "Selecciona el objeto o grupo del fondo para editarlo.",
   "Select the front endpoint or endpoint group for editing.": "Selecciona el objeto o grupo del frente para editarlo.",
-  "Edit either endpoint to update the linked steps. Expand to edit intermediate objects independently.": "Edita cualquier extremo para actualizar los pasos vinculados. Expande la fusión para editar los objetos intermedios de forma independiente.",
   "Unlock the blend objects before changing the blend.": "Desbloquea los objetos antes de modificar la fusión.",
   "Select two compatible unlocked objects or groups at the same hierarchy level.": "Selecciona dos objetos o grupos compatibles, desbloqueados y situados en el mismo nivel de la jerarquía.",
   "Edit object individually": "Editar objeto individualmente",

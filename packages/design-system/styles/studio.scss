@@ -1784,6 +1784,23 @@ textarea,
 .blend-actions, .blend-endpoints { display: flex; gap: 8px; }
 .blend-actions button, .blend-endpoints button { width: 33px; height: 32px; padding: 5px; border: 1px solid var(--border); }
 .blend-actions img, .blend-endpoints img { width: 21px; height: 21px; }
+/* Guidance reads as a tip: the bulb, then the text, aligned with it. */
+.panel-tip {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  margin: 8px 0 2px;
+  font-size: 10px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+.panel-tip img {
+  width: 14px;
+  height: 14px;
+  flex: 0 0 auto;
+  margin-top: 1px;
+  filter: var(--icon);
+}
 .blend-hint { color: var(--muted); font-size: 10px; line-height: 1.5; }
 .layer-exact-select { width: 24px; flex-shrink: 0; padding: 4px; }
 .layer-exact-select img { width: 15px; height: 15px; }

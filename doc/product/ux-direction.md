@@ -27,7 +27,9 @@ hierarchy, restrained accent color and short labels. Ximplicity personality appe
 in the wordmark area, balanced spacing, crisp geometry and a controlled electric-blue
 accent, not glowing decoration around every panel. Avoid gradients behind data,
 oversized marketing cards in the editor, emoji icons and unexplained abbreviations.
-Use original approved vector icon assets consistently. Panel headers share one layout:
+Use original approved vector icon assets consistently. Guidance inside a panel is a tip: a bulb, one message at a time, shown only where the
+user is blocked or the panel cannot do what it offers, never beside correct work.
+Panel headers share one layout:
 the disclosure chevron and the panel name together on the left, anything else pushed to
 the right edge, on a single vertically centred line, and the header band plus the rule
 under an open header mark where each panel starts and ends. Dense property rows may name a
