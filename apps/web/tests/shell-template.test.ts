@@ -30,6 +30,37 @@ describe('shell template', () => {
     expect(badge).toContain("t('Local preview explanation')");
   });
 
+  it('names every typography measure by an icon and a tooltip, in line with its control', () => {
+    const fields = section("<div class=\"property-grid typography-fields\">", "t('Text language')");
+    const icons = ['text-size', 'text-weight', 'text-leading', 'text-letter-spacing', 'text-word-spacing',
+      'text-paragraph-spacing', 'text-baseline-shift', 'text-horizontal-scale', 'text-vertical-scale'];
+    for (const icon of icons) expect(existsSync(`apps/web/public/assets/icons/${icon}.svg`)).toBe(true);
+    for (const icon of ['text-size', 'text-weight', 'text-horizontal-scale', 'text-vertical-scale']) {
+      expect(fields).toContain(`/assets/icons/${icon}.svg`);
+    }
+    expect(fields).toContain("[title]=\"t('Size')\"");
+    expect(fields).toContain("[title]=\"t(field.label) + ' · ' + t(field.hint)\"");
+    // The name is carried by the tooltip and the accessible name, not by visible text.
+    expect(fields).not.toContain(">{{ t('Size') }}<");
+    expect(fields).toContain("[attr.aria-label]=\"t(field.label)\"");
+    const styles = readFileSync('packages/design-system/styles/studio.scss', 'utf-8');
+    const rule = styles.slice(styles.indexOf('.typography-fields label {'), styles.indexOf('.typography-note'));
+    expect(rule).toContain('flex-direction: row');
+    expect(rule).toContain('align-items: center');
+    expect(rule).toContain('.typography-fields .field-icon');
+  });
+
+  it('keeps every dropdown on the theme colors so its option list is never white', () => {
+    const styles = readFileSync('packages/design-system/styles/studio.scss', 'utf-8');
+    const start = styles.indexOf('optgroup {');
+    const options = styles.slice(start, styles.indexOf('}', start));
+    expect(options).toContain('background-color: var(--panel-raised)');
+    expect(options).toContain('color: var(--text)');
+    // No select may fall back to the browser colors by painting no background of its own.
+    const transparent = [...styles.matchAll(/select[^{]*\{[^}]*\}/g)].filter((match) => /background(-color)?:\s*(none|transparent)/.test(match[0]));
+    expect(transparent).toEqual([]);
+  });
+
   it('gives the dimension lock the same styled toggle as the guide lock', () => {
     expect(template).toContain('class="dimension-lock"');
     const styles = readFileSync('packages/design-system/styles/studio.scss', 'utf-8');

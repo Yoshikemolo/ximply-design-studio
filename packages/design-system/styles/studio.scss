@@ -78,6 +78,15 @@ button img {
   height: 17px;
   filter: var(--icon);
 }
+/*
+ * The option list is painted by the browser from the control colors, so every select keeps a
+ * themed background even where it looks borderless; otherwise the list opens white on white.
+ */
+option,
+optgroup {
+  background-color: var(--panel-raised);
+  color: var(--text);
+}
 input,
 select,
 textarea {
@@ -231,7 +240,7 @@ hr {
 }
 .language {
   border: 0;
-  background: transparent;
+  background-color: var(--panel);
   font-size: 10px;
 }
 .primary {
@@ -820,7 +829,7 @@ fieldset:disabled {
 .property-grid label > select {
   margin-left: auto;
   border: 0;
-  background: none;
+  background-color: var(--input);
   font-size: 11px;
   text-align: right;
   padding: 6px 4px;
@@ -1687,8 +1696,10 @@ textarea,
 .typography-actions button { width: 31px; height: 31px; padding: 5px; border: 1px solid var(--border); }
 .typography-actions button.active { background: var(--selected); border-color: var(--accent); }
 .typography-actions img, .aid-pair img { width: 19px; height: 19px; }
-.typography-fields label { display: flex; flex-direction: column; gap: 4px; align-items: stretch; font-size: 10px; }
+/* Each measure is named by its icon and its tooltip, in one line with the control. */
+.typography-fields label { display: flex; flex-direction: row; align-items: center; gap: 4px; font-size: 10px; padding-left: 6px; }
 .typography-fields input, .typography-fields select { width: 100%; min-width: 0; }
+.typography-fields .field-icon { width: 15px; height: 15px; flex: 0 0 auto; filter: var(--icon); }
 .typography-note { color: var(--muted); font-size: 10px; }
 .inline-editor-frame { position: absolute; z-index: 5; outline: 1px solid var(--accent); transform-origin: center; }
 .inline-editor-frame .inline-text-editor { left: 0; top: 0; color: transparent; caret-color: var(--accent); outline: 0; transform-origin: top left; }

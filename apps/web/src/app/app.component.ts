@@ -126,11 +126,11 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   ] as const;
   readonly textAlignments = ["left", "center", "right", "justify"] as const;
   readonly typographyFields = [
-    { key: "lineHeight", label: "Leading", min: 0, max: 2000, hint: "Baseline spacing; zero uses automatic leading." },
-    { key: "letterSpacing", label: "Letter spacing", min: -100, max: 500, hint: "Extra space between characters." },
-    { key: "wordSpacing", label: "Word spacing", min: -100, max: 1000, hint: "Extra space between words." },
-    { key: "paragraphSpacing", label: "Paragraph spacing", min: 0, max: 2000, hint: "Extra space after an explicit line break." },
-    { key: "baselineShift", label: "Baseline shift", min: -1000, max: 1000, hint: "Positive values raise the text baseline." },
+    { key: "lineHeight", label: "Leading", icon: "text-leading", min: 0, max: 2000, hint: "Baseline spacing; zero uses automatic leading." },
+    { key: "letterSpacing", label: "Letter spacing", icon: "text-letter-spacing", min: -100, max: 500, hint: "Extra space between characters." },
+    { key: "wordSpacing", label: "Word spacing", icon: "text-word-spacing", min: -100, max: 1000, hint: "Extra space between words." },
+    { key: "paragraphSpacing", label: "Paragraph spacing", icon: "text-paragraph-spacing", min: 0, max: 2000, hint: "Extra space after an explicit line break." },
+    { key: "baselineShift", label: "Baseline shift", icon: "text-baseline-shift", min: -1000, max: 1000, hint: "Positive values raise the text baseline." },
   ] as const;
   readonly contextMenu = signal<{ target: ContextTarget; x: number; y: number } | null>(null);
   readonly units = measurementUnits;
