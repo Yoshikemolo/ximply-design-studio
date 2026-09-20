@@ -23,6 +23,9 @@ export interface MeasurementSettings {
   snapRulerMajor: boolean;
   snapRulerMinor: boolean;
   dimensionsVisible: boolean;
+  pivotVisible: boolean;
+  pivotLocked: boolean;
+  pivotSnap: boolean;
   dimensionsLocked: boolean;
   dimensionsSnap: boolean;
   dimensionSnapRadius: number;
@@ -31,11 +34,12 @@ export interface MeasurementSettings {
   guideSnapRadius: number;
   gridSnapRadius: number;
 }
-export type LayoutBlock = "appearance" | "workspace" | "measurement" | "dimensions";
+export type LayoutBlock = "appearance" | "workspace" | "measurement" | "dimensions" | "pivot";
 const measurementDefaults: MeasurementSettings = {
   distanceUnit: "px", fontUnit: "px", displayDecimals: 2, rulersVisible: false, guidesVisible: true, guidesLocked: false,
   gridVisible: false, snapRulers: false, snapGuides: false, snapGrid: false,
   dimensionsVisible: true, dimensionsLocked: false, dimensionsSnap: true, dimensionSnapRadius: 8,
+  pivotVisible: true, pivotLocked: false, pivotSnap: true,
   rulerMinorStep: 10, snapRulerMajor: true, snapRulerMinor: false,
   rulerStep: 100, gridSize: 20, rulerSnapRadius: 8, guideSnapRadius: 8, gridSnapRadius: 8,
 };
@@ -61,6 +65,9 @@ export class PreferencesService {
   readonly error = signal("");
   readonly distanceUnit = signal<Unit>(measurementDefaults.distanceUnit);
   readonly displayDecimals = signal(measurementDefaults.displayDecimals);
+  readonly pivotVisible = signal(measurementDefaults.pivotVisible);
+  readonly pivotLocked = signal(measurementDefaults.pivotLocked);
+  readonly pivotSnap = signal(measurementDefaults.pivotSnap);
   readonly fontUnit = signal<Unit>(measurementDefaults.fontUnit);
   readonly rulersVisible = signal(measurementDefaults.rulersVisible);
   readonly guidesVisible = signal(measurementDefaults.guidesVisible);
@@ -81,7 +88,7 @@ export class PreferencesService {
   readonly rulerSnapRadius = signal(measurementDefaults.rulerSnapRadius);
   readonly guideSnapRadius = signal(measurementDefaults.guideSnapRadius);
   readonly gridSnapRadius = signal(measurementDefaults.gridSnapRadius);
-  readonly layoutBlocks = signal<Record<LayoutBlock, boolean>>({ appearance: true, workspace: true, measurement: true, dimensions: true });
+  readonly layoutBlocks = signal<Record<LayoutBlock, boolean>>({ appearance: true, workspace: true, measurement: true, dimensions: true, pivot: true });
   constructor() {
     try {
       const raw = localStorage.getItem("xds-input-settings");

@@ -151,6 +151,12 @@
         }
       </section>
     }
+    @if (preferences.layoutBlocks().pivot) {
+      <section class="context-block measurement-controls" [attr.aria-label]="t('Pivot')">
+        <button class="dimension-lock" [class.active]="preferences.pivotLocked()" [attr.aria-pressed]="preferences.pivotLocked()" [title]="t(preferences.pivotLocked() ? 'Unlock pivot' : 'Lock pivot')" [attr.aria-label]="t(preferences.pivotLocked() ? 'Unlock pivot' : 'Lock pivot')" (click)="preferences.setMeasurement('pivotLocked', !preferences.pivotLocked())"><img [src]="preferences.pivotLocked() ? '/assets/icons/lock.svg' : '/assets/icons/unlock.svg'" alt="" /></button>
+        <div class="aid-pair"><button [class.active]="preferences.pivotVisible()" [attr.aria-pressed]="preferences.pivotVisible()" [title]="t('Show pivot')" [attr.aria-label]="t('Show pivot')" (click)="preferences.setMeasurement('pivotVisible', !preferences.pivotVisible())"><img src="/assets/icons/pivot.svg" alt="" /></button><button class="magnet-toggle" [class.active]="preferences.pivotSnap()" [attr.aria-pressed]="preferences.pivotSnap()" [title]="t('Snap the pivot')" [attr.aria-label]="t('Snap the pivot')" (click)="preferences.setMeasurement('pivotSnap', !preferences.pivotSnap())"><img src="/assets/icons/magnet.svg" alt="" /></button></div>
+      </section>
+    }
     @if (preferences.layoutBlocks().dimensions) {
       <section class="context-block measurement-controls" [attr.aria-label]="t('Dimensions')">
         <button class="dimension-lock" [class.active]="preferences.dimensionsLocked()" [attr.aria-pressed]="preferences.dimensionsLocked()" [title]="t(preferences.dimensionsLocked() ? 'Unlock dimensions' : 'Lock dimensions')" [attr.aria-label]="t(preferences.dimensionsLocked() ? 'Unlock dimensions' : 'Lock dimensions')" (click)="preferences.setMeasurement('dimensionsLocked', !preferences.dimensionsLocked())"><img [src]="'/assets/icons/' + (preferences.dimensionsLocked() ? 'lock' : 'unlock') + '.svg'" alt="" /></button>
@@ -323,6 +329,13 @@
               (pointercancel)="pointerCancel()"
               (lostpointercapture)="pointerLost()"
             ></canvas>
+            @if (preferences.pivotVisible() && editor.selectedLayers().length) {
+              @let pivot = editor.pivot();
+              <svg class="dimension-overlay pivot-overlay" [attr.viewBox]="'0 0 ' + editor.document().width + ' ' + editor.document().height" aria-hidden="true">
+                <circle class="pivot-mark" [class.moved]="editor.pivotMoved()" [attr.cx]="pivot.x" [attr.cy]="pivot.y" [attr.r]="5 / editor.zoom()" vector-effect="non-scaling-stroke"></circle>
+                <path class="pivot-cross" [attr.d]="'M' + (pivot.x - 9 / editor.zoom()) + ',' + pivot.y + 'H' + (pivot.x + 9 / editor.zoom()) + 'M' + pivot.x + ',' + (pivot.y - 9 / editor.zoom()) + 'V' + (pivot.y + 9 / editor.zoom())" vector-effect="non-scaling-stroke"></path>
+              </svg>
+            }
             @if (editor.wallSnapTarget(); as wallTarget) {
               <svg class="dimension-overlay" [attr.viewBox]="'0 0 ' + editor.document().width + ' ' + editor.document().height" aria-hidden="true">
                 @if (editor.wallChain(); as chain) {<path [attr.d]="'M' + chain.x + ',' + chain.y + 'L' + wallTarget.point.x + ',' + wallTarget.point.y" vector-effect="non-scaling-stroke"></path>}

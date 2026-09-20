@@ -195,7 +195,8 @@
       "tests": [
         "packages/domain/tests/document.test.ts",
         "apps/web/tests/editor.test.ts",
-        "apps/web/tests/context-grouping.test.ts"
+        "apps/web/tests/context-grouping.test.ts",
+        "apps/web/tests/pivot.test.ts"
       ],
       "evidence": [
         "doc/implementation/PLAN-0002-0001.md",

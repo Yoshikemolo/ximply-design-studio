@@ -1,4 +1,9 @@
 const ES: Record<string, string> = {
+  "Pivot": "Pivote",
+  "Lock pivot": "Bloquear el pivote",
+  "Unlock pivot": "Desbloquear el pivote",
+  "Show pivot": "Mostrar el pivote",
+  "Snap the pivot": "Magnetismo del pivote",
   "Mechanism": "Mecanismo",
   "Leaves": "Hojas",
   "Number": "Número",

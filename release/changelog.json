@@ -41,6 +41,10 @@
         },
         {
           "type": "Feature",
+          "description": "Add a transform pivot: scaling, rotation and mirroring work about it, it starts at the geometric centre of the selection and can be dragged with a transform tool. Its own controls in the top bar lock it, show it and switch its magnetism, which attracts it to the geometric centre, to vertices and edges, to dimensions and to the active rulers, guides and grid."
+        },
+        {
+          "type": "Feature",
           "description": "Measure in metres, choose where the label sits along the dimension line, and unify the scale and label format of every dimension in the document with one switch."
         },
         {

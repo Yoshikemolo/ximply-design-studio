@@ -446,6 +446,20 @@ hr {
 .leaf-rows input {
   text-align: right;
 }
+.pivot-overlay .pivot-mark {
+  fill: none;
+  stroke: #f5a524;
+  stroke-width: 1.5;
+}
+.pivot-overlay .pivot-mark.moved {
+  fill: #f5a52433;
+}
+.pivot-overlay .pivot-cross {
+  stroke: #f5a524;
+  stroke-width: 1;
+  stroke-dasharray: none;
+  fill: none;
+}
 .dash-row {
   display: grid;
   grid-template-columns: repeat(4, 1fr);

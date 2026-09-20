@@ -458,6 +458,43 @@ export class EditorService {
     const p=layer.procedural;if((p?.type==='door'||p?.type==='window')&&p.host){const procedural={...p};delete procedural.host;return {...layer,procedural};}return layer;
   }
 
+  // Transform pivot: the point scaling, rotation and mirroring work about.
+  readonly pivotVisible = signal(true);
+  readonly pivotLocked = signal(false);
+  readonly pivotSnap = signal(true);
+  private readonly pivotOverride = signal<{ key: string; point: Point } | null>(null);
+  private pivotGesture?: { before: { key: string; point: Point } | null };
+  readonly selectionKey = computed(() => this.selectedLayers().map((layer) => layer.id).sort().join(","));
+  /** The moved pivot while the same objects stay selected; otherwise the geometric centre. */
+  readonly pivot = computed<Point>(() => {
+    const override = this.pivotOverride();
+    return override && override.key === this.selectionKey() ? override.point : this.transformationCenter();
+  });
+  readonly pivotMoved = computed(() => this.pivotOverride()?.key === this.selectionKey());
+  setPivot(point: Point) {
+    if (!Number.isFinite(point.x) || !Number.isFinite(point.y) || !this.selectedLayers().length) return;
+    this.pivotOverride.set({ key: this.selectionKey(), point });
+  }
+  resetPivot() { this.pivotOverride.set(null); }
+  /** Magnetism for the pivot: the geometric centre first, then artwork and annotations, then the active aids. */
+  pivotPoint(point: Point): Point {
+    if (!this.pivotSnap()) return point;
+    const radius = this.dimensionSnapRadius() / this.zoom();
+    const centre = this.transformationCenter();
+    if (Math.hypot(point.x - centre.x, point.y - centre.y) <= radius) return centre;
+    const target = snapDimensionPoint(this.document().layers, point, radius, true);
+    return target?.point ?? this.snap(point);
+  }
+  /** The handle is only grabbable while a transform tool is active, so it never steals a click on the artwork. */
+  private startPivotDrag(point: Point): boolean {
+    if (!["rotate", "scale", "mirror"].includes(this.tool())) return false;
+    if (!this.pivotVisible() || this.pivotLocked() || !this.selectedLayers().length) return false;
+    const pivot = this.pivot();
+    if (Math.hypot(point.x - pivot.x, point.y - pivot.y) > 9 / this.zoom()) return false;
+    this.pivotGesture = { before: this.pivotOverride() };
+    this.setPivot(this.pivotPoint(point));
+    return true;
+  }
   readonly dimensionsVisible = signal(true);
   readonly dimensionsLocked = signal(false);
   readonly dimensionsSnap = signal(true);
@@ -1242,6 +1279,7 @@ export class EditorService {
     override?: ToolId,
   ) {
     const tool = override ?? this.tool();
+    if (this.startPivotDrag(point)) return;
     if(["wall","door","window","pillar","stair"].includes(tool)){this.startProcedural(tool as Procedural["type"],point);return;}
     if (tool === "dimensionChain") { this.startChainDimension(point); return; }
     if (tool === "dimensionRadius" || tool === "dimensionDiameter") { this.startDimension(point, tool === "dimensionRadius" ? "radius" : "diameter"); return; }
@@ -1539,6 +1577,7 @@ export class EditorService {
     };
   }
   move(point: Point, modifiers: { shift?: boolean; alt?: boolean; ctrl?: boolean } = {}) {
+    if (this.pivotGesture) { this.setPivot(this.pivotPoint(point)); return; }
     if(this.proceduralGesture){const g=this.proceduralGesture;const end=modifiers.shift?snapDirection(g.start,point,this.snapAngle()):(g.type==='wall'?this.wallTarget(g.start,point,g.id):this.snap(point));try{const layer=this.proceduralLayer(g.type,g.start,end,g.id);const next=syncProcedurals({...g.before,layers:[...g.before.layers,layer]});parseDocument(JSON.stringify(next));this.document.set(next);this.selectedId.set(layer.id);this.selectedIds.set([layer.id]);}catch{/* Keep the last valid preview. */}return;}
     if(this.dimensionLabelGesture){const layer=this.document().layers.find(l=>l.id===this.dimensionLabelGesture!.id)!;this.setLayer(layer.id,{dimension:{...layer.dimension!,labelPosition:localPoint(layer,point)}});return;}
     const draft=this.dimensionDraft();if(draft){const count=draft.kind==="chain"?Infinity:(draft.kind==="angular"?3:2);const placing=draft.ready===true||draft.points.length>=count;this.dimensionDraft.set({...draft,cursor:placing?this.dimensionOffsetPoint(draft.points,point):this.dimensionPoint(point,true)});if(placing)this.dimensionSnapTarget.set(null);return;}
@@ -1549,7 +1588,7 @@ export class EditorService {
     if (!g) return;
     if (["rectangle", "ellipse", "line", "rounded", "polygon", "star", "arc", "spiral", "grid", "polar", "flare"].includes(g.mode) || g.mode.startsWith("resize:")) point = this.snap(point);
     if (g.mode === "rotate")
-      this.transformSelection(g, {
+      this.transformSelection(g, this.aroundPivot(g.original, {
         ...g.original,
         rotation: rotationFromDrag(
           g.original,
@@ -1558,19 +1597,19 @@ export class EditorService {
           modifiers.shift,
           this.snapAngle(),
         ),
-      });
+      }));
     else if (g.mode === "scale") {
       const factor = Math.max(
         0.05,
         Math.min(10, 1 + (point.x - g.start.x + point.y - g.start.y) / 200),
       );
-      this.transformSelection(g, {
+      this.transformSelection(g, this.aroundPivot(g.original, {
         ...g.original,
         width: g.original.width * factor,
         height: g.original.height * factor,
         x: g.original.x + (g.original.width * (1 - factor)) / 2,
         y: g.original.y + (g.original.height * (1 - factor)) / 2,
-      });
+      }));
     } else if (g.mode === "pen") {
       const curves = structuredClone(g.original.curves!),
         node = curves[0].nodes.at(-1)!,
@@ -1717,6 +1756,7 @@ export class EditorService {
     );
   }
   end() {
+    if (this.pivotGesture) { this.pivotGesture = undefined; this.revision.update((x) => x + 1); return; }
     if(this.proceduralGesture){const g=this.proceduralGesture;this.proceduralGesture=undefined;const drawn=this.document().layers.find(l=>l.id===g.id);if(drawn){this.history.commit(g.before);this.changed();if(g.type==='wall'&&drawn.procedural?.type==='wall')this.wallChain.set(worldPoint(drawn,drawn.procedural.end));}return;}
     if(this.dimensionLabelGesture){this.history.commit(this.dimensionLabelGesture.before);this.dimensionLabelGesture=undefined;this.changed();return;}
     if (this.areaGesture) {
@@ -1745,6 +1785,7 @@ export class EditorService {
     this.changed();
   }
   cancel() {
+    if (this.pivotGesture) { this.pivotOverride.set(this.pivotGesture.before); this.pivotGesture = undefined; }
     if(this.proceduralGesture){this.document.set(this.proceduralGesture.before);this.selectedId.set(this.proceduralGesture.selectedId);this.selectedIds.set(this.proceduralGesture.selectedIds);this.proceduralGesture=undefined;}
     this.finishWallRun();
     this.dimensionDraft.set(null);this.dimensionSnapTarget.set(null);
@@ -1763,7 +1804,7 @@ export class EditorService {
   reflect(axis: "horizontal" | "vertical") {
     const layers = this.selectedLayers().filter((l) => !this.isEffectivelyLocked(l) && !l.guide);
     if (!layers.length) return;
-    const bounds = selectionBounds(layers),
+    const pivot = this.pivot(),
       ids = new Set(layers.map((l) => l.id));
     this.history.commit(this.document());
     this.document.update((d) => ({
@@ -1776,11 +1817,11 @@ export class EditorService {
               ...(l.skewX !== undefined ? { skewX: -l.skewX } : {}),
               ...(axis === "horizontal"
                 ? {
-                    x: 2 * bounds.x + bounds.width - l.x - l.width,
+                    x: 2 * pivot.x - l.x - l.width,
                     flipX: !l.flipX,
                   }
                 : {
-                    y: 2 * bounds.y + bounds.height - l.y - l.height,
+                    y: 2 * pivot.y - l.y - l.height,
                     flipY: !l.flipY,
                   }),
             }
@@ -1812,14 +1853,14 @@ export class EditorService {
         ids: this.selectedLayers().filter((l) => !l.guide).map((l) => l.id),
       };
     this.history.commit(before);
-    this.transformSelection(g, {
+    this.transformSelection(g, this.aroundPivot(source, {
       ...source,
       width: source.width * scale,
       height: source.height * scale,
       x: source.x + (source.width * (1 - scale)) / 2,
       y: source.y + (source.height * (1 - scale)) / 2,
       rotation: source.rotation + rotation,
-    });
+    }));
     this.changed();
   }
   selectLayer(id: string, add = false) {
@@ -2343,6 +2384,19 @@ export class EditorService {
     this.activeNodes.set([]);
     this.changed();
   }
+  /** Shifts a transform that works about the selection centre so the pivot stays put instead. */
+  private aroundPivot(original: Layer, target: Layer): Layer {
+    const pivot = this.pivot();
+    const centre = { x: original.x + original.width / 2, y: original.y + original.height / 2 };
+    const dx = pivot.x - centre.x, dy = pivot.y - centre.y;
+    if (!dx && !dy) return target;
+    const scaleX = original.width ? target.width / original.width : 1;
+    const scaleY = original.height ? target.height / original.height : 1;
+    const angle = ((target.rotation ?? 0) - (original.rotation ?? 0)) * Math.PI / 180;
+    const cos = Math.cos(angle), sin = Math.sin(angle);
+    const mapped = { x: cos * dx * scaleX - sin * dy * scaleY, y: sin * dx * scaleX + cos * dy * scaleY };
+    return { ...target, x: target.x + dx - mapped.x, y: target.y + dy - mapped.y };
+  }
   transformationCenter(): Point {
     const layer=this.selected(),keys=new Set(this.activeNodes());
     const points=layer?.curves?.flatMap((p,i)=>p.nodes.filter((_,j)=>keys.has(i+':'+j)).map(n=>worldPoint(layer,n.point)))??[];
@@ -2368,7 +2422,7 @@ export class EditorService {
     if(!Number.isFinite(dx)||!Number.isFinite(dy)||Math.abs(dx)>1e6||Math.abs(dy)>1e6||(!dx&&!dy))return false;
     return this.numericTransform(p=>({x:p.x+dx,y:p.y+dy}));
   }
-  rotateSelection(angle:number,center:Point=this.transformationCenter()):boolean {
+  rotateSelection(angle:number,center:Point=this.pivot()):boolean {
     if(!Number.isFinite(angle)||!Number.isFinite(center.x)||!Number.isFinite(center.y)||Math.abs(angle)>36000||angle===0)return false;
     const radians=angle*Math.PI/180,c=Math.cos(radians),s=Math.sin(radians);
     return this.numericTransform(p=>({x:center.x+(p.x-center.x)*c-(p.y-center.y)*s,y:center.y+(p.x-center.x)*s+(p.y-center.y)*c}),angle);
