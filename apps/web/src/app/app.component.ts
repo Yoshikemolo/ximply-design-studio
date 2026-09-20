@@ -2,6 +2,7 @@ import { Procedural, ProceduralKind } from "../../../../packages/domain/src/proc
 import { Dimension, DimensionFormat, dimensionGeometry } from "../../../../packages/domain/src/dimensions";
 import { defaultLineEnds, lineEndGeometry, LineEnd, LineEnds } from "../../../../packages/domain/src/line-endings";
 import { LeafType, LEAF_TYPES } from "../../../../packages/domain/src/procedural";
+import { BrushSettings, BrushType, BRUSH_TYPES, brushStamps, previewStroke } from "../../../../packages/domain/src/brush";
 import { defaultMarginGuides, MarginGuides, PAGE_FORMATS, PAGE_RESOLUTIONS, PageCategory, PageOrientation, pageSize, pageSizeFits, RegistrationMarks, REGISTRATION_MARKS, registrationFits } from "../../../../packages/domain/src/page-setup";
 import { BlendEasing } from "../../../../packages/domain/src/object-blend";
 import { FONT_FAMILIES, defaultTypography, defaultTextLayout, TextTypography, TextLayoutOptions } from "../../../../packages/domain/src/text-layout";
@@ -51,6 +52,10 @@ const DASH_PRESETS: { id: string; label: string; dash: number[] }[] = [
   { id: "custom", label: "Custom sequence", dash: [] },
 ];
 const DASH_FIELDS = [0, 1, 2, 3, 4, 5];
+const BRUSH_TYPE_LABELS: Record<BrushType, string> = {
+  round: "Round brush", flat: "Flat brush", calligraphy: "Calligraphy brush",
+  marker: "Marker", airbrush: "Airbrush", pencil: "Pencil brush",
+};
 const BACKGROUND_SWATCHES = [
   { value: "#000000", label: "Black" },
   { value: "#ffffff", label: "White" },
@@ -629,6 +634,37 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     const alpha = Math.round((Math.max(0, Math.min(100, opacity)) / 100) * 255).toString(16).padStart(2, "0");
     this.editor.background(alpha === "00" ? "none" : this.backgroundBase() + (alpha === "ff" ? "" : alpha));
   }
+  // Brush and eraser controls shown in the top bar while either tool is active.
+  get brushTypes() { return BRUSH_TYPES; }
+  get brushTypeLabels() { return BRUSH_TYPE_LABELS; }
+  paintingTool(): "brush" | "eraser" | null {
+    const tool = this.editor.tool();
+    return tool === "brush" || tool === "eraser" ? tool : null;
+  }
+  brush(): BrushSettings { return this.editor.brushFor(this.paintingTool() ?? "brush"); }
+  setBrush(patch: Partial<BrushSettings>) {
+    const tool = this.paintingTool();
+    if (tool && !this.editor.updateBrush(tool, patch)) this.notify(new Error("The brush settings cannot be applied."));
+  }
+  setBrushNumber(key: "pressure" | "opacity" | "cadence" | "diffusion" | "angle", event: Event) {
+    const value = this.number(event);
+    if (Number.isFinite(value)) this.setBrush({ [key]: value });
+  }
+  /** Sample stroke drawn with the current settings, so the choice is visible before painting. */
+  brushPreviewPath() {
+    const settings = this.brush(), points = previewStroke(140, 34);
+    const size = Math.max(2, Math.min(18, this.editor.size()));
+    let path = "";
+    for (let index = 1; index < points.length; index++) {
+      const speed = Math.hypot(points[index].x - points[index - 1].x, points[index].y - points[index - 1].y) * (1 + index / points.length) * 3;
+      for (const stamp of brushStamps(points[index - 1], points[index], size, settings, speed)) {
+        const rx = stamp.radiusX.toFixed(2), ry = stamp.radiusY.toFixed(2);
+        path += `M${(stamp.center.x - stamp.radiusX).toFixed(2)},${stamp.center.y.toFixed(2)}a${rx},${ry} ${((stamp.angle * 180) / Math.PI).toFixed(1)} 1 0 ${(stamp.radiusX * 2).toFixed(2)},0a${rx},${ry} ${((stamp.angle * 180) / Math.PI).toFixed(1)} 1 0 ${(-stamp.radiusX * 2).toFixed(2)},0`;
+      }
+    }
+    return path;
+  }
+  brushPreviewPaint() { return this.paintingTool() === "eraser" ? "var(--muted)" : this.editor.fill(); }
   colorValue(paint: string) { return /^#[0-9a-fA-F]{6}/.test(paint) ? paint.slice(0, 7) : "#000000"; }
   setDimensionExtensionColor(event: Event) {
     const dimension = this.editor.selected()?.dimension; if (!dimension) return;

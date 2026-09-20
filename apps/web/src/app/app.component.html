@@ -151,6 +151,25 @@
         }
       </section>
     }
+    @if (paintingTool(); as painting) {
+      <section class="context-block brush-controls" [attr.aria-label]="t(painting === 'brush' ? 'Brush' : 'Eraser')">
+        <svg class="brush-preview" viewBox="0 0 140 34" aria-hidden="true"><path [attr.d]="brushPreviewPath()" [attr.fill]="brushPreviewPaint()" fill-rule="nonzero" [attr.fill-opacity]="brush().opacity / 100"></path></svg>
+        @if (painting === 'brush') {
+          <div class="aid-pair brush-tips">
+            @for (type of brushTypes; track type) {
+              <button [class.active]="brush().type === type" [attr.aria-pressed]="brush().type === type" [title]="t(brushTypeLabels[type])" [attr.aria-label]="t(brushTypeLabels[type])" (click)="setBrush({type})"><img [src]="'/assets/icons/' + (type === 'round' ? 'brush' : type === 'pencil' ? 'pencil' : 'brush-' + type) + '.svg'" alt="" /></button>
+            }
+          </div>
+        }
+        <label class="brush-field">{{ t('Pressure') }}<input type="range" min="1" max="100" [value]="brush().pressure" (input)="setBrushNumber('pressure', $event)" /><small>{{ brush().pressure }}%</small></label>
+        <label class="brush-field">{{ t('Opacity') }}<input type="range" min="0" max="100" [value]="brush().opacity" (input)="setBrushNumber('opacity', $event)" /><small>{{ brush().opacity }}%</small></label>
+        <label class="brush-field">{{ t('Cadence') }}<input type="range" min="1" max="100" [value]="brush().cadence" (input)="setBrushNumber('cadence', $event)" /><small>{{ brush().cadence }}%</small></label>
+        <label class="brush-field">{{ t('Diffusion') }}<input type="range" min="0" max="100" [value]="brush().diffusion" (input)="setBrushNumber('diffusion', $event)" /><small>{{ brush().diffusion }}%</small></label>
+        <label class="brush-field">{{ t('Tip angle') }}<input type="range" min="0" max="180" [disabled]="brush().type === 'round'" [value]="brush().angle" (input)="setBrushNumber('angle', $event)" /><small>{{ brush().angle }}°</small></label>
+        <label class="brush-field">{{ t('Blend') }}<select [value]="brush().blend" (change)="setBrush({blend: $any(text($event))})">@for (mode of blends; track mode) {<option [value]="mode">{{ t(mode) }}</option>}</select></label>
+        <label class="brush-field brush-switch">{{ t('Speed variation') }}<input class="toggle-switch" type="checkbox" role="switch" [checked]="brush().speedVariation" (change)="setBrush({speedVariation: $any($event.target).checked})" /></label>
+      </section>
+    }
     @if (preferences.layoutBlocks().selection) {
       <section class="context-block measurement-controls" [attr.aria-label]="t('Selection')">
         <div class="aid-pair">
@@ -352,7 +371,7 @@
             @if (preferences.pivotVisible() && editor.selectedLayers().length) {
               @let pivot = editor.pivot();
               <svg class="dimension-overlay pivot-overlay" [attr.viewBox]="'0 0 ' + editor.document().width + ' ' + editor.document().height" aria-hidden="true">
-                <circle class="pivot-mark" [class.moved]="editor.pivotMoved()" [attr.cx]="pivot.x" [attr.cy]="pivot.y" [attr.r]="5 / editor.zoom()" vector-effect="non-scaling-stroke"></circle>
+                <circle class="pivot-mark" [class.moved]="editor.pivotMoved()" [class.grabbable]="editor.pivotGrabbable()" [attr.cx]="pivot.x" [attr.cy]="pivot.y" [attr.r]="5 / editor.zoom()" vector-effect="non-scaling-stroke"></circle>
                 <path class="pivot-cross" [attr.d]="'M' + (pivot.x - 9 / editor.zoom()) + ',' + pivot.y + 'H' + (pivot.x + 9 / editor.zoom()) + 'M' + pivot.x + ',' + (pivot.y - 9 / editor.zoom()) + 'V' + (pivot.y + 9 / editor.zoom())" vector-effect="non-scaling-stroke"></path>
               </svg>
             }

@@ -1,5 +1,6 @@
 import { Procedural, defaultProcedural, generateProcedural, syncProcedurals, validProcedural } from "../../../../packages/domain/src/procedural";
 import { openingHost, wallSnapPoint, WallSnap } from "./procedural-placement";
+import { BrushSettings, BrushType, BRUSH_TYPES, brushStamps, defaultBrush, validBrushSettings } from "../../../../packages/domain/src/brush";
 import { MarginGuides, MARGIN_GUIDE_PREFIX, marginGuidePositions, PageEdges, PageSize, PAGE_MAXIMUM, PAGE_MINIMUM, pageSizeFits, RegistrationMarks, REGISTRATION_LAYER_NAME, registrationFits, registrationLayer, resizePage } from "../../../../packages/domain/src/page-setup";
 import { Dimension, DimensionFormat, defaultDimensionFormat, dimensionGeometry } from "../../../../packages/domain/src/dimensions";
 import { LineEnds, defaultLineEnds, validLineEnds } from "../../../../packages/domain/src/line-endings";
@@ -485,10 +486,13 @@ export class EditorService {
     const target = snapDimensionPoint(this.document().layers, point, radius, true);
     return target?.point ?? this.snap(point);
   }
-  /** The handle is only grabbable while a transform tool is active, so it never steals a click on the artwork. */
+  /** Whether the handle can be grabbed right now: always with a transform tool, and once moved with any other. */
+  readonly pivotGrabbable = computed(() =>
+    this.pivotVisible() && !this.pivotLocked() && this.selectedLayers().length > 0
+    && (["rotate", "scale", "mirror"].includes(this.tool()) || this.pivotMoved()));
   private startPivotDrag(point: Point): boolean {
-    if (!["rotate", "scale", "mirror"].includes(this.tool())) return false;
-    if (!this.pivotVisible() || this.pivotLocked() || !this.selectedLayers().length) return false;
+    // A pivot resting at the centre of the selection would otherwise swallow clicks meant for the artwork.
+    if (!this.pivotGrabbable()) return false;
     const pivot = this.pivot();
     if (Math.hypot(point.x - pivot.x, point.y - pivot.y) > 9 / this.zoom()) return false;
     this.pivotGesture = { before: this.pivotOverride() };
@@ -683,6 +687,17 @@ export class EditorService {
   history = new DocumentHistory();
   readonly renderer = new CanvasRenderer();
   painting?: { id: string; canvas: HTMLCanvasElement };
+  // Brush and eraser keep their own tip settings.
+  readonly brushSettings = signal<Record<"brush" | "eraser", BrushSettings>>({ brush: { ...defaultBrush }, eraser: { ...defaultBrush } });
+  brushFor(tool: "brush" | "eraser") { return this.brushSettings()[tool]; }
+  updateBrush(tool: "brush" | "eraser", patch: Partial<BrushSettings>): boolean {
+    const next = { ...this.brushSettings()[tool], ...patch };
+    if (!validBrushSettings(next)) return false;
+    this.brushSettings.update((all) => ({ ...all, [tool]: next }));
+    return true;
+  }
+  /** Brush subtools pick a tip shape and switch to the brush itself. */
+  setBrushType(type: BrushType) { if (BRUSH_TYPES.includes(type)) this.updateBrush("brush", { type }); }
   private guideGesture?: { before: StudioDocument; id: string; selectedId: string | null; selectedIds: string[] };
 
   private applyAppearance(patch: Partial<Layer>) {
@@ -1825,20 +1840,18 @@ export class EditorService {
       painting.canvas.width / g.original.width,
       painting.canvas.height / g.original.height,
     );
-    ctx.globalCompositeOperation =
-      g.mode === "eraser" ? "destination-out" : "source-over";
-    ctx.strokeStyle = g.mode === "eraser" ? "#000000" : this.fill();
+    const settings = this.brushFor(g.mode === "eraser" ? "eraser" : "brush");
+    ctx.globalCompositeOperation = g.mode === "eraser" ? "destination-out" : settings.blend;
     ctx.fillStyle = g.mode === "eraser" ? "#000000" : this.fill();
-    ctx.lineWidth = this.size();
-    ctx.lineCap = "round";
-    ctx.lineJoin = "round";
-    ctx.beginPath();
-    ctx.moveTo(a.x, a.y);
-    ctx.lineTo(b.x, b.y);
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.arc(b.x, b.y, this.size() / 2, 0, Math.PI * 2);
-    ctx.fill();
+    for (const stamp of brushStamps(a, b, this.size(), settings, Math.hypot(b.x - a.x, b.y - a.y))) {
+      ctx.globalAlpha = stamp.alpha;
+      ctx.filter = stamp.blur > 0.1 ? `blur(${stamp.blur.toFixed(2)}px)` : "none";
+      ctx.beginPath();
+      ctx.ellipse(stamp.center.x, stamp.center.y, stamp.radiusX, stamp.radiusY, stamp.angle, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.filter = "none";
+    ctx.globalAlpha = 1;
     ctx.restore();
     this.revision.update((v) => v + 1);
   }
@@ -2133,6 +2146,9 @@ export class EditorService {
   }
 
   setTool(tool: ToolId) {
+    const brushTypes: Partial<Record<ToolId, BrushType>> = { brush: "round", brushFlat: "flat", brushCalligraphy: "calligraphy", brushMarker: "marker", brushAirbrush: "airbrush", brushPencil: "pencil" };
+    const brushType = brushTypes[tool];
+    if (brushType) { this.setBrushType(brushType); tool = "brush"; }
     if (tool !== this.tool()) { this.finishPath(); this.dimensionDraft.set(null); this.dimensionSnapTarget.set(null); this.finishWallRun(); }
     this.activeNodes.set([]);
     this.tool.set(tool);

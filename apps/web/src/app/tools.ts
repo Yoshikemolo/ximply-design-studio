@@ -31,6 +31,11 @@ export type ToolId =
   | "path"
   | "text"
   | "brush"
+  | "brushFlat"
+  | "brushCalligraphy"
+  | "brushMarker"
+  | "brushAirbrush"
+  | "brushPencil"
   | "eraser"
   | "hand"
   | "line"
@@ -71,6 +76,11 @@ export const TOOLS: ToolPlugin[] = [
   { id: "dimensionChain", label: "Chain dimension", icon: "dimension-chain", group: "Draw" },
   { id: "dimensionRadius", label: "Radius dimension", icon: "dimension-radius", group: "Draw" },
   { id: "dimensionDiameter", label: "Diameter dimension", icon: "dimension-diameter", group: "Draw" },
+  { id: "brushFlat", label: "Flat brush", icon: "brush-flat", group: "Paint" },
+  { id: "brushCalligraphy", label: "Calligraphy brush", icon: "brush-calligraphy", group: "Paint" },
+  { id: "brushMarker", label: "Marker", icon: "brush-marker", group: "Paint" },
+  { id: "brushAirbrush", label: "Airbrush", icon: "brush-airbrush", group: "Paint" },
+  { id: "brushPencil", label: "Pencil brush", icon: "pencil", group: "Paint" },
   { id: "eyedropper", label: "Eyedropper", icon: "eyedropper", group: "Paint" },
   { id: "paintBucket", label: "Paint bucket", icon: "paintBucket", group: "Paint" },
   { id: "mirror", label: "Reflect", icon: "mirror", group: "Select" },
@@ -204,7 +214,7 @@ export const TOOL_FAMILIES: ToolFamily[] = [
   },
   { id: "text", label: "Text", tools: ["text"] },
   { id: "scissors", label: "Scissors", tools: ["scissors"] },
-  { id: "paint", label: "Brush", tools: ["brush"] },
+  { id: "paint", label: "Brush", tools: ["brush", "brushFlat", "brushCalligraphy", "brushMarker", "brushAirbrush", "brushPencil"] },
   { id: "eraser", label: "Eraser", tools: ["eraser"] },
   { id: "style", label: "Style tools", tools: ["eyedropper", "paintBucket"] },
   { id: "rotate", label: "Rotate", tools: ["rotate"] },

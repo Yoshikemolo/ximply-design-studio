@@ -451,6 +451,9 @@ hr {
   stroke: #f5a524;
   stroke-width: 1.5;
 }
+.pivot-overlay .pivot-mark.grabbable {
+  stroke-width: 2.5;
+}
 .pivot-overlay .pivot-mark.moved {
   fill: #f5a52433;
 }
@@ -476,6 +479,42 @@ hr {
   fill: #ffffff;
   stroke: #1687ff;
   stroke-width: 1.5;
+}
+.brush-controls {
+  gap: 12px;
+}
+.brush-preview {
+  width: 108px;
+  height: 28px;
+  background: var(--input);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  flex-shrink: 0;
+}
+.brush-field {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 9px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.brush-field input[type="range"] {
+  width: 74px;
+}
+.brush-field small {
+  min-width: 30px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.brush-field select {
+  font-size: 10px;
+  max-width: 108px;
+}
+.brush-tips button {
+  width: 27px;
+  height: 27px;
+  padding: 4px;
 }
 .dash-row {
   display: grid;

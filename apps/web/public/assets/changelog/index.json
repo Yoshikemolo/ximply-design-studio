@@ -53,6 +53,10 @@
         },
         {
           "type": "Feature",
+          "description": "Add brush subtools for the round, flat, calligraphy, marker, airbrush and pencil tips, and a control bar for the brush and the eraser with pressure, opacity, cadence, blend mode, diffusion, speed variation and tip angle, plus a sample stroke that previews the result."
+        },
+        {
+          "type": "Feature",
           "description": "Resize the page on the canvas by dragging handles on its corners and edges, with the rulers following live, or crop it by dragging the area to keep while the rest is dimmed. Escape cancels and one undo step restores the page."
         },
         {
@@ -122,6 +126,10 @@
         {
           "type": "Improvement",
           "description": "Group both ruler tick switches under a single Snap to ruler ticks label in the unit settings."
+        },
+        {
+          "type": "Fix",
+          "description": "Let the pivot be dragged with any tool once it has been moved away from the centre; before it could only be repositioned with a transform tool."
         },
         {
           "type": "Fix",
