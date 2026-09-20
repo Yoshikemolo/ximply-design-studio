@@ -59,6 +59,7 @@ import {
   validDashPattern,
   bounds,
   DocumentHistory,
+  hitTest,
   Layer,
   localPoint,
   newLayer,
@@ -478,24 +479,63 @@ export class EditorService {
     this.pivotOverride.set({ key: this.selectionKey(), point });
   }
   resetPivot() { this.pivotOverride.set(null); }
-  /** Magnetism for the pivot: the geometric centre first, then artwork and annotations, then the active aids. */
+  /**
+   * Magnetism for the pivot: the centre of the selection, then the corners, edge middles
+   * and edges of its box, then vertices and edges of other artwork, then the active aids.
+   */
   pivotPoint(point: Point): Point {
     if (!this.pivotSnap()) return point;
     const radius = this.dimensionSnapRadius() / this.zoom();
+    const distance = (candidate: Point) => Math.hypot(point.x - candidate.x, point.y - candidate.y);
     const centre = this.transformationCenter();
-    if (Math.hypot(point.x - centre.x, point.y - centre.y) <= radius) return centre;
+    if (distance(centre) <= radius) return centre;
+    const box = selectionBounds(this.selectedLayers().filter((layer) => !layer.guide));
+    const singular: Point[] = [];
+    if (box.width || box.height) {
+      const left = box.x, right = box.x + box.width, top = box.y, bottom = box.y + box.height;
+      const middleX = box.x + box.width / 2, middleY = box.y + box.height / 2;
+      singular.push(
+        { x: left, y: top }, { x: right, y: top }, { x: right, y: bottom }, { x: left, y: bottom },
+        { x: middleX, y: top }, { x: right, y: middleY }, { x: middleX, y: bottom }, { x: left, y: middleY },
+      );
+    }
+    const nearest = singular.filter((candidate) => distance(candidate) <= radius).sort((a, b) => distance(a) - distance(b))[0];
+    if (nearest) return nearest;
+    if (box.width || box.height) {
+      // The sides of the box attract as lines, not only at their singular points.
+      const edges: [Point, Point][] = [
+        [{ x: box.x, y: box.y }, { x: box.x + box.width, y: box.y }],
+        [{ x: box.x + box.width, y: box.y }, { x: box.x + box.width, y: box.y + box.height }],
+        [{ x: box.x + box.width, y: box.y + box.height }, { x: box.x, y: box.y + box.height }],
+        [{ x: box.x, y: box.y + box.height }, { x: box.x, y: box.y }],
+      ];
+      const projections = edges.map(([a, b]) => {
+        const dx = b.x - a.x, dy = b.y - a.y, squared = dx * dx + dy * dy || 1;
+        const t = Math.max(0, Math.min(1, ((point.x - a.x) * dx + (point.y - a.y) * dy) / squared));
+        return { x: a.x + dx * t, y: a.y + dy * t };
+      }).filter((candidate) => distance(candidate) <= radius).sort((a, b) => distance(a) - distance(b));
+      if (projections[0]) return projections[0];
+    }
     const target = snapDimensionPoint(this.document().layers, point, radius, true);
     return target?.point ?? this.snap(point);
   }
-  /** Whether the handle can be grabbed right now: always with a transform tool, and once moved with any other. */
-  readonly pivotGrabbable = computed(() =>
-    this.pivotVisible() && !this.pivotLocked() && this.selectedLayers().length > 0
-    && (["rotate", "scale", "mirror"].includes(this.tool()) || this.pivotMoved()));
-  private startPivotDrag(point: Point): boolean {
-    // A pivot resting at the centre of the selection would otherwise swallow clicks meant for the artwork.
-    if (!this.pivotGrabbable()) return false;
+  /**
+   * The handle can be grabbed while it is shown, unlocked and something is selected, with the
+   * transform tools always and with the selection tool unless the mark still rests over the
+   * artwork at its default place, where a click belongs to the object under it.
+   */
+  readonly pivotGrabbable = computed(() => {
+    if (!this.pivotVisible() || this.pivotLocked() || !this.selectedLayers().length) return false;
+    if (!["select", "rotate", "scale", "mirror"].includes(this.tool())) return false;
+    if (["rotate", "scale", "mirror"].includes(this.tool()) || this.pivotMoved()) return true;
     const pivot = this.pivot();
-    if (Math.hypot(point.x - pivot.x, point.y - pivot.y) > 9 / this.zoom()) return false;
+    return !this.selectedLayers().some((layer) => hitTest(layer, pivot));
+  });
+  private startPivotDrag(point: Point): boolean {
+    if (!this.pivotGrabbable()) return false;
+    // Only a click on the mark itself takes the pivot; anywhere else belongs to the artwork.
+    const pivot = this.pivot();
+    if (Math.hypot(point.x - pivot.x, point.y - pivot.y) > 7 / this.zoom()) return false;
     this.pivotGesture = { before: this.pivotOverride() };
     this.setPivot(this.pivotPoint(point));
     return true;

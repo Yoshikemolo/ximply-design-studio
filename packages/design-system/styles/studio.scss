@@ -524,14 +524,19 @@ hr {
   max-width: 108px;
 }
 .speed-field .speed-mark {
-  display: inline-block;
+  display: block;
   /* Two dots of the tip: the small one where speed thins the stroke, the large one where it swells. */
   border-radius: 50%;
   background: var(--muted);
-  flex-shrink: 0;
+  /* Fixed round dots: never stretched by the row nor squeezed by the slider beside them. */
+  flex: 0 0 auto;
+  align-self: center;
+  aspect-ratio: 1;
+  padding: 0;
 }
-.speed-field .speed-mark.small { width: 6px; height: 6px; }
-.speed-field .speed-mark.large { width: 11px; height: 11px; }
+.speed-field .speed-mark.small { width: 8px; height: 8px; min-width: 8px; }
+.speed-field .speed-mark.large { width: 13px; height: 13px; min-width: 13px; }
+.speed-field input[type="range"] { align-self: center; }
 .brush-tips button {
   width: 27px;
   height: 27px;
