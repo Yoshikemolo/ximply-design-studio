@@ -632,6 +632,36 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     this.pageCategory.set(value);
     this.pageFormatId.set(this.pageFormats()[0].id);
   }
+  // Document properties, shown in Properties when nothing is selected. Each change is
+  // applied at once and keeps the rest of the page setup as it was.
+  activeTabName() { return this.editor.tabs().find((tab) => tab.active)?.name ?? ""; }
+  edgeLabel(edge: "top" | "right" | "bottom" | "left") { return edge === "top" ? "Top" : edge === "right" ? "Right" : edge === "bottom" ? "Bottom" : "Left"; }
+  edgeInitial(edge: "top" | "right" | "bottom" | "left") { return this.t(this.edgeLabel(edge)).slice(0, 1).toUpperCase(); }
+  setDocumentSize(key: "width" | "height", event: Event) {
+    const value = this.distanceInput(event);
+    if (!Number.isFinite(value) || value <= 0) return;
+    if (this.editor.updatePageSetup({ [key]: value })) this.fit();
+  }
+  setDocumentOrientation(orientation: "portrait" | "landscape") {
+    const { width, height } = this.editor.document();
+    if (width === height || (orientation === "portrait") === height > width) return;
+    if (this.editor.updatePageSetup({ width: height, height: width })) this.fit();
+  }
+  setDocumentMargin(edge: "top" | "right" | "bottom" | "left", event: Event) {
+    const value = this.distanceInput(event);
+    if (!Number.isFinite(value) || value < 0) return;
+    // A margin typed in is a margin wanted, so its guides are shown.
+    const margins = { ...this.editor.pageSetup().margins, [edge]: value, edges: true };
+    this.editor.updatePageSetup({ margins });
+  }
+  toggleDocumentMargin(key: "edges" | "centerX" | "centerY", enabled: boolean) {
+    this.editor.updatePageSetup({ margins: { ...this.editor.pageSetup().margins, [key]: enabled } });
+  }
+  setDocumentMarks(event: Event) {
+    const marks = this.text(event) as RegistrationMarks;
+    if (!REGISTRATION_MARKS.includes(marks)) return;
+    this.editor.updatePageSetup({ marks });
+  }
   setPageMargin(key: "top" | "right" | "bottom" | "left", event: Event) {
     const value = this.distanceInput(event);
     if (!Number.isFinite(value) || value < 0 || value > 2048) return;

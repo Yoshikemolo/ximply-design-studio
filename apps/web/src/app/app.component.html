@@ -827,6 +827,7 @@
               ><span class="panel-grip">⋮⋮</span>
             </summary>
             @if (panel === "properties") {
+              <div class="properties-content">
               @if (editor.selected(); as layer) {
                 <div class="selected-kind">
                   <span class="kind-dot"></span>{{ layer.name
@@ -1016,14 +1017,41 @@
                   </button>
                 </div>
               } @else {
-                <div class="empty-properties">
-                  <img src="/assets/icons/select.svg" alt="" />
-                  <p>{{ t("Nothing selected") }}</p>
+                @let page = editor.document();
+                @let setup = editor.pageSetup();
+                <div class="selected-kind">
+                  <img class="kind-icon" src="/assets/icons/document.svg" alt="" />{{ activeTabName() }}<span class="header-spacer"></span><small>{{ t("Document") }}</small>
                 </div>
+                <div class="section-label">{{ t("Page") }} · {{ preferences.distanceUnit() }}</div>
+                <div class="property-grid">
+                  <label [title]="t('Width')">W<input type="number" min="0" step="any" [value]="displayDistance(page.width)" (change)="setDocumentSize('width', $event)" [attr.aria-label]="t('Width')" /></label>
+                  <label [title]="t('Height')">H<input type="number" min="0" step="any" [value]="displayDistance(page.height)" (change)="setDocumentSize('height', $event)" [attr.aria-label]="t('Height')" /></label>
+                </div>
+                <div class="document-row">
+                  <span>{{ t("Orientation") }}</span>
+                  <div class="segmented" role="group" [attr.aria-label]="t('Orientation')">
+                    <button [class.active]="page.height >= page.width" [attr.aria-pressed]="page.height >= page.width" (click)="setDocumentOrientation('portrait')" [title]="t('Portrait')" [attr.aria-label]="t('Portrait')"><img src="/assets/icons/portrait.svg" alt="" /></button>
+                    <button [class.active]="page.width > page.height" [attr.aria-pressed]="page.width > page.height" (click)="setDocumentOrientation('landscape')" [title]="t('Landscape')" [attr.aria-label]="t('Landscape')"><img src="/assets/icons/landscape.svg" alt="" /></button>
+                  </div>
+                </div>
+                <label class="document-row">{{ t("Ruler units") }}<select [value]="preferences.distanceUnit()" (change)="setUnit('distanceUnit', $event)">@for (unit of units; track unit) {<option [value]="unit">{{ unit }}</option>}</select></label>
+                <div class="section-label">{{ t("Margin guides") }} · {{ preferences.distanceUnit() }}</div>
+                <div class="property-grid">
+                  @for (edge of pageEdgeKeys; track edge) {
+                    <label [title]="t(edgeLabel(edge))">{{ edgeInitial(edge) }}<input type="number" min="0" step="any" [value]="displayDistance(setup.margins[edge])" (change)="setDocumentMargin(edge, $event)" [attr.aria-label]="t(edgeLabel(edge))" /></label>
+                  }
+                </div>
+                <label class="document-row toggle-row">{{ t("Margin guides") }}<input class="toggle-switch" type="checkbox" role="switch" [checked]="setup.margins.edges" (change)="toggleDocumentMargin('edges', $any($event.target).checked)" /></label>
+                <label class="document-row toggle-row">{{ t("Vertical centre guide") }}<input class="toggle-switch" type="checkbox" role="switch" [checked]="setup.margins.centerX" (change)="toggleDocumentMargin('centerX', $any($event.target).checked)" /></label>
+                <label class="document-row toggle-row">{{ t("Horizontal centre guide") }}<input class="toggle-switch" type="checkbox" role="switch" [checked]="setup.margins.centerY" (change)="toggleDocumentMargin('centerY', $any($event.target).checked)" /></label>
+                <label class="document-row">{{ t("Registration marks") }}<select [value]="setup.marks" (change)="setDocumentMarks($event)">@for (option of registrationOptions; track option) {<option [value]="option">{{ t(registrationLabels[option]) }}</option>}</select></label>
+                <div class="section-label">{{ t("Background") }}</div>
                 <label class="wide-label color-row">{{ t("Background") }}<input class="color-value" type="text" maxlength="9" [value]="backgroundPaint()" (change)="setBackgroundPaint(text($event))" [title]="t('Use a hex color with optional alpha, or none.')" /><input class="color-swatch" type="color" [class.no-paint]="backgroundPaint() === 'none'" [value]="backgroundBase()" (input)="setBackgroundBase(text($event))" [attr.aria-label]="t('Background')" /></label>
                 <label class="wide-label">{{ t("Paint opacity") }}<input type="range" min="0" max="100" [value]="backgroundOpacity()" (input)="setBackgroundOpacity(number($event))" />{{ backgroundOpacity() }}%</label>
                 <div class="paint-options background-options">@for (swatch of backgroundSwatches; track swatch.value) {<button [class.active]="backgroundPaint() === swatch.value" [title]="t(swatch.label)" [attr.aria-label]="t(swatch.label)" (click)="setBackgroundPaint(swatch.value)"><span [class.no-paint]="swatch.value === 'none'" [style.background]="swatch.value === 'none' ? '' : swatch.value"></span>{{ t(swatch.label) }}</button>}</div>
+                <div class="path-actions"><button (click)="openPageDialog('format')">{{ t("Document dimensions") }}…</button></div>
               }
+              </div>
             } @else {
               <div class="layer-tools">
                 <span

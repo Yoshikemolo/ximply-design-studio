@@ -2,7 +2,7 @@ import { Procedural, defaultProcedural, generateProcedural, syncProcedurals, val
 import { openingHost, wallSnapPoint, WallSnap } from "./procedural-placement";
 import { BrushSettings, BrushType, BRUSH_TYPES, brushStamps, defaultBrush, validBrushSettings } from "../../../../packages/domain/src/brush";
 import { wallAxis, wallBoolean, WallOperation } from "../../../../packages/domain/src/wall-boolean";
-import { MarginGuides, MARGIN_GUIDE_PREFIX, marginGuidePositions, PageEdges, PageSize, PAGE_MAXIMUM, PAGE_MINIMUM, pageSizeFits, RegistrationMarks, REGISTRATION_LAYER_NAME, registrationFits, registrationLayer, resizePage } from "../../../../packages/domain/src/page-setup";
+import { MarginGuides, MARGIN_GUIDE_PREFIX, marginGuidePositions, readPageSetup, PageEdges, PageSize, PAGE_MAXIMUM, PAGE_MINIMUM, pageSizeFits, RegistrationMarks, REGISTRATION_LAYER_NAME, registrationFits, registrationLayer, resizePage } from "../../../../packages/domain/src/page-setup";
 import { Dimension, DimensionFormat, defaultDimensionFormat, dimensionGeometry } from "../../../../packages/domain/src/dimensions";
 import { LineEnds, defaultLineEnds, validLineEnds } from "../../../../packages/domain/src/line-endings";
 import { snapDimensionPoint, snapDimensionOffset, DimensionSnap } from "./dimension-snapping";
@@ -1461,7 +1461,7 @@ export class EditorService {
     }
     const marks = setup.marks && setup.marks !== "none" ? registrationLayer(setup.marks, size, crypto.randomUUID()) : null;
     if (marks) layers = [...layers, marks];
-    if (layers.length > 150) { this.status.set("Close a document before opening another."); return false; }
+    if (layers.length > MAX_LAYERS) { this.status.set("The document cannot hold more layers."); return false; }
     const next = { ...before, width: size.width, height: size.height, background: setup.background ?? before.background, layers };
     try { parseDocument(JSON.stringify(next)); } catch { this.status.set("The page settings cannot be applied."); return false; }
     this.commitStep(before);
@@ -1471,6 +1471,23 @@ export class EditorService {
     this.changed();
     this.status.set("Document dimensions updated");
     return true;
+  }
+  /** The margin guides and registration marks the active page carries now. */
+  pageSetup(): { margins: MarginGuides; marks: RegistrationMarks } {
+    return readPageSetup(this.document());
+  }
+  /**
+   * Changes one part of the page setup from the document properties, keeping the rest:
+   * its size, its margin guides and its registration marks.
+   */
+  updatePageSetup(change: { width?: number; height?: number; margins?: MarginGuides; marks?: RegistrationMarks }): boolean {
+    const current = this.pageSetup();
+    const document = this.document();
+    return this.applyPageSetup({
+      size: { width: Math.round(change.width ?? document.width), height: Math.round(change.height ?? document.height) },
+      margins: change.margins ?? current.margins,
+      marks: change.marks ?? current.marks,
+    });
   }
   /** Adds space on each edge and moves the artwork with the page. */
   expandPage(edges: PageEdges): boolean { return this.resizePageBy(edges, 1); }

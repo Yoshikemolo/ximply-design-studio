@@ -506,8 +506,8 @@ hr {
   flex-direction: column;
 }
 .document-tabs {
-  /* One pixel above the tab height, so the strip never scrolls over its own content. */
-  height: 40px;
+  /* Two pixels above the tab height, so the strip never scrolls over its own content. */
+  height: 38px;
   display: flex;
   align-items: center;
   gap: 10px;
@@ -521,7 +521,7 @@ hr {
   font-size: 10px;
 }
 .document-tab {
-  height: 40px;
+  height: 36px;
   min-width: 150px;
   max-width: 260px;
   display: flex;
@@ -996,6 +996,57 @@ canvas {
   gap: 8px;
   padding: 6px 15px 15px;
   font-size: 11px;
+}
+/*
+ * Properties keeps the same side margins as the other panels for everything it holds;
+ * the pieces that bring their own padding give it up inside it.
+ */
+.properties-content {
+  padding: 0 15px 14px;
+}
+.properties-content > fieldset,
+.properties-content > .selected-kind,
+.properties-content > .object-actions {
+  padding-left: 0;
+  padding-right: 0;
+}
+.properties-content .kind-icon {
+  width: 14px;
+  height: 14px;
+}
+.document-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 8px 0;
+  font-size: 11px;
+}
+.document-row select {
+  max-width: 150px;
+}
+.segmented {
+  display: inline-flex;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+.segmented button {
+  width: 32px;
+  height: 28px;
+  padding: 4px;
+  border: 0;
+  border-radius: 0;
+}
+.segmented button + button {
+  border-left: 1px solid var(--border);
+}
+.segmented button.active {
+  background: var(--selected);
+}
+.segmented img {
+  width: 18px;
+  height: 18px;
 }
 .selected-kind small {
   font-size: 9px;

@@ -504,6 +504,7 @@ const ES: Record<string, string> = {
   "The endpoints lie on each other. Join them as a corner or as a smooth point.": "Los extremos están uno sobre otro. Únelos como vértice o como punto suave.",
   "Corner": "Vértice",
   "Smooth point": "Punto suave",
+  "Height": "Alto",
   "Remove brush stroke": "Quitar trazo de pincel",
   "Apply brush": "Aplicar pincel",
   "Group selection": "Selección de grupo",
