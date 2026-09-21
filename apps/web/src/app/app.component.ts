@@ -339,6 +339,8 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   );
   readonly apiToken = signal("");
   readonly releases = signal<Release[]>([]);
+  /** Year of the copyright line in the footer. */
+  readonly year = new Date().getFullYear();
   readonly currentVersion = signal("…");
   readonly chosenVersion = signal("");
   readonly noteGroups = signal<{ title: string; items: string[] }[]>([]);

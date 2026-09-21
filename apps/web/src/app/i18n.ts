@@ -1,4 +1,5 @@
 const ES: Record<string, string> = {
+  "All Rights Reserved.": "Todos los derechos reservados.",
   "Outline stroke": "Contornear trazo",
   "Create outlines": "Crear contornos",
   "Select the text you want to turn into shapes.": "Selecciona el texto que quieres convertir en formas.",

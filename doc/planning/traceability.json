@@ -881,7 +881,8 @@
       "tests": [
         "tests/test_changelog.py",
         "packages/domain/tests/document.test.ts",
-        "apps/web/tests/editor.test.ts"
+        "apps/web/tests/editor.test.ts",
+        "apps/web/tests/footer-credits.test.ts"
       ],
       "evidence": [
         "doc/product/footer-and-changelog.md",

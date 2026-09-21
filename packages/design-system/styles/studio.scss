@@ -1283,9 +1283,40 @@ textarea {
   padding: 2px 6px;
   min-height: 20px;
 }
-.footer-brand {
+/* The credits, the version and the links of the company, as the other product shows them. */
+.credits {
   font-size: 9px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.credits a,
+.socials a {
+  color: inherit;
+}
+.credits a:hover,
+.socials a:hover {
+  color: var(--text);
+}
+.studio-shell > footer button.version {
   letter-spacing: 0.5px;
+  white-space: nowrap;
+}
+.socials {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-left: 2px;
+}
+.socials img {
+  width: 13px;
+  height: 13px;
+  display: block;
+  filter: var(--icon);
+  opacity: 0.75;
+}
+.socials a:hover img {
+  opacity: 1;
 }
 .visually-hidden {
   position: absolute;

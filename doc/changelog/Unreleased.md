@@ -28,6 +28,7 @@ None.
 
 ## Improvements
 
+- Show the same credits in the footer as the other product of the company, in the same order: the copyright with the company and the author, each one a link, then the version that opens the about screen, then the links to LinkedIn, to Ximplicity and to the repository of this project, each in its own tab.
 - Give the text tool a list of its own, so Create outlines sits beside the tool that writes the text; every tool family with a command of its own now shows the arrow that opens its list.
 - Name what an outline of the stroke left alone: a selection of several objects outlines every one that carries a stroke and says which ones it passed over, text, images, dimensions or objects with no stroke, instead of doing nothing visible.
 
