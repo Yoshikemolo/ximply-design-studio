@@ -41,4 +41,4 @@ None.
 
 ## Engineering
 
-None.
+- Record the owner's decisions on 0.6.0: ADR-0032, the brush carried by a path in the native format, is accepted, and the drawing tools are accepted visually for the maturity of this preview. The strict Sonar gate remains outstanding, so no scenario is marked Verified.
