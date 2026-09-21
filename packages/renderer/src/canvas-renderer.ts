@@ -1,6 +1,7 @@
 import { materializeProcedural, projectionCurves, projectionDash } from "../../domain/src/procedural";
 import { dimensionGeometry, dimensionLabelLayout } from "../../domain/src/dimensions";
 import { lineEndGeometry, pathLineEnds, LineEnd } from "../../domain/src/line-endings";
+import { brushOutline } from "../../domain/src/brush-stroke";
 import { Point } from "../../domain/src/document";
 import { defaultTypography, layoutText, textFont, TextMeasurement, TextTypography } from "../../domain/src/text-layout";
 import { selectionBounds } from "../../domain/src/arrange";
@@ -338,7 +339,19 @@ export class CanvasRenderer {
       // in the drawing tools this editor follows, while the stroke keeps the ends apart.
       for (const path of drawn) this.curve(ctx, path);
       if (hasFill) ctx.fill("evenodd");
-      if (hasStroke) {
+      if (hasStroke && l.brushStroke) {
+        // A brushed path paints the area its nib sweeps, in the colour of the stroke.
+        ctx.fillStyle = l.stroke;
+        ctx.beginPath();
+        for (const path of drawn)
+          for (const ring of brushOutline(path, l.brushStroke, l.strokeWidth)) {
+            if (!ring.length) continue;
+            ctx.moveTo(ring[0].x, ring[0].y);
+            for (const point of ring.slice(1)) ctx.lineTo(point.x, point.y);
+            ctx.closePath();
+          }
+        ctx.fill("nonzero");
+      } else if (hasStroke) {
         if (strokeStyle.alignment === "center") {
           ctx.beginPath();
           for (const path of drawn) this.curve(ctx, path);
@@ -365,7 +378,7 @@ export class CanvasRenderer {
       for (const p of l.points.slice(1)) ctx.lineTo(p.x, p.y);
       ctx.stroke();
     }
-    for (const end of pathLineEnds(l)) this.ending(ctx, end.point, end.direction, end.style, l.stroke, l.strokeWidth);
+    if (!l.brushStroke) for (const end of pathLineEnds(l)) this.ending(ctx, end.point, end.direction, end.style, l.stroke, l.strokeWidth);
     if (l.kind === "text" && !l.textLayout && !l.typography) {
       ctx.font = `${l.fontSize}px sans-serif`;
       ctx.textBaseline = "top";
