@@ -66,6 +66,7 @@ Generated titles and paths only; authoritative content remains in each linked do
 - [REL-0014 — Category-based settings navigation](changelog/0.3.8-alpha.1.md)
 - [REL-0015 — Stroke geometry and scoped style tools](changelog/0.3.9-alpha.1.md)
 - [REL-0023 — Multi-document workbench, construction tools and drafting dimensions](changelog/0.4.0.md)
+- [REL-0024 — Interchange, transformation and type](changelog/0.5.0.md)
 - [REL-0003 — Pending changes](changelog/Unreleased.md)
 - [DOC-ROOT-0002 — Code and contract map](code-map.md)
 - [DOC-ENGINEERING-0001 — Documentation navigation migration](engineering/context-migration.md)
