@@ -114,6 +114,15 @@ class LineEnds(BaseModel):
     linked: Annotated[bool, Field(strict=True)]
 
 
+class BrushStroke(BaseModel):
+    """A calligraphic brush painted along a vector path, mirrored from the editor."""
+    model_config = ConfigDict(extra='forbid')
+    kind: Literal['calligraphic']
+    angle: Annotated[Number, Field(ge=-180, le=180)]
+    roundness: Annotated[Number, Field(ge=0, le=100)]
+    diameter: Annotated[Number, Field(ge=0.1, le=1296)]
+
+
 class DimensionPoint(BaseModel):
     model_config = ConfigDict(extra='forbid')
     x: Annotated[Number, Field(ge=-10000000, le=10000000)]
@@ -280,6 +289,7 @@ class Layer(Point):
     adjustments: Adjustments
     strokeStyle: StrokeStyle | None = None
     lineEnds: LineEnds | None = None
+    brushStroke: BrushStroke | None = None
     dimension: Dimension | None = None
     procedural: Procedural | None = None
     regroupPath: Annotated[list[Annotated[str, Field(min_length=1, max_length=100)]], Field(max_length=16)] | None = None
@@ -297,7 +307,7 @@ class Layer(Point):
     @model_validator(mode='before')
     @classmethod
     def non_nullable_extensions(cls, value):
-        if isinstance(value, dict) and any(key in value and value[key] is None for key in ('curves', 'symbolId', 'traceSourceId', 'groupPath', 'flipX', 'flipY', 'skewX', 'guide', 'textLayout', 'typography', 'strokeStyle', 'lineEnds', 'dimension', 'regroupPath', 'procedural')):
+        if isinstance(value, dict) and any(key in value and value[key] is None for key in ('curves', 'symbolId', 'traceSourceId', 'groupPath', 'flipX', 'flipY', 'skewX', 'guide', 'textLayout', 'typography', 'strokeStyle', 'lineEnds', 'brushStroke', 'dimension', 'regroupPath', 'procedural')):
             raise ValueError('Drawing extensions cannot be null')
         return value
 
@@ -317,6 +327,8 @@ class Layer(Point):
             raise ValueError('Text layout and typography require a text layer')
         if self.guide is not None and (self.kind != 'path' or self.symbolId is not None or self.groupPath):
             raise ValueError('Guides must be ungrouped paths without symbol references')
+        if self.brushStroke is not None and (self.kind != 'path' or self.dimension is not None or self.procedural is not None):
+            raise ValueError('A brush stroke belongs to a plain path')
         return self
 
     @field_validator('source')
@@ -379,7 +391,7 @@ class Document(BaseModel):
         if self.version == 1 and ('symbols' in self.model_fields_set or 'blends' in self.model_fields_set or any(
                 layer.curves is not None or layer.symbolId is not None or layer.traceSourceId is not None
                 or layer.guide is not None or layer.fill == 'none' or layer.stroke == 'none'
-                or layer.strokeStyle is not None or layer.lineEnds is not None
+                or layer.strokeStyle is not None or layer.lineEnds is not None or layer.brushStroke is not None
                 or layer.dimension is not None or layer.regroupPath is not None or layer.procedural is not None
                 or layer.textLayout is not None or layer.typography is not None
                 or len(layer.fill) == 9 or len(layer.stroke) == 9

@@ -1,5 +1,8 @@
 /** Trusted built-in descriptors; shortcut assignments belong to the command registry. */
 export type ToolId =
+  | "groupSelect"
+  | "paintbrush"
+  | "reshape"
   | "wall"
   | "door"
   | "window"
@@ -154,7 +157,10 @@ export const TOOLS: ToolPlugin[] = [
     icon: id,
     group: "Paths" as const,
   })),
-  { id: "brush", label: "Brush", icon: "brush", group: "Paint" },
+  { id: "groupSelect", label: "Group selection", icon: "groupSelect", group: "Select" },
+  { id: "paintbrush", label: "Paintbrush", icon: "paintbrush", group: "Paint" },
+  { id: "brush", label: "Raster brush", icon: "brush", group: "Paint" },
+  { id: "reshape", label: "Reshape", icon: "reshape", group: "Paths" },
   { id: "eraser", label: "Eraser", icon: "eraser", group: "Paint" },
   ...(
     [
@@ -195,7 +201,7 @@ export const TOOL_FAMILIES: ToolFamily[] = [
   { id: "architecture", label: "Floor plan tools", tools: ["wall", "door", "window", "pillar", "stair"] },
   { id: "dimensions", label: "Dimensions", tools: ["dimensionSmart", "dimensionLinear", "dimensionAngular", "dimensionChain", "dimensionRadius", "dimensionDiameter"] },
   { id: "selection", label: "Select", tools: ["select", "selectRectangle", "selectEllipse", "selectLasso"] },
-  { id: "direct", label: "Direct selection", tools: ["direct"] },
+  { id: "direct", label: "Direct selection tools", tools: ["direct", "groupSelect"] },
   {
     id: "pen",
     label: "Bézier tools",
@@ -218,12 +224,12 @@ export const TOOL_FAMILIES: ToolFamily[] = [
   },
   { id: "text", label: "Text", tools: ["text"] },
   { id: "scissors", label: "Scissors", tools: ["scissors", "knife"] },
-  { id: "paint", label: "Brush", tools: ["brush", "brushFlat", "brushCalligraphy", "brushMarker", "brushAirbrush", "brushPencil"] },
+  { id: "paint", label: "Brush tools", tools: ["paintbrush", "brush", "brushFlat", "brushCalligraphy", "brushMarker", "brushAirbrush", "brushPencil"] },
   { id: "eraser", label: "Eraser", tools: ["eraser"] },
   { id: "style", label: "Style tools", tools: ["eyedropper", "paintBucket"] },
   { id: "rotate", label: "Rotate", tools: ["rotate"] },
   { id: "mirror", label: "Reflect", tools: ["mirror"] },
-  { id: "scale", label: "Scale", tools: ["scale"] },
+  { id: "scale", label: "Scale tools", tools: ["scale", "reshape"] },
   {
     id: "symbols",
     label: "Symbol tools",

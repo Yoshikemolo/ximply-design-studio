@@ -239,7 +239,8 @@
         "ADR-0024",
         "ADR-0028",
         "ADR-0029",
-        "ADR-0031"
+        "ADR-0031",
+        "ADR-0032"
       ],
       "scenarios": [
         "SC-0022",
@@ -249,7 +250,12 @@
         "SC-0087",
         "SC-0088",
         "SC-0093",
-        "SC-0100"
+        "SC-0100",
+        "SC-0102",
+        "SC-0103",
+        "SC-0104",
+        "SC-0105",
+        "SC-0106"
       ],
       "implementation": [
         "apps/web/src/app/editor.service.ts",
@@ -269,7 +275,12 @@
         "apps/web/src/app/procedural-placement.ts",
         "packages/domain/src/wall-boolean.ts",
         "packages/domain/src/cut.ts",
-        "packages/domain/src/outline-stroke.ts"
+        "packages/domain/src/outline-stroke.ts",
+        "packages/domain/src/path-fit.ts",
+        "packages/domain/src/path-edit.ts",
+        "packages/domain/src/brush-stroke.ts",
+        "packages/renderer/src/canvas-renderer.ts",
+        "apps/web/src/app/tools.ts"
       ],
       "tests": [
         "packages/domain/tests/document.test.ts",
@@ -302,14 +313,22 @@
         "apps/web/tests/cut-tools.test.ts",
         "packages/domain/tests/outline-stroke.test.ts",
         "apps/web/tests/outline-conversion.test.ts",
-        "apps/web/tests/command-dispatch.test.ts"
+        "apps/web/tests/command-dispatch.test.ts",
+        "packages/domain/tests/path-fit.test.ts",
+        "packages/domain/tests/path-edit.test.ts",
+        "apps/web/tests/pen-illustrator.test.ts",
+        "apps/web/tests/pencil-illustrator.test.ts",
+        "apps/web/tests/path-commands.test.ts",
+        "apps/web/tests/paintbrush.test.ts",
+        "apps/web/tests/eraser-reshape.test.ts"
       ],
       "evidence": [
         "doc/implementation/PLAN-0002-0001.md",
         "doc/implementation/PLAN-0008-0003.md",
         "doc/implementation/PLAN-0008-0004.md",
         "doc/implementation/PLAN-0008-0005.md",
-        "doc/implementation/PLAN-0008-0006.md"
+        "doc/implementation/PLAN-0008-0006.md",
+        "doc/implementation/PLAN-0008-0007.md"
       ]
     },
     {
@@ -358,7 +377,8 @@
       ],
       "adrs": [
         "ADR-0007",
-        "ADR-0008"
+        "ADR-0008",
+        "ADR-0032"
       ],
       "scenarios": [
         "SC-0028",
