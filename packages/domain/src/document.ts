@@ -120,6 +120,11 @@ export function strokeBounds(layer: Layer) {
 }
 /** Layers a document may hold; drawings imported from other tools are often in the hundreds. */
 export const MAX_LAYERS = 1000;
+/**
+ * Smallest side a layer may measure. A drawing scaled down holds shapes under a pixel, so
+ * the bound only keeps a size positive and finite rather than asking for a whole pixel.
+ */
+export const MIN_LAYER_SIZE = 0.01;
 export function newLayer(
   kind: LayerKind,
   id: string,
@@ -586,7 +591,7 @@ export function parseDocument(text: string): StudioDocument {
       if (!finite(layer[key], -100000, 100000))
         throw new Error("Invalid layer transform.");
     for (const key of ["width", "height"])
-      if (!finite(layer[key], 1, 16384)) throw new Error("Invalid layer size.");
+      if (!finite(layer[key], MIN_LAYER_SIZE, 16384)) throw new Error("Invalid layer size.");
     if (
       !finite(layer["opacity"], 0, 1) ||
       !finite(layer["strokeWidth"], 0, 200) ||
@@ -630,7 +635,7 @@ export function parseDocument(text: string): StudioDocument {
   validateProcedurals(value as unknown as StudioDocument);
   const normalized = syncProcedurals(syncBlends({ ...value, version: 2 } as unknown as StudioDocument));
   for (const layer of normalized.layers.filter(l => l.procedural)) {
-    if (![layer.x, layer.y, layer.rotation].every(n => finite(n, -100000, 100000)) || ![layer.width, layer.height].every(n => finite(n, 1, 16384))) throw new Error("Generated procedural geometry exceeds document bounds.");
+    if (![layer.x, layer.y, layer.rotation].every(n => finite(n, -100000, 100000)) || ![layer.width, layer.height].every(n => finite(n, MIN_LAYER_SIZE, 16384))) throw new Error("Generated procedural geometry exceeds document bounds.");
   }
   return normalized;
 }
@@ -692,8 +697,10 @@ export function svgExport(doc: StudioDocument, measure?: TextMeasurement): strin
           : "";
         const closed = drawnCurves.filter((path) => path.closed);
         content =
-          (closed.length
-            ? `<path d="${curveSvg(closed)}" ${svgPaint("fill", l.fill)} fill-rule="evenodd" stroke="none"/>`
+          // A fill paints every contour, open ones included, which is what filling means;
+          // the stroke below keeps the ends of an open contour apart.
+          (drawnCurves.length
+            ? `<path d="${curveSvg(drawnCurves)}" ${svgPaint("fill", l.fill)} fill-rule="evenodd" stroke="none"/>`
             : "") +
           (l.strokeStyle?.alignment && l.strokeStyle.alignment !== "center"
             ? (closed.length ? svgAlignedStroke(l, (attributes) => `<path d="${curveSvg(closed)}" ${attributes}/>`, layerIndex) : "") +

@@ -154,8 +154,9 @@ function pageContent(source: PdfPageSource): PageContent {
     const caps = { butt: 0, round: 1, square: 2 }[style.cap] ?? 0;
     const joins = { miter: 0, round: 1, bevel: 2 }[style.join] ?? 0;
     const settings = `${round(width)} w ${caps} J ${joins} j ${dash}`;
-    if (fill && fill.alpha > 0 && closed.length) {
-      parts.push(`q ${alphaName(layer.opacity * fill.alpha, layer.opacity)} ${colourOperator(fill, false)}\n${pathOperators(closed)}\nf* Q`);
+    // Filling closes every contour it paints, so an open path is filled as it is drawn.
+    if (fill && fill.alpha > 0 && drawn.length) {
+      parts.push(`q ${alphaName(layer.opacity * fill.alpha, layer.opacity)} ${colourOperator(fill, false)}\n${pathOperators(drawn.map((path) => ({ ...path, closed: true })))}\nf* Q`);
     }
     if (stroke && stroke.alpha > 0 && width > 0 && drawn.length) {
       if (style.alignment && style.alignment !== 'center') skipped.add('inside and outside strokes');

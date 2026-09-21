@@ -265,8 +265,9 @@ export class CanvasRenderer {
       const projection = projectionCurves(l);
       const drawn = l.curves.filter((_, index) => !projection[index]);
       ctx.beginPath();
-      for (const path of drawn.filter((p) => p.closed))
-        this.curve(ctx, path);
+      // A fill paints every contour, open ones included: filling closes a path, as it does
+      // in the drawing tools this editor follows, while the stroke keeps the ends apart.
+      for (const path of drawn) this.curve(ctx, path);
       if (hasFill) ctx.fill("evenodd");
       if (hasStroke) {
         if (strokeStyle.alignment === "center") {

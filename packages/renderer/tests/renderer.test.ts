@@ -105,6 +105,8 @@ it("renders cubic curvature rather than its control polygon or chord", () => {
       ...newLayer("path", "curve", { x: 0, y: 0 }),
       width: 120,
       height: 120,
+      // Only the stroke is drawn here, so the pixels speak about the curve itself.
+      fill: "none",
       stroke: "#ff0000",
       strokeWidth: 4,
       curves: [{ nodes: [a, b], closed: false }],
