@@ -221,10 +221,7 @@
                   alt=""
                 />
               </button>
-              @if (
-                family.tools.length > 1 ||
-                ["rotate", "mirror", "scale", "zoom"].includes(family.id)
-              ) {
+              @if (familyHasOptions(family)) {
                 <button
                   class="family-expander"
                   [attr.aria-label]="t('More tools') + ' · ' + t(family.label)"
@@ -1477,7 +1474,7 @@
 }
 
 @if (paintPicker()) {
-  <section class="paint-popover" role="dialog" [attr.aria-label]="t('Appearance')" [style.left.px]="paintPicker()!.x" [style.top.px]="paintPicker()!.y" [style.--popover-top.px]="paintPicker()!.y">
+  <section #paintPopover class="paint-popover" role="dialog" [attr.aria-label]="t('Appearance')" [style.left.px]="paintPicker()!.x" [style.top.px]="paintPicker()!.y" [style.--popover-top.px]="paintPicker()!.y">
     <header><strong>{{ t(paintTarget() === 'fill' ? 'Fill' : 'Stroke') }}</strong><button (click)="paintPicker.set(null)" [attr.aria-label]="t('Close')">×</button></header>
     <label>{{ t('Color') }}<input type="color" [value]="paintBaseColor()" (input)="setPaintBaseColor(text($event))" /></label>
     <label>{{ t("Paint opacity") }}<input type="range" min="0" max="100" [value]="paintOpacity()" (input)="setPaintOpacity(number($event))" />{{ paintOpacity() }}%</label>

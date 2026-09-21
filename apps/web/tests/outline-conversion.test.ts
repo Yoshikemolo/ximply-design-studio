@@ -61,11 +61,32 @@ describe('outline stroke', () => {
     expect(layers[1].fill).toBe('#ff0000');
   });
 
+  it('outlines every selected object and names what it left alone', () => {
+    const e = withLine();
+    e.document.update((document) => ({
+      ...document,
+      layers: [
+        ...document.layers,
+        { ...newLayer('rectangle', 'box', { x: 200, y: 0 }), width: 60, height: 40, stroke: '#00ff00', strokeWidth: 4 },
+        { ...newLayer('text', 'label', { x: 0, y: 200 }), text: 'Note', fontSize: 20 },
+      ],
+    }));
+    e.selectLayer('line');
+    e.selectLayer('box', true);
+    e.selectLayer('label', true);
+    expect(e.outlineStrokeSelection()).toBe(true);
+    // Both drawn objects are outlined; the text is named as left alone.
+    const bands = e.document().layers.filter((layer) => layer.stroke === 'none' && layer.fill !== 'none');
+    expect(bands.length).toBeGreaterThanOrEqual(2);
+    expect(e.status()).toContain('left alone: text');
+  });
+
   it('says so when there is no stroke to outline', () => {
     const e = withLine();
     e.setPaint('stroke', 'none');
     expect(e.outlineStrokeSelection()).toBe(false);
-    expect(e.status()).toContain('no stroke to outline');
+    // The message names what the selection held, so a silent no-op is never the answer.
+    expect(e.status()).toContain('objects without a stroke');
   });
 });
 
@@ -105,5 +126,27 @@ describe('text outlines', () => {
     const e = withLine();
     expect(await e.outlineTextSelection()).toBe(false);
     expect(e.status()).toContain('Select the text');
+  });
+});
+
+describe('appearance popover and the text family', () => {
+  it('measures the popover and keeps it on the screen', () => {
+    const source = readFileSync('apps/web/src/app/app.component.ts', 'utf-8');
+    const placement = source.slice(source.indexOf('openPaint(target'), source.indexOf('paintBaseColor()'));
+    // The place comes from the square, and the height of the popover corrects it.
+    expect(placement).toContain('window.innerHeight - height - 8');
+    expect(placement).toContain('paintPopoverHost');
+    const template = readFileSync('apps/web/src/app/app.component.html', 'utf-8');
+    expect(template).toContain('#paintPopover class="paint-popover"');
+  });
+
+  it('gives the text tool a list with its outline command', () => {
+    const template = readFileSync('apps/web/src/app/app.component.html', 'utf-8');
+    // Every family with a command of its own shows the arrow that opens its list.
+    expect(template).toContain('@if (familyHasOptions(family))');
+    const source = readFileSync('apps/web/src/app/app.component.ts', 'utf-8');
+    const actions = source.slice(source.indexOf('flyoutActionsFor(id: string)'), source.indexOf('flyoutActions()'));
+    expect(actions).toContain('text: ["outlineText"]');
+    expect(actions).toContain('paint: ["outlineStroke"]');
   });
 });

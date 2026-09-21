@@ -746,7 +746,19 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   openPaint(target: "fill" | "stroke", event: MouseEvent) {
     const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
     this.paintTarget.set(target);
-    this.paintPicker.set({ x: Math.max(8, Math.min(rect.right + 8, window.innerWidth - 260)), y: Math.max(8, Math.min(rect.top, window.innerHeight - 440)) });
+    // The popover opens beside the square and is placed properly once it has been measured.
+    this.paintPicker.set({ x: Math.max(8, Math.min(rect.right + 8, window.innerWidth - 260)), y: Math.max(8, rect.top) });
+  }
+  /**
+   * Keeps the appearance popover on the screen: once it is rendered its own height says
+   * where it fits, which the square alone cannot, since the two targets differ in height.
+   */
+  @ViewChild("paintPopover") set paintPopoverHost(element: ElementRef<HTMLElement> | undefined) {
+    const picker = this.paintPicker();
+    if (!element || !picker) return;
+    const height = element.nativeElement.offsetHeight;
+    const top = Math.max(8, Math.min(picker.y, window.innerHeight - height - 8));
+    if (Math.abs(top - picker.y) > 0.5) this.paintPicker.set({ ...picker, y: top });
   }
   paintBaseColor() {
     const color = this.paintColor(this.paintTarget());
@@ -1164,10 +1176,10 @@ export class AppComponent implements AfterViewInit, OnDestroy {
         ?.tools.map((id) => this.tools.find((t) => t.id === id)!) ?? []
     );
   }
-  flyoutActions() {
-    const id = this.flyout();
+  /** Commands a tool family offers beside its tools, which give it a list of its own. */
+  flyoutActionsFor(id: string): string[] {
     return (
-      [...this.actionGroups, this.clipboardGroup].find((g) => g.id === id)?.commands ??
+      [...this.actionGroups, this.clipboardGroup].find((group) => group.id === id)?.commands ??
       (
         {
           rotate: ["rotateCW", "rotateCCW"],
@@ -1179,9 +1191,17 @@ export class AppComponent implements AfterViewInit, OnDestroy {
           paint: ["outlineStroke"],
           text: ["outlineText"],
         } as Record<string, string[]>
-      )[id ?? ""] ??
-      []
+      )[id] ?? []
     );
+  }
+  flyoutActions() {
+    return this.flyoutActionsFor(this.flyout() ?? "");
+  }
+  /** A family shows its arrow when it has more than one tool or a command of its own. */
+  familyHasOptions(family: { id: string; tools: readonly string[] }) {
+    return family.tools.length > 1
+      || ["rotate", "mirror", "scale", "zoom"].includes(family.id)
+      || this.flyoutActionsFor(family.id).length > 0;
   }
   isGeneratedBlendLayer(id: string) { return this.editor.document().blends?.some(blend => blend.stepIds.some(step => step.includes(id))) ?? false; }
   blendStepLimit() {

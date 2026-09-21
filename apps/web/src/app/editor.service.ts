@@ -1568,14 +1568,17 @@ export class EditorService {
    * artwork. A shape that also carries a fill keeps it, as the object under its new band.
    */
   outlineStrokeSelection(): boolean {
-    const layers = this.selectedLayers().filter((layer) => !layer.guide && !this.isEffectivelyLocked(layer) && !layer.dimension);
-    if (!layers.length) { this.status.set("Select the objects whose stroke you want to outline."); return false; }
+    const selected = this.selectedLayers().filter((layer) => !layer.guide && !this.isEffectivelyLocked(layer));
+    const layers = selected.filter((layer) => !layer.dimension && !["image", "text"].includes(layer.kind));
+    if (!selected.length) { this.status.set("Select the objects whose stroke you want to outline."); return false; }
     const document = this.document();
     const produced = new Map<string, Layer[]>();
-    for (const layer of layers) {
+    const skipped: string[] = [];
+    for (const layer of selected) {
+      if (!layers.includes(layer)) { skipped.push(layer.kind === "text" ? "text" : layer.kind === "image" ? "images" : "dimensions"); continue; }
       const source = layer.curves ? layer : { ...layer, kind: "path" as const, curves: this.editableCurves(layer) };
       const band = outlineStroke(source);
-      if (!band) continue;
+      if (!band) { skipped.push("objects without a stroke"); continue; }
       const shape = fitCurves({ ...newLayer("path", crypto.randomUUID(), { x: 0, y: 0 }), rotation: 0 }, band);
       const outlined: Layer = {
         ...layer, ...shape, id: shape.id, kind: "path", rotation: 0, flipX: false, flipY: false, skewX: 0,
@@ -1587,7 +1590,10 @@ export class EditorService {
         : [{ ...layer, stroke: "none", strokeWidth: 0 }];
       produced.set(layer.id, [...kept, outlined]);
     }
-    if (!produced.size) { this.status.set("The selection has no stroke to outline."); return false; }
+    if (!produced.size) {
+      this.status.set(`Nothing was outlined; the selection holds only ${[...new Set(skipped)].join(", ") || "objects without a stroke"}.`);
+      return false;
+    }
     const next = { ...document, layers: document.layers.flatMap((layer) => produced.get(layer.id) ?? [layer]) };
     try { parseDocument(JSON.stringify(next)); } catch { this.status.set("The outline cannot be created here."); return false; }
     this.commitStep(document);
@@ -1596,7 +1602,9 @@ export class EditorService {
     this.selectedIds.set(created);
     this.selectedId.set(created[0]);
     this.activeNodes.set([]);
-    this.status.set(`Outlined the stroke of ${produced.size} object${produced.size > 1 ? "s" : ""}.`);
+    this.status.set(skipped.length
+      ? `Outlined the stroke of ${produced.size} of ${selected.length} objects; left alone: ${[...new Set(skipped)].join(", ")}.`
+      : `Outlined the stroke of ${produced.size} object${produced.size > 1 ? "s" : ""}.`);
     this.changed();
     return true;
   }
