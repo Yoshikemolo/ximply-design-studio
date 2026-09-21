@@ -295,6 +295,34 @@ a {
   font-size: 10px;
   color: var(--muted);
 }
+/* A heading inside a menu, such as the Path commands of the Object menu. */
+.menu-section-label {
+  padding: 8px 8px 2px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+/* A choice among a few options inside a dialog, such as the axis of Average. */
+.radio-group {
+  display: grid;
+  gap: 8px;
+  margin: 0 0 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+.radio-group legend {
+  padding: 0 4px;
+  font-size: 11px;
+  color: var(--muted);
+}
+.radio-group label {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
 hr {
   border: 0;
   border-top: 1px solid var(--border);
@@ -1654,6 +1682,12 @@ textarea {
 /* The second badge says that releasing now leaves the original behind. */
 .cursor-tool-badge.duplicating {
   opacity: 0.8;
+}
+/* The mark of a path tool: a new path, a continuation, a close, an added or deleted anchor. */
+.cursor-mark-badge {
+  width: 16px;
+  height: 16px;
+  padding: 2px;
 }
 .cursor-tool-badge {
   position: fixed;

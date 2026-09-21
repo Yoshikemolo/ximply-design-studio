@@ -35,3 +35,4 @@
 | [Declarative procedural floor-plan geometry](ADR-0029.md) |
 | [Bounded in-process parsing of imported interchange formats](ADR-0030.md) |
 | [Carried faces and an in-process font reader for text outlines](ADR-0031.md) |
+| [Vector Paintbrush strokes carried by paths in the native format](ADR-0032.md) |

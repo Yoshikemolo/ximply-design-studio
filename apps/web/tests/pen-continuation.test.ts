@@ -29,7 +29,8 @@ describe('pen continuation', () => {
     e.finishPath();
     expect(paths(e)).toHaveLength(1);
     expect(nodes(paths(e)[0]).at(-1)).toEqual({ x: 400, y: 200 });
-    expect(nodes(paths(e)[0])).toHaveLength(5);
+    // Clicking the endpoint picks the path up without adding an anchor on top of it.
+    expect(nodes(paths(e)[0])).toHaveLength(4);
   });
 
   it('carries on from the first anchor by reversing the path', () => {
@@ -59,9 +60,11 @@ describe('pen continuation', () => {
     expect(nodes(paths(e)[0])).toHaveLength(3);
   });
 
-  it('leaves closed paths and the middle of a path alone', () => {
+  it('leaves closed paths and the middle of an unselected path alone', () => {
     const e = drawnPath();
     const first = paths(e)[0].id;
+    e.selectedId.set(null);
+    e.selectedIds.set([]);
     e.setTool('pen');
     e.start({ x: 200, y: 150 });
     e.end();
