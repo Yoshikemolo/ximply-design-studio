@@ -49,6 +49,9 @@ reloads nginx only after nginx accepts its own configuration. It then asks the s
 its page and for the code the page loads, reads the neighbours again and warns if any of
 them answers differently. The five most recent releases are kept.
 
+The build runs on the Node version the Angular compiler accepts, fetched for the run, so
+a shell with another Node still produces the same build; `-NodeVersion` changes it.
+
 Useful switches: `-SkipTests` when the suite has just been run, `-KeepReleases`,
 `-Domain`, `-Server`, `-User` and `-IdentityFile` for another host or key.
 

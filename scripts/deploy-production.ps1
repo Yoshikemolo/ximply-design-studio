@@ -27,6 +27,7 @@ param(
     [string]$SiteRoot = '/var/www/xds.ximplicity.es',
     [string[]]$Neighbours = @('evidentapp.ai', 'www.evidentapp.ai', 'api.ximplicity.es'),
     [int]$KeepReleases = 5,
+    [string]$NodeVersion = '24.15.0',
     [switch]$SkipTests,
     [switch]$AllowDirty,
     [switch]$Rollback
@@ -89,8 +90,9 @@ if (-not $SkipTests) {
     if ($LASTEXITCODE -ne 0) { throw 'The tests did not pass, so nothing was published.' }
 }
 
-Write-Step 'Building the application'
-& npx ng build --configuration production
+Write-Step "Building the application with Node $NodeVersion"
+# The build runs on the Node the Angular compiler accepts, whatever the shell has.
+& npx -y "node@$NodeVersion" node_modules/@angular/cli/bin/ng.js build --configuration production
 if ($LASTEXITCODE -ne 0) { throw 'The build failed, so nothing was published.' }
 $build = Join-Path $repository 'dist/studio/browser'
 if (-not (Test-Path (Join-Path $build 'index.html'))) { throw "The build left no index.html in $build." }
