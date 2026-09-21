@@ -105,3 +105,8 @@
 | [SC-0099 — Properties of a whole selection](SC-0099.md) |
 | [SC-0100 — Outline stroke and text outlines](SC-0100.md) |
 | [SC-0101 — Spatial preview planes and parallax](SC-0101.md) |
+| [SC-0102 — The Pen and the anchor tools as Illustrator draws with them](SC-0102.md) |
+| [SC-0103 — Choosing anchors and segments, and showing them](SC-0103.md) |
+| [SC-0104 — Pencil, Smooth, Path Eraser and Eraser](SC-0104.md) |
+| [SC-0105 — Object Path commands and the Reshape tool](SC-0105.md) |
+| [SC-0106 — The vector Paintbrush and brushed paths](SC-0106.md) |
