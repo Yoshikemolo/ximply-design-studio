@@ -19,7 +19,7 @@
           </button>
           <hr />
           <button (click)="imageFile.click()">
-            {{ t("Import image")
+            {{ t("Import")
             }}<kbd>{{ shortcut("importImage") }}</kbd></button
           ><button (click)="editor.exportPng()">
             {{ t("Export PNG") }}<kbd>{{ shortcut("exportPng") }}</kbd></button
@@ -299,7 +299,7 @@
             <button
               (click)="imageFile.click()"
               [title]="commandTitle('importImage')"
-              [attr.aria-label]="t('Import image')"
+              [attr.aria-label]="t('Import')"
             >
               <img src="/assets/icons/image.svg" alt="" />
             </button>

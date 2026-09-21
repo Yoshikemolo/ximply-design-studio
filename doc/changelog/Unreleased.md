@@ -29,6 +29,7 @@ None.
 
 ## Improvements
 
+- Name the import command Import, not Import image: it reads drawings as well as pictures.
 - Show or hide the column of tools from View, Layout, like the other blocks of the workspace. The canvas takes the width the column leaves, and the choice is remembered.
 - Build the spatial preview by group: every element of a group is painted on the same plane and a layer outside a group takes a plane of its own, so the depth of the preview follows how the drawing is organised.
 - Offer a parallax view in the spatial preview. The camera faces the planes head on and follows the pointer a fraction of the page, so the near planes travel further across the view than the far ones; the orbit view returns with the same button.

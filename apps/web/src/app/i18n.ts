@@ -429,7 +429,7 @@ const ES: Record<string, string> = {
   "Save project": "Guardar proyecto",
   "Open project": "Abrir proyecto",
   "New document": "Nuevo documento",
-  "Import image": "Importar imagen",
+  "Import": "Importar",
   "Export PNG": "Exportar PNG",
   "Export SVG": "Exportar SVG",
   Undo: "Deshacer",

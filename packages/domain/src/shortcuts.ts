@@ -82,7 +82,7 @@ export const COMMANDS: Command[] = [
     distributeY: "Distribute vertically",
   }).map(([id, label]) => ({ id, label, keys: [] })),
   { id: "about", label: "About", keys: [] },
-  { id: "importImage", label: "Import image", keys: [] },
+  { id: "importImage", label: "Import", keys: [] },
   { id: "exportPng", label: "Export PNG", keys: [] },
   { id: "exportSvg", label: "Export SVG", keys: [] },
   { id: "undo", label: "Undo", keys: ["Mod+Z"] },
