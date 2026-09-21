@@ -300,7 +300,8 @@
         "packages/domain/tests/cut.test.ts",
         "apps/web/tests/cut-tools.test.ts",
         "packages/domain/tests/outline-stroke.test.ts",
-        "apps/web/tests/outline-conversion.test.ts"
+        "apps/web/tests/outline-conversion.test.ts",
+        "apps/web/tests/command-dispatch.test.ts"
       ],
       "evidence": [
         "doc/implementation/PLAN-0002-0001.md",
@@ -463,15 +464,18 @@
       "scenarios": [
         "SC-0037",
         "SC-0038",
-        "SC-0039"
+        "SC-0039",
+        "SC-0101"
       ],
       "implementation": [
         "apps/web/src/app/editor.service.ts",
-        "packages/domain/src/document.ts"
+        "packages/domain/src/document.ts",
+        "apps/web/src/app/spatial.ts"
       ],
       "tests": [
         "packages/domain/tests/document.test.ts",
-        "apps/web/tests/editor.test.ts"
+        "apps/web/tests/editor.test.ts",
+        "apps/web/tests/spatial-planes.test.ts"
       ],
       "evidence": [
         "doc/implementation/PLAN-0002-0001.md"

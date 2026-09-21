@@ -202,8 +202,11 @@ export function validateShortcuts(value: unknown): ShortcutMap {
   if (Object.keys(input).some((id) => !COMMANDS.some((c) => c.id === id)))
     throw new Error("Unknown command");
   for (const command of COMMANDS) {
-    const introduced = ["tool.eyedropper", "tool.paintBucket", "makeBlend", "expandBlend", "releaseBlend", "displacement", "rotation", "regroup"].includes(command.id);
-    const keys = input[command.id] ?? (introduced ? command.keys.filter((chord) => !Object.values(input).some((value) => Array.isArray(value) && value.some((key) => typeof key === "string" && normalizeChord(key) === chord))) : undefined);
+    // Settings saved before a command existed say nothing about it. The command takes
+    // its own keys, minus any chord the saved settings already gave to another command.
+    const taken = (chord: string) => Object.values(input).some((value) => Array.isArray(value)
+      && value.some((key) => typeof key === "string" && normalizeChord(key) === chord));
+    const keys = input[command.id] ?? command.keys.filter((chord) => !taken(chord));
     if (
       !Array.isArray(keys) ||
       keys.length > 2 ||

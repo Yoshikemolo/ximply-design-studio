@@ -227,6 +227,7 @@ Generated titles and paths only; authoritative content remains in each linked do
 - [SC-0098 — SC-0098 — Outline view and proportional corner resizing](sc/SC-0098.md)
 - [SC-0099 — SC-0099 — Properties of a whole selection](sc/SC-0099.md)
 - [SC-0100 — SC-0100 — Outline stroke and text outlines](sc/SC-0100.md)
+- [SC-0101 — SC-0101 — Spatial preview planes and parallax](sc/SC-0101.md)
 - [SEC-0001 — SEC-0001 — Identity and project isolation](sec/SEC-0001.md)
 - [SEC-0002 — SEC-0002 — Revocation and session lifetime](sec/SEC-0002.md)
 - [SEC-0003 — SEC-0003 — Plugin least privilege](sec/SEC-0003.md)

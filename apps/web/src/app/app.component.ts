@@ -31,6 +31,7 @@ import {
   signal,
 } from "@angular/core";
 import { FormsModule } from "@angular/forms";
+import type { SpatialPreview } from "./spatial";
 import { EditorService, ContextAction, ContextTarget } from "./editor.service";
 import { ContextMenuComponent, ContextMenuEntry } from "./context-menu.component";
 import { SmartTableComponent } from "./smart-table.component";
@@ -333,6 +334,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   readonly workspace = signal("Drawing");
   readonly about = signal(false);
   readonly spatial = signal(false);
+  readonly spatialParallax = signal(false);
   readonly dialog = signal(false);
   readonly projects = signal<{ id: string; name: string; updatedAt: string }[]>(
     [],
@@ -348,7 +350,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   readonly panelOrder = signal(["properties", "layers"]);
   private frame = 0;
   private pan?: { x: number; y: number; left: number; top: number };
-  private disposeSpatial?: () => void;
+  private spatialView?: SpatialPreview;
   constructor(
     readonly editor: EditorService,
     readonly preferences: PreferencesService,
@@ -877,7 +879,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
       this.wheelHandler,
     );
     cancelAnimationFrame(this.frame);
-    this.disposeSpatial?.();
+    this.spatialView?.dispose();
   }
   schedule() {
     cancelAnimationFrame(this.frame);
@@ -1269,6 +1271,49 @@ export class AppComponent implements AfterViewInit, OnDestroy {
       (this.shortcut(id) ? " (" + this.shortcut(id) + ")" : "")
     );
   }
+  /**
+   * What every command does. Menus, the toolbars, the context menu and the keyboard
+   * all read the same table, so a command can never reach one of them and not the others.
+   */
+  private commandActions(): Record<string, () => void> {
+    return {
+      documentFormat: () => this.openPageDialog("format"),
+      expandDocument: () => this.openPageDialog("expand"),
+      cropDocument: () => this.openPageDialog("crop"),
+      about: () => this.openAbout(),
+      importImage: () => this.imageFile?.nativeElement.click(),
+      exportPng: () => {
+        void this.editor.exportPng();
+      },
+      exportSvg: () => this.editor.exportSvg(),
+      undo: () => this.editor.undo(),
+      redo: () => this.editor.redo(),
+      save: () => this.editor.save(),
+      open: () => this.projectFile?.nativeElement.click(),
+      new: () => this.newDocument(),
+      duplicate: () => this.editor.duplicate(),
+      duplicateSeries: () => this.openArrayDialog(),
+      transformAgain: () => this.editor.transformAgain(),
+      copy: () => this.editor.copySelection(),
+      cut: () => this.editor.cutSelection(),
+      paste: () => this.editor.paste(),
+      pasteInFront: () => this.editor.paste("front"),
+      pasteInBack: () => this.editor.paste("back"),
+      toggleBoundingBox: () => this.editor.toggleBoundingBox(),
+      toggleOutline: () => this.editor.toggleOutlineView(),
+      outlineStroke: () => this.editor.outlineStrokeSelection(),
+      outlineText: () => { void this.editor.outlineTextSelection().catch((error) => this.notify(error)); },
+      remove: () => this.editor.remove(),
+      finish: () => this.editor.finishPath(),
+      cancel: () => {
+        if (this.guideDrag) this.cancelGuide();
+        this.editor.cancel();
+        this.editor.finishPath();
+      },
+      fit: () => this.fit(),
+      settings: () => this.openSettings(),
+    };
+  }
   runCommand(id: string) {
     this.flyout.set(null);
     if (!this.commandEnabled(id)) return;
@@ -1314,6 +1359,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
       return;
     }
     const actions: Record<string, () => void> = {
+      ...this.commandActions(),
       documentFormat: () => this.openPageDialog("format"),
       expandDocument: () => this.startPageEditing("resize"),
       cropDocument: () => this.startPageEditing("crop"),
@@ -1822,43 +1868,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
       this.chooseTool(command.slice(5) as ToolId);
       return;
     }
-    const action: Record<string, () => void> = {
-      documentFormat: () => this.openPageDialog("format"),
-      expandDocument: () => this.openPageDialog("expand"),
-      cropDocument: () => this.openPageDialog("crop"),
-      about: () => this.openAbout(),
-      importImage: () => this.imageFile?.nativeElement.click(),
-      exportPng: () => {
-        void this.editor.exportPng();
-      },
-      exportSvg: () => this.editor.exportSvg(),
-      undo: () => this.editor.undo(),
-      redo: () => this.editor.redo(),
-      save: () => this.editor.save(),
-      open: () => this.projectFile?.nativeElement.click(),
-      new: () => this.newDocument(),
-      duplicate: () => this.editor.duplicate(),
-      duplicateSeries: () => this.openArrayDialog(),
-      transformAgain: () => this.editor.transformAgain(),
-      copy: () => this.editor.copySelection(),
-      cut: () => this.editor.cutSelection(),
-      paste: () => this.editor.paste(),
-      pasteInFront: () => this.editor.paste("front"),
-      pasteInBack: () => this.editor.paste("back"),
-      toggleBoundingBox: () => this.editor.toggleBoundingBox(),
-      toggleOutline: () => this.editor.toggleOutlineView(),
-      outlineStroke: () => this.editor.outlineStrokeSelection(),
-      outlineText: () => { void this.editor.outlineTextSelection().catch((error) => this.notify(error)); },
-      remove: () => this.editor.remove(),
-      finish: () => this.editor.finishPath(),
-      cancel: () => {
-        if (this.guideDrag) this.cancelGuide();
-        this.editor.cancel();
-        this.editor.finishPath();
-      },
-      fit: () => this.fit(),
-      settings: () => this.openSettings(),
-    };
+    const action = this.commandActions();
     if (action[command]) action[command]();
     else if (
       ![
@@ -2033,18 +2043,21 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   }
   async spatialPreview() {
     this.spatial.set(true);
+    this.spatialParallax.set(false);
     try {
       const { createSpatialPreview } = await import("./spatial");
       requestAnimationFrame(async () => {
         try {
           if (this.spatialHost) {
-            const dispose = await createSpatialPreview(
+            const view = await createSpatialPreview(
               this.spatialHost.nativeElement,
               this.editor.document(),
               this.editor.renderer,
             );
-            if (this.spatial()) this.disposeSpatial = dispose;
-            else dispose();
+            if (this.spatial()) {
+              this.spatialView = view;
+              view.parallax(this.spatialParallax());
+            } else view.dispose();
           }
         } catch (error) {
           this.notify(error);
@@ -2056,9 +2069,15 @@ export class AppComponent implements AfterViewInit, OnDestroy {
       this.closeSpatial();
     }
   }
+  toggleParallax() {
+    const enabled = !this.spatialParallax();
+    this.spatialParallax.set(enabled);
+    this.spatialView?.parallax(enabled);
+  }
   closeSpatial() {
-    this.disposeSpatial?.();
-    this.disposeSpatial = undefined;
+    this.spatialView?.dispose();
+    this.spatialView = undefined;
     this.spatial.set(false);
+    this.spatialParallax.set(false);
   }
 }
