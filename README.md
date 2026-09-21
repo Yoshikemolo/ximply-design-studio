@@ -118,5 +118,12 @@ Visual browser acceptance, the strict SonarQube gate, protection verification an
 independent human review remain required before merging. Feature-branch availability
 allows local evaluation; it is not full product certification.
 
-Public visibility is requested. A distribution license is not yet selected; see
-[LICENSE-DECISION.md](LICENSE-DECISION.md). Owner and reviewer: Yoshikemolo.
+## Licence
+
+This software is published under the [Ximply Design Studio Limited Use Licence](LICENSE),
+a proprietary licence. You may read it and run it to evaluate it, to study it or for your
+own internal use. Distributing it, building anything derived from it and any commercial
+use need the written permission of the author. The repository being public is not a grant
+of those rights. Third-party material keeps its own licence, and a drawing shown in a
+screenshot belongs to whoever owns it. See [LICENSE-DECISION.md](LICENSE-DECISION.md).
+Owner and reviewer: Yoshikemolo.
