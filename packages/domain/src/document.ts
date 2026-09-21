@@ -64,6 +64,7 @@ export interface Layer {
   textLayout?: TextLayoutOptions;
   typography?: TextTypography;
   source: string;
+  paintLayer?: true;
   adjustments: Adjustments;
   curves?: CurvePath[];
   symbolId?: string;
@@ -587,6 +588,7 @@ export function parseDocument(text: string): StudioDocument {
       typeof layer["locked"] !== "boolean"
     )
       throw new Error("Unsupported layer.");
+    if (layer["paintLayer"] !== undefined && (layer["paintLayer"] !== true || layer["kind"] !== "image" || value["version"] !== 2)) throw new Error("Invalid paint layer.");
     for (const key of ["x", "y", "rotation"])
       if (!finite(layer[key], -100000, 100000))
         throw new Error("Invalid layer transform.");

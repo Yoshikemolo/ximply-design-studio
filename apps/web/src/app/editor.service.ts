@@ -1,3 +1,4 @@
+import { drawPaintSource, finishPaint, paintFrame } from "./paint-buffer";
 import { Procedural, defaultProcedural, generateProcedural, syncProcedurals, validProcedural } from "../../../../packages/domain/src/procedural";
 import { openingHost, wallSnapPoint, WallSnap } from "./procedural-placement";
 import { BrushSettings, BrushType, BRUSH_TYPES, brushStamps, defaultBrush, validBrushSettings } from "../../../../packages/domain/src/brush";
@@ -804,7 +805,7 @@ export class EditorService {
   );
   history = new DocumentHistory();
   readonly renderer = new CanvasRenderer();
-  painting?: { id: string; canvas: HTMLCanvasElement };
+  painting?: { id: string; canvas: HTMLCanvasElement; initial: Uint8ClampedArray; selectedId: string | null; selectedIds: string[] };
   // Brush and eraser keep their own tip settings.
   readonly brushSettings = signal<Record<"brush" | "eraser", BrushSettings>>({ brush: { ...defaultBrush }, eraser: { ...defaultBrush } });
   brushFor(tool: "brush" | "eraser") { return this.brushSettings()[tool]; }
@@ -2021,8 +2022,11 @@ export class EditorService {
         layer.width = this.document().width;
         layer.height = this.document().height;
         layer.name = "Paint layer";
+        layer.paintLayer = true;
         this.document.update((d) => ({ ...d, layers: [...d.layers, layer!] }));
       }
+      const original = layer;
+      layer = paintFrame(layer, before);
       const canvas = window.document.createElement("canvas");
       canvas.width = Math.min(4096, Math.ceil(layer.width));
       canvas.height = Math.min(4096, Math.ceil(layer.height));
@@ -2034,10 +2038,12 @@ export class EditorService {
           this.status.set("Image is loading. Try again.");
           return;
         }
-        ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
+        drawPaintSource(ctx, image, original, layer, canvas.width, canvas.height);
       }
+      this.painting = { id: layer.id, canvas, initial: canvas.getContext("2d")!.getImageData(0, 0, canvas.width, canvas.height).data.slice(), selectedId: this.selectedId(), selectedIds: [...this.selectedIds()] };
+      this.setLayer(layer.id, layer);
       this.selectedId.set(layer.id);
-      this.painting = { id: layer.id, canvas };
+      this.selectedIds.set([layer.id]);
       this.gesture = {
         before,
         start: point,
@@ -2315,10 +2321,19 @@ export class EditorService {
     const layer = this.document().layers.find((l) => l.id === g.id);
     if (layer?.curves && (g.mode === "pen" || g.mode.startsWith("node:")))
       this.setLayer(g.id, fitCurves(layer, layer.curves));
-    if (this.painting)
-      this.setLayer(g.id, {
-        source: this.painting.canvas.toDataURL("image/png"),
-      });
+    if (this.painting) {
+      const painting = this.painting;
+      const result = finishPaint(painting.canvas, g.original, painting.initial);
+      let candidate = result === undefined ? g.before : { ...this.document(), layers: this.document().layers.flatMap(l => l.id === g.id ? result ? [result] : [] : [l]) };
+      let valid = true;
+      try { parseDocument(JSON.stringify(candidate)); } catch { candidate = g.before; valid = false; this.status.set("Paint bounds exceed document limits"); }
+      this.document.set(candidate);
+      if (result === undefined || !valid) {
+        this.selectedId.set(painting.selectedId); this.selectedIds.set(painting.selectedIds);
+        this.gesture = undefined; this.painting = undefined; this.revision.update(v => v + 1); return;
+      }
+      if (!result) { this.selectedId.set(null); this.selectedIds.set([]); }
+    }
     const pivotAtStart = this.movePivot ? { key: this.selectionKey(), point: this.movePivot } : this.pivotOverride();
     if (["move", "rotate", "scale"].includes(g.mode)) this.finishTransformDrag(g, pivotAtStart);
     else this.commitStep(g.before, pivotAtStart);
@@ -2383,6 +2398,7 @@ export class EditorService {
     }
     if (this.gesture) this.document.set(this.gesture.before);
     if (this.movePivot) { this.setPivot(this.movePivot); this.movePivot = undefined; }
+    if (this.painting) { this.selectedId.set(this.painting.selectedId); this.selectedIds.set(this.painting.selectedIds); }
     this.gesture = undefined;
     this.painting = undefined;
     this.revision.update((x) => x + 1);

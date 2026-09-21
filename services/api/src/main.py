@@ -277,6 +277,7 @@ class Layer(Point):
     text: Annotated[str, Field(max_length=2000)]
     fontSize: Annotated[Number, Field(ge=1, le=500)]
     source: str
+    paintLayer: Literal[True] | None = None
     adjustments: Adjustments
     strokeStyle: StrokeStyle | None = None
     lineEnds: LineEnds | None = None
@@ -297,8 +298,10 @@ class Layer(Point):
     @model_validator(mode='before')
     @classmethod
     def non_nullable_extensions(cls, value):
-        if isinstance(value, dict) and any(key in value and value[key] is None for key in ('curves', 'symbolId', 'traceSourceId', 'groupPath', 'flipX', 'flipY', 'skewX', 'guide', 'textLayout', 'typography', 'strokeStyle', 'lineEnds', 'dimension', 'regroupPath', 'procedural')):
+        if isinstance(value, dict) and any(key in value and value[key] is None for key in ('curves', 'symbolId', 'traceSourceId', 'groupPath', 'flipX', 'flipY', 'skewX', 'guide', 'textLayout', 'typography', 'strokeStyle', 'lineEnds', 'dimension', 'regroupPath', 'procedural', 'paintLayer')):
             raise ValueError('Drawing extensions cannot be null')
+        if isinstance(value, dict) and 'paintLayer' in value and (value['paintLayer'] is not True or value.get('kind') != 'image'):
+            raise ValueError('Paint marker requires an image and true')
         return value
 
     @model_validator(mode='after')
@@ -380,7 +383,7 @@ class Document(BaseModel):
                 layer.curves is not None or layer.symbolId is not None or layer.traceSourceId is not None
                 or layer.guide is not None or layer.fill == 'none' or layer.stroke == 'none'
                 or layer.strokeStyle is not None or layer.lineEnds is not None
-                or layer.dimension is not None or layer.regroupPath is not None or layer.procedural is not None
+                or layer.dimension is not None or layer.regroupPath is not None or layer.procedural is not None or layer.paintLayer is not None
                 or layer.textLayout is not None or layer.typography is not None
                 or len(layer.fill) == 9 or len(layer.stroke) == 9
                 or layer.skewX is not None or layer.groupPath is not None or layer.flipX is not None or layer.flipY is not None
