@@ -97,3 +97,10 @@
 | [SC-0091 — SVG import as editable native layers](SC-0091.md) |
 | [SC-0092 — DXF import and the formats that are refused](SC-0092.md) |
 | [SC-0093 — Scissors and knife cutting tools](SC-0093.md) |
+| [SC-0094 — PDF export, printing and choosing documents](SC-0094.md) |
+| [SC-0095 — Clipboard, stacked pastes and the bounding box](SC-0095.md) |
+| [SC-0096 — Duplication in series](SC-0096.md) |
+| [SC-0097 — Illustrator and PDF drawing import](SC-0097.md) |
+| [SC-0098 — Outline view and proportional corner resizing](SC-0098.md) |
+| [SC-0099 — Properties of a whole selection](SC-0099.md) |
+| [SC-0100 — Outline stroke and text outlines](SC-0100.md) |

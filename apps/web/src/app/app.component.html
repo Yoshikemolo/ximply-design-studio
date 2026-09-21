@@ -24,8 +24,10 @@
           ><button (click)="editor.exportPng()">
             {{ t("Export PNG") }}<kbd>{{ shortcut("exportPng") }}</kbd></button
           ><button (click)="editor.exportSvg()">
-            {{ t("Export SVG") }}<kbd>{{ shortcut("exportSvg") }}</kbd>
-          </button>
+            {{ t("Export SVG") }}<kbd>{{ shortcut("exportSvg") }}</kbd></button
+          ><button (click)="exportAsPdf()">{{ t("Export PDF") }}</button
+          ><button (click)="openExport()">{{ t("Export") }}…</button
+          ><button (click)="printSelection()">{{ t("Print") }}</button>
           <hr />
           <button (click)="dialog.set(true)">{{ t("Server") }}</button>
         </div>
@@ -55,6 +57,8 @@
             {{ t("Fit") }}<kbd>{{ shortcut("fit") }}</kbd></button
           ><button (click)="panels.set(!panels())">
             {{ t(panels() ? "Hide panels" : "Show panels") }}</button
+          ><button (click)="editor.toggleOutlineView()">
+            {{ editor.outlineView() ? "✓" : "○" }} {{ t("Outline view") }}<kbd>{{ shortcut("toggleOutline") }}</kbd></button
           ><button (click)="spatialPreview()">{{ t("Spatial preview") }}</button
           >
           <div class="layout-menu"><strong>{{ t("Layout") }}</strong>
@@ -67,6 +71,11 @@
       <details>
         <summary>{{ t("Object") }}</summary>
         <div class="menu-popover">
+          <button [disabled]="!commandEnabled('outlineStroke')" (click)="runCommand('outlineStroke')">
+            {{ t("Outline stroke") }}</button
+          ><button [disabled]="!commandEnabled('outlineText')" (click)="runCommand('outlineText')">
+            {{ t("Create outlines") }}<kbd>{{ shortcut("outlineText") }}</kbd>
+          </button>
           <button (click)="runCommand('group')">
             {{ t("Group") }}<kbd>{{ shortcut("group") }}</kbd></button
           ><button (click)="runCommand('ungroup')">
@@ -123,7 +132,7 @@
       <option value="es">ES</option>
     </select>
     <button class="theme-toggle" (click)="theme.set(theme() === 'dark' ? 'light' : 'dark')" [title]="t(theme() === 'dark' ? 'Light theme' : 'Dark theme')" [attr.aria-label]="t(theme() === 'dark' ? 'Light theme' : 'Dark theme')"><img [src]="'/assets/icons/' + (theme() === 'dark' ? 'moon' : 'sun') + '.svg'" alt="" /></button>
-    <button class="primary small icon-action" (click)="editor.exportPng()" [title]="commandTitle('exportPng')" [attr.aria-label]="t('Export PNG')">
+    <button class="primary small icon-action" (click)="openExport()" [title]="t('Export')" [attr.aria-label]="t('Export')">
       <img src="/assets/icons/export.svg" alt="" />
     </button>
   </header>
@@ -270,6 +279,25 @@
             </button>
           }
           @if (section.id === 'paint') {
+            <div class="tool-family">
+              <button
+                class="family-primary"
+                [title]="commandTitle('copy')"
+                [disabled]="!commandEnabled('copy')"
+                [attr.aria-label]="t(clipboardGroup.label)"
+                (click)="runCommand('copy')"
+              >
+                <img [src]="'/assets/icons/' + clipboardGroup.icon + '.svg'" alt="" /></button
+              ><button
+                class="family-expander"
+                [attr.aria-label]="t('More tools') + ' · ' + t(clipboardGroup.label)"
+                [attr.aria-expanded]="flyout() === clipboardGroup.id"
+                aria-haspopup="menu"
+                (click)="toggleFlyout(clipboardGroup.id, $event)"
+              >
+                <span></span>
+              </button>
+            </div>
             <button
               (click)="imageFile.click()"
               [title]="commandTitle('importImage')"
@@ -358,7 +386,7 @@
               (contextmenu)="openCanvasContext($event)"
               (pointermove)="pointerMove($event)"
               (pointerleave)="cursorPoint.set(null)"
-              (pointerup)="pointerUp()"
+              (pointerup)="pointerUp($event)"
               (pointercancel)="pointerCancel()"
               (lostpointercapture)="pointerLost()"
             ></canvas>
@@ -1094,7 +1122,7 @@
   #imageFile
   class="visually-hidden"
   type="file"
-  accept="image/png,image/jpeg,image/webp,image/svg+xml,.svg,.dxf"
+  accept="image/png,image/jpeg,image/webp,image/svg+xml,.svg,.dxf,.ai,.pdf"
   (change)="imageInput($event)"
 /><input
   #projectFile
@@ -1243,6 +1271,16 @@
       [style.left.px]="cursor.x + 14"
       [style.top.px]="cursor.y + 18"
     />
+    @if (editor.duplicatingDrag()) {
+      <img
+        class="cursor-tool-badge duplicating"
+        [src]="'/assets/icons/' + toolIcon() + '.svg'"
+        alt=""
+        aria-hidden="true"
+        [style.left.px]="cursor.x + 20"
+        [style.top.px]="cursor.y + 24"
+      />
+    }
   }
 }
 @if (settings()) {
@@ -1439,7 +1477,7 @@
 }
 
 @if (paintPicker()) {
-  <section class="paint-popover" role="dialog" [attr.aria-label]="t('Appearance')" [style.left.px]="paintPicker()!.x" [style.top.px]="paintPicker()!.y">
+  <section class="paint-popover" role="dialog" [attr.aria-label]="t('Appearance')" [style.left.px]="paintPicker()!.x" [style.top.px]="paintPicker()!.y" [style.--popover-top.px]="paintPicker()!.y">
     <header><strong>{{ t(paintTarget() === 'fill' ? 'Fill' : 'Stroke') }}</strong><button (click)="paintPicker.set(null)" [attr.aria-label]="t('Close')">×</button></header>
     <label>{{ t('Color') }}<input type="color" [value]="paintBaseColor()" (input)="setPaintBaseColor(text($event))" /></label>
     <label>{{ t("Paint opacity") }}<input type="range" min="0" max="100" [value]="paintOpacity()" (input)="setPaintOpacity(number($event))" />{{ paintOpacity() }}%</label>
@@ -1490,6 +1528,63 @@
   </section></div>
 }
 
+@if (arrayDialog()) {
+  @let array = arraySettings();
+  <div class="modal-backdrop"><form class="server-dialog array-dialog" role="dialog" aria-modal="true" [attr.aria-label]="t('Duplicate in series')" (submit)="$event.preventDefault(); applyArray()" (keydown.escape)="arrayDialog.set(false); $event.stopPropagation()">
+    <h2>{{ t('Duplicate in series') }}</h2>
+    <label class="wide-label">{{ t('Series') }}<select [value]="array.mode" (change)="setArray('mode', $any(text($event)))">@for (mode of arrayModes; track mode.id) {<option [value]="mode.id">{{ t(mode.label) }}</option>}</select></label>
+    @if (array.mode !== 'grid') {
+      <div class="property-grid">
+        <label>{{ t('Copies') }}<input type="number" min="1" max="200" step="1" [value]="array.copies" (change)="setArrayNumber('copies', $event)" /></label>
+        @if (array.mode === 'linear') {
+          <label>{{ t('Step X') }}<input type="number" step="any" [value]="array.stepX" (change)="setArrayNumber('stepX', $event)" /></label>
+          <label>{{ t('Step Y') }}<input type="number" step="any" [value]="array.stepY" (change)="setArrayNumber('stepY', $event)" /></label>
+        } @else {
+          <label>{{ t('Sweep') }}<input type="number" step="any" min="-3600" max="3600" [value]="array.sweep" (change)="setArrayNumber('sweep', $event)" /></label>
+        }
+      </div>
+    } @else {
+      <div class="property-grid">
+        <label>{{ t('Columns') }}<input type="number" min="1" max="40" step="1" [value]="array.columns" (change)="setArrayNumber('columns', $event)" /></label>
+        <label>{{ t('Rows') }}<input type="number" min="1" max="40" step="1" [value]="array.rows" (change)="setArrayNumber('rows', $event)" /></label>
+        <label>{{ t('Gap X') }}<input type="number" step="any" [value]="array.gapX" (change)="setArrayNumber('gapX', $event)" /></label>
+        <label>{{ t('Gap Y') }}<input type="number" step="any" [value]="array.gapY" (change)="setArrayNumber('gapY', $event)" /></label>
+      </div>
+    }
+    <div class="property-grid">
+      <label>{{ t('Rotation') }}<input type="number" step="any" [value]="array.rotation" (change)="setArrayNumber('rotation', $event)" /></label>
+      <label>{{ t('Scale') }} (%)<input type="number" step="any" min="1" max="1000" [value]="array.scale" (change)="setArrayNumber('scale', $event)" /></label>
+    </div>
+    @if (array.mode === 'circular') {
+      <label class="wide-label">{{ t('Turn the copies with the series') }}<input class="toggle-switch" type="checkbox" role="switch" [checked]="array.orient" (change)="setArray('orient', $any($event.target).checked)" /></label>
+      <p class="panel-tip"><img src="/assets/icons/tip.svg" alt="" /><span>{{ t('The copies turn around the pivot of the selection.') }}</span></p>
+    }
+    <div class="dialog-actions"><button type="button" (click)="arrayDialog.set(false)">{{ t('Cancel') }}</button><button type="submit" [disabled]="!arrayValid()">{{ t('Apply') }}</button></div>
+  </form></div>
+}
+
+@if (exportDialog()) {
+  <div class="modal-backdrop"><form class="server-dialog export-dialog" role="dialog" aria-modal="true" [attr.aria-label]="t('Export')" (submit)="$event.preventDefault(); runExport()" (keydown.escape)="exportDialog.set(false); $event.stopPropagation()">
+    <h2>{{ t('Export') }}</h2>
+    <label class="wide-label">{{ t('Format') }}<select [value]="exportFormat()" (change)="exportFormat.set($any(text($event)))">@for (format of exportFormats; track format.id) {<option [value]="format.id">{{ t(format.label) }}</option>}</select></label>
+    <div class="section-label">{{ t('Documents') }}</div>
+    <div class="export-documents">
+      <xds-smart-table
+        [columns]="exportColumns()"
+        [rows]="exportRows()"
+        [selected]="exportTabs()"
+        [selectable]="true"
+        [label]="t('Documents')"
+        [selectionLabel]="t('Export')"
+        [selectAllLabel]="t('Select all')"
+        (selectedChange)="exportTabs.set($event)"
+      ></xds-smart-table>
+    </div>
+    <p class="typography-note">{{ t(exportFormat() === 'pdf' ? 'A PDF collects the chosen documents as one page each.' : 'One file per chosen document.') }}</p>
+    <div class="dialog-actions"><button type="button" (click)="exportDialog.set(false)">{{ t('Cancel') }}</button><button type="button" [disabled]="!exportTabs().length" (click)="printSelection()">{{ t('Print') }}</button><button type="submit" [disabled]="!exportTabs().length">{{ t('Export') }}</button></div>
+  </form></div>
+}
+
 @if (pageDialog(); as pageMode) {
   <div class="modal-backdrop"><form class="server-dialog page-dialog" role="dialog" aria-modal="true" [attr.aria-label]="t('Document dimensions')" (submit)="$event.preventDefault(); applyPageDialog()" (keydown.escape)="pageDialog.set(null); $event.stopPropagation()">
     <h2>{{ t(pageMode === 'format' ? 'Document dimensions' : pageMode === 'expand' ? 'Expand document' : 'Crop document') }}</h2>
@@ -1500,7 +1595,7 @@
       <label class="wide-label">{{ t('Orientation') }}<select [value]="pageOrientation()" (change)="pageOrientation.set($any(text($event)))"><option value="portrait">{{ t('Portrait') }}</option><option value="landscape">{{ t('Landscape') }}</option></select></label>
       <label class="wide-label">{{ t('Ruler units') }}<select [value]="preferences.distanceUnit()" (change)="setUnit('distanceUnit', $event)">@for (unit of units; track unit) {<option [value]="unit">{{ unit }}</option>}</select></label>
       <label class="wide-label color-row">{{ t('Background') }}<input class="color-value" type="text" maxlength="9" [value]="pageBackground()" (change)="pageBackground.set(text($event))" /><input class="color-swatch" type="color" [value]="colorValue(pageBackground())" (input)="pageBackground.set(text($event))" [attr.aria-label]="t('Background')" /></label>
-      <p class="typography-note">{{ t('Page') }}: {{ pagePixels().width }} x {{ pagePixels().height }} px @if (!pageFits()) {<strong>· {{ t('The page must stay between 16 and 4096 pixels.') }}</strong>}</p>
+      <p class="typography-note">{{ t('Page') }}: {{ pagePixels().width }} x {{ pagePixels().height }} px @if (!pageFits()) {<strong>· {{ t('The page must stay between 16 and 8192 pixels.') }}</strong>}</p>
       <div class="section-label">{{ t('Margin guides') }} · {{ preferences.distanceUnit() }}</div>
       <div class="property-grid">
         @for (edge of pageEdgeKeys; track edge) {

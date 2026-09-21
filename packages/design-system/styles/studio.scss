@@ -1,5 +1,91 @@
 @use "context-menu";
 
+/* Faces carried with the studio, so text is drawn and outlined from the same file. */
+@font-face {
+  font-family: "Arimo";
+  src: url("/assets/fonts/arimo-400-normal.woff") format("woff");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Arimo";
+  src: url("/assets/fonts/arimo-400-italic.woff") format("woff");
+  font-weight: 400;
+  font-style: italic;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Arimo";
+  src: url("/assets/fonts/arimo-700-normal.woff") format("woff");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Arimo";
+  src: url("/assets/fonts/arimo-700-italic.woff") format("woff");
+  font-weight: 700;
+  font-style: italic;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Tinos";
+  src: url("/assets/fonts/tinos-400-normal.woff") format("woff");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Tinos";
+  src: url("/assets/fonts/tinos-400-italic.woff") format("woff");
+  font-weight: 400;
+  font-style: italic;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Tinos";
+  src: url("/assets/fonts/tinos-700-normal.woff") format("woff");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Tinos";
+  src: url("/assets/fonts/tinos-700-italic.woff") format("woff");
+  font-weight: 700;
+  font-style: italic;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Cousine";
+  src: url("/assets/fonts/cousine-400-normal.woff") format("woff");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Cousine";
+  src: url("/assets/fonts/cousine-400-italic.woff") format("woff");
+  font-weight: 400;
+  font-style: italic;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Cousine";
+  src: url("/assets/fonts/cousine-700-normal.woff") format("woff");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Cousine";
+  src: url("/assets/fonts/cousine-700-italic.woff") format("woff");
+  font-weight: 700;
+  font-style: italic;
+  font-display: swap;
+}
+
 :root {
   color-scheme: dark;
   --bg: #13161d;
@@ -551,6 +637,65 @@ hr {
   height: 27px;
   padding: 4px;
 }
+/* The export dialog lists every open document; the current one is chosen to begin with. */
+.export-documents {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 180px;
+  overflow-y: auto;
+}
+/* One table for the lists of the shell: values on the left, the selection column last. */
+.smart-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11px;
+}
+.smart-table th {
+  text-align: left;
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--muted);
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--border);
+}
+.smart-table td {
+  padding: 7px 10px;
+  border-bottom: 1px solid var(--border);
+}
+/* Alternating rows keep a long list readable. */
+.smart-table tbody tr:nth-child(odd) {
+  background: var(--panel-raised);
+}
+.smart-table tbody tr.chosen {
+  background: var(--selected);
+}
+.smart-table th.select-column,
+.smart-table td.select-column {
+  width: 34px;
+  text-align: right;
+  padding-right: 10px;
+}
+.smart-table th.end,
+.smart-table td.end {
+  text-align: right;
+}
+.smart-table input[type="checkbox"] {
+  margin: 0;
+  vertical-align: middle;
+}
+.smart-table .cell-note {
+  margin-left: 8px;
+  color: var(--muted);
+  font-size: 9px;
+}
+.export-documents small {
+  margin-left: auto;
+  color: var(--muted);
+  font-size: 9px;
+}
 /* The cut in progress: the first point and, for the knife, the line it will follow. */
 .cut-overlay .cut-mark {
   fill: #ffffff;
@@ -572,8 +717,8 @@ hr {
 }
 .dash-row {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 4px;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 5px;
 }
 .dash-row select {
   grid-column: 1 / -1;
@@ -1459,6 +1604,10 @@ textarea {
   transform-origin: center;
   white-space: pre;
 }
+/* The second badge says that releasing now leaves the original behind. */
+.cursor-tool-badge.duplicating {
+  opacity: 0.8;
+}
 .cursor-tool-badge {
   position: fixed;
   z-index: 90;
@@ -1777,7 +1926,12 @@ textarea,
   .settings-content .shortcut-row > span { grid-column: 1 / -1; }
 }
 
-.paint-popover { max-height: calc(100dvh - 16px); overflow-y: auto; }
+/* The popover never runs past the bottom of the screen: it scrolls from where it opens. */
+.paint-popover { max-height: calc(100dvh - var(--popover-top, 0px) - 16px); overflow-y: auto; }
+/* The line type is a block of its own, as wide as the popover. */
+.dash-control { margin: 14px 0 0; padding: 0; border: 0; width: 100%; }
+.dash-control legend { color: var(--muted); font-size: 11px; margin-bottom: 5px; }
+.dash-control .dash-row { width: 100%; }
 .stroke-style-control { margin: 12px 0 0; padding: 0; border: 0; }
 .stroke-style-control legend { color: var(--muted); font-size: 11px; margin-bottom: 5px; }
 .stroke-style-control > div { display: flex; gap: 8px; }

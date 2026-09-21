@@ -3,6 +3,7 @@ import { Dimension, DimensionFormat, dimensionGeometry } from "../../../../packa
 import { defaultLineEnds, lineEndGeometry, LineEnd, LineEnds } from "../../../../packages/domain/src/line-endings";
 import { LeafType, LEAF_TYPES } from "../../../../packages/domain/src/procedural";
 import { BrushSettings, BrushType, BRUSH_TYPES, brushStamps, previewStroke } from "../../../../packages/domain/src/brush";
+import { ArraySettings, DEFAULT_ARRAY, validArraySettings } from "../../../../packages/domain/src/array-copy";
 import { defaultMarginGuides, MarginGuides, PAGE_FORMATS, PAGE_RESOLUTIONS, PageCategory, PageOrientation, pageSize, pageSizeFits, RegistrationMarks, REGISTRATION_MARKS, registrationFits } from "../../../../packages/domain/src/page-setup";
 import { BlendEasing } from "../../../../packages/domain/src/object-blend";
 import { FONT_FAMILIES, defaultTypography, defaultTextLayout, TextTypography, TextLayoutOptions } from "../../../../packages/domain/src/text-layout";
@@ -32,6 +33,7 @@ import {
 import { FormsModule } from "@angular/forms";
 import { EditorService, ContextAction, ContextTarget } from "./editor.service";
 import { ContextMenuComponent, ContextMenuEntry } from "./context-menu.component";
+import { SmartTableComponent } from "./smart-table.component";
 import { TOOLS, ToolId, TOOL_FAMILIES, ToolFamily } from "./tools";
 import { translate } from "./i18n";
 import { BLENDS, Layer, StrokeStyle, defaultStrokeStyle } from "../../../../packages/domain/src/document";
@@ -52,6 +54,11 @@ const DASH_PRESETS: { id: string; label: string; dash: number[] }[] = [
   { id: "custom", label: "Custom sequence", dash: [] },
 ];
 const DASH_FIELDS = [0, 1, 2, 3, 4, 5];
+const ARRAY_MODES = [
+  { id: "linear", label: "Linear series" },
+  { id: "circular", label: "Circular series" },
+  { id: "grid", label: "Grid series" },
+] as const;
 const BLEND_LIMIT_TIP = "Endpoints are excluded from the step count.";
 const BRUSH_TYPE_LABELS: Record<BrushType, string> = {
   round: "Round brush", flat: "Flat brush", calligraphy: "Calligraphy brush",
@@ -84,7 +91,10 @@ const COMMAND_ICONS: Record<string, string> = {
   makeBlend: "object-blend", expandBlend: "blend-expand", releaseBlend: "blend-release",
   mirrorH: "mirror-h", mirrorV: "mirror-v", rotateCW: "rotate-cw", rotateCCW: "rotate-ccw",
   scaleUp: "scale-up", scaleDown: "scale-down",
-  duplicate: "duplicate", remove: "delete", undo: "undo", redo: "redo",
+  duplicate: "duplicate", transformAgain: "transform-again", remove: "delete", undo: "undo", redo: "redo",
+  outlineStroke: "outline-stroke", outlineText: "outline-text",
+  copy: "copy", cut: "cut", paste: "paste", pasteInFront: "paste-front", pasteInBack: "paste-back",
+  duplicateSeries: "duplicate-series",
   layerUp: "layer-up", layerDown: "layer-down", fit: "fit-view", zoomIn: "zoom-in", zoomOut: "zoom-out",
 };
 const LEAF_TYPE_LABELS: Record<string, string> = { swing: "Hinged", sliding: "Sliding", folding: "Folding", pocket: "Pocket", fixed: "Fixed glazing", opening: "Passage without leaves" };
@@ -92,7 +102,7 @@ const LEAF_TYPE_LABELS: Record<string, string> = { swing: "Hinged", sliding: "Sl
 @Component({
   selector: "xds-root",
   standalone: true,
-  imports: [FormsModule, ContextMenuComponent],
+  imports: [FormsModule, ContextMenuComponent, SmartTableComponent],
   templateUrl: "./app.component.html",
 })
 export class AppComponent implements AfterViewInit, OnDestroy {
@@ -236,6 +246,13 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   readonly alignToArtboard = signal(false);
   readonly transformAngle = signal(90);
   readonly transformScale = signal(100);
+  /** The clipboard beside the import action, since both bring artwork into the document. */
+  readonly clipboardGroup = {
+    id: "clipboard",
+    label: "Copy and paste",
+    icon: "copy",
+    commands: ["copy", "cut", "paste", "pasteInFront", "pasteInBack", "duplicate", "duplicateSeries", "transformAgain"],
+  };
   readonly actionGroups = [
     {
       id: "objectBlend",
@@ -361,6 +378,8 @@ export class AppComponent implements AfterViewInit, OnDestroy {
       editor.tool();
       this.temporarySelect();
       editor.showHandles();
+      editor.boundingBoxVisible();
+      editor.outlineView();
       editor.handleSize();
       this.textEditing();
       this.textDraft();
@@ -401,6 +420,14 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     const context = this.contextMenu();
     if (!context) return [];
     const definitions: Record<ContextAction, { label: string; section: string; command?: string }> = {
+      copy: { label: "Copy", section: "clipboard", command: "copy" },
+      cut: { label: "Cut", section: "clipboard", command: "cut" },
+      paste: { label: "Paste", section: "clipboard", command: "paste" },
+      pasteInFront: { label: "Paste in front", section: "clipboard", command: "pasteInFront" },
+      pasteInBack: { label: "Paste in back", section: "clipboard", command: "pasteInBack" },
+      duplicate: { label: "Duplicate", section: "clipboard", command: "duplicate" },
+      duplicateSeries: { label: "Duplicate in series", section: "clipboard", command: "duplicateSeries" },
+      toggleBoundingBox: { label: "Show or hide the bounding box", section: "view", command: "toggleBoundingBox" },
       displacement: { label: "Enter displacement", section: "transform", command: "displacement" },
       rotation: { label: "Enter rotation", section: "transform", command: "rotation" },
       group: { label: "Group", section: "group", command: "group" },
@@ -430,6 +457,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     const context = this.contextMenu();
     const enabled = context && this.contextEntries().some(entry => entry.id === action && !entry.disabled);
     this.dismissContext();
+    if (context && enabled && action === "duplicateSeries") { this.openArrayDialog(); return; }
     if (context && enabled && (action === "displacement" || action === "rotation")) { this.openTransformDialog(action); return; }
     if (context && enabled) this.editor.runContextAction(context.target, action as ContextAction);
   }
@@ -859,6 +887,9 @@ export class AppComponent implements AfterViewInit, OnDestroy {
               "convertAnchor",
             ].includes(this.activeTool()),
             showHandles: this.editor.showHandles(),
+            boundingBox: this.editor.boundingBoxVisible(),
+            outline: this.editor.outlineView(),
+            outlineInk: this.theme?.() === "light" ? "#202b3f" : "#e5e9f0",
             handleSize: this.editor.handleSize(),
           },
         );
@@ -892,6 +923,85 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   canvasDoubleClick(event: MouseEvent) {
     if (event.button !== 0) return;
     if (this.editor.resetPivotAt(this.point(event))) event.preventDefault();
+  }
+  // Duplication in series: the dialog holds the settings until they are applied.
+  readonly arrayDialog = signal(false);
+  readonly arraySettings = signal<ArraySettings>({ ...DEFAULT_ARRAY });
+  get arrayModes() { return ARRAY_MODES; }
+  openArrayDialog() {
+    this.dismissMenus();
+    this.dismissContext();
+    if (!this.editor.selectedLayers().length) { this.editor.status.set("Select the objects to duplicate."); return; }
+    this.arrayDialog.set(true);
+  }
+  setArray<K extends keyof ArraySettings>(key: K, value: ArraySettings[K]) {
+    this.arraySettings.update((settings) => ({ ...settings, [key]: value }));
+  }
+  setArrayNumber(key: "copies" | "stepX" | "stepY" | "rotation" | "scale" | "sweep" | "columns" | "rows" | "gapX" | "gapY", event: Event) {
+    const value = this.number(event);
+    if (Number.isFinite(value)) this.setArray(key, value);
+  }
+  arrayValid() { return validArraySettings(this.arraySettings()); }
+  applyArray() {
+    if (!this.editor.duplicateSeries(this.arraySettings())) {
+      this.editor.status.set("The series cannot be created with these settings.");
+      return;
+    }
+    this.arrayDialog.set(false);
+  }
+  // Export and print: one dialog chooses the format and which open documents are included.
+  readonly exportDialog = signal(false);
+  readonly exportFormat = signal<"png" | "svg" | "pdf">("pdf");
+  readonly exportTabs = signal<string[]>([]);
+  readonly exportFormats = [
+    { id: "pdf", label: "PDF document" },
+    { id: "svg", label: "SVG drawing" },
+    { id: "png", label: "PNG image" },
+  ];
+  openExport() {
+    this.dismissMenus();
+    this.exportTabs.set([this.editor.activeTabId()]);
+    this.exportDialog.set(true);
+  }
+  /** The export list as table data: one row per open document, named and tagged. */
+  exportColumns() { return [{ key: "name", label: this.t("Document"), noteKey: "note" }]; }
+  exportRows() {
+    return this.editor.tabs().map((tab) => ({ id: tab.id, name: tab.name, note: tab.active ? this.t("Current document") : "" }));
+  }
+  toggleExportTab(id: string, checked: boolean) {
+    this.exportTabs.update((ids) => (checked ? [...new Set([...ids, id])] : ids.filter((entry) => entry !== id)));
+  }
+  /** The chosen documents, in the order of the tab strip, or the active one on its own. */
+  private exportSelection() {
+    const chosen = this.editor.tabOrder().filter((id) => this.exportTabs().includes(id));
+    return chosen.length ? chosen : [this.editor.activeTabId()];
+  }
+  async runExport() {
+    const tabs = this.exportSelection();
+    this.exportDialog.set(false);
+    try {
+      await this.editor.exportAs(this.exportFormat(), tabs);
+    } catch (error) {
+      this.notify(error);
+    }
+  }
+  async exportAsPdf() {
+    this.dismissMenus();
+    try {
+      await this.editor.exportPdf([this.editor.activeTabId()]);
+    } catch (error) {
+      this.notify(error);
+    }
+  }
+  printSelection() {
+    const tabs = this.exportDialog() ? this.exportSelection() : [this.editor.activeTabId()];
+    this.dismissMenus();
+    this.exportDialog.set(false);
+    try {
+      this.editor.printDocuments(tabs);
+    } catch (error) {
+      this.notify(error);
+    }
   }
   pointerDown(event: PointerEvent) {
     if (event.button !== 0) return;
@@ -944,11 +1054,11 @@ export class AppComponent implements AfterViewInit, OnDestroy {
         ctrl: event.ctrlKey,
       });
   }
-  pointerUp() {
+  pointerUp(event?: PointerEvent) {
     this.pointerActive = false;
     if (this.zoomDrag) { this.endZoomArea(); return; }
     this.pan = undefined;
-    this.editor.end();
+    this.editor.end(event ? { alt: event.altKey } : undefined);
   }
   /** Browsers release capture after every pointerup; only an interrupted press cancels the gesture. */
   pointerLost() {
@@ -1057,13 +1167,17 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   flyoutActions() {
     const id = this.flyout();
     return (
-      this.actionGroups.find((g) => g.id === id)?.commands ??
+      [...this.actionGroups, this.clipboardGroup].find((g) => g.id === id)?.commands ??
       (
         {
           rotate: ["rotateCW", "rotateCCW"],
           mirror: ["mirrorH", "mirrorV"],
           scale: ["scaleUp", "scaleDown"],
           zoom: ["zoomIn", "zoomOut", "fit"],
+          // Outlining a stroke belongs with the tools that draw one, and outlining a text
+          // with the tool that writes it.
+          paint: ["outlineStroke"],
+          text: ["outlineText"],
         } as Record<string, string[]>
       )[id ?? ""] ??
       []
@@ -1117,6 +1231,11 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   commandEnabled(id: string) {
     if (id === "makeBlend") return this.editor.canCreateBlend() && this.blendStepLimit() > 0;
     if (id === "expandBlend" || id === "releaseBlend") return !!this.editor.selectedBlend() && !this.blendIsLocked();
+    // The clipboard actions say what they need: something selected, or something copied.
+    if (["copy", "cut", "duplicate", "duplicateSeries", "outlineStroke"].includes(id)) return this.editor.selectedLayers().length > 0;
+    if (id === "outlineText") return this.editor.selectedLayers().some((layer) => layer.kind === "text");
+    if (id === "transformAgain") return this.editor.selectedLayers().length > 0 && !!this.editor.lastTransform();
+    if (["paste", "pasteInFront", "pasteInBack"].includes(id)) return this.editor.canPaste();
     return true;
   }
   commandLabel(id: string) {
@@ -1255,6 +1374,8 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     this.cursorPoint.update((cursor) => (cursor ? { ...cursor } : null));
   }
   toolCursor() {
+    // The copy cursor is the sign that releasing now leaves the original behind.
+    if (this.editor.duplicatingDrag()) return "copy";
     if (this.preferences.cursorAxes()) return "none";
     return this.temporaryPan() || this.activeTool() === "hand"
       ? "grab"
@@ -1612,6 +1733,8 @@ export class AppComponent implements AfterViewInit, OnDestroy {
       return;
     }
     if (!event.isComposing) this.temporarySelect.set(event.ctrlKey);
+    // Alt pressed during a transform announces the duplication even without moving the pointer.
+    this.editor?.setDuplicatingDrag(event.altKey);
     if (
       event.key === "Escape" &&
       !event.isComposing &&
@@ -1693,6 +1816,17 @@ export class AppComponent implements AfterViewInit, OnDestroy {
       open: () => this.projectFile?.nativeElement.click(),
       new: () => this.newDocument(),
       duplicate: () => this.editor.duplicate(),
+      duplicateSeries: () => this.openArrayDialog(),
+      transformAgain: () => this.editor.transformAgain(),
+      copy: () => this.editor.copySelection(),
+      cut: () => this.editor.cutSelection(),
+      paste: () => this.editor.paste(),
+      pasteInFront: () => this.editor.paste("front"),
+      pasteInBack: () => this.editor.paste("back"),
+      toggleBoundingBox: () => this.editor.toggleBoundingBox(),
+      toggleOutline: () => this.editor.toggleOutlineView(),
+      outlineStroke: () => this.editor.outlineStrokeSelection(),
+      outlineText: () => { void this.editor.outlineTextSelection().catch((error) => this.notify(error)); },
       remove: () => this.editor.remove(),
       finish: () => this.editor.finishPath(),
       cancel: () => {
@@ -1735,6 +1869,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   }
   @HostListener("window:keyup", ["$event"]) keyUp(event: KeyboardEvent) {
     this.temporarySelect.set(event.ctrlKey);
+    this.editor?.setDuplicatingDrag(event.altKey);
     if (event.code === "Space") this.spaceHeld = false;
     if (event.code === this.panKey) {
       this.temporaryPan.set(false);

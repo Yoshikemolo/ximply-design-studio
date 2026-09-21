@@ -45,6 +45,12 @@ export class CanvasRenderer {
       zoom: number;
       direct: boolean;
       showHandles?: boolean;
+      /** The frame, the resizing handles and the rotation knob of the selection. */
+      boundingBox?: boolean;
+      /** Outline view: the artwork is drawn as hairline contours without its paints. */
+      outline?: boolean;
+      /** Ink of the outline view, which the shell picks from the theme. */
+      outlineInk?: string;
       handleSize?: number;
     } = { zoom: 1, direct: false },
   ) {
@@ -56,13 +62,14 @@ export class CanvasRenderer {
       ctx.fillStyle = document.background;
       ctx.fillRect(0, 0, canvas.width, canvas.height);
     }
+    const hairline = 1 / Math.max(0.1, interaction.zoom || 1);
     for (const layer of materializeProcedural(document).layers)
       if (layer.visible && !layer.guide)
         this.layer(
           ctx,
-          layer,
+          interaction.outline ? this.asOutline(layer, hairline, interaction.outlineInk ?? "#20262f") : layer,
           ready,
-          painting?.id === layer.id ? painting.canvas : undefined,
+          interaction.outline ? undefined : painting?.id === layer.id ? painting.canvas : undefined,
         );
     const selected = document.layers.filter(
       (l) =>
@@ -89,35 +96,38 @@ export class CanvasRenderer {
       ctx.strokeStyle = "#0d59f2";
       ctx.fillStyle = "#ffffff";
       ctx.lineWidth = 1.5 * unit;
-      ctx.setLineDash([5 * unit, 3 * unit]);
-      ctx.strokeRect(
-        -3 * unit,
-        -3 * unit,
-        layer.width + 6 * unit,
-        layer.height + 6 * unit,
-      );
-      ctx.setLineDash([]);
-      for (const [x, y] of [
-        [0, 0],
-        [layer.width, 0],
-        [0, layer.height],
-        [layer.width, layer.height],
-        [layer.width / 2, 0],
-        [layer.width / 2, layer.height],
-        [0, layer.height / 2],
-        [layer.width, layer.height / 2],
-      ]) {
-        ctx.fillRect(x - size, y - size, size * 2, size * 2);
-        ctx.strokeRect(x - size, y - size, size * 2, size * 2);
+      // The bounding box can be hidden to see the artwork without its frame and handles.
+      if (interaction.boundingBox !== false) {
+        ctx.setLineDash([5 * unit, 3 * unit]);
+        ctx.strokeRect(
+          -3 * unit,
+          -3 * unit,
+          layer.width + 6 * unit,
+          layer.height + 6 * unit,
+        );
+        ctx.setLineDash([]);
+        for (const [x, y] of [
+          [0, 0],
+          [layer.width, 0],
+          [0, layer.height],
+          [layer.width, layer.height],
+          [layer.width / 2, 0],
+          [layer.width / 2, layer.height],
+          [0, layer.height / 2],
+          [layer.width, layer.height / 2],
+        ]) {
+          ctx.fillRect(x - size, y - size, size * 2, size * 2);
+          ctx.strokeRect(x - size, y - size, size * 2, size * 2);
+        }
+        ctx.beginPath();
+        ctx.moveTo(layer.width / 2, 0);
+        ctx.lineTo(layer.width / 2, -28 * unit);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.arc(layer.width / 2, -28 * unit, 6 * unit, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
       }
-      ctx.beginPath();
-      ctx.moveTo(layer.width / 2, 0);
-      ctx.lineTo(layer.width / 2, -28 * unit);
-      ctx.stroke();
-      ctx.beginPath();
-      ctx.arc(layer.width / 2, -28 * unit, 6 * unit, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.stroke();
       if (interaction.direct && layer.curves && !layer.procedural && !layer.dimension)
         for (const path of layer.curves)
           for (const node of path.nodes) {
@@ -192,6 +202,26 @@ export class CanvasRenderer {
     ctx.stroke();
     ctx.restore();
   }
+  /**
+   * The outline view of a layer: its contours in one ink and no paint at all. An image has
+   * no contour of its own, so its frame stands for it, and a dimension keeps its drawing,
+   * since it is an annotation rather than artwork.
+   */
+  private asOutline(layer: Layer, hairline: number, ink: string): Layer {
+    if (layer.dimension) return layer;
+    const outlined: Layer = {
+      ...layer,
+      fill: "none",
+      stroke: ink,
+      strokeWidth: hairline,
+      strokeStyle: { cap: "butt", join: "miter", alignment: "center", dash: [] },
+      opacity: 1,
+      blend: "source-over",
+    };
+    if (layer.kind === "image") return { ...outlined, kind: "rectangle", source: "", curves: undefined };
+    if (layer.kind === "text") return { ...layer, fill: ink, stroke: "none", opacity: 1, blend: "source-over" };
+    return outlined;
+  }
   private layer(
     ctx: CanvasRenderingContext2D,
     l: Layer,
@@ -235,8 +265,9 @@ export class CanvasRenderer {
       const projection = projectionCurves(l);
       const drawn = l.curves.filter((_, index) => !projection[index]);
       ctx.beginPath();
-      for (const path of drawn.filter((p) => p.closed))
-        this.curve(ctx, path);
+      // A fill paints every contour, open ones included: filling closes a path, as it does
+      // in the drawing tools this editor follows, while the stroke keeps the ends apart.
+      for (const path of drawn) this.curve(ctx, path);
       if (hasFill) ctx.fill("evenodd");
       if (hasStroke) {
         if (strokeStyle.alignment === "center") {

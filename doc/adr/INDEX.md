@@ -34,3 +34,4 @@
 | [Vector dimensions with independent annotation sizing](ADR-0028.md) |
 | [Declarative procedural floor-plan geometry](ADR-0029.md) |
 | [Bounded in-process parsing of imported interchange formats](ADR-0030.md) |
+| [Carried faces and an in-process font reader for text outlines](ADR-0031.md) |

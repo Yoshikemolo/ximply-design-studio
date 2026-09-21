@@ -54,7 +54,13 @@ import {
 import { Injectable, computed, signal } from "@angular/core";
 import { ImportResult, importSvg } from "../../../../packages/domain/src/svg-import";
 import { importDxf } from "../../../../packages/domain/src/dxf-import";
+import { pdfArtwork, pdfFirstPage, pdfObjects } from "../../../../packages/domain/src/pdf-import";
 import { knifeCut, scissorCut } from "../../../../packages/domain/src/cut";
+import { outlineStroke } from "../../../../packages/domain/src/outline-stroke";
+import { textOutlines } from "../../../../packages/domain/src/text-outline";
+import { FontOutlines } from "./font-outlines";
+import { PdfImage, PdfPageSource, pdfDocument } from "../../../../packages/domain/src/pdf";
+import { ArraySettings, arraySteps, copyLayer, validArraySettings } from "../../../../packages/domain/src/array-copy";
 import {
   blankDocument,
   defaultStrokeStyle,
@@ -62,6 +68,7 @@ import {
   validDashPattern,
   bounds,
   DocumentHistory,
+  MAX_LAYERS,
   Layer,
   localPoint,
   newLayer,
@@ -77,11 +84,13 @@ import {
 import { CanvasRenderer } from "../../../../packages/renderer/src/canvas-renderer";
 import { ToolId } from "./tools";
 export type StyleScope = "fill" | "stroke" | "both";
-export type ContextAction = "displacement" | "rotation" | "group" | "ungroup" | "regroup" | "hide" | "show" | "delete" | "backward" | "forward" | "toBack" | "toFront" | "corner" | "smooth" | "collapseIncoming" | "collapseOutgoing" | "expandIncoming" | "expandOutgoing" | "deleteNode";
+export type ContextAction = "duplicateSeries" | "copy" | "cut" | "paste" | "pasteInFront" | "pasteInBack" | "duplicate" | "toggleBoundingBox" | "displacement" | "rotation" | "group" | "ungroup" | "regroup" | "hide" | "show" | "delete" | "backward" | "forward" | "toBack" | "toFront" | "corner" | "smooth" | "collapseIncoming" | "collapseOutgoing" | "expandIncoming" | "expandOutgoing" | "deleteNode";
 export type ContextTarget = { revision: number; layerId: string } & (
   { kind: "object"; groupPath?: string[]; selectionIds?: string[] } |
   { kind: "node"; path: number; index: number }
 );
+/** Properties a whole selection shares, so editing one of them edits every selected object. */
+const SHARED_APPEARANCE = ["fill", "stroke", "strokeWidth", "strokeStyle", "lineEnds", "opacity", "blend", "adjustments"];
 /** Walls within this angle of a 45 degree direction are drawn on it, which keeps plans orthogonal. */
 const WALL_ANGLE_TOLERANCE = 6 * Math.PI / 180;
 const WALL_POCHE = "#3f4753";
@@ -184,7 +193,16 @@ export class EditorService {
     if (members.length > 1) grouping.push({ id: "group", enabled: groupable && members.every((layer) => (layer.groupPath?.length ?? 0) < 16) });
     if (members.some((layer) => layer.groupPath?.length)) grouping.push({ id: "ungroup", enabled: groups.length > 0 && groups.every((layer) => !this.isEffectivelyLocked(layer)) });
     if (members.some((layer) => layer.regroupPath?.length)) grouping.push({ id: "regroup", enabled: this.regroupMembers(members).length > 0 });
+    const artwork = members.every((layer) => !layer.guide);
     return [
+      { id: "copy", enabled: artwork && editable },
+      { id: "cut", enabled: artwork && editable },
+      { id: "paste", enabled: this.clipboard.length > 0 },
+      { id: "pasteInFront", enabled: this.clipboard.length > 0 },
+      { id: "pasteInBack", enabled: this.clipboard.length > 0 },
+      { id: "duplicate", enabled: artwork && editable },
+      { id: "duplicateSeries", enabled: artwork && editable },
+      { id: "toggleBoundingBox", enabled: true },
       ...grouping,
       {id:"displacement",enabled:editable && members.every(l=>!l.guide)}, {id:"rotation",enabled:editable && members.every(l=>!l.guide)},
       { id: members.some((layer) => layer.visible) ? "hide" : "show", enabled: true },
@@ -196,9 +214,24 @@ export class EditorService {
     ];
   }
   runContextAction(target: ContextTarget, action: ContextAction): boolean {
-    if(action === "displacement" || action === "rotation")return false;
+    // The dialogs are opened by the shell, which owns them.
+    if(action === "displacement" || action === "rotation" || action === "duplicateSeries")return false;
     if (!this.contextActions(target).some((entry) => entry.id === action && entry.enabled)) return false;
     const members = this.contextMembers(target), ids = new Set(members.map((layer) => layer.id));
+    // The clipboard actions work on the selection, so the target becomes the selection first.
+    if (["copy", "cut", "duplicate"].includes(action)) {
+      this.selectedIds.set([...ids]);
+      this.selectedId.set(target.layerId);
+      if (action === "copy") return this.copySelection();
+      if (action === "cut") return this.cutSelection();
+      this.duplicate();
+      return true;
+    }
+    if (action === "paste" || action === "pasteInFront" || action === "pasteInBack") {
+      if (action !== "paste") { this.selectedIds.set([...ids]); this.selectedId.set(target.layerId); }
+      return this.paste(action === "pasteInFront" ? "front" : action === "pasteInBack" ? "back" : "offset");
+    }
+    if (action === "toggleBoundingBox") { this.toggleBoundingBox(); return true; }
     if (action === "group" || action === "ungroup" || action === "regroup") {
       this.selectedIds.set([...ids]); this.selectedId.set(target.layerId);
       if (action === "regroup") this.regroup(); else this.group(action === "ungroup", target.kind === "object" ? target.groupPath : undefined);
@@ -326,7 +359,7 @@ export class EditorService {
     const candidates = this.blendCandidates();
     if (!candidates || !this.validBlendOptions(steps, easing)) return false;
     const { back, front, parent } = candidates;
-    if (this.document().layers.length + steps * back.length > 150) return false;
+    if (this.document().layers.length + steps * back.length > MAX_LAYERS) return false;
     const blend: ObjectBlend = { id: crypto.randomUUID(), groupId: crypto.randomUUID(), backIds: back.map((layer) => layer.id), frontIds: front.map((layer) => layer.id), steps, easing, stepIds: Array.from({ length: steps }, () => back.map(() => crypto.randomUUID())) };
     const ids = new Set([...blend.backIds, ...blend.frontIds]);
     const insert = (layer: Layer) => ({ ...layer, groupPath: [...parent, blend.groupId, ...(layer.groupPath ?? []).slice(parent.length)] });
@@ -348,7 +381,7 @@ export class EditorService {
     const steps = patch.steps ?? blend.steps, easing = patch.easing ?? blend.easing;
     if (!this.validBlendOptions(steps, easing) || (steps === blend.steps && easing === blend.easing)) return false;
     const before = this.document(), oldGenerated = new Set(blend.stepIds.flat());
-    if (before.layers.length - oldGenerated.size + steps * blend.backIds.length > 150) return false;
+    if (before.layers.length - oldGenerated.size + steps * blend.backIds.length > MAX_LAYERS) return false;
     const nextBlend = { ...blend, steps, easing, stepIds: Array.from({ length: steps }, (_, index) => blend.stepIds[index] ?? blend.backIds.map(() => crypto.randomUUID())) };
     const source = before.layers.find((layer) => layer.id === blend.backIds[0])!;
     const parent = source.groupPath!.slice(0, source.groupPath!.indexOf(blend.groupId));
@@ -434,13 +467,13 @@ export class EditorService {
     layer.name=type[0].toUpperCase()+type.slice(1);layer.procedural=procedural;return generateProcedural(layer,this.document());
   }
   createProcedural(type:Procedural['type'],start:Point,end?:Point):boolean {
-    if(this.document().layers.length>=150)return false;
+    if(this.document().layers.length>=MAX_LAYERS)return false;
     let layer:Layer,next:StudioDocument;try{layer=this.proceduralLayer(type,start,end);next=syncProcedurals({...this.document(),layers:[...this.document().layers,layer]});parseDocument(JSON.stringify(next));}catch{return false;}
     this.commitStep(this.document());this.document.set(next);this.selectedId.set(layer.id);this.selectedIds.set([layer.id]);this.changed();return true;
   }
   private startProcedural(type:Procedural['type'],point:Point) {
     if(type==='door'||type==='window'){this.createProcedural(type,this.snap(point));return;}
-    if(this.document().layers.length>=150)return;
+    if(this.document().layers.length>=MAX_LAYERS)return;
     if(type==='wall'){
       const chain=this.wallChain(),target=this.wallTarget(this.wallChain(),point);
       if(chain&&Math.hypot(target.x-chain.x,target.y-chain.y)>=1){
@@ -478,6 +511,13 @@ export class EditorService {
     return override && override.key === this.selectionKey() ? override.point : this.transformationCenter();
   });
   readonly pivotMoved = computed(() => this.pivotOverride()?.key === this.selectionKey());
+  /**
+   * Carries a pivot placed by hand to the selection that replaces the old one, so a copy
+   * keeps turning and scaling around the point its original did.
+   */
+  private carryPivot(point: Point | null) {
+    if (point) this.setPivot(point);
+  }
   setPivot(point: Point) {
     if (!Number.isFinite(point.x) || !Number.isFinite(point.y) || !this.selectedLayers().length) return;
     this.pivotOverride.set({ key: this.selectionKey(), point });
@@ -598,7 +638,7 @@ export class EditorService {
   }
   /** One offset line shared by consecutive measurements, committed as a single history entry. */
   createChainDimension(points:Point[],labelPosition:Point):boolean {
-    if(points.length<3||this.document().layers.length+points.length-1>150)return false;
+    if(points.length<3||this.document().layers.length+points.length-1>MAX_LAYERS)return false;
     const layers:Layer[]=[];
     for(let i=0;i<points.length-1;i++){
       const layer=this.buildDimension('linear',[points[i],points[i+1]],labelPosition,crypto.randomUUID());
@@ -657,7 +697,7 @@ export class EditorService {
     return {...newLayer('path',id,{x,y},this.stroke(),this.stroke(),Math.min(this.size(),2)),name:kind==='linear'?'Linear dimension':kind==='angular'?'Angular dimension':kind==='radius'?'Radius dimension':'Diameter dimension',width:Math.max(1,...points.map(p=>p.x-x)),height:Math.max(1,...points.map(p=>p.y-y)),fontSize:14,points:anchors.map(local),lineEnds:{start:{kind:'triangle',placement:'tip',size:10},end:{kind:'triangle',placement:'tip',size:10},linked:true},dimension:{kind,anchors:anchors.map(local),labelPosition:local(labelPosition),text:'',labelSize:{width:160,height:40},format:{...this.dimensionDefaults()},extension:{stroke:this.stroke(),strokeWidth:1,gap:6,overshoot:8}}};
   }
   createDimension(kind:Dimension['kind'],anchors:Point[],labelPosition:Point):boolean {
-    if(this.document().layers.length>=150)return false;
+    if(this.document().layers.length>=MAX_LAYERS)return false;
     const layer=this.buildDimension(kind,anchors,labelPosition,crypto.randomUUID());if(!layer)return false;
     try{parseDocument(JSON.stringify({...this.document(),layers:[...this.document().layers,layer]}));}catch{return false;}
     this.commitStep(this.document());this.document.update(d=>({...d,layers:[...d.layers,layer]}));this.selectedId.set(layer.id);this.selectedIds.set([layer.id]);this.changed();return true;
@@ -714,6 +754,20 @@ export class EditorService {
   readonly symbolRadius = signal(70);
   readonly symbolIntensity = signal(0.25);
   readonly showHandles = signal(true);
+  /** Outline view: the artwork is drawn as contours, which is how a drawing is checked. */
+  readonly outlineView = signal(false);
+  toggleOutlineView() {
+    this.outlineView.update((outline) => !outline);
+    this.status.set(this.outlineView() ? "Outline view" : "Preview view");
+    this.revision.update((x) => x + 1);
+  }
+  /** The frame and handles around the selection, which can be hidden while drawing. */
+  readonly boundingBoxVisible = signal(true);
+  toggleBoundingBox() {
+    this.boundingBoxVisible.update((visible) => !visible);
+    this.status.set(this.boundingBoxVisible() ? "Bounding box shown" : "Bounding box hidden");
+    this.revision.update((x) => x + 1);
+  }
   readonly handleSize = signal(4);
   readonly document = signal<StudioDocument>(blankDocument());
   readonly selectedId = signal<string | null>(null);
@@ -845,7 +899,7 @@ export class EditorService {
     this.cancelGuideDrag();
     const doc = this.document();
     const existing = id ? doc.layers.find((layer) => layer.id === id && layer.guide === axis) : undefined;
-    if ((id && (this.guidesLocked() || !existing || existing.locked || !existing.visible)) || (!id && doc.layers.length >= 150)) return null;
+    if ((id && (this.guidesLocked() || !existing || existing.locked || !existing.visible)) || (!id && doc.layers.length >= MAX_LAYERS)) return null;
     const guide = existing ?? { ...newLayer("path", crypto.randomUUID(), { x: 0, y: 0 }, "none", "#00b8d9", 1), guide: axis, name: axis === "vertical" ? "Vertical guide" : "Horizontal guide", width: 1, height: 1 };
     this.guideGesture = { before: structuredClone(doc), id: guide.id, selectedId: this.selectedId(), selectedIds: [...this.selectedIds()] };
     if (!existing) this.document.update((value) => ({ ...value, layers: [...value.layers, guide] }));
@@ -1102,7 +1156,22 @@ export class EditorService {
     this.persistWorkspace();
   }
   previewDocument(): StudioDocument {
-    try { return syncBlends(syncProcedurals(this.document())); } catch { return this.document(); }
+    let base: StudioDocument;
+    try { base = syncBlends(syncProcedurals(this.document())); } catch { base = this.document(); }
+    const ghosts = this.duplicationGhosts();
+    return ghosts.length ? { ...base, layers: [...ghosts, ...base.layers] } : base;
+  }
+  /**
+   * While Alt turns a transform into a duplication, the untouched originals are drawn in
+   * their place behind the objects being dragged, which are the copies to come.
+   */
+  private duplicationGhosts(): Layer[] {
+    const g = this.gesture;
+    if (!this.duplicatingDrag() || !g || !["move", "rotate", "scale"].includes(g.mode)) return [];
+    const ids = new Set(g.ids?.length ? g.ids : [g.id]);
+    return g.before.layers
+      .filter((layer) => ids.has(layer.id) && layer.visible && !layer.guide)
+      .map((layer) => ({ ...layer, id: layer.id + "__origin", locked: true }));
   }
   private synchronizeBlends() {
     const doc = this.document();
@@ -1183,21 +1252,39 @@ export class EditorService {
     if (!Number.isFinite(fontSize) || fontSize < 1 || fontSize > 500) return;
     this.applyTextUpdate((layer) => ({ ...layer, fontSize }));
   }
+  /**
+   * Edits the properties of the selection. Appearance belongs to every selected object, a
+   * whole group included, while place and size belong to the one the form is showing.
+   */
   updateLayer(patch: Partial<Layer>) {
     let layer = this.selected();
     if (!layer || this.isEffectivelyLocked(layer) || layer.guide) return;
+    const keys = Object.keys(patch);
+    const shared = Object.fromEntries(Object.entries(patch).filter(([key]) => SHARED_APPEARANCE.includes(key))) as Partial<Layer>;
+    let own = Object.fromEntries(Object.entries(patch).filter(([key]) => !SHARED_APPEARANCE.includes(key))) as Partial<Layer>;
+    if (!keys.length) return;
     this.commitStep(this.document());
-    if(["x","y","width","height","rotation","skewX","flipX","flipY"].some(key=>key in patch))layer=this.detachOpening(layer);
-    if (patch.width !== undefined || patch.height !== undefined)
-      patch = {
-        ...resizeLayer(
-          layer,
-          patch.width ?? layer.width,
-          patch.height ?? layer.height,
-        ),
-        ...patch,
-      };
-    this.setLayer(layer.id, this.reflowText({ ...layer, ...patch }));
+    if (Object.keys(own).length) {
+      if(["x","y","width","height","rotation","skewX","flipX","flipY"].some(key=>key in own))layer=this.detachOpening(layer);
+      if (own.width !== undefined || own.height !== undefined)
+        own = {
+          ...resizeLayer(
+            layer,
+            own.width ?? layer.width,
+            own.height ?? layer.height,
+          ),
+          ...own,
+        };
+      this.setLayer(layer.id, this.reflowText({ ...layer, ...own }));
+    }
+    if (Object.keys(shared).length) {
+      const ids = new Set(this.selectedLayers().filter((item) => !this.isEffectivelyLocked(item) && !item.guide).map((item) => item.id));
+      this.expandGeneratedForIds(ids);
+      this.document.update((document) => ({
+        ...document,
+        layers: document.layers.map((item) => ids.has(item.id) ? this.reflowText({ ...item, ...structuredClone(shared) }) : item),
+      }));
+    }
     this.changed();
   }
   toggle(id: string, key: "visible" | "locked") {
@@ -1371,10 +1458,224 @@ export class EditorService {
     this.selectedIds.set([]);
     this.changed();
   }
+  /**
+   * Copied artwork lives in the session, not in the clipboard of the system: a drawing is
+   * pasted back as layers, which a text clipboard cannot carry faithfully.
+   */
+  private clipboard: Layer[] = [];
+  readonly canPaste = computed(() => { this.revision(); return this.clipboard.length > 0; });
+  copySelection(): boolean {
+    const layers = this.selectedLayers().filter((layer) => !layer.guide);
+    if (!layers.length) return false;
+    this.clipboard = structuredClone(layers);
+    this.status.set(`Copied ${layers.length} object${layers.length > 1 ? "s" : ""}.`);
+    this.revision.update((x) => x + 1);
+    return true;
+  }
+  cutSelection(): boolean {
+    if (!this.copySelection()) return false;
+    this.remove();
+    this.status.set("Cut to the clipboard.");
+    return true;
+  }
+  /**
+   * Pastes the copied artwork. `where` decides the place in the stack: in front of or behind
+   * the selection, or on top with a small offset, which is what a plain paste does.
+   */
+  paste(where: "offset" | "front" | "back" = "offset"): boolean {
+    if (!this.clipboard.length) return false;
+    const document = this.document();
+    if (document.layers.length + this.clipboard.length > MAX_LAYERS) { this.status.set("The document cannot hold more layers."); return false; }
+    const offset = where === "offset" ? 20 : 0;
+    const copies = this.clipboard.map((layer) => ({
+      ...structuredClone(layer),
+      id: crypto.randomUUID(),
+      x: layer.x + offset,
+      y: layer.y + offset,
+    }));
+    const selected = new Set(this.selectedLayers().map((layer) => layer.id));
+    const indexes = document.layers.map((layer, index) => (selected.has(layer.id) ? index : -1)).filter((index) => index >= 0);
+    // Without a selection the artwork goes to the front, which is where a plain paste lands.
+    const at = where === "front"
+      ? (indexes.length ? Math.max(...indexes) + 1 : document.layers.length)
+      : where === "back"
+        ? (indexes.length ? Math.min(...indexes) : 0)
+        : document.layers.length;
+    this.commitStep(document);
+    this.document.set({ ...document, layers: [...document.layers.slice(0, at), ...copies, ...document.layers.slice(at)] });
+    this.selectedIds.set(copies.map((layer) => layer.id));
+    this.selectedId.set(copies[0].id);
+    this.activeNodes.set([]);
+    this.status.set(where === "front" ? "Pasted in front." : where === "back" ? "Pasted behind." : "Pasted.");
+    this.changed();
+    return true;
+  }
+  /**
+   * The last transformation of the selection, kept so it can be repeated: how far it moved,
+   * how much it turned and grew, and whether it left a copy behind.
+   */
+  readonly lastTransform = signal<{ dx: number; dy: number; rotation: number; scale: number; duplicate: boolean; pivot: Point } | null>(null);
+  /** True while a drag will duplicate on release, which the cursor shows. */
+  readonly duplicatingDrag = signal(false);
+  /** Keeps the cursor honest while Alt is pressed or released without moving the pointer. */
+  setDuplicatingDrag(alt: boolean) {
+    if (this.gesture && ["move", "rotate", "scale"].includes(this.gesture.mode)) this.duplicatingDrag.set(alt);
+  }
+  private recordTransform(step: { dx?: number; dy?: number; rotation?: number; scale?: number; duplicate?: boolean; pivot?: Point }) {
+    // The pivot belongs to the transformation: a repeat turns and scales around the same point.
+    const pivot = step.pivot ?? this.pivot();
+    const value = { dx: step.dx ?? 0, dy: step.dy ?? 0, rotation: step.rotation ?? 0, scale: step.scale ?? 1, duplicate: !!step.duplicate, pivot: { ...pivot } };
+    if (!value.dx && !value.dy && !value.rotation && value.scale === 1 && !value.duplicate) return;
+    this.lastTransform.set(value);
+  }
+  /**
+   * Repeats the last transformation on the current selection, the copy it left behind
+   * included, as one history step.
+   */
+  transformAgain(): boolean {
+    const last = this.lastTransform();
+    const layers = this.selectedLayers().filter((layer) => !layer.guide && !this.isEffectivelyLocked(layer));
+    if (!last || !layers.length) { this.status.set("There is no transformation to repeat."); return false; }
+    const document = this.document();
+    if (last.duplicate && document.layers.length + layers.length > MAX_LAYERS) { this.status.set("The document cannot hold more layers."); return false; }
+    // The recorded pivot is the origin of the repeat, not the pivot of whatever is selected now.
+    const centre = last.pivot;
+    const step = { dx: last.dx, dy: last.dy, rotation: last.rotation, scale: last.scale };
+    const ids = new Set(layers.map((layer) => layer.id));
+    let next: StudioDocument;
+    let selection: string[];
+    if (last.duplicate) {
+      const copies = layers.map((layer) => copyLayer(layer, step, centre, crypto.randomUUID()));
+      next = { ...document, layers: [...document.layers, ...copies] };
+      selection = copies.map((layer) => layer.id);
+    } else {
+      next = { ...document, layers: document.layers.map((layer) => ids.has(layer.id) ? copyLayer(layer, step, centre, layer.id) : layer) };
+      selection = [...ids];
+    }
+    try { parseDocument(JSON.stringify(next)); } catch { this.status.set("The transformation cannot be repeated here."); return false; }
+    this.commitStep(document);
+    this.document.set(next);
+    this.selectedIds.set(selection);
+    this.selectedId.set(selection[0]);
+    // The repeat keeps its origin, so the next one turns around the same point.
+    this.carryPivot(centre);
+    this.status.set(last.duplicate ? "Transformed again with a copy." : "Transformed again.");
+    this.changed();
+    return true;
+  }
+  /**
+   * Turns the stroke of every selected object into the shape it paints, so a line becomes
+   * artwork. A shape that also carries a fill keeps it, as the object under its new band.
+   */
+  outlineStrokeSelection(): boolean {
+    const layers = this.selectedLayers().filter((layer) => !layer.guide && !this.isEffectivelyLocked(layer) && !layer.dimension);
+    if (!layers.length) { this.status.set("Select the objects whose stroke you want to outline."); return false; }
+    const document = this.document();
+    const produced = new Map<string, Layer[]>();
+    for (const layer of layers) {
+      const source = layer.curves ? layer : { ...layer, kind: "path" as const, curves: this.editableCurves(layer) };
+      const band = outlineStroke(source);
+      if (!band) continue;
+      const shape = fitCurves({ ...newLayer("path", crypto.randomUUID(), { x: 0, y: 0 }), rotation: 0 }, band);
+      const outlined: Layer = {
+        ...layer, ...shape, id: shape.id, kind: "path", rotation: 0, flipX: false, flipY: false, skewX: 0,
+        name: layer.name + " outline", fill: layer.stroke, stroke: "none", strokeWidth: 0, strokeStyle: undefined,
+        lineEnds: undefined, points: [], procedural: undefined,
+      };
+      const kept: Layer[] = layer.fill === "none" || !source.curves?.some((path) => path.closed)
+        ? []
+        : [{ ...layer, stroke: "none", strokeWidth: 0 }];
+      produced.set(layer.id, [...kept, outlined]);
+    }
+    if (!produced.size) { this.status.set("The selection has no stroke to outline."); return false; }
+    const next = { ...document, layers: document.layers.flatMap((layer) => produced.get(layer.id) ?? [layer]) };
+    try { parseDocument(JSON.stringify(next)); } catch { this.status.set("The outline cannot be created here."); return false; }
+    this.commitStep(document);
+    this.document.set(next);
+    const created = [...produced.values()].flat().map((layer) => layer.id);
+    this.selectedIds.set(created);
+    this.selectedId.set(created[0]);
+    this.activeNodes.set([]);
+    this.status.set(`Outlined the stroke of ${produced.size} object${produced.size > 1 ? "s" : ""}.`);
+    this.changed();
+    return true;
+  }
+  private readonly fonts = new FontOutlines();
+  /**
+   * Turns every selected text into the shapes of its letters, keeping the fill, the stroke
+   * and the place it had. The text itself is gone afterwards, as it is in any editor that
+   * offers this: the shapes are artwork, not type.
+   */
+  async outlineTextSelection(): Promise<boolean> {
+    const texts = this.selectedLayers().filter((layer) => layer.kind === "text" && !this.isEffectivelyLocked(layer) && !layer.guide);
+    if (!texts.length) { this.status.set("Select the text you want to turn into shapes."); return false; }
+    const produced = new Map<string, Layer>();
+    let approximate = false;
+    for (const layer of texts) {
+      const layout = this.textMetrics(layer);
+      const typography = layout.typography;
+      const { font, exact } = await this.fonts.face(typography.fontFamily, typography.fontWeight, typography.fontStyle);
+      approximate = approximate || !exact;
+      const curves = textOutlines(layout, (text, size, x, y) => this.fonts.paths(font, text, size, x, y))
+        .map((path) => ({ ...path, nodes: path.nodes.map((node) => ({
+          point: worldPoint(layer, node.point),
+          incoming: worldPoint(layer, node.incoming),
+          outgoing: worldPoint(layer, node.outgoing),
+          smooth: node.smooth,
+        })) }));
+      if (!curves.length) continue;
+      const shape = fitCurves({ ...newLayer("path", crypto.randomUUID(), { x: 0, y: 0 }), rotation: 0 }, curves);
+      produced.set(layer.id, {
+        ...layer, ...shape, id: shape.id, kind: "path", rotation: 0, flipX: false, flipY: false, skewX: 0,
+        name: (layer.text || layer.name).slice(0, 40), text: "", typography: undefined, textLayout: undefined, points: [],
+      });
+    }
+    if (!produced.size) { this.status.set("The selected text has no shapes to create."); return false; }
+    const document = this.document();
+    const next = { ...document, layers: document.layers.map((layer) => produced.get(layer.id) ?? layer) };
+    try { parseDocument(JSON.stringify(next)); } catch { this.status.set("The outlines cannot be created here."); return false; }
+    this.commitStep(document);
+    this.document.set(next);
+    const created = [...produced.values()].map((layer) => layer.id);
+    this.selectedIds.set(created);
+    this.selectedId.set(created[0]);
+    this.activeNodes.set([]);
+    this.status.set(approximate
+      ? `Created outlines for ${produced.size} text${produced.size > 1 ? "s" : ""}; a carried face stood in for the chosen family.`
+      : `Created outlines for ${produced.size} text${produced.size > 1 ? "s" : ""}.`);
+    this.changed();
+    return true;
+  }
+  /** Duplicates the selection as a series: a line of copies, a turn around the pivot or a grid. */
+  duplicateSeries(settings: ArraySettings): boolean {
+    const layers = this.selectedLayers().filter((layer) => !layer.guide && !this.isEffectivelyLocked(layer));
+    if (!layers.length || !validArraySettings(settings)) return false;
+    const box = selectionBounds(layers);
+    const centre = { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+    // The pivot of the series is read before the copies replace the selection.
+    const placed = this.pivotMoved() ? this.pivot() : null;
+    const steps = arraySteps(settings, this.pivot(), centre);
+    if (!steps.length) return false;
+    const document = this.document();
+    if (document.layers.length + steps.length * layers.length > MAX_LAYERS) { this.status.set("The document cannot hold more layers."); return false; }
+    const copies = steps.flatMap((step) => layers.map((layer) => copyLayer(layer, step, centre, crypto.randomUUID())));
+    this.commitStep(document);
+    this.document.set({ ...document, layers: [...document.layers, ...copies] });
+    this.selectedIds.set(copies.map((layer) => layer.id));
+    this.selectedId.set(copies[0].id);
+    this.activeNodes.set([]);
+    this.carryPivot(placed);
+    this.status.set(`Duplicated into ${steps.length} ${steps.length > 1 ? "copies" : "copy"}.`);
+    this.changed();
+    return true;
+  }
   duplicate() {
     const layers = this.selectedLayers();
-    if (!layers.length || this.document().layers.length + layers.length > 150)
+    if (!layers.length || this.document().layers.length + layers.length > MAX_LAYERS)
       return;
+    // Repeating a duplicate makes another copy the same distance away.
+    const placed = this.pivotMoved() ? this.pivot() : null;
+    this.recordTransform({ dx: 20, dy: 20, duplicate: true });
     this.commitStep(this.document());
     const groups = new Map<string, string>();
     const copies = layers.map((layer) => ({
@@ -1404,6 +1705,7 @@ export class EditorService {
     this.document.update((d) => ({ ...d, layers: [...d.layers, ...copies], ...(blends?.length ? { blends: [...(d.blends ?? []), ...blends] } : {}) }));
     this.selectedIds.set(copies.map((l) => l.id));
     this.selectedId.set(copies.at(-1)!.id);
+    this.carryPivot(placed);
     this.changed();
   }
   /**
@@ -1648,8 +1950,8 @@ export class EditorService {
       }
       return;
     }
-    if (this.document().layers.length >= 150) {
-      this.status.set("Preview limit: 150 layers");
+    if (this.document().layers.length >= MAX_LAYERS) {
+      this.status.set("The document cannot hold more layers.");
       return;
     }
     if (tool === "eraser") {
@@ -1777,6 +2079,8 @@ export class EditorService {
     if (this.areaGesture) { this.moveAreaSelection(point); return; }
     const g = this.gesture;
     if (!g) return;
+    // Alt held during a transform leaves the original behind, which the cursor announces.
+    if (["move", "rotate", "scale"].includes(g.mode)) this.duplicatingDrag.set(!!modifiers.alt);
     if (["rectangle", "ellipse", "line", "rounded", "polygon", "star", "arc", "spiral", "grid", "polar", "flare"].includes(g.mode) || g.mode.startsWith("resize:")) point = this.snap(point);
     if (g.mode === "rotate")
       this.transformSelection(g, this.aroundPivot(g.original, {
@@ -1873,7 +2177,7 @@ export class EditorService {
           g.original,
           point,
           g.mode.slice(7) as "tl" | "tr" | "bl" | "br" | "t" | "r" | "b" | "l",
-          modifiers.shift ? this.snapAngle() : undefined,
+          { proportional: !!modifiers.shift },
         ),
       );
     else if (g.mode === "rectangle" || g.mode === "ellipse") {
@@ -1946,7 +2250,14 @@ export class EditorService {
       !!this.gesture?.mode.startsWith("node:")
     );
   }
-  end() {
+  /**
+   * Closes the gesture. The modifiers of the release decide the duplication, since a person
+   * may hold Alt without moving the pointer again before letting go.
+   */
+  end(modifiers?: { alt?: boolean }) {
+    if (modifiers && this.gesture && ["move", "rotate", "scale"].includes(this.gesture.mode)) {
+      this.duplicatingDrag.set(!!modifiers.alt);
+    }
     if (this.pageGesture) { this.endPageGesture(); return; }
     if (this.pivotGesture) {
       const before = this.pivotGesture.before;
@@ -1978,11 +2289,54 @@ export class EditorService {
       this.setLayer(g.id, {
         source: this.painting.canvas.toDataURL("image/png"),
       });
-    this.commitStep(g.before, this.movePivot ? { key: this.selectionKey(), point: this.movePivot } : this.pivotOverride());
+    const pivotAtStart = this.movePivot ? { key: this.selectionKey(), point: this.movePivot } : this.pivotOverride();
+    if (["move", "rotate", "scale"].includes(g.mode)) this.finishTransformDrag(g, pivotAtStart);
+    else this.commitStep(g.before, pivotAtStart);
     this.gesture = undefined;
     this.movePivot = undefined;
     this.painting = undefined;
+    this.duplicatingDrag.set(false);
     this.changed();
+  }
+  /**
+   * Closes a move, a rotation or a scaling: it remembers what the drag did so it can be
+   * repeated and, when Alt asked for it, restores the originals and keeps the result as
+   * copies of them.
+   */
+  private finishTransformDrag(g: { before: StudioDocument; id: string; ids?: string[]; mode: string }, pivotAtStart: { key: string; point: Point } | null) {
+    const ids = new Set(g.ids?.length ? g.ids : [g.id]);
+    const before = g.before.layers.filter((layer) => ids.has(layer.id));
+    const after = this.document().layers.filter((layer) => ids.has(layer.id));
+    const centreOf = (layers: Layer[]) => {
+      const box = selectionBounds(layers.filter((layer) => !layer.guide));
+      return { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+    };
+    const source = before.find((layer) => layer.id === g.id) ?? before[0];
+    const result = after.find((layer) => layer.id === g.id) ?? after[0];
+    const duplicate = this.duplicatingDrag();
+    if (source && result) {
+      this.recordTransform({
+        dx: (result.x + result.width / 2) - (source.x + source.width / 2),
+        dy: (result.y + result.height / 2) - (source.y + source.height / 2),
+        rotation: result.rotation - source.rotation,
+        scale: source.width ? result.width / source.width : 1,
+        duplicate,
+        // The pivot of the drag is the one the selection had before it, not the one the
+        // transformed result has now: a repeat turns around the very same point.
+        pivot: pivotAtStart && pivotAtStart.key === this.selectionKey() ? pivotAtStart.point : centreOf(before),
+      });
+    }
+    if (!duplicate || !after.length) { this.commitStep(g.before, pivotAtStart); return; }
+    const placed = this.pivotMoved() ? this.pivot() : null;
+    const copies = after.map((layer) => ({ ...structuredClone(layer), id: crypto.randomUUID(), regroupPath: undefined }));
+    const next = { ...g.before, layers: [...g.before.layers, ...copies] };
+    try { parseDocument(JSON.stringify(next)); } catch { this.commitStep(g.before, pivotAtStart); return; }
+    this.commitStep(g.before, pivotAtStart);
+    this.document.set(next);
+    this.selectedIds.set(copies.map((layer) => layer.id));
+    this.selectedId.set(copies[0].id);
+    this.carryPivot(placed);
+    this.status.set(`Duplicated ${copies.length} object${copies.length > 1 ? "s" : ""} with the transformation.`);
   }
   cancel() {
     if (this.pageGesture) { this.cancelPageGesture(); this.pageMode.set(null); this.status.set("Page editing cancelled"); }
@@ -2034,6 +2388,7 @@ export class EditorService {
     this.changed();
   }
   transformBy(rotation = 0, scale = 1) {
+    this.recordTransform({ rotation, scale });
     if (this.selectedLayers().some((layer) => this.isEffectivelyLocked(layer))) return;
     const source = this.selectionLayer();
     if (
@@ -2287,7 +2642,7 @@ export class EditorService {
       }
     }
     if (!layer) {
-      if (this.document().layers.length >= 150) return;
+      if (this.document().layers.length >= MAX_LAYERS) return;
       layer = newLayer(
         "path",
         crypto.randomUUID(),
@@ -2793,10 +3148,12 @@ export class EditorService {
   }
   displaceSelection(dx:number,dy:number):boolean {
     if(!Number.isFinite(dx)||!Number.isFinite(dy)||Math.abs(dx)>1e6||Math.abs(dy)>1e6||(!dx&&!dy))return false;
+    this.recordTransform({ dx, dy });
     return this.numericTransform(p=>({x:p.x+dx,y:p.y+dy}));
   }
   rotateSelection(angle:number,center:Point=this.pivot()):boolean {
     if(!Number.isFinite(angle)||!Number.isFinite(center.x)||!Number.isFinite(center.y)||Math.abs(angle)>36000||angle===0)return false;
+    this.recordTransform({ rotation: angle });
     const radians=angle*Math.PI/180,c=Math.cos(radians),s=Math.sin(radians);
     return this.numericTransform(p=>({x:center.x+(p.x-center.x)*c-(p.y-center.y)*s,y:center.y+(p.x-center.x)*s+(p.y-center.y)*c}),angle);
   }
@@ -2891,7 +3248,7 @@ export class EditorService {
     const symbol = this.document().symbols?.find(
       (s) => s.id === this.activeSymbol(),
     );
-    if (!symbol || this.document().layers.length >= 150) return;
+    if (!symbol || this.document().layers.length >= MAX_LAYERS) return;
     this.commitStep(this.document());
     this.addInstance(point);
     this.changed();
@@ -2900,7 +3257,7 @@ export class EditorService {
     const symbol = this.document().symbols?.find(
       (s) => s.id === this.activeSymbol(),
     );
-    if (!symbol || this.document().layers.length >= 150) return;
+    if (!symbol || this.document().layers.length >= MAX_LAYERS) return;
     const layer = {
       ...structuredClone(symbol.layer),
       id: crypto.randomUUID(),
@@ -3143,7 +3500,7 @@ export class EditorService {
     const retained = current.layers.filter(
       (l) => l.traceSourceId !== source.id,
     );
-    if (retained.length + regions.length > 150)
+    if (retained.length + regions.length > MAX_LAYERS)
       throw new Error("Trace exceeds the layer limit; reduce color levels");
     const traced = regions.map((region) => ({
       ...newLayer(
@@ -3221,8 +3578,8 @@ export class EditorService {
     layer.width = canvas.width;
     layer.height = canvas.height;
     layer.source = canvas.toDataURL("image/png");
-    if (this.document().layers.length >= 150)
-      throw new Error("Preview limit: 150 layers");
+    if (this.document().layers.length >= MAX_LAYERS)
+      throw new Error("The document cannot hold more layers.");
     this.commitStep(this.document());
     this.document.update((d) => ({ ...d, layers: [...d.layers, layer] }));
     this.selectedId.set(layer.id);
@@ -3246,14 +3603,48 @@ export class EditorService {
       return this.placeImport(importDxf(await file.text(), { name: file.name.slice(0, 80) }));
     }
     if (name.endsWith(".dwg")) throw new Error("DWG cannot be read; export the drawing as DXF and import that.");
-    if (name.endsWith(".ai") || name.endsWith(".pdf")) throw new Error("PDF and Illustrator files are not supported yet; export the artwork as SVG.");
+    if (name.endsWith(".ai") || name.endsWith(".pdf")) {
+      if (file.size > 20_000_000) throw new Error("Choose a drawing under 20 MB.");
+      return this.placeImport(await this.readPdf(new Uint8Array(await file.arrayBuffer()), file.name.slice(0, 80)));
+    }
     return this.importImage(file);
+  }
+  /**
+   * Reads the drawing of a PDF or Illustrator file. The streams are decompressed here,
+   * where the platform lives, and interpreted by the reader in the domain.
+   */
+  private async readPdf(bytes: Uint8Array, name: string): Promise<ImportResult> {
+    const objects = pdfObjects(bytes);
+    const page = pdfFirstPage(objects);
+    let content = "";
+    for (const id of page.contents) {
+      const stream = objects.get(id)?.stream;
+      if (!stream) continue;
+      content += await this.streamText(bytes.slice(stream.start, stream.end), stream.filter);
+    }
+    if (!content.trim()) throw new Error("The drawing of this file could not be read.");
+    return pdfArtwork(content, page, { name });
+  }
+  /** Decompresses a stream with the decompression the browser provides; raw data passes through. */
+  private async streamText(data: Uint8Array, filter: string): Promise<string> {
+    let bytes = data;
+    if (filter === "FlateDecode") {
+      const inflate = async (format: "deflate" | "deflate-raw") => {
+        const stream = new Blob([data.slice().buffer as ArrayBuffer]).stream().pipeThrough(new DecompressionStream(format));
+        return new Uint8Array(await new Response(stream).arrayBuffer());
+      };
+      try { bytes = await inflate("deflate"); }
+      catch { try { bytes = await inflate("deflate-raw"); } catch { throw new Error("The drawing of this file could not be read."); } }
+    } else if (filter) throw new Error("The drawing of this file could not be read.");
+    let text = "";
+    for (let index = 0; index < bytes.length; index++) text += String.fromCharCode(bytes[index]);
+    return text;
   }
   /** Places an imported drawing as one history step, reporting what the reader skipped. */
   private placeImport(result: ImportResult) {
     if (!result.layers.length) throw new Error("The drawing has no content this editor can place.");
     const document = this.document();
-    if (document.layers.length + result.layers.length > 150) throw new Error("Preview limit: 150 layers");
+    if (document.layers.length + result.layers.length > MAX_LAYERS) throw new Error("The document cannot hold more layers.");
     const next = { ...document, layers: [...document.layers, ...result.layers] };
     parseDocument(JSON.stringify(next));
     this.commitStep(document);
@@ -3289,10 +3680,85 @@ export class EditorService {
     );
     this.status.set("SVG exported; raster layers remain embedded images");
   }
-  async exportPng() {
-    const canvas = await this.renderer.export(this.document());
+  async exportPng(document = this.document()) {
+    const canvas = await this.renderer.export(document);
     canvas.toBlob((blob) => {
-      if (blob) this.download(blob, this.document().name + ".png");
+      if (blob) this.download(blob, document.name + ".png");
     }, "image/png");
+  }
+  /** The document of any open tab, the active one included. */
+  documentOf(tabId: string): StudioDocument | null {
+    if (tabId === this.activeTabId()) return this.document();
+    return this.inactiveTabs()[tabId]?.document ?? null;
+  }
+  /**
+   * Raster layers are re-encoded as JPEG here, where the canvas lives, so the PDF writer
+   * receives bytes it can store and the domain stays free of the browser.
+   */
+  private async pdfImages(document: StudioDocument): Promise<Record<string, PdfImage>> {
+    const images: Record<string, PdfImage> = {};
+    for (const layer of document.layers) {
+      if (layer.kind !== "image" || !layer.source || !layer.visible) continue;
+      try {
+        // The source is decoded by an image element, which needs no network API and is
+        // therefore unaffected by the content security policy of the page.
+        const element = new Image();
+        element.src = layer.source;
+        await element.decode();
+        const canvas = window.document.createElement("canvas");
+        canvas.width = Math.max(1, element.naturalWidth || Math.round(layer.width));
+        canvas.height = Math.max(1, element.naturalHeight || Math.round(layer.height));
+        const context = canvas.getContext("2d")!;
+        // A JPEG carries no transparency, so the image is composed over white first.
+        context.fillStyle = "#ffffff";
+        context.fillRect(0, 0, canvas.width, canvas.height);
+        context.drawImage(element, 0, 0, canvas.width, canvas.height);
+        const encoded = canvas.toDataURL("image/jpeg", 0.92).split(",")[1] ?? "";
+        if (encoded) images[layer.id] = { data: atob(encoded), width: canvas.width, height: canvas.height };
+      } catch { /* A layer whose source cannot be read is reported by the writer. */ }
+    }
+    return images;
+  }
+  /** Writes the chosen documents as one PDF file, one page each. */
+  async exportPdf(tabIds: string[] = [this.activeTabId()]) {
+    const documents = tabIds.map((id) => this.documentOf(id)).filter((document): document is StudioDocument => !!document);
+    if (!documents.length) throw new Error("Choose at least one document to export.");
+    const sources: PdfPageSource[] = [];
+    for (const document of documents) sources.push({ document, images: await this.pdfImages(document) });
+    const result = pdfDocument(sources);
+    const bytes = new Uint8Array(result.data.length);
+    for (let index = 0; index < result.data.length; index++) bytes[index] = result.data.charCodeAt(index) & 0xff;
+    const name = documents.length === 1 ? documents[0].name : this.document().name + " and " + (documents.length - 1) + " more";
+    this.download(new Blob([bytes], { type: "application/pdf" }), name + ".pdf");
+    this.status.set(result.skipped.length
+      ? `PDF exported; not represented: ${result.skipped.join(", ")}.`
+      : `PDF exported with ${documents.length} page${documents.length > 1 ? "s" : ""}.`);
+  }
+  /** Exports the chosen documents in the chosen format; PDF collects them into one file. */
+  async exportAs(format: "png" | "svg" | "pdf", tabIds: string[] = [this.activeTabId()]) {
+    if (format === "pdf") return this.exportPdf(tabIds);
+    for (const id of tabIds) {
+      const document = this.documentOf(id);
+      if (!document) continue;
+      if (format === "svg") {
+        this.download(new Blob([svgExport(document, this.renderer.measureText)], { type: "image/svg+xml" }), document.name + ".svg");
+      } else await this.exportPng(document);
+    }
+    this.status.set(`Exported ${tabIds.length} document${tabIds.length > 1 ? "s" : ""} as ${format.toUpperCase()}.`);
+  }
+  /** Prints the chosen documents, one page each, through the printing dialog of the browser. */
+  printDocuments(tabIds: string[] = [this.activeTabId()], open = (target: string) => window.open("", target)) {
+    const documents = tabIds.map((id) => this.documentOf(id)).filter((document): document is StudioDocument => !!document);
+    if (!documents.length) throw new Error("Choose at least one document to print.");
+    const view = open("_blank");
+    if (!view) { this.status.set("Allow pop-up windows to print."); return false; }
+    const pages = documents.map((document) => `<section style="width:${document.width}px;height:${document.height}px">`
+      + svgExport(document, this.renderer.measureText) + "</section>").join("");
+    view.document.write(`<!DOCTYPE html><html><head><title>${documents[0].name}</title>`
+      + "<style>@page{margin:0}body{margin:0}section{break-after:page;overflow:hidden}svg{width:100%;height:100%}</style>"
+      + `</head><body onload="print()">${pages}</body></html>`);
+    view.document.close();
+    this.status.set(`Sent ${documents.length} document${documents.length > 1 ? "s" : ""} to the printing dialog.`);
+    return true;
   }
 }

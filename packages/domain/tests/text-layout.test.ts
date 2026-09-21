@@ -80,7 +80,7 @@ describe("shared text layout", () => {
   });
 
   it("formats the selected font and rejects malformed native typography", () => {
-    expect(textFont(20, typography({ fontFamily: "Times New Roman", fontWeight: 700, fontStyle: "italic" }))).toBe('italic 700 20px "Times New Roman"');
+    expect(textFont(20, typography({ fontFamily: "Times New Roman", fontWeight: 700, fontStyle: "italic" }))).toBe('italic 700 20px Tinos, "Times New Roman"');
     const layer = { ...newLayer("text", "t", { x: 0, y: 0 }), typography: typography({}), textLayout: { ...defaultTextLayout } };
     const doc = { ...blankDocument(), layers: [layer] };
     expect(parseDocument(JSON.stringify(doc))).toEqual(doc);

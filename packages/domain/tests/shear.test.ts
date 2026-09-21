@@ -58,7 +58,7 @@ describe("centered shear geometry", () => {
       parseDocument(JSON.stringify({ ...document, version: 1 })),
     ).toThrow();
   });
-  it("exports centered shear and fills only closed subpaths", () => {
+  it("exports centered shear and fills every subpath, closed or not", () => {
     const closed = {
       closed: true,
       nodes: [
@@ -82,7 +82,10 @@ describe("centered shear geometry", () => {
     expect(svg).toContain("translate(40 30) skewX(45) translate(-40 -30)");
     const paths = svg.match(/<path[^>]+>/g)!;
     expect(paths).toHaveLength(2);
-    expect(paths[0]).not.toContain("30 30");
+    // The fill paints both contours, since filling closes a path; the stroke keeps the
+    // open contour open and paints no fill of its own.
+    expect(paths[0]).toContain("30 30");
+    expect(paths[0]).toContain('fill-rule="evenodd"');
     expect(paths[1]).toContain("30 30");
     expect(paths[1]).toContain('fill="none"');
   });

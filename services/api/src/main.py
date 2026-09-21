@@ -263,8 +263,8 @@ class Layer(Point):
     id: Annotated[str, Field(min_length=1, max_length=100)]
     name: Annotated[str, Field(max_length=150)]
     kind: Literal['rectangle', 'ellipse', 'path', 'text', 'image']
-    width: Annotated[Number, Field(ge=1, le=16384)]
-    height: Annotated[Number, Field(ge=1, le=16384)]
+    width: Annotated[Number, Field(ge=0.01, le=16384)]
+    height: Annotated[Number, Field(ge=0.01, le=16384)]
     rotation: Annotated[Number, Field(ge=-100000, le=100000)]
     opacity: Annotated[Number, Field(ge=0, le=1)]
     visible: bool
@@ -357,7 +357,7 @@ class Document(BaseModel):
     width: Annotated[int, Field(ge=16, le=8192)]
     height: Annotated[int, Field(ge=16, le=8192)]
     background: Paint
-    layers: Annotated[list[Layer], Field(max_length=150)]
+    layers: Annotated[list[Layer], Field(max_length=1000)]
     blends: Annotated[list[ObjectBlend], Field(max_length=150)] | None = None
     symbols: Annotated[list[SymbolDefinition], Field(max_length=100)] | None = None
 

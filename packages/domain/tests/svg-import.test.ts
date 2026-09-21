@@ -83,6 +83,16 @@ describe('svg import', () => {
     expect(Math.max(...flatten(under, 32).map((point) => point.y))).toBeCloseTo(10, 1);
   });
 
+  it('closes an open path that carries a fill, as the drawing means it', () => {
+    const filled = importSvg(svg('<path d="M0,0 L100,0 L100,50" fill="#ff0000"/>'));
+    expect(filled.layers[0].curves![0].closed).toBe(true);
+    const stroked = importSvg(svg('<path d="M0,0 L100,0 L100,50" fill="none" stroke="#000000"/>'));
+    expect(stroked.layers[0].curves![0].closed).toBe(false);
+    // A polyline is a line by definition, so a fill never closes it.
+    const line = importSvg(svg('<polyline points="0,0 100,0 100,50" fill="#ff0000"/>'));
+    expect(line.layers[0].curves![0].closed).toBe(false);
+  });
+
   it('normalizes colours and reports what it cannot represent', () => {
     expect(importPaint('#ABC', '#000000').paint).toBe('#aabbcc');
     expect(importPaint('rgb(255, 0, 0)', '#000000').paint).toBe('#ff0000');

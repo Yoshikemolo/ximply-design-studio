@@ -1,0 +1,42 @@
+<table class="smart-table" [attr.aria-label]="label">
+  <thead>
+    <tr>
+      @for (column of columns; track column.key) {
+        <th scope="col" [class.end]="column.align === 'end'">{{ column.label }}</th>
+      }
+      @if (selectable) {
+        <th scope="col" class="select-column">
+          <input
+            type="checkbox"
+            [checked]="allChosen()"
+            [indeterminate]="someChosen()"
+            [attr.aria-label]="selectAllLabel"
+            (change)="toggleAll($any($event.target).checked)"
+          />
+        </th>
+      }
+    </tr>
+  </thead>
+  <tbody>
+    @for (row of records(); track row.id) {
+      <tr [class.chosen]="isChosen(row.id)">
+        @for (column of columns; track column.key) {
+          <td [class.end]="column.align === 'end'">
+            <span class="cell-value">{{ value(row, column.key) }}</span>
+            @if (note(row, column); as note) {<small class="cell-note">{{ note }}</small>}
+          </td>
+        }
+        @if (selectable) {
+          <td class="select-column">
+            <input
+              type="checkbox"
+              [checked]="isChosen(row.id)"
+              [attr.aria-label]="selectionLabel + ': ' + value(row, columns[0].key)"
+              (change)="toggle(row.id, $any($event.target).checked)"
+            />
+          </td>
+        }
+      </tr>
+    }
+  </tbody>
+</table>
