@@ -15,10 +15,16 @@ strict quality gate.
 
 ## Try it online
 
-The current preview is published at **https://xds.ximplicity.es**. It is a preview of the
-work on the release branch, served as static files with no account and no server storage:
-drawings live in the browser and in the files you save. It is not a released product and
-carries no quality-gate evidence.
+### [Open the live preview at xds.ximplicity.es](https://xds.ximplicity.es)
+
+[![Ximply Design Studio editing a vector illustration](assets/screenshots/xds-editor-preview.png)](https://xds.ximplicity.es)
+
+The preview above is the editor running in a browser: the drawing tools on the left, the
+appearance of the selected path in the middle, and the properties and layers of the
+document on the right. It is served as static files with no account and no server
+storage, so drawings live in the browser and in the files you save. It is a preview of
+the work on the release branch, not a released product, and carries no quality-gate
+evidence.
 
 ## Quick Start
 
@@ -112,5 +118,12 @@ Visual browser acceptance, the strict SonarQube gate, protection verification an
 independent human review remain required before merging. Feature-branch availability
 allows local evaluation; it is not full product certification.
 
-Public visibility is requested. A distribution license is not yet selected; see
-[LICENSE-DECISION.md](LICENSE-DECISION.md). Owner and reviewer: Yoshikemolo.
+## Licence
+
+This software is published under the [Ximply Design Studio Limited Use Licence](LICENSE),
+a proprietary licence. You may read it and run it to evaluate it, to study it or for your
+own internal use. Distributing it, building anything derived from it and any commercial
+use need the written permission of the author. The repository being public is not a grant
+of those rights. Third-party material keeps its own licence, and a drawing shown in a
+screenshot belongs to whoever owns it. See [LICENSE-DECISION.md](LICENSE-DECISION.md).
+Owner and reviewer: Yoshikemolo.
