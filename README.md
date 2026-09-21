@@ -13,12 +13,19 @@ editable .xds projects or PNG, SVG and PDF output, printing included. The archit
 remains documented; this preview implements a bounded first slice and has not passed the
 strict quality gate.
 
+## Try it online
+
+The current preview is published at **https://xds.ximplicity.es**. It is a preview of the
+work on the release branch, served as static files with no account and no server storage:
+drawings live in the browser and in the files you save. It is not a released product and
+carries no quality-gate evidence.
+
 ## Quick Start
 
 Requirements: Git, Docker Desktop/Engine with Compose v2, and Python 3.11+.
 
 ```bash
-git clone --branch feat/drawing-preview https://github.com/Yoshikemolo/ximply-design-studio.git
+git clone https://github.com/Yoshikemolo/ximply-design-studio.git
 cd ximply-design-studio
 ./scripts/local.sh start
 ```
