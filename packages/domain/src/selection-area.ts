@@ -11,6 +11,8 @@ function onSegment(p: Point, a: Point, b: Point): boolean {
 function intersects(a: Point, b: Point, c: Point, d: Point): boolean {
   return (cross(a, b, c) * cross(a, b, d) < 0 && cross(c, d, a) * cross(c, d, b) < 0) || onSegment(a, c, d) || onSegment(b, c, d) || onSegment(c, a, b) || onSegment(d, a, b);
 }
+/** Whether a point lies inside a polygon, by the even-odd rule. */
+export function pointInPolygon(p: Point, points: Point[]): boolean { return contains(points, p); }
 function contains(points: Point[], p: Point): boolean {
   let inside = false;
   for (let i = 0, j = points.length - 1; i < points.length; j = i++) {

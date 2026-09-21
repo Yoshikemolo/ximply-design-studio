@@ -51,10 +51,10 @@ describe("editable transform regressions", () => {
       );
     },
   );
-  it("keeps the unfinished pen path when selection is temporarily overridden", () => {
+  it("keeps the unfinished pen path when the temporary selection lands on it", () => {
     const editor = curve();
     const id = editor.penId();
-    editor.start({ x: 500, y: 500 }, {}, "select");
+    editor.start({ x: 200, y: 200 }, {}, "select");
     editor.end();
     expect(editor.tool()).toBe("pen");
     expect(editor.penId()).toBe(id);
@@ -62,6 +62,16 @@ describe("editable transform regressions", () => {
     editor.end();
     expect(editor.document().layers).toHaveLength(1);
     expect(editor.selected()!.curves![0].nodes).toHaveLength(3);
+  });
+  it("leaves the path open when Ctrl-click lands away from every object, as in Illustrator", () => {
+    const editor = curve();
+    editor.start({ x: 500, y: 500 }, {}, "select");
+    editor.end();
+    expect(editor.penId()).toBeNull();
+    expect(editor.selectedIds()).toEqual([]);
+    editor.start({ x: 600, y: 600 });
+    editor.end();
+    expect(editor.document().layers).toHaveLength(2);
   });
   it("preserves each linked symbol instance organization and transform when redefined", () => {
     const editor = curve();

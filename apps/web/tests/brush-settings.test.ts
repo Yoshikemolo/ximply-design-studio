@@ -60,8 +60,9 @@ describe('brush tips', () => {
 describe('brush subtools', () => {
   it('offers one tool per tip in the brush family', () => {
     const family = TOOL_FAMILIES.find((entry) => entry.id === 'paint')!;
-    expect(family.tools).toEqual(['brush', 'brushFlat', 'brushCalligraphy', 'brushMarker', 'brushAirbrush', 'brushPencil']);
-    expect(TOOLS.filter((tool) => family.tools.includes(tool.id))).toHaveLength(6);
+    // The vector Paintbrush leads the family, as B selects it; the raster tips follow.
+    expect(family.tools).toEqual(['paintbrush', 'brush', 'brushFlat', 'brushCalligraphy', 'brushMarker', 'brushAirbrush', 'brushPencil']);
+    expect(TOOLS.filter((tool) => family.tools.includes(tool.id))).toHaveLength(7);
   });
 
   it('selects the brush and its tip together', () => {

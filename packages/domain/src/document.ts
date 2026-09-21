@@ -1,6 +1,7 @@
 import { Procedural, materializeProcedural, projectionCurves, projectionDash, syncProcedurals, validProcedural, validateProcedurals, resizeProcedural } from "./procedural";
 import { Dimension, dimensionGeometry, dimensionLabelLayout, validDimension } from "./dimensions";
 import { LineEnds, lineEndGeometry, pathLineEnds, validLineEnds } from "./line-endings";
+import { BrushStroke, brushOutline, brushOutlineSvg, validBrushStroke } from "./brush-stroke";
 import { ObjectBlend, syncBlends, validateBlends } from "./object-blend";
 import { FONT_FAMILIES, layoutText, TextLayoutOptions, TextTypography, TextMeasurement } from "./text-layout";
 import {
@@ -56,6 +57,8 @@ export interface Layer {
   strokeWidth: number;
   strokeStyle?: StrokeStyle;
   lineEnds?: LineEnds;
+  /** A brush painted along the path instead of a plain stroke, as the Paintbrush draws. */
+  brushStroke?: BrushStroke;
   dimension?: Dimension;
   procedural?: Procedural;
   points: Point[];
@@ -512,6 +515,7 @@ export function parseDocument(text: string): StudioDocument {
       throw new Error("Invalid guide layer.");
     if (layer["procedural"] !== undefined && (value["version"] !== 2 || layer["kind"] !== "path" || layer["dimension"] !== undefined || layer["guide"] !== undefined || layer["symbolId"] !== undefined || !validProcedural(layer["procedural"]))) throw new Error("Invalid procedural layer.");
     if (layer["lineEnds"] !== undefined && (value["version"] !== 2 || !validLineEnds(layer["lineEnds"]))) throw new Error("Invalid line endings.");
+    if (layer["brushStroke"] !== undefined && (value["version"] !== 2 || layer["kind"] !== "path" || layer["dimension"] !== undefined || layer["procedural"] !== undefined || !validBrushStroke(layer["brushStroke"]))) throw new Error("Invalid brush stroke.");
     if (layer["dimension"] !== undefined && (value["version"] !== 2 || layer["kind"] !== "path" || layer["guide"] !== undefined || layer["symbolId"] !== undefined || !validDimension(layer["dimension"]))) throw new Error("Invalid dimension.");
     const strokeStyle = layer["strokeStyle"];
     if (strokeStyle !== undefined && (value["version"] !== 2 || !record(strokeStyle) ||
@@ -696,7 +700,13 @@ export function svgExport(doc: StudioDocument, measure?: TextMeasurement): strin
           ? `<path d="${curveSvg(l.curves.filter((_, index) => projection[index]))}" fill="none" ${svgStroke(l)} stroke-dasharray="${projectionDash(l.strokeWidth).join(" ")}"/>`
           : "";
         const closed = drawnCurves.filter((path) => path.closed);
-        content =
+        // A brushed path is written as the area its nib sweeps, filled with the stroke colour.
+        const brushed = l.brushStroke && l.stroke !== "none" && l.strokeWidth > 0
+          ? `<path d="${brushOutlineSvg(drawnCurves.flatMap((path) => brushOutline(path, l.brushStroke!, l.strokeWidth)))}" ${svgPaint("fill", l.stroke)} fill-rule="nonzero" stroke="none"/>`
+          : null;
+        content = brushed !== null
+          ? (drawnCurves.length ? `<path d="${curveSvg(drawnCurves)}" ${svgPaint("fill", l.fill)} fill-rule="evenodd" stroke="none"/>` : "") + brushed
+          :
           // A fill paints every contour, open ones included, which is what filling means;
           // the stroke below keeps the ends of an open contour apart.
           (drawnCurves.length
@@ -730,7 +740,7 @@ export function svgExport(doc: StudioDocument, measure?: TextMeasurement): strin
       }
       if (l.kind === "image")
         content = `<image width="${l.width}" height="${l.height}" href="${escapeXml(l.source)}" style="filter:brightness(${l.adjustments.brightness}%) contrast(${l.adjustments.contrast}%) saturate(${l.adjustments.saturation}%) blur(${l.adjustments.blur}px)"/>`;
-      content += pathLineEnds(l).map(end => endingSvg(end.point, end.direction, end.style, l.stroke, l.strokeWidth)).join("");
+      if (!l.brushStroke) content += pathLineEnds(l).map(end => endingSvg(end.point, end.direction, end.style, l.stroke, l.strokeWidth)).join("");
       const blend = l.blend === "source-over" ? "normal" : l.blend;
       return `<g transform="translate(${l.x} ${l.y}) rotate(${l.rotation} ${l.width / 2} ${l.height / 2})${l.skewX ? ` translate(${l.width / 2} ${l.height / 2}) skewX(${l.skewX}) translate(${-l.width / 2} ${-l.height / 2})` : ""}${l.flipX || l.flipY ? ` translate(${l.flipX ? l.width : 0} ${l.flipY ? l.height : 0}) scale(${l.flipX ? -1 : 1} ${l.flipY ? -1 : 1})` : ""}" opacity="${l.opacity}" style="mix-blend-mode:${blend}">${content}</g>`;
     })
