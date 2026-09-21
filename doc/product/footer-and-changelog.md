@@ -24,7 +24,15 @@ not another product's release claims or legal disclaimer.
 The public home/footer text exposes company links labelled Ximplicity, GitHub,
 Contact us, Privacy policy and Legal notice, and reference links Architecture,
 Documentation, Changelog and Security advisories. This does not establish the exact
-bottom row of the authenticated application. Browser access was declined; no attempt
+bottom row of the authenticated application.
+
+The bottom row of the studio follows the one the company already ships in its data
+mapping product, at the owner's request and in the same order: the copyright of the
+year with Ximplicity Software Solutions and the author, each one a link; the version,
+which opens the about screen with the running release; and the links to LinkedIn, to
+Ximplicity and to the repository of this project, each opening in its own tab. The
+product name replaces the one that product uses. The site map and the level indicator
+of that footer belong to that product and are not copied. Browser access was declined; no attempt
 was made to bypass it. Do not invent missing destinations or claim footer parity yet.
 The user requires the same bottom-row links: implementation acceptance requires a
 confirmed ordered label/URL mapping from the reference application or a supplied

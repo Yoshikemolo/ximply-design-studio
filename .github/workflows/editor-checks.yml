@@ -3,7 +3,7 @@ on:
   pull_request:
     branches: [dev, qa, demo, release, main]
   push:
-    branches: [feat/first-editor]
+    branches: ['feat/**', 'fix/**']
 permissions:
   contents: read
 jobs:
@@ -18,12 +18,26 @@ jobs:
       - run: npm ci --ignore-scripts --no-audit --no-fund
       - run: npm run build
       - run: python3 scripts/check_styles.py
-      - run: npm test
+      - run: npm run test:coverage
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
       - run: python -m pip install -r services/api/requirements-dev.txt
-      - run: python -m pytest services/api/tests -q
+      - name: Measure API coverage
+        run: python -m pytest services/api/tests -q --cov=services/api/src --cov-branch --cov-report=term --cov-report=xml:reports/api/coverage.xml
+      - name: Measure engineering coverage
+        run: |
+          python -m coverage run --branch --source=harness,scripts -m unittest discover -s tests -v
+          python -m coverage xml -o reports/engineering/coverage.xml
+      - name: Preserve coverage evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-${{ github.sha }}
+          path: |
+            reports/typescript/
+            reports/api/coverage.xml
+            reports/engineering/coverage.xml
+          if-no-files-found: error
       - name: Validate local Compose configuration
         env:
           XDS_API_TOKEN: ci-configuration-validation-only-not-a-deployed-secret

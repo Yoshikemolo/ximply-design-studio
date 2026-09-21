@@ -1,6 +1,7 @@
 {
   "schemaVersion": 1,
   "owner": "Yoshikemolo",
+  "trustedWebCommitter": "web-flow",
   "language": "en",
   "allowEmoji": false,
   "allowAttributionTrailers": false,
@@ -50,6 +51,26 @@
     {
       "sha": "c948cdfeeeba73fd9c32380a7c22ec111989094b",
       "reason": "GitHub web merge created before server-side merges were constrained; history is preserved, not rewritten."
+    },
+    {
+      "sha": "18f571807639daa73d64ce8b7238069dcbc79f28",
+      "reason": "GitHub web merge of PR #13 into dev with the default message; history is preserved, not rewritten."
+    },
+    {
+      "sha": "174c5471381e06b2db92fb9eb78801eee520e444",
+      "reason": "GitHub web merge of PR #15 into dev with the default message; history is preserved, not rewritten."
+    },
+    {
+      "sha": "e05fbf4ae2756d61c3934122d1ec9244bfbd2ba8",
+      "reason": "GitHub web merge of PR #16 into dev with the default message, before merge titles used the pull request title; history is preserved, not rewritten."
+    },
+    {
+      "sha": "afec8b1530a3193e3807c9e5c5cfc766e00dac35",
+      "reason": "GitHub web merge of PR #17 into dev with the default message, before merge titles used the pull request title; history is preserved, not rewritten."
+    },
+    {
+      "sha": "03bf3ba042587a8aa332392b3d2c6c7acaf06e97",
+      "reason": "GitHub web merge of PR #18 into dev with the default message, before merge titles used the pull request title; history is preserved, not rewritten."
     }
   ]
 }

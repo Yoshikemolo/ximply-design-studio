@@ -42,11 +42,17 @@
       ],
       "implementation": [
         "apps/web/src/app/editor.service.ts",
-        "packages/domain/src/document.ts"
+        "packages/domain/src/document.ts",
+        "packages/domain/src/shortcuts.ts",
+        "apps/web/src/app/preferences.service.ts"
       ],
       "tests": [
         "packages/domain/tests/document.test.ts",
-        "apps/web/tests/editor.test.ts"
+        "apps/web/tests/editor.test.ts",
+        "apps/web/tests/preferences.test.ts",
+        "apps/web/tests/menus.test.ts",
+        "apps/web/tests/input-behavior.test.ts",
+        "apps/web/tests/tool-rail-visibility.test.ts"
       ],
       "evidence": [
         "doc/implementation/PLAN-0002-0001.md"
@@ -143,18 +149,28 @@
       "scenarios": [
         "SC-0016",
         "SC-0017",
-        "SC-0018"
+        "SC-0018",
+        "SC-0085"
       ],
       "implementation": [
         "apps/web/src/app/editor.service.ts",
-        "packages/domain/src/document.ts"
+        "packages/domain/src/document.ts",
+        "packages/domain/src/page-setup.ts",
+        "apps/web/src/app/app.component.ts"
       ],
       "tests": [
         "packages/domain/tests/document.test.ts",
-        "apps/web/tests/editor.test.ts"
+        "apps/web/tests/editor.test.ts",
+        "apps/web/tests/document-tabs.test.ts",
+        "apps/web/tests/shell-template.test.ts",
+        "apps/web/tests/page-setup.test.ts",
+        "apps/web/tests/page-editing.test.ts",
+        "apps/web/tests/background-paint.test.ts"
       ],
       "evidence": [
-        "doc/implementation/PLAN-0002-0001.md"
+        "doc/implementation/PLAN-0002-0001.md",
+        "doc/implementation/PLAN-0006-0001.md",
+        "doc/implementation/PLAN-0008-0006.md"
       ]
     },
     {
@@ -168,23 +184,43 @@
       ],
       "adrs": [
         "ADR-0004",
-        "ADR-0007"
+        "ADR-0007",
+        "ADR-0028",
+        "ADR-0029"
       ],
       "scenarios": [
         "SC-0019",
         "SC-0020",
-        "SC-0021"
+        "SC-0021",
+        "SC-0095",
+        "SC-0096",
+        "SC-0099"
       ],
       "implementation": [
         "apps/web/src/app/editor.service.ts",
-        "packages/domain/src/document.ts"
+        "packages/domain/src/document.ts",
+        "packages/domain/src/wall-boolean.ts",
+        "packages/domain/src/array-copy.ts"
       ],
       "tests": [
         "packages/domain/tests/document.test.ts",
-        "apps/web/tests/editor.test.ts"
+        "apps/web/tests/editor.test.ts",
+        "apps/web/tests/context-grouping.test.ts",
+        "apps/web/tests/pivot.test.ts",
+        "apps/web/tests/wall-booleans.test.ts",
+        "apps/web/tests/transforms.test.ts",
+        "apps/web/tests/clipboard.test.ts",
+        "apps/web/tests/context-actions.test.ts",
+        "packages/domain/tests/array-copy.test.ts",
+        "apps/web/tests/array-duplicate.test.ts",
+        "apps/web/tests/transform-again.test.ts",
+        "apps/web/tests/group-properties.test.ts"
       ],
       "evidence": [
-        "doc/implementation/PLAN-0002-0001.md"
+        "doc/implementation/PLAN-0002-0001.md",
+        "doc/implementation/PLAN-0008-0003.md",
+        "doc/implementation/PLAN-0008-0004.md",
+        "doc/implementation/PLAN-0008-0006.md"
       ]
     },
     {
@@ -198,23 +234,82 @@
       ],
       "adrs": [
         "ADR-0004",
-        "ADR-0007"
+        "ADR-0007",
+        "ADR-0023",
+        "ADR-0024",
+        "ADR-0028",
+        "ADR-0029",
+        "ADR-0031"
       ],
       "scenarios": [
         "SC-0022",
         "SC-0023",
-        "SC-0024"
+        "SC-0024",
+        "SC-0086",
+        "SC-0087",
+        "SC-0088",
+        "SC-0093",
+        "SC-0100"
       ],
       "implementation": [
         "apps/web/src/app/editor.service.ts",
-        "packages/domain/src/document.ts"
+        "packages/domain/src/document.ts",
+        "packages/domain/src/curves.ts",
+        "packages/domain/src/shapes.ts",
+        "packages/domain/src/erase.ts",
+        "packages/domain/src/arrange.ts",
+        "packages/domain/src/symbols.ts",
+        "packages/domain/src/tracing.ts",
+        "packages/domain/src/measurements.ts",
+        "apps/web/src/app/preferences.service.ts",
+        "packages/domain/src/dimensions.ts",
+        "packages/domain/src/line-endings.ts",
+        "apps/web/src/app/dimension-snapping.ts",
+        "packages/domain/src/procedural.ts",
+        "apps/web/src/app/procedural-placement.ts",
+        "packages/domain/src/wall-boolean.ts",
+        "packages/domain/src/cut.ts",
+        "packages/domain/src/outline-stroke.ts"
       ],
       "tests": [
         "packages/domain/tests/document.test.ts",
-        "apps/web/tests/editor.test.ts"
+        "apps/web/tests/editor.test.ts",
+        "packages/domain/tests/drawing.test.ts",
+        "packages/domain/tests/arrange.test.ts",
+        "packages/domain/tests/measurements.test.ts",
+        "packages/domain/tests/appearance-guides.test.ts",
+        "packages/renderer/tests/appearance-guides.test.ts",
+        "apps/web/tests/appearance-guides.test.ts",
+        "packages/domain/tests/dimensions.test.ts",
+        "apps/web/tests/dimensions-editor.test.ts",
+        "apps/web/tests/floor-plan-ui.test.ts",
+        "apps/web/tests/procedural-editor.test.ts",
+        "packages/domain/tests/procedural-independent.test.ts",
+        "apps/web/tests/procedural-independent.test.ts",
+        "packages/renderer/tests/procedural.test.ts",
+        "packages/renderer/tests/dimensions.test.ts",
+        "apps/web/tests/dimension-pointer.test.ts",
+        "packages/renderer/tests/stroke-dash.test.ts",
+        "packages/domain/tests/openings.test.ts",
+        "apps/web/tests/wall-runs.test.ts",
+        "apps/web/tests/plan-tools.test.ts",
+        "apps/web/tests/stroke-dash-ui.test.ts",
+        "apps/web/tests/wall-booleans.test.ts",
+        "apps/web/tests/dimension-label.test.ts",
+        "apps/web/tests/radial-dimensions.test.ts",
+        "apps/web/tests/pen-continuation.test.ts",
+        "packages/domain/tests/cut.test.ts",
+        "apps/web/tests/cut-tools.test.ts",
+        "packages/domain/tests/outline-stroke.test.ts",
+        "apps/web/tests/outline-conversion.test.ts",
+        "apps/web/tests/command-dispatch.test.ts"
       ],
       "evidence": [
-        "doc/implementation/PLAN-0002-0001.md"
+        "doc/implementation/PLAN-0002-0001.md",
+        "doc/implementation/PLAN-0008-0003.md",
+        "doc/implementation/PLAN-0008-0004.md",
+        "doc/implementation/PLAN-0008-0005.md",
+        "doc/implementation/PLAN-0008-0006.md"
       ]
     },
     {
@@ -228,7 +323,8 @@
       ],
       "adrs": [
         "ADR-0004",
-        "ADR-0014"
+        "ADR-0014",
+        "ADR-0031"
       ],
       "scenarios": [
         "SC-0025",
@@ -237,11 +333,15 @@
       ],
       "implementation": [
         "apps/web/src/app/editor.service.ts",
-        "packages/domain/src/document.ts"
+        "packages/domain/src/document.ts",
+        "packages/domain/src/text-outline.ts",
+        "apps/web/src/app/font-outlines.ts"
       ],
       "tests": [
         "packages/domain/tests/document.test.ts",
-        "apps/web/tests/editor.test.ts"
+        "apps/web/tests/editor.test.ts",
+        "packages/domain/tests/text-outline.test.ts",
+        "apps/web/tests/text-outlines.test.ts"
       ],
       "evidence": [
         "doc/implementation/PLAN-0002-0001.md"
@@ -263,25 +363,30 @@
       "scenarios": [
         "SC-0028",
         "SC-0029",
-        "SC-0030"
+        "SC-0030",
+        "SC-0089"
       ],
       "implementation": [
         "apps/web/src/app/editor.service.ts",
-        "packages/domain/src/document.ts"
+        "packages/domain/src/document.ts",
+        "packages/domain/src/brush.ts"
       ],
       "tests": [
         "packages/domain/tests/document.test.ts",
-        "apps/web/tests/editor.test.ts"
+        "apps/web/tests/editor.test.ts",
+        "apps/web/tests/brush-settings.test.ts",
+        "apps/web/tests/zoom-area.test.ts"
       ],
       "evidence": [
-        "doc/implementation/PLAN-0002-0001.md"
+        "doc/implementation/PLAN-0002-0001.md",
+        "doc/implementation/PLAN-0008-0006.md"
       ]
     },
     {
       "id": "FEAT-0011",
       "title": "Selections and painted masks",
       "path": "doc/feat/FEAT-0011.md",
-      "status": "Planned",
+      "status": "Implementing",
       "iteration": "ITER-0004",
       "dependsOn": [
         "FEAT-0010"
@@ -295,9 +400,18 @@
         "SC-0032",
         "SC-0033"
       ],
-      "implementation": [],
-      "tests": [],
-      "evidence": []
+      "implementation": [
+        "packages/domain/src/selection-area.ts",
+        "apps/web/src/app/editor.service.ts"
+      ],
+      "tests": [
+        "packages/domain/src/selection-area.test.ts",
+        "apps/web/tests/area-selection-mode.test.ts",
+        "apps/web/tests/area-selection.test.ts"
+      ],
+      "evidence": [
+        "doc/implementation/PLAN-0008-0006.md"
+      ]
     },
     {
       "id": "FEAT-0012",
@@ -320,14 +434,18 @@
       ],
       "implementation": [
         "apps/web/src/app/editor.service.ts",
-        "packages/domain/src/document.ts"
+        "packages/domain/src/document.ts",
+        "apps/web/src/app/app.component.ts"
       ],
       "tests": [
         "packages/domain/tests/document.test.ts",
-        "apps/web/tests/editor.test.ts"
+        "apps/web/tests/editor.test.ts",
+        "apps/web/tests/blend-ui.test.ts",
+        "apps/web/tests/object-blend.test.ts"
       ],
       "evidence": [
-        "doc/implementation/PLAN-0002-0001.md"
+        "doc/implementation/PLAN-0002-0001.md",
+        "doc/implementation/PLAN-0008-0006.md"
       ]
     },
     {
@@ -347,15 +465,18 @@
       "scenarios": [
         "SC-0037",
         "SC-0038",
-        "SC-0039"
+        "SC-0039",
+        "SC-0101"
       ],
       "implementation": [
         "apps/web/src/app/editor.service.ts",
-        "packages/domain/src/document.ts"
+        "packages/domain/src/document.ts",
+        "apps/web/src/app/spatial.ts"
       ],
       "tests": [
         "packages/domain/tests/document.test.ts",
-        "apps/web/tests/editor.test.ts"
+        "apps/web/tests/editor.test.ts",
+        "apps/web/tests/spatial-planes.test.ts"
       ],
       "evidence": [
         "doc/implementation/PLAN-0002-0001.md"
@@ -517,18 +638,27 @@
       "scenarios": [
         "SC-0058",
         "SC-0059",
-        "SC-0060"
+        "SC-0060",
+        "SC-0090",
+        "SC-0098"
       ],
       "implementation": [
         "apps/web/src/app/editor.service.ts",
-        "packages/domain/src/document.ts"
+        "packages/domain/src/document.ts",
+        "apps/web/src/app/app.component.ts",
+        "packages/design-system/styles/studio.scss",
+        "packages/renderer/src/canvas-renderer.ts"
       ],
       "tests": [
         "packages/domain/tests/document.test.ts",
-        "apps/web/tests/editor.test.ts"
+        "apps/web/tests/editor.test.ts",
+        "apps/web/tests/shell-template.test.ts",
+        "apps/web/tests/typography-ui.test.ts",
+        "apps/web/tests/outline-proportional.test.ts"
       ],
       "evidence": [
-        "doc/implementation/PLAN-0002-0001.md"
+        "doc/implementation/PLAN-0002-0001.md",
+        "doc/implementation/PLAN-0008-0006.md"
       ]
     },
     {
@@ -568,23 +698,43 @@
       ],
       "adrs": [
         "ADR-0009",
-        "ADR-0016"
+        "ADR-0016",
+        "ADR-0030"
       ],
       "scenarios": [
         "SC-0064",
         "SC-0065",
-        "SC-0066"
+        "SC-0066",
+        "SC-0091",
+        "SC-0092",
+        "SC-0094",
+        "SC-0097"
       ],
       "implementation": [
         "apps/web/src/app/editor.service.ts",
-        "packages/domain/src/document.ts"
+        "packages/domain/src/document.ts",
+        "packages/domain/src/svg-import.ts",
+        "packages/domain/src/dxf-import.ts",
+        "packages/domain/src/pdf.ts",
+        "apps/web/src/app/smart-table.component.ts",
+        "packages/domain/src/pdf-import.ts",
+        "packages/domain/src/eps-import.ts"
       ],
       "tests": [
         "packages/domain/tests/document.test.ts",
-        "apps/web/tests/editor.test.ts"
+        "apps/web/tests/editor.test.ts",
+        "packages/domain/tests/svg-import.test.ts",
+        "packages/domain/tests/dxf-import.test.ts",
+        "apps/web/tests/vector-import.test.ts",
+        "packages/domain/tests/pdf.test.ts",
+        "apps/web/tests/export-print.test.ts",
+        "apps/web/tests/smart-table.test.ts",
+        "packages/domain/tests/pdf-import.test.ts",
+        "packages/domain/tests/eps-import.test.ts"
       ],
       "evidence": [
-        "doc/implementation/PLAN-0002-0001.md"
+        "doc/implementation/PLAN-0002-0001.md",
+        "doc/implementation/PLAN-0022-0001.md"
       ]
     },
     {
@@ -737,7 +887,8 @@
       "tests": [
         "tests/test_changelog.py",
         "packages/domain/tests/document.test.ts",
-        "apps/web/tests/editor.test.ts"
+        "apps/web/tests/editor.test.ts",
+        "apps/web/tests/footer-credits.test.ts"
       ],
       "evidence": [
         "doc/product/footer-and-changelog.md",

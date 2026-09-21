@@ -16,7 +16,7 @@ class LocalLauncherTests(unittest.TestCase):
                 self.assertEqual(0, local.main())
                 content=(Path(folder)/'.env.local').read_text()
                 self.assertGreater(len(content.splitlines()[0].split('=',1)[1]),32)
-                command=run.call_args.args[0]
+                command=next(call.args[0] for call in run.call_args_list if call.args[0][:2] == ['docker', 'compose'])
                 self.assertIn('ximply-design-studio-preview',command)
                 self.assertEqual(['up','--build','-d','--wait'],command[-4:])
 
@@ -29,3 +29,22 @@ class LocalLauncherTests(unittest.TestCase):
     def test_nuke_requires_exact_project_confirmation(self):
         with patch('sys.argv',['local.py','nuke']),redirect_stderr(StringIO()),self.assertRaises(SystemExit):
             local.main()
+
+    def test_info_reports_checkout_without_docker_or_environment_file(self):
+        with tempfile.TemporaryDirectory() as folder, redirect_stdout(StringIO()) as output:
+            root = Path(folder)
+            (root / 'release').mkdir()
+            (root / 'release/version.json').write_text('{"version":"0.3.1-alpha.1"}')
+            with patch.object(local, 'ROOT', root), patch('sys.argv', ['local.py', 'info']), \
+                 patch.object(local.subprocess, 'check_output', side_effect=['abc123\n', 'feat/drawing-preview\n']), \
+                 patch.object(local.subprocess, 'run') as docker:
+                self.assertEqual(0, local.main())
+            self.assertIn('0.3.1-alpha.1 | source: feat/drawing-preview | commit: abc123', output.getvalue())
+            self.assertFalse((root / '.env.local').exists())
+            docker.assert_not_called()
+
+    def test_archive_info_works_without_git(self):
+        with tempfile.TemporaryDirectory() as folder:
+            with patch.object(local, 'ROOT', Path(folder)), \
+                 patch.object(local.subprocess, 'check_output', side_effect=FileNotFoundError):
+                self.assertEqual('Ximply Design Studio unknown | source: archive | commit: unavailable', local.preview_info())

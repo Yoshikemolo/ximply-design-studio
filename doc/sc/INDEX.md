@@ -88,3 +88,20 @@
 | [SC-0082 — Single version source](SC-0082.md) |
 | [SC-0083 — Typed and explicit release notes](SC-0083.md) |
 | [SC-0084 — Exact footer link parity](SC-0084.md) |
+| [SC-0085 — Tabbed documents and unsaved-change protection](SC-0085.md) |
+| [SC-0086 — Drafting-rule linear dimension presentation](SC-0086.md) |
+| [SC-0087 — Broken line types and leaf projections](SC-0087.md) |
+| [SC-0088 — Connected wall runs and plan tools](SC-0088.md) |
+| [SC-0089 — Painting controls and brush tips](SC-0089.md) |
+| [SC-0090 — Panel layout and contextual guidance](SC-0090.md) |
+| [SC-0091 — SVG import as editable native layers](SC-0091.md) |
+| [SC-0092 — DXF import and the formats that are refused](SC-0092.md) |
+| [SC-0093 — Scissors and knife cutting tools](SC-0093.md) |
+| [SC-0094 — PDF export, printing and choosing documents](SC-0094.md) |
+| [SC-0095 — Clipboard, stacked pastes and the bounding box](SC-0095.md) |
+| [SC-0096 — Duplication in series](SC-0096.md) |
+| [SC-0097 — Illustrator and PDF drawing import](SC-0097.md) |
+| [SC-0098 — Outline view and proportional corner resizing](SC-0098.md) |
+| [SC-0099 — Properties of a whole selection](SC-0099.md) |
+| [SC-0100 — Outline stroke and text outlines](SC-0100.md) |
+| [SC-0101 — Spatial preview planes and parallax](SC-0101.md) |

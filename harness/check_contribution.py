@@ -42,6 +42,13 @@ def legacy_exemptions(policy: dict[str, Any]) -> set[str]:
         exemptions.add(sha)
     return exemptions
 
+def committer_allowed(commit: dict[str, Any], policy: dict[str, Any]) -> bool:
+    """Accept the owner, or GitHub's own committer when GitHub verified the signature."""
+    committer = commit.get("committerLogin")
+    if committer == policy["owner"]:
+        return True
+    return committer == policy["trustedWebCommitter"] and commit.get("verified") is True
+
 def check_metadata(report: dict[str, Any], expected_head: str, policy: dict[str, Any]) -> list[str]:
     errors: list[str] = []
     exempt = legacy_exemptions(policy)
@@ -57,10 +64,12 @@ def check_metadata(report: dict[str, Any], expected_head: str, policy: dict[str,
                 continue
             if commit.get("sha") in exempt:
                 continue
-            for identity in ("authorLogin", "committerLogin"):
-                if commit.get(identity) != policy["owner"]:
-                    errors.append(f"Commit {identity} must be {policy['owner']}")
-            errors += check_text(str(commit.get("message", "")), "Commit", policy)
+            sha = commit.get("sha", "unknown")
+            if commit.get("authorLogin") != policy["owner"]:
+                errors.append(f"Commit {sha} authorLogin must be {policy['owner']}; received {commit.get('authorLogin')!r}")
+            if not committer_allowed(commit, policy):
+                errors.append(f"Commit {sha} committerLogin must be {policy['owner']} or a verified {policy['trustedWebCommitter']} merge; received {commit.get('committerLogin')!r}")
+            errors += [f"{sha}: {error}" for error in check_text(str(commit.get("message", "")), "Commit", policy)]
     pr = report.get("pullRequest")
     if pr is not None:
         if not isinstance(pr, dict):
@@ -77,15 +86,23 @@ def main() -> int:
     parser.add_argument("report", type=Path, nargs="?")
     parser.add_argument("--head")
     parser.add_argument("--message-file", type=Path)
+    parser.add_argument("--pr-title-file", type=Path)
+    parser.add_argument("--pr-body-file", type=Path)
     args = parser.parse_args()
     try:
         policy = json.loads(POLICY_PATH.read_text())
-        if args.message_file:
-            errors = check_text(args.message_file.read_text(), "Commit", policy)
-        elif args.report and args.head:
-            errors = check_metadata(json.loads(args.report.read_text()), args.head, policy)
-        else:
-            parser.error("Provide a report and --head, or --message-file")
+        errors = []
+        if bool(args.report) != bool(args.head):
+            parser.error("Provide both report and --head")
+        if bool(args.pr_title_file) != bool(args.pr_body_file):
+            parser.error("Provide both --pr-title-file and --pr-body-file")
+        if not (args.report or args.message_file or args.pr_title_file):
+            parser.error("Provide metadata evidence or proposed contribution text files")
+        if args.report:
+            errors += check_metadata(json.loads(args.report.read_text()), args.head, policy)
+        for path, label in ((args.message_file, "Commit"), (args.pr_title_file, "PR title"), (args.pr_body_file, "PR body")):
+            if path:
+                errors += check_text(path.read_text(encoding="utf-8"), label, policy)
         for error in errors:
             print(error)
         return int(bool(errors))
