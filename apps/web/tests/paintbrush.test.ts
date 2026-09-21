@@ -108,3 +108,24 @@ describe('the calligraphic nib', () => {
     expect(validBrushStroke({ ...DEFAULT_BRUSH_STROKE, extra: 1 })).toBe(false);
   });
 });
+
+describe('the brush of a path', () => {
+  it('is applied, changed and taken off as the Brushes panel does', () => {
+    localStorage.clear();
+    const e = new EditorService();
+    e.zoom.set(1);
+    e.setTool('pen');
+    for (const [x, y] of [[100, 100], [300, 100]]) { e.start({ x, y }); e.end(); }
+    e.finishPath();
+    const id = e.document().layers[0].id;
+    e.selectedIds.set([id]);
+    e.selectedId.set(id);
+    expect(e.setBrushStroke({})).toBe(true);
+    expect(e.document().layers[0].brushStroke).toEqual(DEFAULT_BRUSH_STROKE);
+    e.setBrushStroke({ roundness: 250, angle: 45 });
+    expect(e.document().layers[0].brushStroke).toEqual({ ...DEFAULT_BRUSH_STROKE, roundness: 100, angle: 45 });
+    e.setBrushStroke(null);
+    expect('brushStroke' in e.document().layers[0]).toBe(false);
+    expect(e.document().layers[0].stroke).not.toBe('none');
+  });
+});

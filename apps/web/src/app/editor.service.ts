@@ -1317,6 +1317,38 @@ export class EditorService {
     }
     this.changed();
   }
+  /**
+   * Applies a brush to the selected paths, changes it, or takes it off, as the Brushes
+   * panel does: a path without its brush keeps its plain stroke.
+   */
+  setBrushStroke(change: Partial<BrushStroke> | null) {
+    const targets = this.selectedLayers().filter((l) => l.kind === "path" && !l.dimension && !l.procedural && !l.guide && !this.isEffectivelyLocked(l));
+    if (!targets.length) { this.status.set("Select the paths to brush."); return false; }
+    const next = (layer: Layer): BrushStroke | undefined => {
+      if (change === null) return undefined;
+      const base = layer.brushStroke ?? this.activeBrushStroke();
+      const merged = { ...base, ...change, kind: "calligraphic" as const };
+      return {
+        kind: "calligraphic",
+        angle: Math.min(180, Math.max(-180, merged.angle)),
+        roundness: Math.min(100, Math.max(0, merged.roundness)),
+        diameter: Math.min(1296, Math.max(0.1, merged.diameter)),
+      };
+    };
+    const ids = new Set(targets.map((l) => l.id));
+    this.commitStep(this.document());
+    this.document.update((d) => ({
+      ...d,
+      layers: d.layers.map((l) => {
+        if (!ids.has(l.id)) return l;
+        const brushStroke = next(l);
+        const { brushStroke: _removed, ...rest } = l;
+        return brushStroke ? { ...rest, brushStroke } : rest;
+      }),
+    }));
+    this.changed();
+    return true;
+  }
   toggle(id: string, key: "visible" | "locked") {
     this.commitStep(this.document());
     const layer = this.document().layers.find((l) => l.id === id)!;
