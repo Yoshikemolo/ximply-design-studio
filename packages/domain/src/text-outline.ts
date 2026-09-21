@@ -21,27 +21,56 @@ const rectangle = (x: number, y: number, width: number, height: number): CurvePa
   closed: true,
   nodes: [{ x, y }, { x: x + width, y }, { x: x + width, y: y + height }, { x, y: y + height }].map((point) => anchor(point)),
 });
+/** A letter with the contours it is made of: its outline and the holes inside it. */
+export interface OutlinedGlyph {
+  text: string;
+  curves: CurvePath[];
+}
+/** The letters of one word, which the editor keeps together. */
+export interface OutlinedWord {
+  text: string;
+  glyphs: OutlinedGlyph[];
+}
+export interface OutlinedText {
+  words: OutlinedWord[];
+  /** The bar of an underline or a strikethrough, one per line of text. */
+  decoration: CurvePath[];
+}
 /**
- * The outlines of every glyph of a laid-out text, in the coordinates of its layer, with the
- * underline or the strikethrough as the bars they are drawn as.
+ * The outlines of a laid-out text, letter by letter and word by word, in the coordinates
+ * of its layer. A letter carries every contour it is made of, so its holes travel with it;
+ * a word ends where a space or a line does.
  */
-export function textOutlines(layout: TextLayoutResult, glyphs: GlyphPaths): CurvePath[] {
+export function textOutlineGroups(layout: TextLayoutResult, glyphs: GlyphPaths): OutlinedText {
   const type = layout.typography;
   const horizontal = type.horizontalScale || 1, vertical = type.verticalScale || 1;
-  const curves: CurvePath[] = [];
+  const words: OutlinedWord[] = [];
   for (const line of layout.lines) {
+    let word: OutlinedWord | null = null;
     for (const glyph of line.glyphs) {
+      if (/^\s+$/.test(glyph.text)) { word = null; continue; }
       // The glyph is placed in the unscaled space and scaled with the text, as it is drawn.
-      const paths = glyphs(glyph.text, layout.fontSize, glyph.x / horizontal, line.y / vertical);
-      for (const path of paths) if (path.nodes.length > 1) curves.push(scalePath(path, horizontal, vertical));
+      const paths = glyphs(glyph.text, layout.fontSize, glyph.x / horizontal, line.y / vertical)
+        .filter((path) => path.nodes.length > 1)
+        .map((path) => scalePath(path, horizontal, vertical));
+      if (!paths.length) continue;
+      if (!word) { word = { text: '', glyphs: [] }; words.push(word); }
+      word.text += glyph.text;
+      word.glyphs.push({ text: glyph.text, curves: paths });
     }
   }
+  const decoration: CurvePath[] = [];
   if (type.decoration !== 'none') {
     const thickness = Math.max(1, layout.fontSize / 16) * vertical;
     for (const line of layout.lines) {
       const offset = type.decoration === 'underline' ? layout.fontSize * 0.12 : -layout.fontSize * 0.3;
-      curves.push(rectangle(line.x, line.y + offset * vertical, line.width, thickness));
+      decoration.push(rectangle(line.x, line.y + offset * vertical, line.width, thickness));
     }
   }
-  return curves;
+  return { words, decoration };
+}
+/** Every contour of a text, flattened, for a caller that wants one shape. */
+export function textOutlines(layout: TextLayoutResult, glyphs: GlyphPaths): CurvePath[] {
+  const outlined = textOutlineGroups(layout, glyphs);
+  return [...outlined.words.flatMap((word) => word.glyphs.flatMap((glyph) => glyph.curves)), ...outlined.decoration];
 }

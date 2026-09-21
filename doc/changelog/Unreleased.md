@@ -24,6 +24,7 @@ None.
 
 ## New features
 
+- Turn a text into one shape per letter, each with the holes of that letter inside it, the letters of a word grouped together, the words grouped into the text and the whole thing kept inside the group the text belonged to. A selection of several texts outlines every one of them.
 - Import encapsulated PostScript drawings, the EPS files Illustrator and CorelDRAW export: their paths, colours and stroke widths arrive as editable layers, read with the names of the language and the aliases each program defines for them, and whatever falls outside that vocabulary is reported.
 
 ## Improvements
@@ -34,6 +35,7 @@ None.
 
 ## Fixes
 
+- Create outlines produced one shape for a whole text, painted with the colour of a new path rather than the colour of the text, and the contours of a letter were left open because a font does not write the closing word; each letter is now its own closed shape in the paint the text carried.
 - Keep the appearance popovers of the fill and the stroke on the screen: the one opened from the squares at the bottom of the tool rail ran past the lower edge, since the place was chosen from the square before the popover had a height.
 
 ## Security

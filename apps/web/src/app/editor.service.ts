@@ -58,7 +58,7 @@ import { pdfArtwork, pdfFirstPage, pdfObjects } from "../../../../packages/domai
 import { epsArtwork, epsPostScript } from "../../../../packages/domain/src/eps-import";
 import { knifeCut, scissorCut } from "../../../../packages/domain/src/cut";
 import { outlineStroke } from "../../../../packages/domain/src/outline-stroke";
-import { textOutlines } from "../../../../packages/domain/src/text-outline";
+import { textOutlineGroups } from "../../../../packages/domain/src/text-outline";
 import { FontOutlines } from "./font-outlines";
 import { PdfImage, PdfPageSource, pdfDocument } from "../../../../packages/domain/src/pdf";
 import { ArraySettings, arraySteps, copyLayer, validArraySettings } from "../../../../packages/domain/src/array-copy";
@@ -1618,40 +1618,61 @@ export class EditorService {
   async outlineTextSelection(): Promise<boolean> {
     const texts = this.selectedLayers().filter((layer) => layer.kind === "text" && !this.isEffectivelyLocked(layer) && !layer.guide);
     if (!texts.length) { this.status.set("Select the text you want to turn into shapes."); return false; }
-    const produced = new Map<string, Layer>();
+    const produced = new Map<string, Layer[]>();
     let approximate = false;
     for (const layer of texts) {
       const layout = this.textMetrics(layer);
       const typography = layout.typography;
       const { font, exact } = await this.fonts.face(typography.fontFamily, typography.fontWeight, typography.fontStyle);
       approximate = approximate || !exact;
-      const curves = textOutlines(layout, (text, size, x, y) => this.fonts.paths(font, text, size, x, y))
-        .map((path) => ({ ...path, nodes: path.nodes.map((node) => ({
-          point: worldPoint(layer, node.point),
-          incoming: worldPoint(layer, node.incoming),
-          outgoing: worldPoint(layer, node.outgoing),
-          smooth: node.smooth,
-        })) }));
-      if (!curves.length) continue;
-      const shape = fitCurves({ ...newLayer("path", crypto.randomUUID(), { x: 0, y: 0 }), rotation: 0 }, curves);
-      produced.set(layer.id, {
-        ...layer, ...shape, id: shape.id, kind: "path", rotation: 0, flipX: false, flipY: false, skewX: 0,
-        name: (layer.text || layer.name).slice(0, 40), text: "", typography: undefined, textLayout: undefined, points: [],
-      });
+      const outlined = textOutlineGroups(layout, (text, size, x, y) => this.fonts.paths(font, text, size, x, y));
+      // The shapes of one text belong together, its words belong together inside that,
+      // and a letter keeps every contour it is made of, holes included.
+      const parents = (layer.groupPath ?? []).slice(0, 13);
+      const textGroup = crypto.randomUUID();
+      const shapes: Layer[] = [];
+      const place = (curves: CurvePath[], name: string, groupPath: string[]) => {
+        const world = curves.map((path) => ({
+          closed: path.closed,
+          nodes: path.nodes.map((node) => ({
+            point: worldPoint(layer, node.point),
+            incoming: worldPoint(layer, node.incoming),
+            outgoing: worldPoint(layer, node.outgoing),
+            smooth: node.smooth,
+          })),
+        }));
+        const shape = fitCurves({ ...newLayer("path", crypto.randomUUID(), { x: 0, y: 0 }), rotation: 0 }, world);
+        shapes.push({
+          ...layer, ...shape, id: shape.id, kind: "path", rotation: 0, flipX: false, flipY: false, skewX: 0,
+          // The shape of a letter is painted as the text was painted, not as a new path.
+          fill: layer.fill, stroke: layer.stroke, strokeWidth: layer.strokeWidth, opacity: layer.opacity,
+          name: name.slice(0, 40) || "Shape", text: "", typography: undefined, textLayout: undefined, points: [],
+          groupPath,
+        });
+      };
+      for (const word of outlined.words) {
+        const wordGroup = crypto.randomUUID();
+        for (const glyph of word.glyphs) place(glyph.curves, glyph.text, [...parents, textGroup, wordGroup]);
+      }
+      // The bar of an underline or a strikethrough belongs to the text, not to a word.
+      for (const bar of outlined.decoration) place([bar], "Line", [...parents, textGroup]);
+      if (shapes.length) produced.set(layer.id, shapes);
     }
     if (!produced.size) { this.status.set("The selected text has no shapes to create."); return false; }
     const document = this.document();
-    const next = { ...document, layers: document.layers.map((layer) => produced.get(layer.id) ?? layer) };
+    const next = { ...document, layers: document.layers.flatMap((layer) => produced.get(layer.id) ?? [layer]) };
+    if (next.layers.length > MAX_LAYERS) { this.status.set("The document cannot hold more layers."); return false; }
     try { parseDocument(JSON.stringify(next)); } catch { this.status.set("The outlines cannot be created here."); return false; }
     this.commitStep(document);
     this.document.set(next);
-    const created = [...produced.values()].map((layer) => layer.id);
+    const created = [...produced.values()].flat().map((layer) => layer.id);
     this.selectedIds.set(created);
     this.selectedId.set(created[0]);
     this.activeNodes.set([]);
+    const letters = created.length;
     this.status.set(approximate
-      ? `Created outlines for ${produced.size} text${produced.size > 1 ? "s" : ""}; a carried face stood in for the chosen family.`
-      : `Created outlines for ${produced.size} text${produced.size > 1 ? "s" : ""}.`);
+      ? `Created outlines for ${produced.size} text${produced.size > 1 ? "s" : ""} in ${letters} shapes; a carried face stood in for the chosen family.`
+      : `Created outlines for ${produced.size} text${produced.size > 1 ? "s" : ""} in ${letters} shapes.`);
     this.changed();
     return true;
   }

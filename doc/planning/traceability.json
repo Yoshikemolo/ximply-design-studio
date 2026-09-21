@@ -338,7 +338,8 @@
       "tests": [
         "packages/domain/tests/document.test.ts",
         "apps/web/tests/editor.test.ts",
-        "packages/domain/tests/text-outline.test.ts"
+        "packages/domain/tests/text-outline.test.ts",
+        "apps/web/tests/text-outlines.test.ts"
       ],
       "evidence": [
         "doc/implementation/PLAN-0002-0001.md"
