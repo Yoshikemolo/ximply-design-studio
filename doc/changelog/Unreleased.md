@@ -29,6 +29,8 @@ None.
 
 ## Improvements
 
+- Point the readme at the published preview, https://xds.ximplicity.es, and clone the default branch instead of a branch that was retired.
+- Publish the editor on the owner's preview address with `scripts/deploy-production.ps1`, which builds the checkout, uploads it under the commit it was built from, moves the link the web server reads and reloads it only after the configuration is accepted, keeping the earlier releases so a return to one of them is a single command.
 - Name the import command Import, not Import image: it reads drawings as well as pictures.
 - Show or hide the column of tools from View, Layout, like the other blocks of the workspace. The canvas takes the width the column leaves, and the choice is remembered.
 - Build the spatial preview by group: every element of a group is painted on the same plane and a layer outside a group takes a plane of its own, so the depth of the preview follows how the drawing is organised.
