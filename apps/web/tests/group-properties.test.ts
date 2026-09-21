@@ -65,6 +65,34 @@ describe('properties of a group', () => {
       .toEqual(['#0000ff', '#0000ff', '#0000ff']);
   });
 
+  it('changes only the property that was edited, on every selected object', () => {
+    const e = grouped();
+    // Each member starts with its own appearance, one of them without a stroke.
+    e.document.update((document) => ({
+      ...document,
+      layers: document.layers.map((item) => item.id === 'b'
+        ? { ...item, fill: '#00ff00', stroke: 'none', strokeWidth: 1 }
+        : item),
+    }));
+    e.selectLayer('a');
+    e.setStrokeWidth(9);
+    // The width reaches both, and nothing else moved: the transparent stroke stays away.
+    expect([layer(e, 'a').strokeWidth, layer(e, 'b').strokeWidth]).toEqual([9, 9]);
+    expect([layer(e, 'a').fill, layer(e, 'b').fill]).toEqual(['#111111', '#00ff00']);
+    expect([layer(e, 'a').stroke, layer(e, 'b').stroke]).toEqual(['#222222', 'none']);
+    e.setPaint('stroke', '#0000ff');
+    // The colour of the stroke reaches both, and the fills stay as each one had them.
+    expect([layer(e, 'a').stroke, layer(e, 'b').stroke]).toEqual(['#0000ff', '#0000ff']);
+    expect([layer(e, 'a').fill, layer(e, 'b').fill]).toEqual(['#111111', '#00ff00']);
+    expect([layer(e, 'a').strokeWidth, layer(e, 'b').strokeWidth]).toEqual([9, 9]);
+    e.setPaint('fill', '#ff0000');
+    expect([layer(e, 'a').stroke, layer(e, 'b').stroke]).toEqual(['#0000ff', '#0000ff']);
+    // The line type of the selection is merged into the style each object already had.
+    e.setStrokeStyle({ dash: [6, 3] });
+    expect(layer(e, 'a').strokeStyle?.dash).toEqual([6, 3]);
+    expect(layer(e, 'b').strokeStyle?.cap).toBe(layer(e, 'a').strokeStyle?.cap);
+  });
+
   it('leaves a locked member of the selection alone', () => {
     const e = grouped();
     e.toggle('b', 'locked');

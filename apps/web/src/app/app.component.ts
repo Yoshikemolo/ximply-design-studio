@@ -92,6 +92,7 @@ const COMMAND_ICONS: Record<string, string> = {
   mirrorH: "mirror-h", mirrorV: "mirror-v", rotateCW: "rotate-cw", rotateCCW: "rotate-ccw",
   scaleUp: "scale-up", scaleDown: "scale-down",
   duplicate: "duplicate", transformAgain: "transform-again", remove: "delete", undo: "undo", redo: "redo",
+  outlineStroke: "outline-stroke", outlineText: "outline-text",
   copy: "copy", cut: "cut", paste: "paste", pasteInFront: "paste-front", pasteInBack: "paste-back",
   duplicateSeries: "duplicate-series",
   layerUp: "layer-up", layerDown: "layer-down", fit: "fit-view", zoomIn: "zoom-in", zoomOut: "zoom-out",
@@ -1173,6 +1174,10 @@ export class AppComponent implements AfterViewInit, OnDestroy {
           mirror: ["mirrorH", "mirrorV"],
           scale: ["scaleUp", "scaleDown"],
           zoom: ["zoomIn", "zoomOut", "fit"],
+          // Outlining a stroke belongs with the tools that draw one, and outlining a text
+          // with the tool that writes it.
+          paint: ["outlineStroke"],
+          text: ["outlineText"],
         } as Record<string, string[]>
       )[id ?? ""] ??
       []
@@ -1227,7 +1232,8 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     if (id === "makeBlend") return this.editor.canCreateBlend() && this.blendStepLimit() > 0;
     if (id === "expandBlend" || id === "releaseBlend") return !!this.editor.selectedBlend() && !this.blendIsLocked();
     // The clipboard actions say what they need: something selected, or something copied.
-    if (["copy", "cut", "duplicate", "duplicateSeries"].includes(id)) return this.editor.selectedLayers().length > 0;
+    if (["copy", "cut", "duplicate", "duplicateSeries", "outlineStroke"].includes(id)) return this.editor.selectedLayers().length > 0;
+    if (id === "outlineText") return this.editor.selectedLayers().some((layer) => layer.kind === "text");
     if (id === "transformAgain") return this.editor.selectedLayers().length > 0 && !!this.editor.lastTransform();
     if (["paste", "pasteInFront", "pasteInBack"].includes(id)) return this.editor.canPaste();
     return true;
@@ -1819,6 +1825,8 @@ export class AppComponent implements AfterViewInit, OnDestroy {
       pasteInBack: () => this.editor.paste("back"),
       toggleBoundingBox: () => this.editor.toggleBoundingBox(),
       toggleOutline: () => this.editor.toggleOutlineView(),
+      outlineStroke: () => this.editor.outlineStrokeSelection(),
+      outlineText: () => { void this.editor.outlineTextSelection().catch((error) => this.notify(error)); },
       remove: () => this.editor.remove(),
       finish: () => this.editor.finishPath(),
       cancel: () => {

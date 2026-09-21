@@ -100,6 +100,8 @@ export const COMMANDS: Command[] = [
   { id: "pasteInBack", label: "Paste in back", keys: ["Mod+B"] },
   { id: "toggleBoundingBox", label: "Show or hide the bounding box", keys: ["Mod+Shift+B"] },
   { id: "toggleOutline", label: "Outline view", keys: ["Mod+Y"] },
+  { id: "outlineStroke", label: "Outline stroke", keys: [] },
+  { id: "outlineText", label: "Create outlines", keys: ["Mod+Shift+O"] },
   { id: "remove", label: "Delete", keys: ["Delete", "Backspace"] },
   { id: "finish", label: "Finish path", keys: ["Enter"] },
   { id: "cancel", label: "Cancel", keys: ["Escape"] },

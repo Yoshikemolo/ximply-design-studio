@@ -48,9 +48,34 @@ export interface TextLayoutResult {
 
 /** Deterministic fallback for headless callers; visual exports should inject font metrics. */
 export const approximateTextMeasurement: TextMeasurement = (text, size) => Array.from(text).length * size * 0.6;
+/**
+ * Faces the studio carries with it, so text looks the same on every machine and the
+ * outlines of a text come from the very file that drew it. Each one has the metrics of
+ * the family it stands for, so a document written before them keeps its lines.
+ */
+export const BUNDLED_FACES = {
+  Arimo: { file: "arimo", stands: ["sans-serif", "Arial", "Verdana", "Trebuchet MS"] },
+  Tinos: { file: "tinos", stands: ["serif", "Times New Roman", "Georgia"] },
+  Cousine: { file: "cousine", stands: ["monospace", "Courier New"] },
+} as const;
+export type BundledFace = keyof typeof BUNDLED_FACES;
+/** The carried face that draws a family, and whether it has the metrics of that family. */
+export function bundledFace(family: string): { face: BundledFace; exact: boolean } {
+  for (const [face, entry] of Object.entries(BUNDLED_FACES) as [BundledFace, { stands: readonly string[] }][]) {
+    if (entry.stands.includes(family)) {
+      return { face, exact: !["Georgia", "Verdana", "Trebuchet MS"].includes(family) };
+    }
+  }
+  return { face: "Arimo", exact: false };
+}
+/** Name of the font file for a face at a weight and a style. */
+export function faceFile(face: BundledFace, weight: number, style: string): string {
+  return `${BUNDLED_FACES[face].file}-${weight >= 600 ? 700 : 400}-${style === "italic" ? "italic" : "normal"}.woff`;
+}
 export function textFont(size: number, typography: TextTypography): string {
   const family = typography.fontFamily.includes(" ") ? `"${typography.fontFamily}"` : typography.fontFamily;
-  return `${typography.fontStyle} ${typography.fontWeight} ${size}px ${family}`;
+  // The carried face is asked for first, so what is drawn is what will be outlined.
+  return `${typography.fontStyle} ${typography.fontWeight} ${size}px ${bundledFace(typography.fontFamily).face}, ${family}`;
 }
 const visibleText = (text: string) => text.replace(/\u00ad/g, "");
 

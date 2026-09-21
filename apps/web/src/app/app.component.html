@@ -71,6 +71,11 @@
       <details>
         <summary>{{ t("Object") }}</summary>
         <div class="menu-popover">
+          <button [disabled]="!commandEnabled('outlineStroke')" (click)="runCommand('outlineStroke')">
+            {{ t("Outline stroke") }}</button
+          ><button [disabled]="!commandEnabled('outlineText')" (click)="runCommand('outlineText')">
+            {{ t("Create outlines") }}<kbd>{{ shortcut("outlineText") }}</kbd>
+          </button>
           <button (click)="runCommand('group')">
             {{ t("Group") }}<kbd>{{ shortcut("group") }}</kbd></button
           ><button (click)="runCommand('ungroup')">
@@ -1472,7 +1477,7 @@
 }
 
 @if (paintPicker()) {
-  <section class="paint-popover" role="dialog" [attr.aria-label]="t('Appearance')" [style.left.px]="paintPicker()!.x" [style.top.px]="paintPicker()!.y">
+  <section class="paint-popover" role="dialog" [attr.aria-label]="t('Appearance')" [style.left.px]="paintPicker()!.x" [style.top.px]="paintPicker()!.y" [style.--popover-top.px]="paintPicker()!.y">
     <header><strong>{{ t(paintTarget() === 'fill' ? 'Fill' : 'Stroke') }}</strong><button (click)="paintPicker.set(null)" [attr.aria-label]="t('Close')">×</button></header>
     <label>{{ t('Color') }}<input type="color" [value]="paintBaseColor()" (input)="setPaintBaseColor(text($event))" /></label>
     <label>{{ t("Paint opacity") }}<input type="range" min="0" max="100" [value]="paintOpacity()" (input)="setPaintOpacity(number($event))" />{{ paintOpacity() }}%</label>

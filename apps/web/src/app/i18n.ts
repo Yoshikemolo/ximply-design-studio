@@ -1,4 +1,13 @@
 const ES: Record<string, string> = {
+  "Outline stroke": "Contornear trazo",
+  "Create outlines": "Crear contornos",
+  "Select the text you want to turn into shapes.": "Selecciona el texto que quieres convertir en formas.",
+  "The selected text has no shapes to create.": "El texto seleccionado no genera ninguna forma.",
+  "The outlines cannot be created here.": "No se pueden crear los contornos aquí.",
+  "The font of this text could not be read.": "No se ha podido leer la fuente de este texto.",
+  "Select the objects whose stroke you want to outline.": "Selecciona los objetos cuyo trazo quieres contornear.",
+  "The selection has no stroke to outline.": "La selección no tiene ningún trazo que contornear.",
+  "The outline cannot be created here.": "No se puede crear el contorno aquí.",
   "Outline view": "Ver contornos",
   "Preview view": "Ver previsualización",
   "Copy and paste": "Copiar y pegar",

@@ -237,7 +237,8 @@
         "ADR-0023",
         "ADR-0024",
         "ADR-0028",
-        "ADR-0029"
+        "ADR-0029",
+        "ADR-0031"
       ],
       "scenarios": [
         "SC-0022",
@@ -246,7 +247,8 @@
         "SC-0086",
         "SC-0087",
         "SC-0088",
-        "SC-0093"
+        "SC-0093",
+        "SC-0100"
       ],
       "implementation": [
         "apps/web/src/app/editor.service.ts",
@@ -265,7 +267,8 @@
         "packages/domain/src/procedural.ts",
         "apps/web/src/app/procedural-placement.ts",
         "packages/domain/src/wall-boolean.ts",
-        "packages/domain/src/cut.ts"
+        "packages/domain/src/cut.ts",
+        "packages/domain/src/outline-stroke.ts"
       ],
       "tests": [
         "packages/domain/tests/document.test.ts",
@@ -295,7 +298,9 @@
         "apps/web/tests/radial-dimensions.test.ts",
         "apps/web/tests/pen-continuation.test.ts",
         "packages/domain/tests/cut.test.ts",
-        "apps/web/tests/cut-tools.test.ts"
+        "apps/web/tests/cut-tools.test.ts",
+        "packages/domain/tests/outline-stroke.test.ts",
+        "apps/web/tests/outline-conversion.test.ts"
       ],
       "evidence": [
         "doc/implementation/PLAN-0002-0001.md",
@@ -316,7 +321,8 @@
       ],
       "adrs": [
         "ADR-0004",
-        "ADR-0014"
+        "ADR-0014",
+        "ADR-0031"
       ],
       "scenarios": [
         "SC-0025",
@@ -325,11 +331,14 @@
       ],
       "implementation": [
         "apps/web/src/app/editor.service.ts",
-        "packages/domain/src/document.ts"
+        "packages/domain/src/document.ts",
+        "packages/domain/src/text-outline.ts",
+        "apps/web/src/app/font-outlines.ts"
       ],
       "tests": [
         "packages/domain/tests/document.test.ts",
-        "apps/web/tests/editor.test.ts"
+        "apps/web/tests/editor.test.ts",
+        "packages/domain/tests/text-outline.test.ts"
       ],
       "evidence": [
         "doc/implementation/PLAN-0002-0001.md"

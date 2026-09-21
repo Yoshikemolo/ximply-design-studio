@@ -56,6 +56,9 @@ import { ImportResult, importSvg } from "../../../../packages/domain/src/svg-imp
 import { importDxf } from "../../../../packages/domain/src/dxf-import";
 import { pdfArtwork, pdfFirstPage, pdfObjects } from "../../../../packages/domain/src/pdf-import";
 import { knifeCut, scissorCut } from "../../../../packages/domain/src/cut";
+import { outlineStroke } from "../../../../packages/domain/src/outline-stroke";
+import { textOutlines } from "../../../../packages/domain/src/text-outline";
+import { FontOutlines } from "./font-outlines";
 import { PdfImage, PdfPageSource, pdfDocument } from "../../../../packages/domain/src/pdf";
 import { ArraySettings, arraySteps, copyLayer, validArraySettings } from "../../../../packages/domain/src/array-copy";
 import {
@@ -1557,6 +1560,89 @@ export class EditorService {
     // The repeat keeps its origin, so the next one turns around the same point.
     this.carryPivot(centre);
     this.status.set(last.duplicate ? "Transformed again with a copy." : "Transformed again.");
+    this.changed();
+    return true;
+  }
+  /**
+   * Turns the stroke of every selected object into the shape it paints, so a line becomes
+   * artwork. A shape that also carries a fill keeps it, as the object under its new band.
+   */
+  outlineStrokeSelection(): boolean {
+    const layers = this.selectedLayers().filter((layer) => !layer.guide && !this.isEffectivelyLocked(layer) && !layer.dimension);
+    if (!layers.length) { this.status.set("Select the objects whose stroke you want to outline."); return false; }
+    const document = this.document();
+    const produced = new Map<string, Layer[]>();
+    for (const layer of layers) {
+      const source = layer.curves ? layer : { ...layer, kind: "path" as const, curves: this.editableCurves(layer) };
+      const band = outlineStroke(source);
+      if (!band) continue;
+      const shape = fitCurves({ ...newLayer("path", crypto.randomUUID(), { x: 0, y: 0 }), rotation: 0 }, band);
+      const outlined: Layer = {
+        ...layer, ...shape, id: shape.id, kind: "path", rotation: 0, flipX: false, flipY: false, skewX: 0,
+        name: layer.name + " outline", fill: layer.stroke, stroke: "none", strokeWidth: 0, strokeStyle: undefined,
+        lineEnds: undefined, points: [], procedural: undefined,
+      };
+      const kept: Layer[] = layer.fill === "none" || !source.curves?.some((path) => path.closed)
+        ? []
+        : [{ ...layer, stroke: "none", strokeWidth: 0 }];
+      produced.set(layer.id, [...kept, outlined]);
+    }
+    if (!produced.size) { this.status.set("The selection has no stroke to outline."); return false; }
+    const next = { ...document, layers: document.layers.flatMap((layer) => produced.get(layer.id) ?? [layer]) };
+    try { parseDocument(JSON.stringify(next)); } catch { this.status.set("The outline cannot be created here."); return false; }
+    this.commitStep(document);
+    this.document.set(next);
+    const created = [...produced.values()].flat().map((layer) => layer.id);
+    this.selectedIds.set(created);
+    this.selectedId.set(created[0]);
+    this.activeNodes.set([]);
+    this.status.set(`Outlined the stroke of ${produced.size} object${produced.size > 1 ? "s" : ""}.`);
+    this.changed();
+    return true;
+  }
+  private readonly fonts = new FontOutlines();
+  /**
+   * Turns every selected text into the shapes of its letters, keeping the fill, the stroke
+   * and the place it had. The text itself is gone afterwards, as it is in any editor that
+   * offers this: the shapes are artwork, not type.
+   */
+  async outlineTextSelection(): Promise<boolean> {
+    const texts = this.selectedLayers().filter((layer) => layer.kind === "text" && !this.isEffectivelyLocked(layer) && !layer.guide);
+    if (!texts.length) { this.status.set("Select the text you want to turn into shapes."); return false; }
+    const produced = new Map<string, Layer>();
+    let approximate = false;
+    for (const layer of texts) {
+      const layout = this.textMetrics(layer);
+      const typography = layout.typography;
+      const { font, exact } = await this.fonts.face(typography.fontFamily, typography.fontWeight, typography.fontStyle);
+      approximate = approximate || !exact;
+      const curves = textOutlines(layout, (text, size, x, y) => this.fonts.paths(font, text, size, x, y))
+        .map((path) => ({ ...path, nodes: path.nodes.map((node) => ({
+          point: worldPoint(layer, node.point),
+          incoming: worldPoint(layer, node.incoming),
+          outgoing: worldPoint(layer, node.outgoing),
+          smooth: node.smooth,
+        })) }));
+      if (!curves.length) continue;
+      const shape = fitCurves({ ...newLayer("path", crypto.randomUUID(), { x: 0, y: 0 }), rotation: 0 }, curves);
+      produced.set(layer.id, {
+        ...layer, ...shape, id: shape.id, kind: "path", rotation: 0, flipX: false, flipY: false, skewX: 0,
+        name: (layer.text || layer.name).slice(0, 40), text: "", typography: undefined, textLayout: undefined, points: [],
+      });
+    }
+    if (!produced.size) { this.status.set("The selected text has no shapes to create."); return false; }
+    const document = this.document();
+    const next = { ...document, layers: document.layers.map((layer) => produced.get(layer.id) ?? layer) };
+    try { parseDocument(JSON.stringify(next)); } catch { this.status.set("The outlines cannot be created here."); return false; }
+    this.commitStep(document);
+    this.document.set(next);
+    const created = [...produced.values()].map((layer) => layer.id);
+    this.selectedIds.set(created);
+    this.selectedId.set(created[0]);
+    this.activeNodes.set([]);
+    this.status.set(approximate
+      ? `Created outlines for ${produced.size} text${produced.size > 1 ? "s" : ""}; a carried face stood in for the chosen family.`
+      : `Created outlines for ${produced.size} text${produced.size > 1 ? "s" : ""}.`);
     this.changed();
     return true;
   }

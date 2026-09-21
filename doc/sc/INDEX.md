@@ -103,3 +103,4 @@
 | [SC-0097 — Illustrator and PDF drawing import](SC-0097.md) |
 | [SC-0098 — Outline view and proportional corner resizing](SC-0098.md) |
 | [SC-0099 — Properties of a whole selection](SC-0099.md) |
+| [SC-0100 — Outline stroke and text outlines](SC-0100.md) |
