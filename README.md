@@ -15,10 +15,16 @@ strict quality gate.
 
 ## Try it online
 
-The current preview is published at **https://xds.ximplicity.es**. It is a preview of the
-work on the release branch, served as static files with no account and no server storage:
-drawings live in the browser and in the files you save. It is not a released product and
-carries no quality-gate evidence.
+### [Open the live preview at xds.ximplicity.es](https://xds.ximplicity.es)
+
+[![Ximply Design Studio editing a vector illustration](assets/screenshots/xds-editor-preview.png)](https://xds.ximplicity.es)
+
+The preview above is the editor running in a browser: the drawing tools on the left, the
+appearance of the selected path in the middle, and the properties and layers of the
+document on the right. It is served as static files with no account and no server
+storage, so drawings live in the browser and in the files you save. It is a preview of
+the work on the release branch, not a released product, and carries no quality-gate
+evidence.
 
 ## Quick Start
 

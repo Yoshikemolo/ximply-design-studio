@@ -29,6 +29,7 @@ None.
 
 ## Improvements
 
+- Show the editor at work in the readme, above the address of the published preview, so the link is the first thing the page offers.
 - Point the readme at the published preview, https://xds.ximplicity.es, and clone the default branch instead of a branch that was retired.
 - Publish the editor on the owner's preview address with `scripts/deploy-production.ps1`, which builds the checkout, uploads it under the commit it was built from, moves the link the web server reads and reloads it only after the configuration is accepted, keeping the earlier releases so a return to one of them is a single command.
 - Name the import command Import, not Import image: it reads drawings as well as pictures.
