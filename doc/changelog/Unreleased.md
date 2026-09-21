@@ -24,7 +24,7 @@ None.
 
 ## New features
 
-None.
+- Import encapsulated PostScript drawings, the EPS files Illustrator and CorelDRAW export: their paths, colours and stroke widths arrive as editable layers, read with the names of the language and the aliases each program defines for them, and whatever falls outside that vocabulary is reported.
 
 ## Improvements
 

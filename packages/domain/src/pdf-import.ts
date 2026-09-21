@@ -111,7 +111,7 @@ interface GraphicsState {
   dash: number[];
 }
 /** One token of a content stream: a number, a name, a delimiter block or an operator. */
-function* tokens(content: string): Generator<string> {
+export function* pdfTokens(content: string): Generator<string> {
   let index = 0;
   while (index < content.length) {
     const character = content[index];
@@ -217,7 +217,7 @@ export function pdfArtwork(content: string, page: PdfPageRef, options: { name?: 
     }
     paths = [];
   };
-  for (const token of tokens(content)) {
+  for (const token of pdfTokens(content)) {
     if (DECIMAL.test(token) || token.startsWith('/') || token === '[' || token === ']' || token.startsWith('(') || token.startsWith('<')) {
       operands.push(token);
       if (operands.length > 64) operands.shift();

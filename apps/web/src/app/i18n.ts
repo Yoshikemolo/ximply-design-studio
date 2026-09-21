@@ -59,6 +59,7 @@ const ES: Record<string, string> = {
   "Choose a drawing under 20 MB.": "Elige un dibujo de menos de 20 MB.",
   "DWG cannot be read; export the drawing as DXF and import that.": "No se puede leer un DWG; exporta el dibujo como DXF e impórtalo.",
   "The document cannot hold more layers.": "El documento no puede contener más capas.",
+  "The file is not an encapsulated PostScript drawing.": "El archivo no es un dibujo PostScript encapsulado.",
   "The drawing of this file could not be read.": "No se ha podido leer el dibujo de este archivo.",
   "The file is not a PDF or Illustrator drawing.": "El archivo no es un dibujo PDF ni de Illustrator.",
   "The file has no page this editor can read.": "El archivo no tiene ninguna página que este editor pueda leer.",

@@ -711,7 +711,8 @@
         "packages/domain/src/dxf-import.ts",
         "packages/domain/src/pdf.ts",
         "apps/web/src/app/smart-table.component.ts",
-        "packages/domain/src/pdf-import.ts"
+        "packages/domain/src/pdf-import.ts",
+        "packages/domain/src/eps-import.ts"
       ],
       "tests": [
         "packages/domain/tests/document.test.ts",
@@ -722,7 +723,8 @@
         "packages/domain/tests/pdf.test.ts",
         "apps/web/tests/export-print.test.ts",
         "apps/web/tests/smart-table.test.ts",
-        "packages/domain/tests/pdf-import.test.ts"
+        "packages/domain/tests/pdf-import.test.ts",
+        "packages/domain/tests/eps-import.test.ts"
       ],
       "evidence": [
         "doc/implementation/PLAN-0002-0001.md",

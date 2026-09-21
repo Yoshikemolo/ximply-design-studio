@@ -55,6 +55,7 @@ import { Injectable, computed, signal } from "@angular/core";
 import { ImportResult, importSvg } from "../../../../packages/domain/src/svg-import";
 import { importDxf } from "../../../../packages/domain/src/dxf-import";
 import { pdfArtwork, pdfFirstPage, pdfObjects } from "../../../../packages/domain/src/pdf-import";
+import { epsArtwork, epsPostScript } from "../../../../packages/domain/src/eps-import";
 import { knifeCut, scissorCut } from "../../../../packages/domain/src/cut";
 import { outlineStroke } from "../../../../packages/domain/src/outline-stroke";
 import { textOutlines } from "../../../../packages/domain/src/text-outline";
@@ -3609,6 +3610,11 @@ export class EditorService {
     if (name.endsWith(".dxf")) {
       if (file.size > 20_000_000) throw new Error("Choose a drawing under 20 MB.");
       return this.placeImport(importDxf(await file.text(), { name: file.name.slice(0, 80) }));
+    }
+    if (name.endsWith(".eps") || name.endsWith(".ps")) {
+      if (file.size > 20_000_000) throw new Error("Choose a drawing under 20 MB.");
+      const bytes = new Uint8Array(await file.arrayBuffer());
+      return this.placeImport(epsArtwork(epsPostScript(bytes), { name: file.name.slice(0, 80) }));
     }
     if (name.endsWith(".dwg")) throw new Error("DWG cannot be read; export the drawing as DXF and import that.");
     if (name.endsWith(".ai") || name.endsWith(".pdf")) {
