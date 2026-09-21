@@ -27,7 +27,15 @@ hierarchy, restrained accent color and short labels. Ximplicity personality appe
 in the wordmark area, balanced spacing, crisp geometry and a controlled electric-blue
 accent, not glowing decoration around every panel. Avoid gradients behind data,
 oversized marketing cards in the editor, emoji icons and unexplained abbreviations.
-Use original approved vector icon assets consistently. Reserve strong color for
+Use original approved vector icon assets consistently. Guidance inside a panel is a tip: a bulb, one message at a time, shown only where the
+user is blocked or the panel cannot do what it offers, never beside correct work.
+Panel headers share one layout:
+the disclosure chevron and the panel name together on the left, anything else pushed to
+the right edge, on a single vertically centred line, and the header band plus the rule
+under an open header mark where each panel starts and ends. Dense property rows may name a
+field by its icon alone when the icon is unambiguous and the written name stays
+reachable as its tooltip and accessible name, with icon and control on one line; every
+control keeps the theme colors, including the option list a dropdown opens. Reserve strong color for
 active tool, selection, focus and warnings; layer color tags have separate meaning.
 
 ## Shell composition
@@ -45,6 +53,24 @@ near center; participant avatars, Share, account/settings on the right. Avatar c
 are stable, supplemented by initials and accessible labels. Do not place global
 administration/licence controls in the main drawing workflow; they belong in settings.
 A licensing limitation gives a precise reason and a nonblocking route to resolve it.
+
+## Settings navigation — owner requirement
+
+Settings uses two columns: a category menu on the left and only the selected
+category's form on the right. Keep navigation visible while long forms scroll,
+use localized category names and explanatory icon tooltips, and preserve keyboard
+navigation and visible focus. On narrow screens adapt the navigation without
+restoring one long form containing every category.
+
+Apply this structure whenever adding settings. Register each category centrally;
+do not append unrelated controls to the end of a shared scrolling form. Switching
+categories must cancel transient shortcut recording without resetting saved values.
+
+Future memory and storage categories should follow this same structure. Candidate
+settings include maximum undo count, maximum undo-memory size, clearing undo history,
+temporary directory and default work directory. These are recorded future needs,
+not implemented capabilities; directory controls require an appropriate filesystem
+capability and undo-memory controls require defined history accounting semantics.
 
 ## Core interactions
 

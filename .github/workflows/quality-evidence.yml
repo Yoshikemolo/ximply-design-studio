@@ -1,0 +1,65 @@
+name: Strict quality evidence
+on:
+  pull_request:
+    branches: [dev, qa, demo, release, main]
+    types: [opened, synchronize, reopened, edited]
+permissions:
+  contents: read
+jobs:
+  quality:
+    # Owner-requested temporary pause; see doc/testing/sonarqube.md.
+    # Keep the job identity so required checks resolve as skipped, not pending.
+    if: ${{ false }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Sonar analysis temporarily paused by owner
+        run: echo "Sonar evidence was not collected; this job is intentionally skipped."
+
+# Restore the original steps below and remove the job-level false condition
+# together with the placeholder steps above to resume strict enforcement.
+#     steps:
+#       - name: Check out trusted base harness
+#         uses: actions/checkout@v4
+#         with:
+#           ref: ${{ github.event.pull_request.base.sha }}
+#       - uses: actions/setup-python@v5
+#         with:
+#           python-version: '3.12'
+#       - name: Require trusted analysis configuration
+#         env:
+#           SONAR_HOST_URL: ${{ vars.SONAR_HOST_URL }}
+#           SONAR_ANALYSIS_MANIFEST_JSON: ${{ vars.SONAR_ANALYSIS_MANIFEST_JSON }}
+#           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+#         run: |
+#           python - <<'PY'
+#           import json
+#           import os
+#           from pathlib import Path
+#
+#           required = ('SONAR_HOST_URL', 'SONAR_ANALYSIS_MANIFEST_JSON', 'SONAR_TOKEN')
+#           missing = [name for name in required if not os.environ.get(name, '').strip()]
+#           if missing:
+#               raise SystemExit('Quality gate blocked: configure ' + ', '.join(missing)
+#                                + '. Run all module scans for this exact PR head first; see doc/testing/sonarqube.md.')
+#           try:
+#               manifest = json.loads(os.environ['SONAR_ANALYSIS_MANIFEST_JSON'])
+#           except ValueError:
+#               raise SystemExit('Quality gate blocked: SONAR_ANALYSIS_MANIFEST_JSON must contain valid JSON.') from None
+#           Path('reports').mkdir(exist_ok=True)
+#           Path('reports/sonar-manifest.json').write_text(json.dumps(manifest), encoding='utf-8')
+#           PY
+#       - name: Collect and enforce fresh strict analysis
+#         env:
+#           SONAR_HOST_URL: ${{ vars.SONAR_HOST_URL }}
+#           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+#           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+#         run: |
+#           python harness/collect_quality.py --server "$SONAR_HOST_URL" --manifest reports/sonar-manifest.json --revision "$HEAD_SHA" --output reports/quality.json
+#           python harness/check_quality.py reports/quality.json --revision "$HEAD_SHA"
+#       - name: Preserve collected quality evidence
+#         if: always()
+#         uses: actions/upload-artifact@v4
+#         with:
+#           name: quality-${{ github.event.pull_request.head.sha }}
+#           path: reports/quality.json
+#           if-no-files-found: ignore

@@ -1,6 +1,1376 @@
 {
-  "currentVersion": "0.2.0-alpha.2",
+  "currentVersion": "0.5.0",
   "entries": [
+    {
+      "version": "0.5.0",
+      "date": "2026-09-21",
+      "summary": "Drawings come in and go out as vectors, artwork is copied, repeated and outlined, and text becomes shapes",
+      "breakingChanges": [
+        "A document may now hold up to a thousand layers instead of a hundred and fifty, which drawings imported from other tools often need. Migration: a file with more than a hundred and fifty layers is refused by earlier versions of this editor and of the API; keep the original file if you need to open it there.",
+        "The smallest side a layer may measure falls from one pixel to a hundredth of a pixel, so scaled drawings keep their shapes. Migration: a file holding such a layer is refused by earlier versions of this editor and of the API; keep the original file if you need to open it there."
+      ],
+      "changes": [
+        {
+          "type": "Feature",
+          "description": "Import SVG drawings as editable native layers, with their shapes, paths, text, colours, stroke widths, transforms and groups, and report in the status line whatever the reader could not represent."
+        },
+        {
+          "type": "Feature",
+          "description": "Duplicate in series with Ctrl+Shift+D: a linear series with its own step, turn and relative size per copy; a circular series around the pivot, with the copies turning with it or keeping their rotation; and a grid series with its columns, rows and gaps."
+        },
+        {
+          "type": "Feature",
+          "description": "Copy, cut and paste artwork, with paste in front and paste in back, which keep the coordinates of the copy and place it immediately above or below the selected object. Copy is Ctrl+C, cut Ctrl+X, paste Ctrl+V, paste in front Ctrl+F and paste in back Ctrl+B."
+        },
+        {
+          "type": "Feature",
+          "description": "Show or hide the bounding box of the selection, the frame with its handles and the rotation knob, with Ctrl+Shift+B."
+        },
+        {
+          "type": "Feature",
+          "description": "Lay the list of documents in the export dialog out as a table with a heading, the document name on the left and its selection box on the right, alternating rows and a box that chooses or clears them all. The table is a component of its own, with multiple selection as a feature, so other lists can be built on it."
+        },
+        {
+          "type": "Feature",
+          "description": "Offer the clipboard actions, the duplicate and the bounding box on the selected objects in the context menu, each with its key."
+        },
+        {
+          "type": "Feature",
+          "description": "Add a copy and paste group to the tool rail beside the import action, with copy, cut, the three pastes, the duplicate and the duplication in series in its list of subtools, each enabled only when it applies."
+        },
+        {
+          "type": "Feature",
+          "description": "Export as PDF, with the vector geometry of the drawing rather than a picture of it: paths keep their curves, strokes keep their dashes and text keeps its characters, drawn with the standard font."
+        },
+        {
+          "type": "Feature",
+          "description": "Choose what to export from one dialog: the format, and which of the open documents are included, with the current one chosen to begin with. A PDF collects them as one page each; SVG and PNG write one file per document."
+        },
+        {
+          "type": "Feature",
+          "description": "Print the chosen documents through the printing dialog of the browser, one page each, from the File menu or the export dialog."
+        },
+        {
+          "type": "Feature",
+          "description": "Cut paths with two clicks: the scissors open a path at two of its own points, leaving independent open paths, and the knife divides the closed shapes its line crosses into two independent closed shapes. Both draw the cut in progress, both are undone in one step, and Escape forgets a cut that was started."
+        },
+        {
+          "type": "Feature",
+          "description": "Edit the appearance of a whole selection from the properties: the fill, the stroke, its width, the line ends, the transparency and the blend mode reach every selected object, a group included, as one undo step. The place and the size stay with the object the form is showing."
+        },
+        {
+          "type": "Feature",
+          "description": "Outline the stroke of any object from the Object menu or beside the tools that draw one: the line becomes the shape it painted, with the colour it had, and a shape that also carried a fill keeps it under its new band."
+        },
+        {
+          "type": "Feature",
+          "description": "Turn text into shapes with Ctrl+Shift+O, the combination Illustrator uses, from the Object menu or beside the text tool: every letter becomes artwork with the fill, the place and the decoration the text had."
+        },
+        {
+          "type": "Feature",
+          "description": "Carry three faces with the studio, each with the metrics of the family it stands for, so text is drawn the same on every machine and its outlines come from the very file that drew it. Families with no carried twin are outlined with the closest one, which the editor reports."
+        },
+        {
+          "type": "Feature",
+          "description": "Give the line type of the stroke popover a block of its own, as wide as the popover, and keep the popover inside the screen by scrolling from where it opens instead of running past the bottom edge."
+        },
+        {
+          "type": "Feature",
+          "description": "Switch between the preview and the outline view with Ctrl+Y or from the View menu: the outline view draws every layer as a hairline contour in one ink, without fills, colours, transparency or blend modes, with the frame of an image standing for it."
+        },
+        {
+          "type": "Feature",
+          "description": "Scale proportionally while Shift is held during a corner drag, keeping the shape of the layer with its opposite corner fixed; the key used to snap the direction of the drag instead."
+        },
+        {
+          "type": "Feature",
+          "description": "Close an imported path that carries a fill, which is what a drawing means by it: a shape left open in Illustrator arrives filled rather than empty, while a contour that is only stroked keeps its ends apart and one that is both filled and stroked arrives as the closed fill and the open stroke."
+        },
+        {
+          "type": "Feature",
+          "description": "Import Illustrator and PDF drawings: the page of the file is read and its paths, colours and stroke widths arrive as editable layers, with the page turned upright and measured in pixels. Text, placed objects, inline images, gradients and clipping paths are reported instead of approximated."
+        },
+        {
+          "type": "Feature",
+          "description": "Import ASCII DXF drawings: lines, polylines, circles, arcs, ellipses, points and text, with each drawing layer kept as a group and the drawing mirrored into document coordinates."
+        },
+        {
+          "type": "Feature",
+          "description": "Fill an open path: a contour with a fill is painted as the drawing means it, on the canvas, in SVG and in PDF, while its stroke keeps its ends apart, which is how the drawing tools this studio follows behave."
+        },
+        {
+          "type": "Improvement",
+          "description": "Offer SVG and DXF beside the images in the import dialog, and refuse DWG, PDF and Illustrator files with the export that does work instead of a silent failure."
+        },
+        {
+          "type": "Improvement",
+          "description": "Repeat the last transformation with Ctrl+D: the move, the turn, the scaling or the duplication just applied is performed again on the selection, the copy it left behind included, and around the same pivot the original transformation used. A pivot placed by hand also travels to the copies a duplication makes, so successive repeats turn around one point."
+        },
+        {
+          "type": "Improvement",
+          "description": "Leave the original behind while transforming: holding Alt during a move, a turn or a scaling duplicates the objects on release. The original stays drawn in its place while the copy follows the pointer, the tool badge beside the cursor doubles and the cursor takes the copy sign, and the keys held at the moment of the release decide the outcome, so Alt can be pressed without moving the pointer again."
+        },
+        {
+          "type": "Improvement",
+          "description": "Raise the document size ceiling from 4096 to 8192 pixels, so A3 and A2 at 300 dots per inch can be set up and stored. A1 and A0 at that resolution stay out of range."
+        },
+        {
+          "type": "Fix",
+          "description": "Prepare the raster layers of a PDF with an image element instead of a network request, which a strict content security policy can refuse."
+        },
+        {
+          "type": "Fix",
+          "description": "Bring the transform pivot back with undo and forward with redo: each history step now carries the pivot it was taken with, and placing the pivot is a step of its own that leaves the artwork untouched."
+        },
+        {
+          "type": "Fix",
+          "description": "Open a project whose drawing was scaled down: a layer may measure less than a pixel now, which a scaled drawing produces and the reader used to refuse, so files saved after scaling an imported drawing load again."
+        },
+        {
+          "type": "Security",
+          "description": "Read every imported file as data: no declared entity is expanded, no external reference is followed, nothing carried by a file is executed, and sizes, element counts and node counts are bounded before a layer exists. The font files the studio carries are served by the application itself and parsed in memory."
+        },
+        {
+          "type": "Engineering",
+          "description": "Let the document history carry the session state of each step beside the document, which is how the pivot travels with undo and redo."
+        },
+        {
+          "type": "Engineering",
+          "description": "Add a font reader and three carried faces, proposed in ADR-0031 and awaiting review, with their licences recorded in the notices shipped with the application."
+        }
+      ],
+      "capabilityStatus": "local-preview",
+      "markdown": "0.5.0.md",
+      "source": "doc/changelog/0.5.0.md"
+    },
+    {
+      "version": "0.4.0",
+      "date": "2026-09-20",
+      "summary": "Several documents in tabs, parametric construction tools, drafting dimensions, page setup, a movable transform pivot and brush controls",
+      "breakingChanges": [
+        "Extended native-v2 paints and guide metadata require the updated reader. Migration: preserve original files and use this version for new saves; older readers may reject or discard these extensions."
+      ],
+      "changes": [
+        {
+          "type": "Feature",
+          "description": "Work on several documents at once: New document and the tab strip plus button open a blank document in its own tab, and each tab keeps its content, undo history and selection. Tabs close one by one and show an unsaved-changes marker."
+        },
+        {
+          "type": "Feature",
+          "description": "Add File > Clear to empty the active document, undoable, and ask in an in-app dialog before clearing or closing unsaved work."
+        },
+        {
+          "type": "Feature",
+          "description": "Save projects with the .xds extension the documentation defines; files saved earlier as .ximply still open."
+        },
+        {
+          "type": "Feature",
+          "description": "Draw connected wall runs where each click continues from the previous end with exact shared joints, choose whether a wall is centred on the drawn line or has a face on it, and end the run with Escape."
+        },
+        {
+          "type": "Feature",
+          "description": "Give each door or window leaf its own mechanism, hinged, sliding, folding, pocket or fixed, choose how many leaves and the wall face they open towards, and add a passage without leaves."
+        },
+        {
+          "type": "Feature",
+          "description": "Add a straight stair flight with a configurable width, length, number of steps and walking direction."
+        },
+        {
+          "type": "Feature",
+          "description": "Set the line type of any stroke: solid, dashed, dotted, axis or a custom sequence of up to six dash and gap lengths."
+        },
+        {
+          "type": "Feature",
+          "description": "Add chain dimensions, which measure consecutive spans against one offset line, and radius and diameter dimensions with their standard prefixes, one arrow on the arc or two through the centre and an optional centre mark."
+        },
+        {
+          "type": "Feature",
+          "description": "Measure in metres, choose where the label sits along the dimension line, and unify the scale and label format of every dimension in the document with one switch."
+        },
+        {
+          "type": "Feature",
+          "description": "Combine walls with the boolean operations and keep them parametric: collinear runs merge, a crossing wall splits the one it crosses, intersecting keeps the crossing piece and excluding keeps every arm. Ordinary artwork still combines into one plain object."
+        },
+        {
+          "type": "Feature",
+          "description": "Set up the document from the transform tools: paper, screen and animation formats with output resolution and orientation, ruler units, margin guides with their centres, background colour, registration marks as a locked layer, and expanding or cropping the page."
+        },
+        {
+          "type": "Feature",
+          "description": "Resize the page on the canvas by dragging handles on its corners and edges, with the rulers following live, or crop it by dragging the area to keep while the rest is dimmed. Escape cancels and one undo step restores the page."
+        },
+        {
+          "type": "Feature",
+          "description": "Paint the page background like any other fill, with opacity, a colour picker and quick swatches for black, white, blueprint blue, chroma key green and no colour, which leaves the page transparent."
+        },
+        {
+          "type": "Feature",
+          "description": "Add a transform pivot that scaling, rotation and mirroring work about. It starts at the geometric centre of the selection and is dragged by its own mark while unlocked, travels with the objects when they move, returns to the centre on a double press, and snaps to the centre, to the selection box, to artwork vertices and dimensions and to the active rulers, guides and grid. Its own controls lock it, show it and switch its magnetism."
+        },
+        {
+          "type": "Feature",
+          "description": "Choose how the area selectors pick objects: every object the area touches, or only the ones it encloses."
+        },
+        {
+          "type": "Feature",
+          "description": "Add brush subtools for the round, flat, calligraphy, marker, airbrush and pencil tips, with a control bar for the brush and the eraser: pressure, opacity, cadence, diffusion, a speed variation slider that runs from thinner to thicker around the nominal size, a blend mode and tip angle where they apply, and a sample stroke that previews the result."
+        },
+        {
+          "type": "Feature",
+          "description": "Add a zoom area subtool: drag a rectangle and it fills the visible workspace on release; Ctrl with Space and a drag does the same with any tool active."
+        },
+        {
+          "type": "Feature",
+          "description": "Add an Appearance section to the settings with the theme and how transparency is displayed, and choose how many decimal places measurements are shown with."
+        },
+        {
+          "type": "Improvement",
+          "description": "Apply drafting rules to linear dimensions: labels aligned with the line and never upside down, the line broken around the label when it fits, arrowheads moved outside and the label placed beyond the nearest end when the span is too small, a gap at the measured points, an overshoot past the extension lines and 3:1 arrowheads."
+        },
+        {
+          "type": "Improvement",
+          "description": "Pre-mark the snap point of the dimension tools with a small blue square on vertices, intersections, edge midpoints and points on edges, and preview the actual dimension while choosing its side and offset."
+        },
+        {
+          "type": "Improvement",
+          "description": "Snap new dimensions to the anchors and extension ends of existing ones and share their offset line when parallel, whenever dimension magnetism is on."
+        },
+        {
+          "type": "Improvement",
+          "description": "Snap wall drawing to existing wall ends and axes before the grid, and lean it to the nearest 45 degree direction within six degrees, which keeps plans orthogonal; a wall joint still wins over the tendency."
+        },
+        {
+          "type": "Improvement",
+          "description": "Draw door and window frames in the wall beside the clear opening, draw hinged leaves as panels with thickness towards the opening, and draw leaf travel as a broken projection line in the editor and in SVG exports."
+        },
+        {
+          "type": "Improvement",
+          "description": "Give new walls and pillars a construction appearance and draw openings as outlines instead of using the current drawing colours."
+        },
+        {
+          "type": "Improvement",
+          "description": "Name the pen tool B\u00e9zier, give its subtools and each brush tip an icon drawn in the same language as the control bar, and continue an existing unlocked open path when either of its ends is clicked, while a locked path still starts a new object."
+        },
+        {
+          "type": "Improvement",
+          "description": "Name each typography measure in the text properties by an icon and a tooltip rather than a written label, with icon and control on one line."
+        },
+        {
+          "type": "Improvement",
+          "description": "Lay out every panel header in the right column the same way, chevron and name together on the left and anything else pushed right, on a raised band closed off by a rule while the panel is open."
+        },
+        {
+          "type": "Improvement",
+          "description": "Show the guidance of the blend panel as one tip at a time, marked by a bulb, and only where the panel is blocked; nothing is shown while a blend can simply be made or edited."
+        },
+        {
+          "type": "Improvement",
+          "description": "Show an icon beside each boolean, align, transform, blend and grouping action, shorten the dimension and floor plan forms, group the opening leaves and the ruler tick switches under their own headings, and align each setting with its control."
+        },
+        {
+          "type": "Improvement",
+          "description": "Use one scrollbar appearance across the shell, give the context bar and the document tab strip the height their content needs, move the workspace choice to the header beside the language and show only the fill in the appearance block while the brush is active."
+        },
+        {
+          "type": "Improvement",
+          "description": "Open projects in the current tab when it is an untouched blank document, otherwise in a new tab, and remove the redundant quick Fill, Stroke and Width rows from the tool rail."
+        },
+        {
+          "type": "Fix",
+          "description": "Keep each fixed dimension point after a click: the canvas treated the pointer capture released after every click as a cancellation, so the third click never created the dimension."
+        },
+        {
+          "type": "Fix",
+          "description": "Draw walls as complete rectangles: composing their outlines dropped one corner, so a wall appeared as a triangle with its start edge collapsed."
+        },
+        {
+          "type": "Fix",
+          "description": "Open the document dimensions dialog from its toolbar button, which did nothing because the command was only registered for keyboard shortcuts."
+        },
+        {
+          "type": "Fix",
+          "description": "Open every dropdown on the theme colours: the property and header selects painted no background of their own, so under the dark theme the option list opened white with pale text."
+        },
+        {
+          "type": "Fix",
+          "description": "Let the pivot mark take its own press wherever it rests; it used to hand the press to the object under it, which made the pivot unreachable at its default place."
+        },
+        {
+          "type": "Fix",
+          "description": "Draw the two speed variation marks as round dots of a fixed size, centred with the slider; the larger one was stretched into an ellipse by the row."
+        },
+        {
+          "type": "Fix",
+          "description": "Accept stair parameters in the floor plan property panel, and replace the native browser confirmation used by New document."
+        },
+        {
+          "type": "Fix",
+          "description": "Generated documentation navigation is identical on Windows and POSIX hosts, with forward-slash links and case-sensitive document order."
+        },
+        {
+          "type": "Fix",
+          "description": "Load the full editor stylesheet directly in production so the Content Security Policy does not leave the interface unstyled. Rebuild the local containers to apply the correction."
+        },
+        {
+          "type": "Fix",
+          "description": "Use localhost:8090 by default for the local editor to avoid conflicts with port 8080. Existing installations should set XDS_PORT=8090 in .env.local and restart; credentials and saved projects are preserved."
+        },
+        {
+          "type": "Security",
+          "description": "Validate dash sequences, leaf mechanisms, opening sides, wall alignment, stair parameters, page setup and background paints in the native parser and in the authenticated API before storage."
+        },
+        {
+          "type": "Security",
+          "description": "Revalidate every restored local draft with the native document parser and bound local recovery to 12 tabs of 4 MB each."
+        },
+        {
+          "type": "Engineering",
+          "description": "Share one dimension geometry between Canvas, SVG export, hit testing and the placement preview, and derive projection curves instead of storing them."
+        },
+        {
+          "type": "Engineering",
+          "description": "Keep boolean results on walls parametric by clipping their axes rather than their outlines."
+        },
+        {
+          "type": "Engineering",
+          "description": "Keep every new parameter optional so existing documents open unchanged, and store local recovery per tab, migrating the earlier single-document draft automatically."
+        },
+        {
+          "type": "Engineering",
+          "description": "The contribution check accepts GitHub merge button commits when GitHub verified the signature, the author is the owner and the pull request title used as message is a Conventional Commit; the web merges of PR #16, PR #17 and PR #18 join the pinned historical exemptions."
+        },
+        {
+          "type": "Engineering",
+          "description": "Add the GitHub web merges of PR #13 and PR #15 on dev to the pinned legacy-commit exemptions by exact SHA and reason, without rewriting history."
+        },
+        {
+          "type": "Engineering",
+          "description": "Temporarily pause the Sonar quality job at the owner's request, preserving its commented analysis steps and strict policy for reactivation; skipped analysis is not passing quality evidence."
+        },
+        {
+          "type": "Engineering",
+          "description": "Add a disposable SonarQube trial with pinned images, real coverage inputs, retained findings and automatic container/volume teardown. This diagnostic run does not replace the strict integration gate."
+        },
+        {
+          "type": "Engineering",
+          "description": "Exercise the actual trial image-resolution and teardown commands with regression tests, including preservation of unrelated containers. These tests do not claim a live scan."
+        },
+        {
+          "type": "Engineering",
+          "description": "Record incremental product checkpoints and explicit branch/version feedback as permanent project instructions."
+        },
+        {
+          "type": "Engineering",
+          "description": "Retry temporary connection resets while the disposable server starts; sanitize transport errors before writing diagnostic output."
+        },
+        {
+          "type": "Engineering",
+          "description": "Add native-v2 absent/alpha paints and nonprinting guide metadata with matching API validation, renderer tests and measurement preferences; interface integration is in progress."
+        },
+        {
+          "type": "Engineering",
+          "description": "Retain only dev, release, main and active work branches; close pending PRs and remove retired branches without promoting unverified code."
+        },
+        {
+          "type": "Engineering",
+          "description": "Validate proposed commit and PR wording before publication and identify failing commit revisions in contribution diagnostics; retain all existing policy restrictions."
+        },
+        {
+          "type": "Engineering",
+          "description": "Record the PR integration preflight and distinguish passing build checks from the required product quality gate."
+        },
+        {
+          "type": "Engineering",
+          "description": "The contribution check accepts two pinned historical GitHub merge commits on dev by exact SHA and reason, without rewriting history; all other commits remain fully checked."
+        }
+      ],
+      "capabilityStatus": "local-preview",
+      "markdown": "0.4.0.md",
+      "source": "doc/changelog/0.4.0.md"
+    },
+    {
+      "version": "0.3.16-alpha.1",
+      "date": "2026-09-20",
+      "summary": "Connected wall runs, leaf mechanisms with opening side, stairs, chain dimensions and dashed line types",
+      "breakingChanges": [],
+      "changes": [
+        {
+          "type": "Feature",
+          "description": "Draw connected wall runs: each click continues the wall from the previous end, and the segments share exact joints. Escape ends the run."
+        },
+        {
+          "type": "Feature",
+          "description": "Choose whether a wall is centred on the drawn line or has its left or right face on it."
+        },
+        {
+          "type": "Feature",
+          "description": "Give each door or window leaf its own mechanism: hinged, sliding, folding, pocket or fixed, and choose the wall face the leaves open towards."
+        },
+        {
+          "type": "Feature",
+          "description": "Add a passage without leaves for open doorways."
+        },
+        {
+          "type": "Feature",
+          "description": "Set the line type of any stroke: solid, dashed, dotted, axis or a custom sequence of up to six dash and gap lengths."
+        },
+        {
+          "type": "Feature",
+          "description": "Add a straight stair flight with a configurable width, length, number of steps and walking direction."
+        },
+        {
+          "type": "Feature",
+          "description": "Add a chain dimension tool that measures consecutive spans against a single offset line in one step."
+        },
+        {
+          "type": "Feature",
+          "description": "Add radius and diameter dimensions with their standard prefixes, one arrow on the arc or two through the centre, and an optional centre mark."
+        },
+        {
+          "type": "Feature",
+          "description": "Add a transform pivot: scaling, rotation and mirroring work about it, it starts at the geometric centre of the selection and is dragged by pressing on its own mark, which always takes that press while the pivot is unlocked. A press anywhere outside the mark moves the selected objects and carries the pivot with them, and a locked pivot hands every press to the artwork. Its own controls in the top bar lock it, show it and switch its magnetism, which attracts it to the geometric centre, to vertices and edges, to dimensions and to the active rulers, guides and grid."
+        },
+        {
+          "type": "Feature",
+          "description": "Measure in metres, choose where the label sits along the dimension line, and unify the scale and label format of every dimension in the document with one switch."
+        },
+        {
+          "type": "Feature",
+          "description": "Combine walls with the boolean operations and keep them as walls: collinear runs merge, a crossing wall splits the one it crosses, intersecting keeps the crossing piece and excluding keeps every arm, all as parametric walls. Ordinary artwork still combines into one plain object."
+        },
+        {
+          "type": "Feature",
+          "description": "Add a zoom area subtool: drag a rectangle and it fills the visible workspace on release; Ctrl with Space and a drag does the same with any tool active."
+        },
+        {
+          "type": "Feature",
+          "description": "Add brush subtools for the round, flat, calligraphy, marker, airbrush and pencil tips, and a control bar for the brush and the eraser with pressure, opacity, cadence, diffusion and a speed variation slider that runs from thinner to thicker around the nominal size, plus a blend mode and tip angle where they apply and a sample stroke that previews the result, swelling and thinning as the speed slider dictates."
+        },
+        {
+          "type": "Feature",
+          "description": "Resize the page on the canvas by dragging handles on its corners and edges, with the rulers following live, or crop it by dragging the area to keep while the rest is dimmed. Escape cancels and one undo step restores the page."
+        },
+        {
+          "type": "Feature",
+          "description": "Set up the document from the transform tools: paper, screen and animation formats with output resolution and orientation, ruler units, margin guides with their centres, background colour, registration marks as a locked layer, and expanding or cropping the page."
+        },
+        {
+          "type": "Feature",
+          "description": "Choose how many decimal places measurements are shown with."
+        },
+        {
+          "type": "Feature",
+          "description": "Choose how the area selectors pick objects: every object the area touches, or only the ones it encloses."
+        },
+        {
+          "type": "Feature",
+          "description": "Paint the page background like any other fill: opacity, a colour picker and quick swatches for black, white, blueprint blue, chroma key green and no colour, which leaves the page transparent."
+        },
+        {
+          "type": "Feature",
+          "description": "Add an Appearance section to the settings with the theme and how transparency is displayed: checkerboard on or off and the size of its squares."
+        },
+        {
+          "type": "Feature",
+          "description": "Draw the plan section of the frame at each side of a door or window."
+        },
+        {
+          "type": "Improvement",
+          "description": "Name the pen tool B\u00e9zier and give its subtools matching icons: the same pen with a plus, a minus or a square badge, and give each brush tip an icon drawn as the stroke it paints, the same language the control bar uses."
+        },
+        {
+          "type": "Improvement",
+          "description": "Carry on drawing an existing B\u00e9zier path: clicking either end of an unlocked open path with the pen continues it instead of starting another object, while a locked path still starts a new one."
+        },
+        {
+          "type": "Improvement",
+          "description": "Save projects with the .xds extension, the native extension the documentation defines; files saved earlier as .ximply still open."
+        },
+        {
+          "type": "Improvement",
+          "description": "Draw leaf travel as a broken projection line in the editor and in SVG exports, scaled with the stroke width."
+        },
+        {
+          "type": "Improvement",
+          "description": "Draw door and window frames in the wall beside the clear opening instead of inside it, and draw hinged leaves as panels with thickness towards the opening."
+        },
+        {
+          "type": "Improvement",
+          "description": "Snap wall drawing to existing wall ends and axes before the grid, so corners and T junctions meet exactly."
+        },
+        {
+          "type": "Improvement",
+          "description": "Lean wall drawing to the nearest 45 degree direction when the angle is within six degrees of it, which keeps plans orthogonal; a wall joint still wins over the tendency."
+        },
+        {
+          "type": "Improvement",
+          "description": "Give new walls and pillars a construction appearance and draw openings as outlines instead of using the current drawing colors."
+        },
+        {
+          "type": "Improvement",
+          "description": "Snap new dimensions to the anchors and extension ends of existing ones, and share their offset line when parallel, whenever dimension magnetism is on."
+        },
+        {
+          "type": "Improvement",
+          "description": "Shorten the dimension label form and group its settings under their own heading."
+        },
+        {
+          "type": "Improvement",
+          "description": "Show an icon beside each boolean, align, transform, blend and grouping action, and narrow the tool option list."
+        },
+        {
+          "type": "Improvement",
+          "description": "Give the dimension lock the same styled toggle as the guide lock, and explain the local preview badge, which now opens the local service settings."
+        },
+        {
+          "type": "Improvement",
+          "description": "Use one scrollbar appearance across the shell, and give the context bar and the document tab strip the height their content needs so neither scrolls vertically."
+        },
+        {
+          "type": "Improvement",
+          "description": "Group both ruler tick switches under a single Snap to ruler ticks label in the unit settings."
+        },
+        {
+          "type": "Improvement",
+          "description": "Move the workspace choice to the header beside the language, and show only the fill in the appearance block while the brush is active."
+        },
+        {
+          "type": "Fix",
+          "description": "Drag the pivot by its mark with the selection tool as well, wherever the mark rests: it used to give the press to the object under it, which made the pivot unreachable at its default place. The dragged position snaps to the centre of the selection, to the corners, side middles and sides of the selection box, and to the vertices of other artwork within the snapping distance."
+        },
+        {
+          "type": "Fix",
+          "description": "Name each typography measure in the text properties with an icon and a tooltip instead of a written label, with the icon and its control on one line: size, weight, leading, letter, word and paragraph spacing, baseline shift and both scales."
+        },
+        {
+          "type": "Fix",
+          "description": "Carry a pivot placed by hand with the selection it belongs to: moving the objects by dragging or with the arrow keys keeps the pivot at the same place within them, and a cancelled drag returns it. Rotating, scaling and mirroring still leave the pivot itself in place, since they turn around it. Unlocking the pivot is therefore what allows moving it independently."
+        },
+        {
+          "type": "Fix",
+          "description": "Send the pivot back to the geometric centre of the selection by double clicking its mark, while the pivot is unlocked."
+        },
+        {
+          "type": "Fix",
+          "description": "Show the guidance of the blend panel as a tip, marked by a bulb, and only where the panel is blocked: when a member is locked, when the step count has reached its limit, when fewer than two objects are selected and when the selected pair does not qualify. One tip at a time, and none at all while the blend can simply be made or edited. The note on editing endpoints is dropped; both endpoint buttons already explain themselves."
+        },
+        {
+          "type": "Fix",
+          "description": "Lay out every panel header in the right column the same way: the chevron and the name together on the left and whatever the header carries on its right edge pushed there, all on one vertically centred line. Drawing tools and Blend objects pushed their name to the right edge. Each header now sits on a raised band closed off by a rule while the panel is open, so where one panel ends and the next begins is visible, and the chevron is an icon that turns with the open state."
+        },
+        {
+          "type": "Fix",
+          "description": "Draw the two speed variation marks as round concentric dots of a fixed size, centred with the slider; the larger one was stretched into an ellipse by the row."
+        },
+        {
+          "type": "Fix",
+          "description": "Open the document dimensions dialog from its toolbar button: the command was only registered for keyboard shortcuts, so the button did nothing."
+        },
+        {
+          "type": "Fix",
+          "description": "Open every dropdown on the theme colours: the option list of the property and header selects took the browser colours because those controls painted no background of their own, so under the dark theme it opened white with pale text."
+        },
+        {
+          "type": "Fix",
+          "description": "Draw walls as complete rectangles: composing their outlines dropped one corner, so a wall appeared as a triangle with its start edge collapsed."
+        },
+        {
+          "type": "Security",
+          "description": "Validate dash sequences, leaf mechanisms, opening sides, wall alignment and stair parameters in the native parser and in the authenticated API before storage."
+        },
+        {
+          "type": "Engineering",
+          "description": "Derive projection curves instead of storing them, and share one geometry between Canvas, SVG and hit testing."
+        },
+        {
+          "type": "Engineering",
+          "description": "Keep every new parameter optional so existing documents open unchanged."
+        }
+      ],
+      "capabilityStatus": "local-preview",
+      "markdown": "0.3.16-alpha.1.md",
+      "source": "doc/changelog/0.3.16-alpha.1.md"
+    },
+    {
+      "version": "0.3.15-alpha.1",
+      "date": "2026-09-19",
+      "summary": "Multiple documents in tabs, File > Clear with unsaved-change protection and professional linear dimensions",
+      "breakingChanges": [],
+      "changes": [
+        {
+          "type": "Feature",
+          "description": "Open several documents at once: New document and the tab strip plus button open a blank document in a new tab, and each tab keeps its own content, undo history and selection."
+        },
+        {
+          "type": "Feature",
+          "description": "Add File > Clear to empty the active document; it is undoable."
+        },
+        {
+          "type": "Feature",
+          "description": "Ask for confirmation in an in-app dialog before clearing or closing a document with unsaved changes."
+        },
+        {
+          "type": "Feature",
+          "description": "Close tabs individually; tabs show an unsaved-changes marker."
+        },
+        {
+          "type": "Improvement",
+          "description": "Pre-mark the snap point of dimension tools with a small blue square on vertices, intersections, edge midpoints and points on edges."
+        },
+        {
+          "type": "Improvement",
+          "description": "Preview the actual dimension while choosing its side and offset."
+        },
+        {
+          "type": "Improvement",
+          "description": "Align linear dimension labels with the dimension line, never upside down, and break the line around the label when it fits."
+        },
+        {
+          "type": "Improvement",
+          "description": "Move arrowheads outside and place the label beyond the nearest end when the space between extension lines is too small."
+        },
+        {
+          "type": "Improvement",
+          "description": "Keep a gap between measured points and extension lines, overshoot the dimension line and draw 3:1 drafting arrowheads."
+        },
+        {
+          "type": "Improvement",
+          "description": "Open projects in the current tab when it is an untouched blank document, otherwise in a new tab."
+        },
+        {
+          "type": "Improvement",
+          "description": "Remove the redundant quick Fill, Stroke and Width rows from the tool rail; the overlapping fill and stroke squares keep the full appearance picker."
+        },
+        {
+          "type": "Fix",
+          "description": "Keep each fixed dimension point after a click: the canvas no longer treats the pointer capture released after every click as a cancellation, so the third click creates the dimension."
+        },
+        {
+          "type": "Fix",
+          "description": "Replace the native browser confirmation used by New document."
+        },
+        {
+          "type": "Security",
+          "description": "Revalidate every restored local draft with the native document parser and bound local recovery to 12 tabs of 4 MB each."
+        },
+        {
+          "type": "Engineering",
+          "description": "Store local recovery per tab and migrate the earlier single-document draft automatically."
+        },
+        {
+          "type": "Engineering",
+          "description": "Share one dimension geometry between Canvas, SVG export, hit testing and the placement preview."
+        }
+      ],
+      "capabilityStatus": "local-preview",
+      "markdown": "0.3.15-alpha.1.md",
+      "source": "doc/changelog/0.3.15-alpha.1.md"
+    },
+    {
+      "version": "0.3.14-alpha.1",
+      "date": "2026-09-19",
+      "summary": "Editable parametric walls, doors, windows and pillars",
+      "breakingChanges": [
+        "New native-v2 procedural parameters and wall-host references require compatible readers. Migration: preserve original files and use this version or newer for new saves; SVG/PNG retain visible geometry but not editable parameters or host relationships."
+      ],
+      "changes": [
+        {
+          "type": "Feature",
+          "description": "Add procedural wall, door, window and pillar tools with editable parameters and generated vector geometry."
+        },
+        {
+          "type": "Feature",
+          "description": "Configure door/window leaf widths and supported swing or sliding representations; choose rectangular or circular pillars."
+        },
+        {
+          "type": "Feature",
+          "description": "Host openings on walls so their cutouts and placement follow the host."
+        },
+        {
+          "type": "Improvement",
+          "description": "Join compatible crossing walls and shared end faces while preserving source objects, group membership and ordinary artwork stack boundaries."
+        },
+        {
+          "type": "Improvement",
+          "description": "Close shared wall corners with miter joins, retaining flat free endpoints and bounded bevel fallbacks at acute angles."
+        },
+        {
+          "type": "Improvement",
+          "description": "Recompute supported procedural contours from native parameters for Canvas rendering and SVG export; cut openings only from their host and retain physical wall thickness under shear."
+        },
+        {
+          "type": "Fix",
+          "description": "Reject procedural elements and dimensions in native blend definitions before derived blend geometry can overwrite them."
+        },
+        {
+          "type": "Engineering",
+          "description": "Use a bounded local registry of trusted geometry functions; native files store declarative parameters, never executable code."
+        },
+        {
+          "type": "Engineering",
+          "description": "Validate parameter shapes and host references in both the application and API."
+        },
+        {
+          "type": "Engineering",
+          "description": "Keep this preview scoped to two-dimensional vector plans, without BIM, structural validation, building-code certification or external CAD-format fidelity."
+        }
+      ],
+      "capabilityStatus": "local-preview",
+      "markdown": "0.3.14-alpha.1.md",
+      "source": "doc/changelog/0.3.14-alpha.1.md"
+    },
+    {
+      "version": "0.3.13-alpha.1",
+      "date": "2026-09-19",
+      "summary": "Vector dimension annotations, line endpoints, contextual grouping and ruler subdivisions",
+      "breakingChanges": [
+        "New native-v2 dimension, line-end and regroup metadata requires compatible readers. Migration: preserve original files and use this version or newer for new saves; SVG/PNG exports preserve visible annotations but not editable dimension semantics or regroup history."
+      ],
+      "changes": [
+        {
+          "type": "Feature",
+          "description": "Add linear and angular dimension tools with singular-point placement assistance, editable measurement formatting and a movable label handle."
+        },
+        {
+          "type": "Feature",
+          "description": "Configure dimension scale, display units, decimal count and separator per annotation, carrying formatting defaults to subsequent dimensions."
+        },
+        {
+          "type": "Feature",
+          "description": "Add independent start/end markers: arrow, open arrow, triangle, dot, slash, cross or none, with size, tip/base placement and linked editing."
+        },
+        {
+          "type": "Feature",
+          "description": "Add Group, Ungroup and Regroup to contextual menus according to selection membership; retain edits and nested parent groups when restoring prior membership."
+        },
+        {
+          "type": "Feature",
+          "description": "Add numeric displacement and rotation entry for selected objects, groups and Bezier anchors with an explicit rotation center."
+        },
+        {
+          "type": "Improvement",
+          "description": "Add dimension visibility, lock and snapping controls beside the existing measurement aids."
+        },
+        {
+          "type": "Improvement",
+          "description": "Preserve annotation glyph and marker shapes during object transforms; customize dimension lines, extension lines and label typography."
+        },
+        {
+          "type": "Improvement",
+          "description": "Configure major/minor ruler intervals and their snapping independently, while retaining the global ruler magnet and screen-space tolerance."
+        },
+        {
+          "type": "Fix",
+          "description": "Preserve multiple selection when opening its context menu and leave independent objects unchanged when ungrouping selected groups."
+        },
+        {
+          "type": "Engineering",
+          "description": "Validate dimension, endpoint and regroup extensions in native documents and API contracts; share annotation geometry between Canvas and SVG."
+        },
+        {
+          "type": "Engineering",
+          "description": "Keep dimensions as independent captured annotations rather than persistent CAD constraints. Radius/diameter, tolerances and chain/baseline dimensions remain outside this preview."
+        },
+        {
+          "type": "Engineering",
+          "description": "Migrate missing minor ruler preferences from the existing major interval without changing native artwork coordinates."
+        }
+      ],
+      "capabilityStatus": "local-preview",
+      "markdown": "0.3.13-alpha.1.md",
+      "source": "doc/changelog/0.3.13-alpha.1.md"
+    },
+    {
+      "version": "0.3.12-alpha.1",
+      "date": "2026-09-19",
+      "summary": "Area selection tools with remembered mode and Shift toggling",
+      "breakingChanges": [],
+      "changes": [
+        {
+          "type": "Feature",
+          "description": "Add rectangular, circular and freehand lasso subtools to Selection, with localized icons/tooltips and live area previews."
+        },
+        {
+          "type": "Feature",
+          "description": "Reuse the last area-selection mode when dragging empty canvas with the normal Selection tool; persist the last mode locally."
+        },
+        {
+          "type": "Feature",
+          "description": "Hold Shift during area selection to toggle reached objects against the starting selection, adding unselected objects and removing selected ones."
+        },
+        {
+          "type": "Improvement",
+          "description": "Preserve ordinary object movement and transforms, respect groups and locked/hidden layers, and exclude editing guides."
+        },
+        {
+          "type": "Improvement",
+          "description": "Cancel area selection with Escape or pointer cancellation without changing artwork or document undo history."
+        },
+        {
+          "type": "Engineering",
+          "description": "Use bounded geometric area intersection and document-coordinate previews without changing native documents or API contracts."
+        }
+      ],
+      "capabilityStatus": "local-preview",
+      "markdown": "0.3.12-alpha.1.md",
+      "source": "doc/changelog/0.3.12-alpha.1.md"
+    },
+    {
+      "version": "0.3.11-alpha.1",
+      "date": "2026-09-19",
+      "summary": "Blue ruler markers follow the canvas cursor",
+      "breakingChanges": [],
+      "changes": [
+        {
+          "type": "Feature",
+          "description": "Show a blue cursor projection on each visible ruler: a vertical mark at X on the horizontal ruler and a horizontal mark at Y on the vertical ruler."
+        },
+        {
+          "type": "Improvement",
+          "description": "Keep markers aligned through zoom and scrolling, independently of the full-canvas cursor-axes setting. Hide them when the cursor leaves the canvas or an editing dialog is active."
+        },
+        {
+          "type": "Engineering",
+          "description": "Reuse viewport-aware cursor coordinates and noninteractive overlays without changing document or preference formats."
+        }
+      ],
+      "capabilityStatus": "local-preview",
+      "markdown": "0.3.11-alpha.1.md",
+      "source": "doc/changelog/0.3.11-alpha.1.md"
+    },
+    {
+      "version": "0.3.10-alpha.1",
+      "date": "2026-09-19",
+      "summary": "Editable vector blends with intermediate steps, easing and expansion",
+      "breakingChanges": [
+        "Optional native-v2 blend definitions require an updated reader. Migration: preserve original documents before saving live blends; older readers may reject the new metadata. Expand blends before exchanging editable objects without the live relation."
+      ],
+      "changes": [
+        {
+          "type": "Feature",
+          "description": "Blend two compatible vector objects or equally sized vector groups from back to front, interpolating vertices, handles, geometry, colors, alpha, stroke width and opacity."
+        },
+        {
+          "type": "Feature",
+          "description": "Edit intermediate step count and linear, ease-in, ease-out or ease-in-out distribution."
+        },
+        {
+          "type": "Feature",
+          "description": "Edit retained endpoints and regenerate intermediate objects; expand to independently editable objects or release to retain only the original endpoints."
+        },
+        {
+          "type": "Improvement",
+          "description": "Expose localized blend actions and endpoint editing controls; expanded objects support ordinary grouping and ungrouping."
+        },
+        {
+          "type": "Improvement",
+          "description": "Preserve undo and native save/load, and export materialized intermediate artwork through existing SVG/PNG rendering."
+        },
+        {
+          "type": "Engineering",
+          "description": "Validate blend metadata and reference ownership in frontend/API, with bounded subdivision, layer count and group depth."
+        },
+        {
+          "type": "Engineering",
+          "description": "Support compatible vector contour topology and equal-cardinality groups. Text/image blends, editable spines and path-following orientation remain outside this preview."
+        }
+      ],
+      "capabilityStatus": "local-preview",
+      "markdown": "0.3.10-alpha.1.md",
+      "source": "doc/changelog/0.3.10-alpha.1.md"
+    },
+    {
+      "version": "0.3.9-alpha.1",
+      "date": "2026-09-19",
+      "summary": "Stroke alignment, joins, caps and scoped eyedropper/bucket tools",
+      "breakingChanges": [
+        "Optional native-v2 strokeStyle metadata requires an updated reader. Migration: preserve original documents before saving new stroke properties; older readers may reject new metadata. Absent metadata retains the legacy centered round stroke."
+      ],
+      "changes": [
+        {
+          "type": "Feature",
+          "description": "Configure center, inside or outside stroke alignment on closed vector contours through the shared stroke picker."
+        },
+        {
+          "type": "Feature",
+          "description": "Choose round, bevel or miter joins and butt, projecting square or round caps using localized icon controls."
+        },
+        {
+          "type": "Feature",
+          "description": "Sample semantic object styles with Eyedropper and apply current styles with Paint Bucket, choosing fill, stroke or both. Stroke transfer includes alpha, width, alignment, joins and caps."
+        },
+        {
+          "type": "Improvement",
+          "description": "Preserve existing shortcut assignments when introducing style tools; conflicting new default bindings remain unassigned."
+        },
+        {
+          "type": "Improvement",
+          "description": "Record style application in undo history and preserve new stroke defaults when drawing subsequent objects."
+        },
+        {
+          "type": "Fix",
+          "description": "Keep stroke geometry consistent between canvas and SVG, including compound closed contours and independent paint alpha."
+        },
+        {
+          "type": "Engineering",
+          "description": "Validate stroke metadata in frontend/API native-v2 readers and symbol definitions."
+        },
+        {
+          "type": "Engineering",
+          "description": "Open contours and live text use centered stroke alignment. Style sampling reads object properties, not image pixels; bucket applies object styles rather than region flood filling or live-paint topology."
+        }
+      ],
+      "capabilityStatus": "local-preview",
+      "markdown": "0.3.9-alpha.1.md",
+      "source": "doc/changelog/0.3.9-alpha.1.md"
+    },
+    {
+      "version": "0.3.8-alpha.1",
+      "date": "2026-09-19",
+      "summary": "Settings category navigation with one active form panel",
+      "breakingChanges": [],
+      "changes": [
+        {
+          "type": "Feature",
+          "description": "Navigate settings through a left-hand category menu and edit only the selected category in the right-hand panel."
+        },
+        {
+          "type": "Improvement",
+          "description": "Preserve all existing settings and their values, with localized category navigation, keyboard access and responsive layout."
+        },
+        {
+          "type": "Improvement",
+          "description": "Keep long forms separately scrollable and cancel unfinished shortcut recording when changing categories."
+        },
+        {
+          "type": "Engineering",
+          "description": "Record the owner's settings layout requirement in repository instructions and UX guidance for future categories."
+        },
+        {
+          "type": "Engineering",
+          "description": "Record undo-memory limits, clearing history, temporary directory and default work directory as future requirements, without exposing unimplemented controls."
+        }
+      ],
+      "capabilityStatus": "local-preview",
+      "markdown": "0.3.8-alpha.1.md",
+      "source": "doc/changelog/0.3.8-alpha.1.md"
+    },
+    {
+      "version": "0.3.7-alpha.1",
+      "date": "2026-09-19",
+      "summary": "Editable typography and text frame sizing with shared canvas and SVG composition",
+      "breakingChanges": [
+        "Optional native-v2 typography and text-layout metadata may be rejected by older readers. Migration: preserve original documents and use the updated application for new saves; legacy text without metadata retains its rendering behavior."
+      ],
+      "changes": [
+        {
+          "type": "Feature",
+          "description": "Select font family, weight and style; configure leading, letter, word and paragraph spacing, horizontal and vertical scale, baseline offset, alignment and decoration."
+        },
+        {
+          "type": "Feature",
+          "description": "Text property toggles control wrapping, automatic English/Spanish hyphenation, content sizing, horizontal or vertical automatic sizing and shrink-to-fit within a fixed frame."
+        },
+        {
+          "type": "Feature",
+          "description": "Text layout uses shared canvas/SVG glyph positions and browser font measurements. Automatic frame changes and multi-object property updates are undoable."
+        },
+        {
+          "type": "Feature",
+          "description": "Add a persistent global guide-lock button immediately before Guides, reusing the layer padlock icons. Existing guides cannot be dragged while locked; rulers still create new guides."
+        },
+        {
+          "type": "Improvement",
+          "description": "Replace compact action labels with icons and localized tooltips while preserving form labels, accessible names and menu shortcuts."
+        },
+        {
+          "type": "Improvement",
+          "description": "Display text dimensions and spacing in configured units while retaining canonical pixel values."
+        },
+        {
+          "type": "Fix",
+          "description": "Preserve fixed text frame dimensions during text editing; automatic sizing is explicit."
+        },
+        {
+          "type": "Engineering",
+          "description": "Add strict matching frontend/API text metadata validation and bounded layout calculations."
+        },
+        {
+          "type": "Engineering",
+          "description": "Pin the hyphen dependency to 1.14.1 for automatic English/Spanish hyphenation; retain its distributed license notice."
+        },
+        {
+          "type": "Engineering",
+          "description": "Fonts depend on system availability. Inline editing uses a native textarea: its caret and selection may differ from composed artwork for justification, automatic hyphenation or scaling. This release does not implement per-character styles, linked frames, text on paths or complete OpenType controls."
+        }
+      ],
+      "capabilityStatus": "local-preview",
+      "markdown": "0.3.7-alpha.1.md",
+      "source": "doc/changelog/0.3.7-alpha.1.md"
+    },
+    {
+      "version": "0.3.6-alpha.1",
+      "date": "2026-09-19",
+      "summary": "Target-aware menus for objects, groups, guides and Bezier nodes",
+      "breakingChanges": [],
+      "changes": [
+        {
+          "type": "Feature",
+          "description": "Right-click canvas objects, groups, guide lines or layer rows for grouped visibility, deletion and stacking actions. Move one step or to either end within the containing group; groups move as complete units."
+        },
+        {
+          "type": "Feature",
+          "description": "Right-click selected Bezier anchors or handles to convert corner/smooth nodes, collapse or expand either handle independently, or delete the vertex."
+        },
+        {
+          "type": "Feature",
+          "description": "Show current configured shortcuts when the contextual action matches a registered command; support keyboard navigation and outside dismissal."
+        },
+        {
+          "type": "Improvement",
+          "description": "Preserve native context menus in text fields. Locked targets disable destructive actions; stale targets are rejected after document edits."
+        },
+        {
+          "type": "Improvement",
+          "description": "Display explicit units beside additional dimensional properties. The canvas cursor remains hidden while its axis guides are visible, independently of the optional tool badge."
+        },
+        {
+          "type": "Fix",
+          "description": "Keep guide context menus accessible when guides are locked without permitting locked dragging."
+        },
+        {
+          "type": "Engineering",
+          "description": "Context targets capture document revision, exact layer/group scope and node indices. Actions are undoable and do not modify unrelated siblings."
+        }
+      ],
+      "capabilityStatus": "local-preview",
+      "markdown": "0.3.6-alpha.1.md",
+      "source": "doc/changelog/0.3.6-alpha.1.md"
+    },
+    {
+      "version": "0.3.5-alpha.1",
+      "date": "2026-09-19",
+      "summary": "Shared alpha paint picker, configurable units and editable magnetic guides",
+      "breakingChanges": [
+        "Native-v2 now supports absent/alpha paints and guide metadata that older readers may reject or discard. Migration: preserve original files and use this version for new saves; reverting the application does not convert new files. Guides are intentionally omitted from PNG and SVG exports."
+      ],
+      "changes": [
+        {
+          "type": "Feature",
+          "description": "Open the same fill/stroke picker from Appearance, the inspector or overlapping swatches below the two-column toolbar. Choose a color, no color, black or white and edit independent color opacity and stroke width."
+        },
+        {
+          "type": "Feature",
+          "description": "Swap fill and stroke without losing their transparency. Paint alpha remains separate from overall layer opacity."
+        },
+        {
+          "type": "Feature",
+          "description": "Configure distance and font units independently using px, pt, mm, cm, inches or feet. Rulers and dimensional controls convert their display and input without resizing artwork."
+        },
+        {
+          "type": "Feature",
+          "description": "Show or hide rulers, guides and grid with paired magnetic buttons. Configure ruler step, grid spacing and each source's magnetic radius in Settings."
+        },
+        {
+          "type": "Feature",
+          "description": "Drag horizontal or vertical guides from rulers, reposition them and drag them outside the artboard to delete them. Guides persist as ordered layers with visibility, locking and undo support."
+        },
+        {
+          "type": "Feature",
+          "description": "Reorder layers by dragging, preserving grouped artwork together."
+        },
+        {
+          "type": "Improvement",
+          "description": "Toggle Appearance, Workspace and Measurement context blocks through View > Layout; visibility preferences persist."
+        },
+        {
+          "type": "Improvement",
+          "description": "Move theme switching beside the language selector in the header, using sun/moon icons for the current theme."
+        },
+        {
+          "type": "Improvement",
+          "description": "Match snapping distance to screen pixels across canvas zoom and preserve the pointer offset while moving objects."
+        },
+        {
+          "type": "Fix",
+          "description": "Keep guide layers out of artwork rendering, exports, 3D preview and normal artwork operations."
+        },
+        {
+          "type": "Fix",
+          "description": "Preserve independent fill/stroke alpha through native files, authenticated API storage, Canvas and SVG."
+        },
+        {
+          "type": "Security",
+          "description": "Validate paint strings, guide metadata, finite coordinates and bounded measurement preferences without weakening storage authentication."
+        },
+        {
+          "type": "Engineering",
+          "description": "Use 96 document pixels per inch and 72 points per inch; these units do not assert physical monitor calibration."
+        },
+        {
+          "type": "Engineering",
+          "description": "Keep ruler generation bounded and canonical document geometry in pixels. Full quality certification remains separate from feature-branch preview publication."
+        }
+      ],
+      "capabilityStatus": "local-preview",
+      "markdown": "0.3.5-alpha.1.md",
+      "source": "doc/changelog/0.3.5-alpha.1.md"
+    },
+    {
+      "version": "0.3.4-alpha.1",
+      "date": "2026-09-19",
+      "summary": "Edit Bezier points with Selection and constrain handle drags",
+      "breakingChanges": [],
+      "changes": [
+        {
+          "type": "Feature",
+          "description": "Edit anchors and direction handles on a selected curve using Selection as well as Direct Selection."
+        },
+        {
+          "type": "Improvement",
+          "description": "Hold Shift while dragging anchors, handles or new Pen tangents to constrain their direction to the angle increment in Settings, relative to the canvas axes."
+        },
+        {
+          "type": "Improvement",
+          "description": "Hold Ctrl or Alt while dragging a handle to move it independently without moving the opposite handle. Unmodified smooth handles remain coupled."
+        },
+        {
+          "type": "Improvement",
+          "description": "Preserve curve controls and the active gesture when Ctrl changes during a drag; temporary Ctrl selection remains available while idle."
+        },
+        {
+          "type": "Fix",
+          "description": "Preserve selected anchors when Shift starts a constrained drag; a Shift-click can still deselect an anchor."
+        },
+        {
+          "type": "Fix",
+          "description": "Clear stale node selections when changing layers and ignore direction handles hidden by Settings."
+        },
+        {
+          "type": "Fix",
+          "description": "Apply path edits with the effective selection tool instead of accidentally invoking the underlying drawing or anchor-deletion tool."
+        },
+        {
+          "type": "Engineering",
+          "description": "Add geometry and routing regression checks, including transformed paths, modifier changes, undo and cancellation. Native files and API contracts remain compatible."
+        }
+      ],
+      "capabilityStatus": "local-preview",
+      "markdown": "0.3.4-alpha.1.md",
+      "source": "doc/changelog/0.3.4-alpha.1.md"
+    },
+    {
+      "version": "0.3.3-alpha.1",
+      "date": "2026-09-19",
+      "summary": "Follow the canvas cursor with optional horizontal and vertical guides",
+      "breakingChanges": [],
+      "changes": [
+        {
+          "type": "Feature",
+          "description": "Show horizontal and vertical guides across the canvas, intersecting at the pointer, with a crosshair cursor."
+        },
+        {
+          "type": "Feature",
+          "description": "Enable or disable cursor axes with a Settings toggle; the choice persists between sessions and is independent of the tool-icon setting."
+        },
+        {
+          "type": "Improvement",
+          "description": "Keep guides aligned through canvas zoom and scrolling, clipped to the canvas, and hidden outside it or while editing text."
+        },
+        {
+          "type": "Engineering",
+          "description": "Extend existing local input preferences with an optional boolean; existing settings default to enabled and native documents remain compatible."
+        }
+      ],
+      "capabilityStatus": "local-preview",
+      "markdown": "0.3.3-alpha.1.md",
+      "source": "doc/changelog/0.3.3-alpha.1.md"
+    },
+    {
+      "version": "0.3.2-alpha.1",
+      "date": "2026-09-19",
+      "summary": "Organize drawing controls in a grouped two-column toolbar",
+      "breakingChanges": [],
+      "changes": [
+        {
+          "type": "Improvement",
+          "description": "Arrange toolbar buttons in two columns, grouped by selection, drawing, paint, transformation and navigation, followed by appearance controls."
+        },
+        {
+          "type": "Improvement",
+          "description": "Expose Selection and Direct Selection side by side while preserving tool flyouts, configured shortcuts and tooltips."
+        },
+        {
+          "type": "Improvement",
+          "description": "Place related operations together and adjust the workspace width and flyout placement for the wider rail."
+        },
+        {
+          "type": "Engineering",
+          "description": "Preserve native document and API compatibility; no data migration is required."
+        }
+      ],
+      "capabilityStatus": "local-preview",
+      "markdown": "0.3.2-alpha.1.md",
+      "source": "doc/changelog/0.3.2-alpha.1.md"
+    },
+    {
+      "version": "0.3.1-alpha.1",
+      "date": "2026-09-19",
+      "summary": "Identify the local preview and dismiss menus on window blur",
+      "breakingChanges": [],
+      "changes": [
+        {
+          "type": "Feature",
+          "description": "Run the local launcher with info to identify the source version, branch and commit without starting Docker or reading credentials."
+        },
+        {
+          "type": "Improvement",
+          "description": "Print the source version, branch and commit after successfully starting the local preview. About and the footer show the new preview version."
+        },
+        {
+          "type": "Fix",
+          "description": "Close main menus and tool flyouts when leaving the browser window; preserve expandable inspector panels and reset temporary input state."
+        },
+        {
+          "type": "Engineering",
+          "description": "Add regression checks for window-blur dismissal and checkout identification, including operation without Git."
+        },
+        {
+          "type": "Engineering",
+          "description": "Preview publication does not certify the strict integration gate; existing quality and browser-acceptance limitations remain."
+        }
+      ],
+      "capabilityStatus": "local-preview",
+      "markdown": "0.3.1-alpha.1.md",
+      "source": "doc/changelog/0.3.1-alpha.1.md"
+    },
+    {
+      "version": "0.3.0-alpha.1",
+      "date": "2026-09-19",
+      "summary": "Editable cubic paths, drawing tools and configurable input",
+      "breakingChanges": [
+        "New saves use native document format 2 for curves, subpaths and symbol metadata. Earlier readers cannot open these files. Format 1 import remains supported.",
+        "Tool defaults change to M Rectangle, L Ellipse, P Pen, N Pencil, Shift+E Eraser and R Rotate. Configurable shortcuts replace the temporary preview bindings.",
+        "Migration: Preserve original .ximply files before opening and saving them with this version. Review Settings and resolve shortcut collisions before saving preferences. Keep the new application for v2 files: reverting the application does not downgrade documents. Existing server artifacts follow the same reader-version boundary. Rebuild local containers; retain .env.local and project volumes."
+      ],
+      "changes": [
+        {
+          "type": "Feature",
+          "description": "Draw editable cubic paths with Pen and edit anchors/handles with direct selection, anchor addition/deletion and corner/smooth conversion."
+        },
+        {
+          "type": "Feature",
+          "description": "Construct lines, rounded rectangles, polygons, stars, arcs, spirals, rectangular and polar grids and flares alongside existing shape tools."
+        },
+        {
+          "type": "Feature",
+          "description": "Refine paths with smooth, simplify, average, join/close, scissors, path eraser, filled-vector eraser and stray-point cleanup."
+        },
+        {
+          "type": "Feature",
+          "description": "Trace images in monochrome, grayscale or color using bounded editable scanline output; retain source images and update, expand or release a trace."
+        },
+        {
+          "type": "Feature",
+          "description": "Create linked symbols; redefine, replace and expand instances; import/export local libraries; spray and manipulate instances with shift, scrunch, size, spin, stain, screen and initial style operations."
+        },
+        {
+          "type": "Feature",
+          "description": "Select multiple objects; create and dissolve nested groups; align in six directions and distribute horizontally or vertically. Combine vectors with union, subtract, intersect or exclude; raster and text are excluded from boolean operations."
+        },
+        {
+          "type": "Feature",
+          "description": "Expose Rotate, Reflect and Scale tool families through triangular flyouts, with sibling choices dismissed by outside interaction or Escape. Reflect preserves editable flip flags for vectors, images and text; numeric transforms also support selected groups."
+        },
+        {
+          "type": "Feature",
+          "description": "Configure shortcuts with collision detection, Shift constraint angle and the optional lower-right cursor tool badge in Settings."
+        },
+        {
+          "type": "Improvement",
+          "description": "Replace the starter example with an editable branded cover, including a cubic X mark and grouped vector studies."
+        },
+        {
+          "type": "Improvement",
+          "description": "Hold Ctrl for temporary Selection; release it to restore the drawing tool without losing unfinished Pen paths."
+        },
+        {
+          "type": "Improvement",
+          "description": "Add explicit canvas zoom buttons."
+        },
+        {
+          "type": "Improvement",
+          "description": "Add visible rotation and four edge handles; edge scaling affects only its local dimension. Shift constrains rotation and linear transformations to the chosen angle."
+        },
+        {
+          "type": "Improvement",
+          "description": "Edit existing text inline using the Text tool."
+        },
+        {
+          "type": "Improvement",
+          "description": "Show active shortcuts in menus and tooltips; close custom dropdowns and menus when interacting elsewhere. Ctrl+Space+wheel zooms the canvas while preserving UI scale."
+        },
+        {
+          "type": "Improvement",
+          "description": "Keep About reachable from Help and the footer; company links open in a new tab."
+        },
+        {
+          "type": "Fix",
+          "description": "Prevent accidental text selection in interface labels while preserving selection in inputs, text areas and editable content."
+        },
+        {
+          "type": "Fix",
+          "description": "Load the full production stylesheet directly without a CSP-blocked inline handler."
+        },
+        {
+          "type": "Fix",
+          "description": "Use localhost:8090 by default. Existing installations should update XDS_PORT in .env.local; saved projects and credentials are retained."
+        },
+        {
+          "type": "Fix",
+          "description": "Generate identical documentation links and ordering on Windows and POSIX hosts."
+        },
+        {
+          "type": "Security",
+          "description": "Continue validating native versions and bounded geometry; imported documents and symbol libraries do not execute code. Existing bearer storage boundaries remain."
+        },
+        {
+          "type": "Engineering",
+          "description": "Collect whole-source frontend, API and engineering coverage; enforce fresh Sonar evidence in a separate fail-closed CI check. Coverage and unavailable analyses still block integration."
+        },
+        {
+          "type": "Engineering",
+          "description": "Keep drawing geometry separate from Angular; carry native format changes through renderer, SVG and API validation."
+        },
+        {
+          "type": "Engineering",
+          "description": "Pin polygon-clipping 0.15.7 for filled-vector erasure. Curves are sampled at 24 steps per segment, so erased geometry is approximate."
+        },
+        {
+          "type": "Engineering",
+          "description": "Tracing is limited to 64 pixels per side; contour fitting remains pending."
+        },
+        {
+          "type": "Engineering",
+          "description": "Preserve rotated child geometry during nonuniform group transforms using optional native-v2 skewX; keep curve controls and symbol-instance state during transformations."
+        },
+        {
+          "type": "Engineering",
+          "description": "Nine-slice resizing uses a fixed 25 percent inset. Editable registration and slice guides and a full graphic-style library remain pending."
+        },
+        {
+          "type": "Engineering",
+          "description": "Record the mandatory integration preflight and preview feedback cadence."
+        },
+        {
+          "type": "Engineering",
+          "description": "Preserve exact historical commit exemptions and the unchanged quality policy. Current build/test/CI evidence is recorded in the implementation handoff, not inferred from earlier releases."
+        }
+      ],
+      "capabilityStatus": "local-preview",
+      "markdown": "0.3.0-alpha.1.md",
+      "source": "doc/changelog/0.3.0-alpha.1.md"
+    },
     {
       "version": "0.2.0-alpha.2",
       "date": "2026-09-19",

@@ -2,17 +2,23 @@
 
 A layered vector and image editor by Ximplicity.
 
-**0.2.0-alpha.2 — first single-user local preview.** Draw shapes and freehand paths,
-edit text, transform layers, import and retouch images, undo/redo, save editable
-projects and export PNG/SVG. The architecture for the broader professional platform
-remains documented; this alpha implements a bounded first slice.
+**0.5.0 — single-user drawing workbench preview.** Work on several documents in tabs, set
+the page up from paper, screen and animation formats, import SVG, DXF, Illustrator and PDF
+drawings as editable paths, draw floor plans with connected walls, openings, stairs and
+drafting dimensions, draw editable cubic paths and construction shapes, cut them with the
+scissors and the knife, refine paths, paint with brush tips and their own control bar, trace
+images, reuse symbols, edit text inline and turn it into shapes, copy and paste with stacked
+pastes, repeat and duplicate transformations about a movable pivot, retouch images and save
+editable .xds projects or PNG, SVG and PDF output, printing included. The architecture for the broader professional platform
+remains documented; this preview implements a bounded first slice and has not passed the
+strict quality gate.
 
 ## Quick Start
 
 Requirements: Git, Docker Desktop/Engine with Compose v2, and Python 3.11+.
 
 ```bash
-git clone --branch feat/first-editor https://github.com/Yoshikemolo/ximply-design-studio.git
+git clone --branch feat/drawing-preview https://github.com/Yoshikemolo/ximply-design-studio.git
 cd ximply-design-studio
 ./scripts/local.sh start
 ```
@@ -27,15 +33,33 @@ keyboard shortcuts, cleanup and development commands.
 
 ## Included in the alpha
 
-- Rectangles, ellipses, freehand vector paths and editable text.
-- Layer selection, movement, corner resizing, rotation, ordering, visibility, locks,
+- Cubic Pen, direct anchor editing, construction primitives and path refinement.
+- Multiple selection, contextual grouping/regrouping, alignment/distribution and vector boolean operations.
+- Linear/angular dimension annotations with editable units, labels and endpoint markers.
+- Parametric 2D walls, hosted doors/windows and rectangular or circular pillars.
+- Bounded scanline image tracing and local linked symbols with painting tools.
+- Freehand vector paths and inline editable text.
+- Layer selection, movement, corner/edge resizing, rotation handles, ordering, visibility, locks,
   opacity and blend modes.
 - PNG/JPEG/WebP import, raster brush/eraser and non-destructive image adjustments.
-- Undo/redo, native .ximply save/open, PNG export and supported-vector SVG export.
-- Dark/light themes, EN/ES interface labels, collapsible/reorderable panels.
+- Undo/redo, native .xds save/open, PNG export and supported-vector SVG export.
+- Rotate/Reflect/Scale tool families, triangular flyouts and numeric group transforms.
+- Configurable collision-checked shortcuts, Shift angle constraints and tool cursor badge.
+- Shared fill/stroke palette with independent alpha, no-color and quick swatches.
+- Configurable distance/font units, rulers, guide layers, grid and independent snapping.
+- Dark/light themes, EN/ES interface labels and configurable context blocks.
 - Three.js layer-plane inspection with camera orbit, zoom and pan.
 - About screen with a version selector and bundled Markdown release notes.
 - Bearer-protected FastAPI artifact storage for one local user.
+
+Native saves now use format 2; preserve original v1 files because older readers
+cannot open new saves. Tracing is capped at 64 pixels per side; curved vector erasure
+is sampled. Nonuniform group scaling preserves rotated child geometry through centered shear.
+Nine-slice insets are fixed; registration/slice-guide editing and full
+graphic styles remain pending. See the [drawing roadmap](doc/planning/drawing-roadmap.md).
+
+Dimension anchors are independent annotations, not persistent CAD constraints.
+Procedural floor plans are bounded 2D vector geometry, without BIM or structural validation.
 
 The preview does not implement production Keycloak integration, PostgreSQL/TypeORM
 transactions, multiuser collaboration, desktop windows, third-party plugin loading,
@@ -49,6 +73,7 @@ transactional persistence service. Do not expose this preview as a production se
 - [Functional specification](doc/product/functional-specification.md)
 - [Proposed architecture](doc/architecture/system-overview.md) and [ADRs](doc/adr/INDEX.md)
 - [First editor scope and evidence](doc/implementation/PLAN-0002-0001.md)
+- [Drawing iteration and acceptance](doc/implementation/PLAN-0008-0001.md)
 - [Methodology audit](doc/testing/methodology-audit.md)
 - [Contribution rules](CONTRIBUTING.md) and [GitFlow](doc/engineering/gitflow.md)
 - [Changelog](CHANGELOG.md) and [release-note contract](doc/product/footer-and-changelog.md)
@@ -73,13 +98,12 @@ python3 -m unittest discover -s tests -v
 API tests require `services/api/requirements-dev.txt`, then
 `python -m pytest services/api/tests -q`.
 
-The Angular production build and automated tests pass. GitHub Actions also builds
-and starts the Docker preview, then verifies frontend delivery, authentication,
-artifact round-trip and the About deep link. See the [recorded container run](https://github.com/Yoshikemolo/ximply-design-studio/actions/runs/35444283893).
-Visual browser acceptance remains unverified because the remote browser cannot reach
-the development host. The strict SonarQube gate, protection verification and independent
-human review are still required before merging. The preview remains available from
-its feature branch for local evaluation; these tests are not full product certification.
+The earlier local preview has [recorded container evidence](https://github.com/Yoshikemolo/ximply-design-studio/actions/runs/35444283893).
+That historical run does not validate this drawing iteration. Record current revision
+build/test/CI evidence in the [drawing plan](doc/implementation/PLAN-0008-0001.md).
+Visual browser acceptance, the strict SonarQube gate, protection verification and
+independent human review remain required before merging. Feature-branch availability
+allows local evaluation; it is not full product certification.
 
 Public visibility is requested. A distribution license is not yet selected; see
 [LICENSE-DECISION.md](LICENSE-DECISION.md). Owner and reviewer: Yoshikemolo.

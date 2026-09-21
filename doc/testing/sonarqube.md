@@ -97,3 +97,61 @@ Tests: [collector tests](../../tests/test_quality_collector.py). Plan and scope:
 were checked on 2026-09-19, together with the official next.sonarqube.com API response
 examples for ce/task, project_analyses/search and measures/component. API examples
 support fixture shapes; they do not prove compatibility with an installed version.
+
+## Temporary owner-authorized pause
+
+On 2026-09-19 the owner explicitly requested temporarily disabling the Sonar PR
+check while its infrastructure and evidence are unavailable. The workflow retains
+its event triggers and `quality` job identity, but a job-level `if: ${{ false }}`
+skips execution. The original steps remain commented out; the placeholder step is
+also unreachable. A skipped required job resolves without leaving an expected check
+pending. It is not an analysis pass and supplies no quality evidence. Other checks,
+review requirements and release permissions remain unchanged; this exception does
+not authorize merging or Verified status.
+
+To restore enforcement, remove the job-level false condition and placeholder steps,
+then uncomment the preserved original steps in `.github/workflows/quality-evidence.yml`.
+Configure the trusted server, module analysis manifest and token described below,
+obtain scans for the exact candidate revision, and rerun the restored workflow.
+The quality policy, collector, thresholds and module inventory remain unchanged.
+The disposable aggregate trial remains diagnostic and is not a substitute.
+
+## Required PR evidence workflow
+
+When enabled, the `Strict quality evidence / quality` job checks out the trusted base revision's
+collector and policy. Configure repository variables `SONAR_HOST_URL` and
+`SONAR_ANALYSIS_MANIFEST_JSON`, and the secret `SONAR_TOKEN`. The manifest must list
+successful scans for every required module at the exact candidate head revision.
+A missing value, stale revision or failed threshold makes the job fail; it never
+substitutes build/test success for Sonar evidence. Require this check in branch
+protection alongside design, contribution and editor checks. Branch protection
+configuration and independent approval still require verification.
+
+The editor workflow collects TypeScript LCOV in `reports/typescript/lcov.info`, API
+XML in `reports/api/coverage.xml`, and engineering XML in
+`reports/engineering/coverage.xml`. Collection includes uncovered source files.
+These artifacts are inputs for analysis, not proof that the strict gate passed.
+
+## Disposable trial
+
+The owner authorizes a temporary test instance. `sonar-trial.yml` starts a pinned
+Community Build container on a disposable Linux runner, bound only to loopback port
+19000. It uses the embedded H2 database exclusively for this short-lived test. The
+server and scanner images are pinned by registry digest in
+`infra/sonar/trial-images.json`; tags were resolved on 2026-09-19.
+
+The trial creates transient credentials, generates actual coverage, scans current
+source, and retains findings under the source SHA. An `always()` teardown removes
+both named containers and their anonymous volumes, including on analysis failure;
+cleanup evidence is uploaded with findings for seven days. Hosted runner disposal
+is the final boundary for abrupt runner termination. No repository Sonar secret or
+permanent server is needed. The trial never creates a PR or promotes branches.
+
+This first aggregate analysis is diagnostic. It cannot prove all required modules
+or new-code baseline compliance on a newly created database. Actual findings and
+coverage thresholds remain enforced and reported; the existing strict integration
+harness is unchanged. Missing module implementation and absent baseline metrics are
+not replaced with zeroes or invented passing evidence.
+
+References: [official container setup](https://docs.sonarsource.com/sonarqube-community-build/server-installation/from-docker-image/set-up-and-start-container.md)
+and [official scanner](https://docs.sonarsource.com/sonarqube-community-build/analyzing-source-code/scanners/sonarscanner).

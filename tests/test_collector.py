@@ -19,3 +19,10 @@ class CollectorTests(unittest.TestCase):
         commit={"sha":"a"*40,"author":{"login":"Yoshikemolo"},"committer":{"login":"Yoshikemolo"},"commit":{"message":"docs: define contracts"}}
         with patch("harness.collect_contribution.fetch",side_effect=[pr,[commit],pr]):
             self.assertEqual(1,len(collect("Yoshikemolo/ximply-design-studio",1,"a"*40)["commits"]))
+    def test_normalizes_signature_verification_strictly(self):
+        item={"sha":"a","author":None,"committer":None,"commit":{"message":"docs: add a spec","verification":{"verified":True}}}
+        self.assertTrue(normalize_commit(item)["verified"])
+        for verification in (None,{},{"verified":"true"},{"verified":False}):
+            with self.subTest(verification=verification):
+                item["commit"]["verification"]=verification
+                self.assertFalse(normalize_commit(item)["verified"])
