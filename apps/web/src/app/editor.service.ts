@@ -86,6 +86,8 @@ export type ContextTarget = { revision: number; layerId: string } & (
   { kind: "object"; groupPath?: string[]; selectionIds?: string[] } |
   { kind: "node"; path: number; index: number }
 );
+/** Properties a whole selection shares, so editing one of them edits every selected object. */
+const SHARED_APPEARANCE = ["fill", "stroke", "strokeWidth", "strokeStyle", "lineEnds", "opacity", "blend", "adjustments"];
 /** Walls within this angle of a 45 degree direction are drawn on it, which keeps plans orthogonal. */
 const WALL_ANGLE_TOLERANCE = 6 * Math.PI / 180;
 const WALL_POCHE = "#3f4753";
@@ -1247,21 +1249,39 @@ export class EditorService {
     if (!Number.isFinite(fontSize) || fontSize < 1 || fontSize > 500) return;
     this.applyTextUpdate((layer) => ({ ...layer, fontSize }));
   }
+  /**
+   * Edits the properties of the selection. Appearance belongs to every selected object, a
+   * whole group included, while place and size belong to the one the form is showing.
+   */
   updateLayer(patch: Partial<Layer>) {
     let layer = this.selected();
     if (!layer || this.isEffectivelyLocked(layer) || layer.guide) return;
+    const keys = Object.keys(patch);
+    const shared = Object.fromEntries(Object.entries(patch).filter(([key]) => SHARED_APPEARANCE.includes(key))) as Partial<Layer>;
+    let own = Object.fromEntries(Object.entries(patch).filter(([key]) => !SHARED_APPEARANCE.includes(key))) as Partial<Layer>;
+    if (!keys.length) return;
     this.commitStep(this.document());
-    if(["x","y","width","height","rotation","skewX","flipX","flipY"].some(key=>key in patch))layer=this.detachOpening(layer);
-    if (patch.width !== undefined || patch.height !== undefined)
-      patch = {
-        ...resizeLayer(
-          layer,
-          patch.width ?? layer.width,
-          patch.height ?? layer.height,
-        ),
-        ...patch,
-      };
-    this.setLayer(layer.id, this.reflowText({ ...layer, ...patch }));
+    if (Object.keys(own).length) {
+      if(["x","y","width","height","rotation","skewX","flipX","flipY"].some(key=>key in own))layer=this.detachOpening(layer);
+      if (own.width !== undefined || own.height !== undefined)
+        own = {
+          ...resizeLayer(
+            layer,
+            own.width ?? layer.width,
+            own.height ?? layer.height,
+          ),
+          ...own,
+        };
+      this.setLayer(layer.id, this.reflowText({ ...layer, ...own }));
+    }
+    if (Object.keys(shared).length) {
+      const ids = new Set(this.selectedLayers().filter((item) => !this.isEffectivelyLocked(item) && !item.guide).map((item) => item.id));
+      this.expandGeneratedForIds(ids);
+      this.document.update((document) => ({
+        ...document,
+        layers: document.layers.map((item) => ids.has(item.id) ? this.reflowText({ ...item, ...structuredClone(shared) }) : item),
+      }));
+    }
     this.changed();
   }
   toggle(id: string, key: "visible" | "locked") {

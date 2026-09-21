@@ -192,7 +192,8 @@
         "SC-0020",
         "SC-0021",
         "SC-0095",
-        "SC-0096"
+        "SC-0096",
+        "SC-0099"
       ],
       "implementation": [
         "apps/web/src/app/editor.service.ts",
@@ -211,7 +212,8 @@
         "apps/web/tests/context-actions.test.ts",
         "packages/domain/tests/array-copy.test.ts",
         "apps/web/tests/array-duplicate.test.ts",
-        "apps/web/tests/transform-again.test.ts"
+        "apps/web/tests/transform-again.test.ts",
+        "apps/web/tests/group-properties.test.ts"
       ],
       "evidence": [
         "doc/implementation/PLAN-0002-0001.md",
