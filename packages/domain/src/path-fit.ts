@@ -412,3 +412,38 @@ export function pathDeviation(from: CurvePath, to: CurvePath, steps = 24): numbe
   }
   return worst;
 }
+
+/** The options of the Pencil and the Paintbrush, as their option dialogs present them. */
+export interface FreehandToolOptions extends FreehandOptions {
+  /** Fill new strokes with the current fill. */
+  fill: boolean;
+  /** Keep the path selected after drawing it. */
+  keepSelected: boolean;
+  /** Redraw, extend or join a selected path that the stroke starts near. */
+  editSelected: boolean;
+  /** How near, in screen pixels, a stroke must start to edit a selected path: 2 to 20. */
+  within: number;
+}
+/** Illustrator's defaults for the Pencil. */
+export const PENCIL_DEFAULTS: FreehandToolOptions = { fidelity: 2.5, smoothness: 0, fill: false, keepSelected: true, editSelected: true, within: 12 };
+/** Illustrator's defaults for the Paintbrush. */
+export const PAINTBRUSH_DEFAULTS: FreehandToolOptions = { fidelity: 4, smoothness: 0, fill: false, keepSelected: false, editSelected: true, within: 12 };
+/** Illustrator's defaults for the Smooth tool. */
+export const SMOOTH_DEFAULTS: FreehandOptions = { fidelity: 2.5, smoothness: 0 };
+export const WITHIN_RANGE = { min: 2, max: 20 } as const;
+
+/** Validates stored options, falling back to the defaults for anything missing or out of range. */
+export function validFreehandTool(value: unknown, defaults: FreehandToolOptions): FreehandToolOptions {
+  const input = (value && typeof value === "object" ? value : {}) as Partial<Record<keyof FreehandToolOptions, unknown>>;
+  const number = (v: unknown, fallback: number, min: number, max: number) =>
+    typeof v === "number" && Number.isFinite(v) ? Math.min(max, Math.max(min, v)) : fallback;
+  const flag = (v: unknown, fallback: boolean) => (typeof v === "boolean" ? v : fallback);
+  return {
+    fidelity: number(input.fidelity, defaults.fidelity, FIDELITY_RANGE.min, FIDELITY_RANGE.max),
+    smoothness: number(input.smoothness, defaults.smoothness, SMOOTHNESS_RANGE.min, SMOOTHNESS_RANGE.max),
+    fill: flag(input.fill, defaults.fill),
+    keepSelected: flag(input.keepSelected, defaults.keepSelected),
+    editSelected: flag(input.editSelected, defaults.editSelected),
+    within: Math.round(number(input.within, defaults.within, WITHIN_RANGE.min, WITHIN_RANGE.max)),
+  };
+}

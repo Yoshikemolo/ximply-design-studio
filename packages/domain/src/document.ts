@@ -1,6 +1,7 @@
 import { Procedural, materializeProcedural, projectionCurves, projectionDash, syncProcedurals, validProcedural, validateProcedurals, resizeProcedural } from "./procedural";
 import { Dimension, dimensionGeometry, dimensionLabelLayout, validDimension } from "./dimensions";
 import { LineEnds, lineEndGeometry, pathLineEnds, validLineEnds } from "./line-endings";
+import { BrushStroke, validBrushStroke } from "./brush-stroke";
 import { ObjectBlend, syncBlends, validateBlends } from "./object-blend";
 import { FONT_FAMILIES, layoutText, TextLayoutOptions, TextTypography, TextMeasurement } from "./text-layout";
 import {
@@ -56,6 +57,8 @@ export interface Layer {
   strokeWidth: number;
   strokeStyle?: StrokeStyle;
   lineEnds?: LineEnds;
+  /** A brush painted along the path instead of a plain stroke, as the Paintbrush draws. */
+  brushStroke?: BrushStroke;
   dimension?: Dimension;
   procedural?: Procedural;
   points: Point[];
@@ -512,6 +515,7 @@ export function parseDocument(text: string): StudioDocument {
       throw new Error("Invalid guide layer.");
     if (layer["procedural"] !== undefined && (value["version"] !== 2 || layer["kind"] !== "path" || layer["dimension"] !== undefined || layer["guide"] !== undefined || layer["symbolId"] !== undefined || !validProcedural(layer["procedural"]))) throw new Error("Invalid procedural layer.");
     if (layer["lineEnds"] !== undefined && (value["version"] !== 2 || !validLineEnds(layer["lineEnds"]))) throw new Error("Invalid line endings.");
+    if (layer["brushStroke"] !== undefined && (value["version"] !== 2 || layer["kind"] !== "path" || layer["dimension"] !== undefined || layer["procedural"] !== undefined || !validBrushStroke(layer["brushStroke"]))) throw new Error("Invalid brush stroke.");
     if (layer["dimension"] !== undefined && (value["version"] !== 2 || layer["kind"] !== "path" || layer["guide"] !== undefined || layer["symbolId"] !== undefined || !validDimension(layer["dimension"]))) throw new Error("Invalid dimension.");
     const strokeStyle = layer["strokeStyle"];
     if (strokeStyle !== undefined && (value["version"] !== 2 || !record(strokeStyle) ||

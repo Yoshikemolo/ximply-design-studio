@@ -120,6 +120,8 @@ export function joinPaths(
   second: CurvePath,
   secondAtStart: boolean,
   kind: "corner" | "smooth" = "corner",
+  /** The Pen joins with the handle it is drawing with; Join always draws a straight segment. */
+  keepHandles = false,
 ): CurvePath {
   const a = firstAtStart ? reversePath(first) : structuredClone(first);
   const b = secondAtStart ? structuredClone(second) : reversePath(second);
@@ -129,11 +131,13 @@ export function joinPaths(
     if (kind === "smooth") smoothen(merged);
     return { nodes: [...a.nodes.slice(0, -1), merged, ...b.nodes.slice(1)], closed: false };
   }
-  // The joining segment is straight, so the handles that face it go back in.
-  end.outgoing = { ...end.point };
-  start.incoming = { ...start.point };
-  end.smooth = false;
-  start.smooth = false;
+  if (!keepHandles) {
+    // The joining segment is straight, so the handles that face it go back in.
+    end.outgoing = { ...end.point };
+    start.incoming = { ...start.point };
+    end.smooth = false;
+    start.smooth = false;
+  }
   return { nodes: [...a.nodes, ...b.nodes], closed: false };
 }
 
@@ -388,3 +392,102 @@ export function nearestOnPath(path: CurvePath, point: Point, steps = 64): { segm
 }
 
 export { collapsed as cornerAnchor };
+
+/** Joins pieces end to start into one path; ends that meet become one anchor. */
+export function concatPieces(pieces: CurvePath[], closed = false): CurvePath {
+  const nodes: Anchor[] = [];
+  for (const piece of pieces.filter((p) => p.nodes.length)) {
+    const first = piece.nodes[0];
+    const last = nodes[nodes.length - 1];
+    if (last && same(last.point, first.point, 1e-6)) {
+      last.outgoing = { ...first.outgoing };
+      last.smooth = false;
+      nodes.push(...piece.nodes.slice(1).map(copy));
+    } else nodes.push(...piece.nodes.map(copy));
+  }
+  if (closed && nodes.length > 2 && same(nodes[0].point, nodes[nodes.length - 1].point, 1e-6)) {
+    const end = nodes.pop()!;
+    nodes[0].incoming = { ...end.incoming };
+    nodes[0].smooth = false;
+  }
+  return { nodes, closed: closed && nodes.length > 1 };
+}
+
+/** Moves the first and last anchors of a stroke onto two points, handles included. */
+function pinEnds(stroke: CurvePath, start: Point | null, end: Point | null): CurvePath {
+  const result = structuredClone(stroke);
+  if (start && result.nodes.length) result.nodes[0] = placeAnchor(result.nodes[0], start);
+  if (end && result.nodes.length > 1) result.nodes[result.nodes.length - 1] = placeAnchor(result.nodes[result.nodes.length - 1], end);
+  return result;
+}
+
+/** A parameter along a path: the index of the segment plus the position along it. */
+export interface PathParameter { segment: number; t: number }
+export const parameterValue = (p: PathParameter) => p.segment + p.t;
+export function pointAtParameter(path: CurvePath, value: number): Point {
+  const count = segmentCount(path), n = path.nodes.length;
+  if (!count) return { ...path.nodes[0].point };
+  const clamped = path.closed ? ((value % count) + count) % count : Math.max(0, Math.min(count, value));
+  const segment = Math.min(count - 1, Math.floor(clamped));
+  const a = path.nodes[segment], b = path.nodes[(segment + 1) % n];
+  return cubic(a.point, a.outgoing, b.incoming, b.point, clamped - segment);
+}
+
+/**
+ * Redraws part of a path with a freehand stroke, as the Pencil and the Paintbrush do on
+ * a selected path. The stroke starts on the path at `from`. When it ends on the path at
+ * `to`, it replaces what lies between the two; a closed path keeps whichever way round
+ * the stroke did not follow. When it ends away from the path, it replaces everything past
+ * its start in the direction it was drawn, which may open a closed path.
+ */
+export function redrawPath(path: CurvePath, from: PathParameter, to: PathParameter | null, stroke: CurvePath): CurvePath {
+  const count = segmentCount(path);
+  if (!count || stroke.nodes.length < 2) return structuredClone(path);
+  const s = parameterValue(from);
+  const startPoint = pointAtParameter(path, s);
+  if (path.closed) {
+    if (to) {
+      const e = parameterValue(to);
+      const endPoint = pointAtParameter(path, e);
+      const pinned = pinEnds(stroke, startPoint, endPoint);
+      const forwardEnd = e >= s ? e : e + count;
+      const middle = pinned.nodes[Math.floor(pinned.nodes.length / 2)].point;
+      const forward = stretch(path, s, forwardEnd, count), backward = stretch(path, forwardEnd, s + count, count);
+      const near = (piece: CurvePath) => Math.min(...piece.nodes.map((node) => dist(node.point, middle)), Infinity);
+      if (near(forward) <= near(backward)) return concatPieces([backward, pinned], true);
+      return concatPieces([forward, reversePath(pinned)], true);
+    }
+    const ring = stretch(path, s, s + count, count);
+    return concatPieces([ring, pinEnds(stroke, startPoint, null)], false);
+  }
+  if (to) {
+    const e = parameterValue(to);
+    const lo = Math.min(s, e), hi = Math.max(s, e);
+    const pinned = pinEnds(stroke, startPoint, pointAtParameter(path, e));
+    const oriented = s <= e ? pinned : reversePath(pinned);
+    return concatPieces([stretch(path, 0, lo, count), oriented, stretch(path, hi, count, count)]);
+  }
+  const pinned = pinEnds(stroke, startPoint, null);
+  const ahead = pointAtParameter(path, Math.min(count, s + 0.01)), behind = pointAtParameter(path, Math.max(0, s - 0.01));
+  const tangent = { x: ahead.x - behind.x, y: ahead.y - behind.y };
+  const heading = { x: pinned.nodes[Math.min(2, pinned.nodes.length - 1)].point.x - pinned.nodes[0].point.x, y: pinned.nodes[Math.min(2, pinned.nodes.length - 1)].point.y - pinned.nodes[0].point.y };
+  if (tangent.x * heading.x + tangent.y * heading.y >= 0) return concatPieces([stretch(path, 0, s, count), pinned]);
+  return concatPieces([reversePath(pinned), stretch(path, s, count, count)]);
+}
+
+/**
+ * Closes a freehand path as the Pencil does with Alt: when it ends on its start the two
+ * ends become one anchor, and otherwise the shortest line goes back to the start.
+ */
+export function closeFreehand(path: CurvePath, tolerance: number): CurvePath {
+  if (path.closed || path.nodes.length < 2) return structuredClone(path);
+  const first = path.nodes[0], last = path.nodes[path.nodes.length - 1];
+  if (path.nodes.length > 2 && dist(first.point, last.point) <= tolerance) {
+    const nodes = path.nodes.slice(0, -1).map(copy);
+    const shift = { x: first.point.x - last.point.x, y: first.point.y - last.point.y };
+    nodes[0].incoming = { x: last.incoming.x + shift.x, y: last.incoming.y + shift.y };
+    nodes[0].smooth = false;
+    return { nodes, closed: true };
+  }
+  return closeByJoin(path);
+}

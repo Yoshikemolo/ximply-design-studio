@@ -29,6 +29,7 @@ import {
   TraceOptions,
 } from "../../../../packages/domain/src/tracing";
 import {
+  Anchor,
   anchor,
   CurvePath,
   fitCurves,
@@ -52,12 +53,22 @@ import {
   ShapeOptions,
 } from "../../../../packages/domain/src/shapes";
 import { Injectable, computed, signal } from "@angular/core";
+
+/** The marks a path tool shows beside the cursor, as Illustrator's cursors do. */
+export type PathCursor = "newPath" | "continue" | "close" | "add" | "delete" | "convert" | "join" | "freehand" | null;
+/** A selected path a freehand stroke edits: extended from an endpoint, or redrawn from a point. */
+type FreehandTarget =
+  | { layer: Layer; path: number; kind: "extend"; atStart: boolean }
+  | { layer: Layer; path: number; kind: "redraw"; from: PathParameter };
 import { ImportResult, importSvg } from "../../../../packages/domain/src/svg-import";
 import { importDxf } from "../../../../packages/domain/src/dxf-import";
 import { pdfArtwork, pdfFirstPage, pdfObjects } from "../../../../packages/domain/src/pdf-import";
 import { epsArtwork, epsPostScript } from "../../../../packages/domain/src/eps-import";
 import { knifeCut, scissorCut } from "../../../../packages/domain/src/cut";
 import { outlineStroke } from "../../../../packages/domain/src/outline-stroke";
+import { PathParameter, averagePoints, closeByJoin, closeFreehand, concatPieces, cutAtAnchors, deleteAnchor as deleteAnchorKeepingShape, dragSegment, joinPaths, nearestOnPath, placeAnchor, rangesNear, redrawPath, removeParts, removeRanges, stretch } from "../../../../packages/domain/src/path-edit";
+import { DEFAULT_SIMPLIFY, FreehandOptions, FreehandToolOptions, PAINTBRUSH_DEFAULTS, PENCIL_DEFAULTS, SMOOTH_DEFAULTS, SimplifyOptions, fitFreehand, simplifyPath } from "../../../../packages/domain/src/path-fit";
+import { BrushStroke, DEFAULT_BRUSH_STROKE } from "../../../../packages/domain/src/brush-stroke";
 import { textOutlineGroups } from "../../../../packages/domain/src/text-outline";
 import { FontOutlines } from "./font-outlines";
 import { PdfImage, PdfPageSource, pdfDocument } from "../../../../packages/domain/src/pdf";
@@ -751,6 +762,26 @@ export class EditorService {
   readonly shapeOptions = signal<ShapeOptions>({ ...DEFAULT_SHAPE });
   readonly activeNodes = signal<string[]>([]);
   readonly penId = signal<string | null>(null);
+  /** The Pen adds and deletes anchors over a selected path unless this is turned off. */
+  readonly autoAddDelete = signal(true);
+  /** What the pointer would do if pressed now, shown as a mark beside the cursor. */
+  readonly pathCursor = signal<PathCursor>(null);
+  /** The anchor under the pointer, highlighted when the preference asks for it. */
+  readonly hoverAnchor = signal<{ id: string; key: string } | null>(null);
+  /**
+   * The anchors drawn as selected: those chosen with the direct tools, and, while the Pen
+   * draws, the last anchor it placed, which Illustrator shows as the one selected.
+   */
+  selectedAnchorKeys(): string[] {
+    const drawing = this.drawingLayer();
+    if (drawing && drawing.id === this.selectedId()) {
+      const last = drawing.curves![0].nodes.length - 1;
+      return last >= 0 ? [`0:${last}`] : [];
+    }
+    return this.activeNodes();
+  }
+  /** The selection tool Ctrl brings back while another tool is active. */
+  readonly lastSelectionTool = signal<"select" | "direct">("select");
   readonly activeSymbol = signal<string | null>(null);
   readonly symbolRadius = signal(70);
   readonly symbolIntensity = signal(0.25);
@@ -1810,10 +1841,18 @@ export class EditorService {
     if (areaTools[tool]) { this.startAreaSelection(point, areaTools[tool]!, !!modifiers.shift); return; }
     if (tool === "eyedropper") { this.sampleStyle(point); return; }
     if (tool === "paintBucket") { this.applyStyleAt(point); return; }
-    if (["rectangle", "ellipse", "path", "pen", "line", "rounded", "polygon", "star", "arc", "spiral", "grid", "polar", "flare", "text"].includes(tool)) point = this.snap(point);
+    if (["rectangle", "ellipse", "path", "paintbrush", "pen", "line", "rounded", "polygon", "star", "arc", "spiral", "grid", "polar", "flare", "text"].includes(tool)) point = this.snap(point);
     if (tool === "hand" || (tool === "brush" && ["none", "transparent"].includes(this.fill()))) return;
     const before = structuredClone(this.document());
     if (tool !== "pen" && !override) this.penId.set(null);
+    // Ctrl-click away from every object leaves the path being drawn open, and deselects.
+    if (override && this.penId() && !this.pointHitsArtwork(point)) {
+      this.finishPath();
+      this.selectedId.set(null);
+      this.selectedIds.set([]);
+      this.activeNodes.set([]);
+      return;
+    }
     if (tool === "mirror") {
       this.reflect(modifiers.alt ? "vertical" : "horizontal");
       return;
@@ -1835,20 +1874,29 @@ export class EditorService {
     }
     if (tool === "zoom") return;
     if (tool === "pen") {
-      this.startPen(point, before);
+      this.startPen(point, before, modifiers);
+      return;
+    }
+    if (tool === "convertAnchor") {
+      if (!this.startConvert(point, before)) this.status.set("Press on an anchor or a handle to convert it.");
+      return;
+    }
+    if (tool === "addAnchor" || tool === "deleteAnchor") {
+      // Alt turns each of the two tools into the other one, as it does in Illustrator.
+      this.anchorToolClick(point, before, (tool === "addAnchor") !== !!modifiers.alt ? "add" : "delete");
       return;
     }
     if (tool === "scissors" || tool === "knife") {
       this.cutClick(point, before, tool);
       return;
     }
+    if (tool === "smooth") {
+      this.startSmoothDrag(point, before);
+      return;
+    }
     if (
       [
         "direct",
-        "addAnchor",
-        "deleteAnchor",
-        "convertAnchor",
-        "smooth",
         "pathEraser",
       ].includes(tool)
     ) {
@@ -1859,31 +1907,9 @@ export class EditorService {
       this.startSymbol(point, before);
       return;
     }
-    if (tool === "path") {
-      const active = this.selected();
-      if (active?.kind === "path" && !active.dimension && !active.procedural && !this.isEffectivelyLocked(active) && active.visible && !active.guide) {
-        const curves = this.editableCurves(active),
-          path = curves[0],
-          p = localPoint(active, point);
-        if (path?.nodes.length) {
-          const start = path.nodes.findIndex(
-            (n) =>
-              Math.hypot(n.point.x - p.x, n.point.y - p.y) < 12 / this.zoom(),
-          );
-          if (start >= 0) {
-            this.gesture = {
-              before,
-              start: point,
-              last: point,
-              id: active.id,
-              points: [p],
-              original: { ...structuredClone(active), curves },
-              mode: "pencilEdit:" + start,
-            };
-            return;
-          }
-        }
-      }
+    if (tool === "path" || tool === "paintbrush") {
+      this.startFreehand(point, before, modifiers, tool);
+      return;
     }
     if (tool === "text") {
       const existing = pick(this.document().layers.filter(layer=>!layer.dimension || this.dimensionsVisible()), point);
@@ -2097,7 +2123,7 @@ export class EditorService {
       mode: tool,
     };
   }
-  move(point: Point, modifiers: { shift?: boolean; alt?: boolean; ctrl?: boolean } = {}) {
+  move(point: Point, modifiers: { shift?: boolean; alt?: boolean; ctrl?: boolean; space?: boolean } = {}) {
     if (this.pageGesture) { this.updatePageGesture(point); return; }
     if (this.cutPending()?.tool === "knife") this.cutPreview.set(point);
     if (this.pivotGesture) { this.setPivot(this.pivotPoint(point)); return; }
@@ -2108,7 +2134,7 @@ export class EditorService {
     if(!this.gesture&&!this.proceduralGesture&&this.tool()==='wall'){this.hoverWall(modifiers.shift&&this.wallChain()?snapDirection(this.wallChain()!,point,this.snapAngle()):point);return;}
     if (this.areaGesture) { this.moveAreaSelection(point); return; }
     const g = this.gesture;
-    if (!g) return;
+    if (!g) { this.hoverPath(point, modifiers); return; }
     // Alt held during a transform leaves the original behind, which the cursor announces.
     if (["move", "rotate", "scale"].includes(g.mode)) this.duplicatingDrag.set(!!modifiers.alt);
     if (["rectangle", "ellipse", "line", "rounded", "polygon", "star", "arc", "spiral", "grid", "polar", "flare"].includes(g.mode) || g.mode.startsWith("resize:")) point = this.snap(point);
@@ -2135,19 +2161,11 @@ export class EditorService {
         x: g.original.x + (g.original.width * (1 - factor)) / 2,
         y: g.original.y + (g.original.height * (1 - factor)) / 2,
       }));
-    } else if (g.mode === "pen") {
-      const curves = structuredClone(g.original.curves!),
-        node = curves[0].nodes.at(-1)!,
-        end = modifiers.shift
-          ? snapDirection(worldPoint(g.original, node.point), point, this.snapAngle())
-          : point,
-        p = localPoint(g.original, end);
-      node.outgoing = p;
-      if (!modifiers.ctrl && !modifiers.alt)
-        node.incoming = { x: node.point.x * 2 - p.x, y: node.point.y * 2 - p.y };
-      node.smooth = !modifiers.ctrl && !modifiers.alt;
-      this.setLayer(g.id, { curves });
-    } else if (g.mode.startsWith("node:")) this.dragNode(point, modifiers);
+    } else if (g.mode === "pen") this.dragPenAnchor(point, modifiers);
+    else if (g.mode === "penHandle") this.dragPenHandle(point, modifiers);
+    else if (g.mode === "penClose") this.dragPenClose(point, modifiers);
+    else if (g.mode.startsWith("convert:")) this.dragConvert(point, modifiers);
+    else if (g.mode.startsWith("node:")) this.dragNode(point, modifiers);
     else if (
       [
         "line",
@@ -2223,28 +2241,9 @@ export class EditorService {
         };
       }
       this.setLayer(g.id, bounds(g.start, end));
-    } else if (g.mode.startsWith("pencilEdit:")) {
-      if (g.points.length < 2000) {
-        g.points.push(localPoint(g.original, point));
-        const index = Number(g.mode.split(":")[1]),
-          curves = structuredClone(g.original.curves!),
-          path = curves[0],
-          nodes = g.points.map(anchor);
-        path.nodes =
-          index === 0 && !path.closed
-            ? [...nodes.reverse(), ...path.nodes.slice(1)]
-            : [...path.nodes.slice(0, index), ...nodes];
-        this.setLayer(g.id, fitCurves(g.original, curves));
-      }
-    } else if (g.mode === "path") {
-      if (
-        g.points.length < 20000 &&
-        Math.hypot(point.x - g.last.x, point.y - g.last.y) > 1
-      ) {
-        g.points.push(point);
-        this.setLayer(g.id, normalizePath(g.original, g.points));
-      }
-    } else if (g.mode === "brush" || g.mode === "eraser") this.paint(point);
+    } else if (g.mode === "freehand" || g.mode === "freehandEdit") this.dragFreehand(point, modifiers);
+    else if (g.mode === "smoothDrag") this.dragSmooth(point);
+    else if (g.mode === "brush" || g.mode === "eraser") this.paint(point);
     g.last = point;
   }
   private paint(point: Point) {
@@ -2275,10 +2274,8 @@ export class EditorService {
     this.revision.update((v) => v + 1);
   }
   isEditingCurve() {
-    return (
-      this.gesture?.mode === "pen" ||
-      !!this.gesture?.mode.startsWith("node:")
-    );
+    const mode = this.gesture?.mode ?? "";
+    return ["pen", "penHandle", "penClose"].includes(mode) || mode.startsWith("node:") || mode.startsWith("convert:") || mode.startsWith("segment:");
   }
   /**
    * Closes the gesture. The modifiers of the release decide the duplication, since a person
@@ -2312,9 +2309,32 @@ export class EditorService {
       this.activeNodes.update((keys) =>
         keys.filter((key) => key !== g.deselectNodeOnClick),
       );
+    if ((g.mode === "freehand" || g.mode === "freehandEdit") && !this.finishFreehand(g)) {
+      this.gesture = undefined;
+      this.revision.update((x) => x + 1);
+      return;
+    }
+    const clicked = Math.hypot(g.last.x - g.start.x, g.last.y - g.start.y) <= 0.5 / this.zoom();
+    if (clicked && g.mode === "penHandle") {
+      // A click on the last anchor takes its outgoing handle in, so the next segment starts straight.
+      const curves = structuredClone(g.original.curves!), node = curves[0].nodes.at(-1)!;
+      node.outgoing = { ...node.point };
+      node.smooth = false;
+      this.setLayer(g.id, { curves });
+    }
+    if (clicked && g.mode.startsWith("convert:") && g.mode.endsWith(":point")) {
+      // A click with Convert Anchor makes a corner without handles.
+      const [, pi, ni] = g.mode.split(":");
+      const curves = structuredClone(g.original.curves!);
+      curves[+pi].nodes[+ni] = anchor(curves[+pi].nodes[+ni].point);
+      this.setLayer(g.id, { curves });
+    }
     const layer = this.document().layers.find((l) => l.id === g.id);
-    if (layer?.curves && (g.mode === "pen" || g.mode.startsWith("node:")))
+    if (layer?.curves && (["pen", "penHandle", "penClose"].includes(g.mode) || g.mode.startsWith("node:") || g.mode.startsWith("convert:") || g.mode.startsWith("segment:")))
       this.setLayer(g.id, fitCurves(layer, layer.curves));
+    if (g.mode === "penClose") { this.penId.set(null); this.activeNodes.set([]); }
+    if (g.mode === "pathEraser") this.finishPathEraser(g);
+    this.penDrag = undefined;
     if (this.painting)
       this.setLayer(g.id, {
         source: this.painting.canvas.toDataURL("image/png"),
@@ -2631,6 +2651,8 @@ export class EditorService {
     const brushType = brushTypes[tool];
     if (brushType) { this.setBrushType(brushType); tool = "brush"; }
     if (tool !== this.tool()) { this.finishPath(); this.dimensionDraft.set(null); this.dimensionSnapTarget.set(null); this.finishWallRun(); this.clearCut(); }
+    if (tool === "select" || tool === "direct") this.lastSelectionTool.set(tool);
+    this.pathCursor.set(null);
     this.activeNodes.set([]);
     this.tool.set(tool);
   }
@@ -2653,11 +2675,103 @@ export class EditorService {
     }
     return null;
   }
-  private startPen(point: Point, before: StudioDocument) {
-    let layer = this.document().layers.find(
-      (l) => l.id === this.penId() && !this.isEffectivelyLocked(l) && l.visible && !l.guide,
-    );
+  /** The path the Pen is drawing, while it is still one this editor may change. */
+  private drawingLayer(): Layer | undefined {
+    const layer = this.document().layers.find((l) => l.id === this.penId());
+    if (!layer || this.isEffectivelyLocked(layer) || !layer.visible || layer.guide || !layer.curves?.length) return undefined;
+    return layer;
+  }
+  /** The open path, other than the one being drawn, with an endpoint under the pointer. */
+  private penJoinTarget(point: Point, drawingId: string): { layer: Layer; atStart: boolean } | null {
+    const radius = 9 / this.zoom();
+    for (const layer of [...this.document().layers].reverse()) {
+      if (layer.id === drawingId || layer.guide || layer.dimension || layer.procedural || !layer.visible || this.isEffectivelyLocked(layer)) continue;
+      const path = layer.curves?.[0];
+      if (!path || path.closed || path.nodes.length < 1 || layer.curves!.length !== 1) continue;
+      for (const end of [{ node: path.nodes[0], atStart: true }, { node: path.nodes.at(-1)!, atStart: false }]) {
+        const world = worldPoint(layer, end.node.point);
+        if (Math.hypot(point.x - world.x, point.y - world.y) <= radius) return { layer, atStart: end.atStart };
+      }
+    }
+    return null;
+  }
+  /**
+   * What the Pen does over a selected path when it is not drawing: over an anchor it
+   * deletes it, over a segment it adds one, which Illustrator calls automatic
+   * add and delete. Shift, or turning the preference off, keeps the Pen a Pen.
+   */
+  private penAutoTarget(point: Point):
+    | { kind: "delete"; layer: Layer; path: number; index: number }
+    | { kind: "add"; layer: Layer; path: number; segment: number; t: number }
+    | null {
+    for (const layer of [...this.selectedLayers()].reverse()) {
+      if (!layer.curves?.length || layer.kind !== "path" || layer.dimension || layer.procedural || layer.guide || !layer.visible || this.isEffectivelyLocked(layer)) continue;
+      const radius = 9 / this.zoom();
+      for (let pi = 0; pi < layer.curves.length; pi++) {
+        const path = layer.curves[pi];
+        const index = path.nodes.findIndex((node) => {
+          const world = worldPoint(layer, node.point);
+          return Math.hypot(world.x - point.x, world.y - point.y) <= radius;
+        });
+        // The end of an open path is where the Pen carries on, not an anchor to delete.
+        const isEnd = !path.closed && (index === 0 || index === path.nodes.length - 1);
+        if (index >= 0 && !(isEnd && layer.curves.length === 1)) return { kind: "delete", layer, path: pi, index };
+        if (index >= 0) return null;
+      }
+      const local = localPoint(layer, point);
+      for (let pi = 0; pi < layer.curves.length; pi++) {
+        const near = nearestOnPath(layer.curves[pi], local);
+        if (near && near.distance <= 5 / this.zoom() && near.t > 0.001 && near.t < 0.999)
+          return { kind: "add", layer, path: pi, segment: near.segment, t: near.t };
+      }
+    }
+    return null;
+  }
+  /** Adds an anchor on a segment without changing the shape, and selects it. */
+  private addAnchorAt(layer: Layer, path: number, segment: number, t: number, before: StudioDocument) {
+    const curves = structuredClone(layer.curves!);
+    curves[path] = splitSegment(curves[path], segment, t);
+    this.commitStep(before);
+    this.setLayer(layer.id, { kind: "path", curves });
+    this.selectedId.set(layer.id);
+    this.selectedIds.set([layer.id]);
+    this.activeNodes.set([`${path}:${segment + 1}`]);
+    this.changed();
+  }
+  /** Removes an anchor while the segments around it keep the shape they had. */
+  private deleteAnchorAt(layer: Layer, path: number, index: number, before: StudioDocument) {
+    let curves = structuredClone(layer.curves!);
+    curves[path] = deleteAnchorKeepingShape(curves[path], index);
+    curves = curves.filter((c) => c.nodes.length > 1);
+    this.commitStep(before);
+    if (!curves.length) {
+      this.document.update((d) => ({ ...d, layers: d.layers.filter((l) => l.id !== layer.id) }));
+      this.selectedId.set(null);
+      this.selectedIds.set([]);
+    } else this.setLayer(layer.id, fitCurves({ ...layer, kind: "path" }, curves));
+    this.activeNodes.set([]);
+    this.changed();
+  }
+  private penDrag?: { shift: Point; handle: Point | null; lastPointer: Point; split: boolean; incoming: Point | null };
+  /**
+   * The Pen, as Illustrator draws with it. A click sets a corner anchor and a drag a smooth
+   * one whose handles move together; Shift keeps the new anchor, or the handle, on the
+   * angle increment. Clicking the first anchor closes the path, clicking the last one
+   * takes its outgoing handle in or, dragged, pulls a new one out, and clicking the end
+   * of another open path joins it. Over a selected path the Pen adds or deletes anchors,
+   * and with Alt it converts them.
+   */
+  private startPen(point: Point, before: StudioDocument, modifiers: { shift?: boolean; alt?: boolean; ctrl?: boolean } = {}) {
+    let layer = this.drawingLayer();
     if (!layer) {
+      this.penId.set(null);
+      // Alt makes the Pen the Convert Anchor tool, before any automatic add or delete.
+      if (modifiers.alt && this.startConvert(point, before)) return;
+      if (!modifiers.shift && this.autoAddDelete()) {
+        const target = this.penAutoTarget(point);
+        if (target?.kind === "delete") { this.deleteAnchorAt(target.layer, target.path, target.index, before); return; }
+        if (target?.kind === "add") { this.addAnchorAt(target.layer, target.path, target.segment, target.t, before); return; }
+      }
       // Clicking an end of an unlocked open path carries on with it instead of starting another object.
       const continuation = this.penContinuation(point);
       if (continuation) {
@@ -2668,56 +2782,449 @@ export class EditorService {
           this.setLayer(continuation.layer.id, { curves });
         }
         this.penId.set(continuation.layer.id);
-        layer = this.document().layers.find((l) => l.id === continuation.layer.id);
+        const continued = this.document().layers.find((l) => l.id === continuation.layer.id)!;
+        this.selectedId.set(continued.id);
+        this.selectedIds.set([continued.id]);
+        this.beginPenHandle(continued, before, point);
+        return;
       }
+      if (this.document().layers.length >= MAX_LAYERS) { this.status.set("The document cannot hold more layers."); return; }
+      const fresh = newLayer("path", crypto.randomUUID(), { x: 0, y: 0 }, this.fill(), this.stroke(), this.size());
+      fresh.strokeStyle = { ...this.strokeStyle() };
+      fresh.lineEnds = structuredClone(this.lineEnds());
+      fresh.name = "Bézier path";
+      fresh.curves = [{ nodes: [], closed: false }];
+      this.document.update((d) => ({ ...d, layers: [...d.layers, fresh] }));
+      this.penId.set(fresh.id);
+      layer = fresh;
     }
-    if (!layer) {
-      if (this.document().layers.length >= MAX_LAYERS) return;
-      layer = newLayer(
-        "path",
-        crypto.randomUUID(),
-        { x: 0, y: 0 },
-        this.fill(),
-        this.stroke(),
-        this.size(),
-      );
-      layer.strokeStyle = { ...this.strokeStyle() };
-    if(layer.kind === "path") layer.lineEnds=structuredClone(this.lineEnds());
-      layer.name = "Bézier path";
-      layer.curves = [{ nodes: [], closed: false }];
-      this.document.update((d) => ({ ...d, layers: [...d.layers, layer!] }));
-      this.penId.set(layer.id);
-    }
-    const curves = structuredClone(layer.curves!),
-      path = curves[0],
-      p = localPoint(layer, point);
-    this.selectedId.set(layer.id);
-    if (
-      path.nodes.length > 2 &&
-      Math.hypot(p.x - path.nodes[0].point.x, p.y - path.nodes[0].point.y) <
-        10 / this.zoom()
-    ) {
+    const drawn = layer;
+    const curves = structuredClone(drawn.curves!), path = curves[0];
+    this.selectedId.set(drawn.id);
+    this.selectedIds.set([drawn.id]);
+    const radius = 9 / this.zoom();
+    const under = (node: Anchor) => {
+      const world = worldPoint(drawn, node.point);
+      return Math.hypot(world.x - point.x, world.y - point.y) <= radius;
+    };
+    if (path.nodes.length >= 2 && under(path.nodes[0])) {
       path.closed = true;
-      this.setLayer(layer.id, { curves });
-      this.commitStep(before);
-      this.penId.set(null);
-      this.changed();
+      this.setLayer(drawn.id, { curves });
+      this.gesture = { before, start: point, last: point, id: drawn.id, points: [], original: { ...structuredClone(drawn), curves }, mode: "penClose" };
       return;
     }
+    if (path.nodes.length && under(path.nodes.at(-1)!)) { this.beginPenHandle(drawn, before, point); return; }
+    const join = this.penJoinTarget(point, drawn.id);
+    if (join) { this.joinWhileDrawing(drawn, join, before); return; }
+    if (modifiers.alt && this.startConvert(point, before)) return;
     if (path.nodes.length >= 2000) return;
-    path.nodes.push(anchor(p));
-    this.setLayer(layer.id, { curves });
-    const original = { ...structuredClone(layer), curves };
-    this.gesture = {
-      before,
-      start: point,
-      last: point,
-      id: layer.id,
-      points: [],
-      original,
-      mode: "pen",
-    };
+    const at = modifiers.shift && path.nodes.length
+      ? snapDirection(worldPoint(drawn, path.nodes.at(-1)!.point), point, this.snapAngle())
+      : point;
+    path.nodes.push(anchor(localPoint(drawn, at)));
+    this.setLayer(drawn.id, { curves });
+    this.activeNodes.set([]);
+    this.penDrag = { shift: { x: 0, y: 0 }, handle: null, lastPointer: at, split: false, incoming: null };
+    this.gesture = { before, start: at, last: at, id: drawn.id, points: [], original: { ...structuredClone(drawn), curves }, mode: "pen" };
   }
+  /** A press on the last anchor: a click takes its outgoing handle in, a drag pulls a new one. */
+  private beginPenHandle(layer: Layer, before: StudioDocument, point: Point) {
+    const curves = structuredClone(layer.curves!);
+    this.activeNodes.set([]);
+    this.gesture = { before, start: point, last: point, id: layer.id, points: [], original: { ...structuredClone(layer), curves }, mode: "penHandle" };
+  }
+  /** Joins the path being drawn to the end of another open path and stops drawing. */
+  private joinWhileDrawing(layer: Layer, target: { layer: Layer; atStart: boolean }, before: StudioDocument) {
+    const other = target.layer;
+    const otherPath: CurvePath = mapCurves([other.curves![0]], (p) => localPoint(layer, worldPoint(other, p)))[0];
+    const joined = joinPaths(layer.curves![0], false, otherPath, target.atStart, "corner", true);
+    const next = fitCurves(layer, [joined]);
+    this.commitStep(before);
+    this.document.update((d) => ({ ...d, layers: d.layers.filter((l) => l.id !== other.id).map((l) => (l.id === layer.id ? next : l)) }));
+    this.penId.set(null);
+    this.selectedId.set(layer.id);
+    this.selectedIds.set([layer.id]);
+    this.activeNodes.set([]);
+    this.status.set("Joined the two paths.");
+    this.changed();
+  }
+  /** Moves the anchor being placed, or its handles, while the button is down. */
+  private dragPenAnchor(point: Point, modifiers: { shift?: boolean; alt?: boolean; space?: boolean }) {
+    const g = this.gesture!, drag = this.penDrag!;
+    if (modifiers.space) {
+      // Space held moves the anchor itself; its handles travel with it.
+      drag.shift = { x: drag.shift.x + point.x - drag.lastPointer.x, y: drag.shift.y + point.y - drag.lastPointer.y };
+    }
+    drag.lastPointer = point;
+    const curves = structuredClone(g.original.curves!), node = curves[0].nodes.at(-1)!;
+    const base = worldPoint(g.original, node.point);
+    const at = { x: base.x + drag.shift.x, y: base.y + drag.shift.y };
+    if (modifiers.alt && !drag.split) {
+      // Alt splits the handles: the incoming one stays where it was, the outgoing one goes on.
+      drag.split = true;
+      drag.incoming = drag.handle ? { x: -drag.handle.x, y: -drag.handle.y } : { x: 0, y: 0 };
+    }
+    if (!modifiers.space) {
+      const target = modifiers.shift ? snapDirection(at, point, this.snapAngle()) : point;
+      const offset = { x: target.x - at.x, y: target.y - at.y };
+      drag.handle = Math.hypot(offset.x, offset.y) > 0.5 / this.zoom() ? offset : null;
+    }
+    node.point = localPoint(g.original, at);
+    if (drag.handle) {
+      node.outgoing = localPoint(g.original, { x: at.x + drag.handle.x, y: at.y + drag.handle.y });
+      const incoming = drag.split ? drag.incoming! : { x: -drag.handle.x, y: -drag.handle.y };
+      node.incoming = localPoint(g.original, { x: at.x + incoming.x, y: at.y + incoming.y });
+      node.smooth = !drag.split;
+    } else {
+      node.outgoing = { ...node.point };
+      node.incoming = drag.split && drag.incoming ? localPoint(g.original, { x: at.x + drag.incoming.x, y: at.y + drag.incoming.y }) : { ...node.point };
+      node.smooth = false;
+    }
+    this.setLayer(g.id, { curves });
+  }
+  /** Pulls a new outgoing handle out of the last anchor; the incoming one stays. */
+  private dragPenHandle(point: Point, modifiers: { shift?: boolean }) {
+    const g = this.gesture!;
+    const curves = structuredClone(g.original.curves!), node = curves[0].nodes.at(-1)!;
+    const at = worldPoint(g.original, node.point);
+    const target = modifiers.shift ? snapDirection(at, point, this.snapAngle()) : point;
+    node.outgoing = localPoint(g.original, target);
+    node.smooth = false;
+    this.setLayer(g.id, { curves });
+  }
+  /**
+   * Dragging on the first anchor while closing shapes the closing curve: both handles of
+   * the first anchor turn with the pointer, or, with Alt, only the one the closing
+   * segment arrives on.
+   */
+  private dragPenClose(point: Point, modifiers: { shift?: boolean; alt?: boolean }) {
+    const g = this.gesture!;
+    const curves = structuredClone(g.original.curves!), node = curves[0].nodes[0];
+    const at = worldPoint(g.original, node.point);
+    const target = modifiers.shift ? snapDirection(at, point, this.snapAngle()) : point;
+    if (Math.hypot(target.x - at.x, target.y - at.y) <= 0.5 / this.zoom()) return;
+    node.incoming = localPoint(g.original, { x: 2 * at.x - target.x, y: 2 * at.y - target.y });
+    if (!modifiers.alt) node.outgoing = localPoint(g.original, target);
+    node.smooth = !modifiers.alt;
+    this.setLayer(g.id, { curves });
+  }
+  /**
+   * The Convert Anchor tool, which the Pen also becomes while Alt is held. Pressed on an
+   * anchor, a drag pulls out two handles that move together and a click takes both in;
+   * pressed on a handle, the handle moves on its own and the anchor becomes a corner.
+   */
+  private startConvert(point: Point, before: StudioDocument): boolean {
+    const candidates = [this.drawingLayer(), ...this.selectedLayers(), pick(this.document().layers, point)];
+    for (const candidate of candidates) {
+      if (!candidate || this.isEffectivelyLocked(candidate) || !candidate.visible || candidate.guide || candidate.dimension || candidate.procedural) continue;
+      if (!["path", "rectangle", "ellipse"].includes(candidate.kind)) continue;
+      const layer: Layer = candidate.curves ? candidate : { ...candidate, kind: "path", curves: this.editableCurves(candidate) };
+      const hit = this.findCurveNode(layer, point);
+      if (!hit) continue;
+      this.setLayer(layer.id, { kind: "path", curves: structuredClone(layer.curves!) });
+      this.selectedId.set(layer.id);
+      this.selectedIds.set([layer.id]);
+      this.activeNodes.set([`${hit.path}:${hit.index}`]);
+      this.gesture = { before, start: point, last: point, id: layer.id, points: [], original: structuredClone(layer), mode: `convert:${hit.path}:${hit.index}:${hit.part}` };
+      return true;
+    }
+    return false;
+  }
+  private dragConvert(point: Point, modifiers: { shift?: boolean }) {
+    const g = this.gesture!;
+    const [, pi, ni, part] = g.mode.split(":");
+    const curves = structuredClone(g.original.curves!), node = curves[+pi].nodes[+ni];
+    const at = worldPoint(g.original, node.point);
+    const target = modifiers.shift ? snapDirection(at, point, this.snapAngle()) : point;
+    if (part === "point") {
+      if (Math.hypot(target.x - at.x, target.y - at.y) <= 0.5 / this.zoom()) return;
+      node.outgoing = localPoint(g.original, target);
+      node.incoming = localPoint(g.original, { x: 2 * at.x - target.x, y: 2 * at.y - target.y });
+      node.smooth = true;
+    } else {
+      node[part as "incoming" | "outgoing"] = localPoint(g.original, target);
+      node.smooth = false;
+    }
+    this.setLayer(g.id, { curves });
+  }
+  /** Whether a press here lands on an object or on an anchor or handle of a selected path. */
+  private pointHitsArtwork(point: Point): boolean {
+    if (pick(this.document().layers.filter((layer) => !layer.dimension || this.dimensionsVisible()), point)) return true;
+    return this.selectedLayers().some((layer) => !!layer.curves && !!this.findCurveNode(layer, point));
+  }
+  /** The Add and Delete Anchor tools: a click on a segment adds, a click on an anchor deletes. */
+  private anchorToolClick(point: Point, before: StudioDocument, kind: "add" | "delete") {
+    const candidates = [...this.selectedLayers(), pick(this.document().layers, point)];
+    for (const candidate of candidates) {
+      if (!candidate || this.isEffectivelyLocked(candidate) || !candidate.visible || candidate.guide || candidate.dimension || candidate.procedural) continue;
+      if (!["path", "rectangle", "ellipse"].includes(candidate.kind)) continue;
+      const layer: Layer = candidate.curves ? candidate : { ...candidate, kind: "path", curves: this.editableCurves(candidate) };
+      if (kind === "delete") {
+        const hit = this.findCurveNode(layer, point);
+        if (hit?.part === "point") { this.setLayer(layer.id, { kind: "path", curves: layer.curves }); this.deleteAnchorAt(layer, hit.path, hit.index, before); return; }
+        continue;
+      }
+      const local = localPoint(layer, point);
+      for (let pi = 0; pi < layer.curves!.length; pi++) {
+        const near = nearestOnPath(layer.curves![pi], local);
+        if (near && near.distance <= 6 / this.zoom() && near.t > 0.001 && near.t < 0.999) {
+          this.setLayer(layer.id, { kind: "path", curves: layer.curves });
+          this.addAnchorAt(layer, pi, near.segment, near.t, before);
+          return;
+        }
+      }
+    }
+    this.status.set(kind === "add" ? "Click on a segment to add an anchor." : "Click on an anchor to delete it.");
+  }
+  /**
+   * Works out the mark beside the cursor and the anchor under it while no button is down,
+   * so each path tool announces what a press would do before it happens.
+   */
+  hoverPath(point: Point, modifiers: { shift?: boolean; alt?: boolean } = {}) {
+    const tool = this.tool();
+    let state: PathCursor = null;
+    let hover: { id: string; key: string } | null = null;
+    const anchorUnder = (layer: Layer | undefined) => {
+      if (!layer?.curves) return null;
+      const hit = this.findCurveNode(layer, point);
+      return hit?.part === "point" ? { id: layer.id, key: `${hit.path}:${hit.index}` } : null;
+    };
+    for (const layer of this.selectedLayers()) { hover = anchorUnder(layer); if (hover) break; }
+    if (tool === "pen") {
+      const drawing = this.drawingLayer();
+      if (drawing) {
+        const nodes = drawing.curves![0].nodes;
+        const radius = 9 / this.zoom();
+        const under = (node: Anchor | undefined) => !!node && Math.hypot(worldPoint(drawing, node.point).x - point.x, worldPoint(drawing, node.point).y - point.y) <= radius;
+        if (nodes.length >= 2 && under(nodes[0])) state = "close";
+        else if (under(nodes.at(-1))) state = "convert";
+        else if (this.penJoinTarget(point, drawing.id)) state = "join";
+        else if (modifiers.alt && hover) state = "convert";
+      } else {
+        const auto = !modifiers.shift && this.autoAddDelete() ? this.penAutoTarget(point) : null;
+        if (auto) state = auto.kind;
+        else if (modifiers.alt && hover) state = "convert";
+        else if (this.penContinuation(point)) state = "continue";
+        else state = "newPath";
+      }
+    } else if (tool === "addAnchor") state = modifiers.alt ? "delete" : "add";
+    else if (tool === "deleteAnchor") state = modifiers.alt ? "add" : "delete";
+    else if (tool === "convertAnchor") state = "convert";
+    else if (tool === "path" || tool === "paintbrush") state = this.freehandHoverState(point, tool, modifiers);
+    this.pathCursor.set(state);
+    const current = this.hoverAnchor();
+    if (current?.id !== hover?.id || current?.key !== hover?.key) {
+      this.hoverAnchor.set(hover);
+      this.revision.update((x) => x + 1);
+    }
+  }
+  /**
+   * The mark beside the Pencil or the Paintbrush: the small cross of a new path, which
+   * disappears when a press would redraw or extend a selected path instead.
+   */
+  private freehandHoverState(point: Point, tool: "path" | "paintbrush", modifiers: { alt?: boolean }): PathCursor {
+    if (tool === "path" && modifiers.alt) return null;
+    return this.freehandEditTarget(point, tool) ? null : "freehand";
+  }
+  /** The options of the Pencil, the Paintbrush and the Smooth tool, as their dialogs set them. */
+  readonly pencilOptions = signal<FreehandToolOptions>({ ...PENCIL_DEFAULTS });
+  readonly paintbrushOptions = signal<FreehandToolOptions>({ ...PAINTBRUSH_DEFAULTS });
+  readonly smoothOptions = signal<FreehandOptions>({ ...SMOOTH_DEFAULTS });
+  private freehand?: {
+    tool: "path" | "paintbrush";
+    points: Point[];
+    target: FreehandTarget | null;
+    close: boolean;
+    connect: boolean;
+  };
+  private freehandOptionsFor(tool: "path" | "paintbrush") {
+    return tool === "path" ? this.pencilOptions() : this.paintbrushOptions();
+  }
+  /**
+   * The selected path a freehand stroke starting here would edit: an endpoint of an open
+   * path is extended, and any other point near a path is where a redraw starts. The
+   * Paintbrush edits only brushed paths, as its strokes are the ones it owns.
+   */
+  private freehandEditTarget(point: Point, tool: "path" | "paintbrush"): FreehandTarget | null {
+    const options = this.freehandOptionsFor(tool);
+    if (!options.editSelected) return null;
+    const radius = options.within / this.zoom();
+    for (const layer of [...this.selectedLayers()].reverse()) {
+      if (layer.kind !== "path" || layer.dimension || layer.procedural || layer.guide || !layer.visible || this.isEffectivelyLocked(layer)) continue;
+      if (tool === "paintbrush" && !layer.brushStroke) continue;
+      const curves = this.editableCurves(layer);
+      const local = localPoint(layer, point);
+      for (let pi = 0; pi < curves.length; pi++) {
+        const path = curves[pi];
+        if (!path.closed && path.nodes.length > 1) {
+          for (const [index, atStart] of [[0, true], [path.nodes.length - 1, false]] as const) {
+            const node = path.nodes[index];
+            if (Math.hypot(node.point.x - local.x, node.point.y - local.y) <= radius) return { layer, path: pi, kind: "extend", atStart };
+          }
+        }
+        const near = nearestOnPath(path, local);
+        if (near && near.distance <= radius) return { layer, path: pi, kind: "redraw", from: { segment: near.segment, t: near.t } };
+      }
+    }
+    return null;
+  }
+  /**
+   * Starts a Pencil or Paintbrush stroke. The stroke follows the pointer and is fitted with
+   * the fidelity and smoothness when the button is released. Alt pressed after the drag has
+   * begun closes the path; on the Pencil, Alt held before pressing is the Smooth tool.
+   */
+  private startFreehand(point: Point, before: StudioDocument, modifiers: { alt?: boolean }, tool: "path" | "paintbrush") {
+    if (tool === "path" && modifiers.alt) { this.startSmoothDrag(point, before); return; }
+    const target = this.freehandEditTarget(point, tool);
+    this.freehand = { tool, points: [point], target, close: false, connect: false };
+    if (target) {
+      const layer = { ...target.layer, kind: "path" as const, curves: this.editableCurves(target.layer) };
+      this.gesture = { before, start: point, last: point, id: layer.id, points: [point], original: structuredClone(layer), mode: "freehandEdit" };
+      return;
+    }
+    if (this.document().layers.length >= MAX_LAYERS) { this.freehand = undefined; this.status.set("The document cannot hold more layers."); return; }
+    const options = this.freehandOptionsFor(tool);
+    const layer = newLayer("path", crypto.randomUUID(), { x: 0, y: 0 }, options.fill ? this.fill() : "none", this.stroke(), this.size());
+    layer.strokeStyle = { ...this.strokeStyle() };
+    layer.lineEnds = structuredClone(this.lineEnds());
+    layer.name = tool === "path" ? "Pencil path" : "Brush stroke";
+    if (tool === "paintbrush") layer.brushStroke = structuredClone(this.activeBrushStroke());
+    layer.x = point.x; layer.y = point.y; layer.width = 1; layer.height = 1;
+    layer.curves = [polyline([{ x: 0, y: 0 }])];
+    this.document.update((d) => ({ ...d, layers: [...d.layers, layer] }));
+    this.selectedId.set(layer.id);
+    this.selectedIds.set([layer.id]);
+    this.gesture = { before, start: point, last: point, id: layer.id, points: [point], original: structuredClone(layer), mode: "freehand" };
+  }
+  /** Follows the pointer with the raw stroke; the curves are fitted on release. */
+  private dragFreehand(point: Point, modifiers: { alt?: boolean; ctrl?: boolean }) {
+    const g = this.gesture!, stroke = this.freehand!;
+    stroke.close = !!modifiers.alt;
+    stroke.connect = !!modifiers.ctrl;
+    const last = stroke.points[stroke.points.length - 1];
+    if (Math.hypot(point.x - last.x, point.y - last.y) < 0.5 / this.zoom() || stroke.points.length >= 20000) return;
+    stroke.points.push(point);
+    if (g.mode === "freehand") {
+      this.setLayer(g.id, fitCurves({ ...g.original, x: 0, y: 0, width: 1, height: 1, rotation: 0 }, [polyline(stroke.points)]));
+      return;
+    }
+    const preview = this.freehandResult(polyline(stroke.points.map((p) => localPoint(g.original, p))), false);
+    if (preview) this.setLayer(g.id, fitCurves(g.original, preview));
+  }
+  /**
+   * What a freehand edit makes of the target path with a given stroke, in the target's
+   * coordinates: an extension from an endpoint, or a redraw from where the stroke started
+   * to where it ended on the path, if it did.
+   */
+  private freehandResult(stroke: CurvePath, final: boolean, state = this.freehand!): CurvePath[] | null {
+    const g = this.gesture!, target = state.target!;
+    const curves = structuredClone(g.original.curves!);
+    const path = curves[target.path];
+    if (stroke.nodes.length < 2) return null;
+    const radius = this.freehandOptionsFor(state.tool).within / this.zoom();
+    if (target.kind === "extend") {
+      const extended = joinPaths(path, target.atStart, stroke, true, "corner");
+      curves[target.path] = final && state.close ? closeByJoin(extended) : extended;
+      return curves;
+    }
+    const end = stroke.nodes[stroke.nodes.length - 1].point;
+    const near = nearestOnPath(path, end);
+    const to = near && near.distance <= radius ? { segment: near.segment, t: near.t } : null;
+    curves[target.path] = redrawPath(path, target.from, to, stroke);
+    return curves;
+  }
+  /** Fits the stroke and commits it: a new path, or the edit of the selected one. */
+  private finishFreehand(g: NonNullable<EditorService["gesture"]>) {
+    const state = this.freehand!;
+    this.freehand = undefined;
+    const options = this.freehandOptionsFor(state.tool);
+    const pixel = 1 / this.zoom();
+    if (g.mode === "freehand") {
+      if (state.points.length < 2) {
+        this.document.set(g.before);
+        return false;
+      }
+      let path = fitFreehand(state.points, options, pixel);
+      if (state.close) path = closeFreehand(path, Math.max(options.fidelity, 3) * pixel * 2);
+      const layer: Layer = fitCurves({ ...g.original, x: 0, y: 0, width: 1, height: 1, rotation: 0 }, [path]);
+      this.setLayer(g.id, layer);
+      if (!options.keepSelected) { this.selectedId.set(null); this.selectedIds.set([]); }
+      return true;
+    }
+    const target = state.target!;
+    const stroke = fitFreehand(state.points.map((p) => localPoint(g.original, p)), options, pixel);
+    const curves = this.freehandResult(stroke, true, state);
+    if (!curves) { this.setLayer(g.id, g.original); return false; }
+    let layer = fitCurves(g.original, curves);
+    let removed: string | null = null;
+    if (target.kind === "extend" && state.connect) {
+      // Ctrl joins the stroke to the end of another selected open path it finishes on.
+      const end = state.points[state.points.length - 1];
+      const other = this.selectedLayers().find((l) => l.id !== g.id && l.curves?.length === 1 && !l.curves[0].closed && !this.isEffectivelyLocked(l));
+      if (other) {
+        const path = other.curves![0];
+        const ends = [{ node: path.nodes[0], atStart: true }, { node: path.nodes.at(-1)!, atStart: false }];
+        const hit = ends.find((e) => { const w = worldPoint(other, e.node.point); return Math.hypot(w.x - end.x, w.y - end.y) <= options.within / this.zoom(); });
+        if (hit) {
+          const otherLocal = mapCurves([path], (p) => localPoint(layer, worldPoint(other, p)))[0];
+          const own = layer.curves![target.path];
+          const joined = joinPaths(own, false, otherLocal, hit.atStart, "corner");
+          const next = structuredClone(layer.curves!);
+          next[target.path] = joined;
+          layer = fitCurves(layer, next);
+          removed = other.id;
+        }
+      }
+    }
+    this.document.update((d) => ({ ...d, layers: d.layers.filter((l) => l.id !== removed).map((l) => (l.id === g.id ? layer : l)) }));
+    this.selectedIds.set([g.id]);
+    this.selectedId.set(g.id);
+    return true;
+  }
+  /**
+   * The Smooth tool: dragging along a selected path smooths the stretch the drag passes
+   * over, with the fidelity and smoothness of its options, and leaves the rest alone.
+   */
+  private startSmoothDrag(point: Point, before: StudioDocument) {
+    const layer = this.selectedLayers().find((l) => l.kind === "path" && !l.dimension && !l.procedural && !l.guide && l.visible && !this.isEffectivelyLocked(l))
+      ?? pick(this.document().layers, point);
+    if (!layer || layer.kind !== "path" || this.isEffectivelyLocked(layer) || layer.dimension || layer.procedural) { this.status.set("Select a path to smooth."); return; }
+    const withCurves = { ...layer, curves: this.editableCurves(layer) };
+    this.selectedId.set(layer.id);
+    this.selectedIds.set([layer.id]);
+    this.gesture = { before, start: point, last: point, id: layer.id, points: [point], original: structuredClone(withCurves), mode: "smoothDrag" };
+  }
+  private dragSmooth(point: Point) {
+    const g = this.gesture!;
+    const last = g.points[g.points.length - 1];
+    if (Math.hypot(point.x - last.x, point.y - last.y) < 0.5 / this.zoom()) return;
+    g.points.push(point);
+    this.setLayer(g.id, fitCurves(g.original, this.smoothedCurves(g.original, g.points)));
+  }
+  /** The curves of a layer with every stretch the drag passed over smoothed again. */
+  private smoothedCurves(layer: Layer, drag: Point[]): CurvePath[] {
+    const local = drag.map((p) => localPoint(layer, p));
+    const radius = 10 / this.zoom();
+    const options = this.smoothOptions();
+    return layer.curves!.map((path) => {
+      const ranges = rangesNear(path, local, radius);
+      if (!ranges.length) return path;
+      // Each stretch is sampled, evened out and fitted again between its two ends.
+      const count = path.closed ? path.nodes.length : path.nodes.length - 1;
+      const merged = ranges.sort((a, b) => a[0] - b[0]);
+      const span: [number, number] = [merged[0][0], merged[merged.length - 1][1]];
+      if (span[1] - span[0] < 0.02) return path;
+      const samples = flatten(stretch(path, span[0], span[1], count), 12);
+      const smoothness = Math.min(100, options.smoothness + 35);
+      const fitted = fitFreehand(samples, { fidelity: options.fidelity, smoothness }, 1 / this.zoom());
+      const pieces = path.closed
+        ? [stretch(path, span[1], span[0] + count, count), fitted]
+        : [stretch(path, 0, span[0], count), fitted, stretch(path, span[1], count, count)];
+      return concatPieces(pieces, path.closed);
+    });
+  }
+  /** The brush the Paintbrush applies to new strokes. */
+  readonly activeBrushStroke = signal<BrushStroke>({ ...DEFAULT_BRUSH_STROKE });
   private editableCurves(layer: Layer): CurvePath[] {
     if (layer.curves) return structuredClone(layer.curves);
     if (layer.kind === "path") return [polyline(layer.points)];
@@ -2921,18 +3428,6 @@ export class EditorService {
     this.selectedId.set(layer.id);
     const curves = this.editableCurves(layer),
       p = localPoint(layer, point);
-    if (tool === "smooth") {
-      this.commitStep(before);
-      this.setLayer(
-        layer.id,
-        fitCurves(
-          { ...layer, kind: "path" },
-          curves.map((c) => smoothPath(c)),
-        ),
-      );
-      this.changed();
-      return;
-    }
     if (tool === "pathEraser") {
       this.gesture = {
         before,
@@ -2946,42 +3441,12 @@ export class EditorService {
       this.erasePath(point);
       return;
     }
-    if (tool === "addAnchor") {
-      const near = nearestSegment(curves, p);
-      if (!near || near.distance > 12 / this.zoom()) return;
-      curves[near.path] = splitSegment(curves[near.path], near.segment, near.t);
-      this.commitStep(before);
-      this.setLayer(layer.id, { kind: "path", curves });
-      this.changed();
-      return;
-    }
     if (!hit) {
       this.setLayer(layer.id, { kind: "path", curves });
       return;
     }
     this.setLayer(layer.id, { kind: "path", curves });
     const key = hit.path + ":" + hit.index;
-    if (tool === "deleteAnchor") {
-      curves[hit.path].nodes.splice(hit.index, 1);
-      this.commitStep(before);
-      this.setLayer(layer.id, { curves: curves.filter((c) => c.nodes.length) });
-      this.activeNodes.set([]);
-      this.changed();
-      return;
-    }
-    if (tool === "convertAnchor") {
-      const node = curves[hit.path].nodes[hit.index];
-      if (node.smooth) {
-        curves[hit.path].nodes[hit.index] = anchor(node.point);
-      } else {
-        const smoothed = smoothPath(curves[hit.path]);
-        curves[hit.path].nodes[hit.index] = smoothed.nodes[hit.index];
-      }
-      this.commitStep(before);
-      this.setLayer(layer.id, { curves });
-      this.changed();
-      return;
-    }
     const deselectNodeOnClick =
       modifiers.shift && hit.part === "point" && this.activeNodes().includes(key)
         ? key
@@ -3220,15 +3685,42 @@ export class EditorService {
     }
     this.changed();
   }
+  /**
+   * The Path Eraser removes the parts of the path the pointer passes over and keeps the
+   * rest as the Bezier segments it was, cut exactly where the eraser met them.
+   */
   private erasePath(point: Point) {
-    const g = this.gesture!,
-      layer = this.document().layers.find((l) => l.id === g.id)!;
-    const curves = eraseStroke(
-      this.editableCurves(layer),
-      localPoint(layer, point),
-      this.size() / 2,
-    );
-    this.setLayer(layer.id, { kind: "path", curves });
+    const g = this.gesture!;
+    g.points.push(point);
+    const original = g.original;
+    const local = g.points.map((p) => localPoint(original, p));
+    const radius = 5 / this.zoom() + original.strokeWidth / 2;
+    const curves = this.editableCurves(original).flatMap((path) => removeRanges(path, rangesNear(path, local, radius)));
+    if (!curves.length) { this.setLayer(g.id, { kind: "path", curves: [] }); return; }
+    this.setLayer(g.id, fitCurves({ ...original, kind: "path" }, curves));
+  }
+  /**
+   * A path erased to nothing goes, and a single path the eraser cut in pieces becomes one
+   * object per piece, as the pieces are separate paths now.
+   */
+  private finishPathEraser(g: { id: string; original: Layer }) {
+    const layer = this.document().layers.find((l) => l.id === g.id);
+    if (!layer) return;
+    if (!layer.curves?.length) {
+      this.document.update((d) => ({ ...d, layers: d.layers.filter((l) => l.id !== g.id) }));
+      this.selectedId.set(null);
+      this.selectedIds.set([]);
+      return;
+    }
+    if (this.editableCurves(g.original).length !== 1 || layer.curves.length < 2) return;
+    const pieces = layer.curves.map((path) => {
+      const world = this.worldCurve(layer, path);
+      const fresh = fitCurves({ ...newLayer("path", crypto.randomUUID(), { x: 0, y: 0 }), rotation: 0 }, [world]);
+      return { ...layer, ...fresh, id: fresh.id, kind: "path" as const, rotation: 0, flipX: false, flipY: false, skewX: 0, points: [] };
+    });
+    this.document.update((d) => ({ ...d, layers: d.layers.flatMap((l) => (l.id === g.id ? pieces : [l])) }));
+    this.selectedIds.set(pieces.map((piece) => piece.id));
+    this.selectedId.set(pieces[0].id);
   }
   private eraseVector(point: Point) {
     if(this.document().layers.find(l=>l.id===this.gesture?.id)?.dimension || this.document().layers.find(l=>l.id===this.gesture?.id)?.procedural)return;

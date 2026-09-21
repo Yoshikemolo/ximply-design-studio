@@ -3,7 +3,7 @@ import type { Point } from '../src/document';
 import { Anchor, CurvePath, cubic, flatten } from '../src/curves';
 import {
   averagePoints, closeByJoin, cutAtAnchors, deleteAnchor, dragSegment, joinPaths, nearestOnPath,
-  rangesNear, removeParts, removeRanges, reversePath,
+  rangesNear, redrawPath, removeParts, removeRanges, reversePath,
 } from '../src/path-edit';
 import { pathDeviation } from '../src/path-fit';
 
@@ -177,5 +177,52 @@ describe('erasing along a path', () => {
   it('finds the nearest point of a path', () => {
     const near = nearestOnPath(circle(), { x: 100, y: 170 });
     expect(near!.distance).toBeCloseTo(20, 1);
+  });
+});
+
+describe('redrawing with a freehand stroke', () => {
+  const line = () => open([0, 0], [100, 0], [200, 0], [300, 0]);
+  const bump = (from: number, to: number, height = -40): CurvePath =>
+    open([from, 0], [from + (to - from) / 3, height], [from + (2 * (to - from)) / 3, height], [to, 0]);
+
+  it('replaces what lies between the two points where the stroke meets the path', () => {
+    const result = redrawPath(line(), { segment: 0, t: 0.5 }, { segment: 2, t: 0.5 }, bump(50, 250));
+    const xs = result.nodes.map((n) => Math.round(n.point.x));
+    expect(result.nodes[0].point.x).toBe(0);
+    expect(result.nodes.at(-1)!.point.x).toBe(300);
+    expect(result.nodes.some((n) => n.point.y < -30)).toBe(true);
+    // Nothing of the original survives between the two meeting points.
+    expect(result.nodes.filter((n) => n.point.y === 0 && n.point.x > 60 && n.point.x < 240)).toHaveLength(0);
+    expect(xs.length).toBeGreaterThan(3);
+  });
+
+  it('follows the stroke when it is drawn backwards over the path', () => {
+    const result = redrawPath(line(), { segment: 2, t: 0.5 }, { segment: 0, t: 0.5 }, reversePath(bump(50, 250)));
+    expect(result.nodes[0].point.x).toBe(0);
+    expect(result.nodes.at(-1)!.point.x).toBe(300);
+  });
+
+  it('replaces everything past the start when the stroke leaves the path', () => {
+    const stroke = open([150, 0], [200, -50], [260, -80]);
+    const result = redrawPath(line(), { segment: 1, t: 0.5 }, null, stroke);
+    expect(result.nodes[0].point.x).toBe(0);
+    expect(result.nodes.at(-1)!.point).toEqual({ x: 260, y: -80 });
+  });
+
+  it('keeps a closed path closed when the stroke starts and ends on it', () => {
+    const square: CurvePath = { ...open([0, 0], [100, 0], [100, 100], [0, 100]), closed: true };
+    const stroke = open([50, 0], [50, -40], [100, -40], [100, 50]);
+    const result = redrawPath(square, { segment: 0, t: 0.5 }, { segment: 1, t: 0.5 }, stroke);
+    expect(result.closed).toBe(true);
+    // The corner at (100, 0) the stroke went round is gone; the far corners stay.
+    expect(result.nodes.some((n) => n.point.x === 100 && n.point.y === 0)).toBe(false);
+    expect(result.nodes.some((n) => n.point.x === 0 && n.point.y === 100)).toBe(true);
+  });
+
+  it('opens a closed path when the stroke ends away from it', () => {
+    const square: CurvePath = { ...open([0, 0], [100, 0], [100, 100], [0, 100]), closed: true };
+    const result = redrawPath(square, { segment: 0, t: 0.5 }, null, open([50, 0], [50, -60]));
+    expect(result.closed).toBe(false);
+    expect(result.nodes.at(-1)!.point).toEqual({ x: 50, y: -60 });
   });
 });
