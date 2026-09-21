@@ -32,6 +32,8 @@ import {
 } from "@angular/core";
 import { FormsModule } from "@angular/forms";
 import type { SpatialPreview } from "./spatial";
+/** The commands a text field keeps for itself, because they edit the text it holds. */
+const FIELD_COMMANDS = ["undo", "redo", "copy", "cut", "paste", "pasteInFront", "pasteInBack", "selectAll", "remove", "finish", "cancel", "panHold"];
 import { EditorService, ContextAction, ContextTarget } from "./editor.service";
 import { ContextMenuComponent, ContextMenuEntry } from "./context-menu.component";
 import { SmartTableComponent } from "./smart-table.component";
@@ -1125,7 +1127,33 @@ export class AppComponent implements AfterViewInit, OnDestroy {
       this.editor.updateLayer({ text });
     }
   }
+  /**
+   * The command a key runs while the writing of a text has the keyboard. A field owns the
+   * keys that edit its own text, so only a command of the editor held with the control or
+   * command key is taken from it.
+   */
+  private editorCommand(event: KeyboardEvent): string | undefined {
+    if (!event.ctrlKey && !event.metaKey) return undefined;
+    const command = matchShortcut(this.preferences.bindings(), event);
+    return command && !FIELD_COMMANDS.includes(command) ? command : undefined;
+  }
+  /** Commits the text being written and leaves its object selected. */
+  private finishTextEditing() {
+    const id = this.textEditing();
+    if (!id) return;
+    this.commitText();
+    this.editor.selectedId.set(id);
+    this.editor.selectedIds.set([id]);
+  }
   textKey(event: KeyboardEvent) {
+    const editorCommand = this.editorCommand(event);
+    if (editorCommand) {
+      event.preventDefault();
+      event.stopPropagation();
+      this.finishTextEditing();
+      this.runCommand(editorCommand);
+      return;
+    }
     event.stopPropagation();
     if (event.isComposing) return;
     if (event.key === "Escape") {
@@ -1827,14 +1855,23 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     const target = event.target as HTMLElement;
     if (
       event.isComposing ||
-      target?.closest('input,textarea,select,[contenteditable="true"]') ||
       this.about() ||
       this.dialog() ||
       this.settings() ||
-      this.textEditing() ||
       this.spatial()
     )
       return;
+    // A field keeps the keys that write in it; a command of the editor still runs, as it
+    // does in Illustrator, and the text being written is committed before it does.
+    if (target?.closest('input,textarea,select,[contenteditable="true"]') || this.textEditing()) {
+      const editorCommand = this.editorCommand(event);
+      if (!editorCommand) return;
+      event.preventDefault();
+      this.finishTextEditing();
+      target?.blur?.();
+      this.runCommand(editorCommand);
+      return;
+    }
     if (event.code === "Space") {
       this.spaceHeld = true;
       if (event.ctrlKey || event.metaKey) {

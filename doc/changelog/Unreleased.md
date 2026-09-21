@@ -39,6 +39,7 @@ None.
 
 ## Fixes
 
+- Run the keyboard commands of the editor while a text is being written or a field has the keyboard. The inline writing of a text kept every key for itself, so Ctrl+Shift+O and the other commands did nothing; what is written is now committed first and the command runs on the object, as it does in Illustrator. A field keeps the keys that write in it.
 - Show and hide the Pivot and Selection blocks of the workspace from the Layout menu. Their entries did nothing, because the settings accepted only four block names out of six.
 - Create outlines and outline stroke did nothing from the Object menu, the list of the text tool or the context menu: those surfaces read a table of commands that did not carry them, while the keyboard read another. Every surface now reads one table, so a command cannot reach one of them and not the others.
 - Keep the keyboard settings the owner saved when a new command appears. A command that the saved settings had never heard of made the whole file invalid, and every customised shortcut was replaced by the defaults; the new command now takes its own keys and the rest are left alone.

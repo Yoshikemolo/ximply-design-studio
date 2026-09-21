@@ -49,6 +49,52 @@ describe('command dispatch', () => {
     expect(shapes.every((layer) => layer.kind === 'path')).toBe(true);
   }, 30000);
 
+  it('creates outlines while the text is being written, as Illustrator does', async () => {
+    localStorage.clear();
+    fontsFromDisk();
+    const { app, editor } = shell();
+    editor.setTool('text');
+    editor.start({ x: 40, y: 60 });
+    editor.end();
+    editor.updateLayer({ text: 'Hola' });
+    const id = editor.selected()!.id;
+    Object.assign(app, { textEditing: signal<string | null>(id), textDraft: signal('Hola mundo') });
+    let prevented = false;
+    const event = {
+      key: 'O', code: 'KeyO', ctrlKey: true, metaKey: false, altKey: false, shiftKey: true,
+      isComposing: false, repeat: false, target: window.document.body,
+      preventDefault: () => { prevented = true; }, stopPropagation: () => undefined,
+    } as unknown as KeyboardEvent;
+    app.textKey(event);
+    expect(prevented).toBe(true);
+    await vi.waitFor(() => {
+      expect(editor.document().layers.some((layer) => layer.kind === 'text')).toBe(false);
+    }, { timeout: 10000 });
+    // The text that was being written is what the shapes carry.
+    expect(editor.document().layers.length).toBeGreaterThan(4);
+  }, 30000);
+
+  it('leaves a field the keys that write in it', () => {
+    localStorage.clear();
+    const { app } = shell();
+    const field = window.document.createElement('input');
+    window.document.body.appendChild(field);
+    let prevented = false;
+    const typing = {
+      key: 'a', code: 'KeyA', ctrlKey: false, metaKey: false, altKey: false, shiftKey: false,
+      isComposing: false, repeat: false, target: field,
+      preventDefault: () => { prevented = true; }, stopPropagation: () => undefined,
+    } as unknown as KeyboardEvent;
+    Object.assign(app, {
+      textEditing: signal<string | null>(null), about: signal(false), dialog: signal(false),
+      settings: signal(false), spatial: signal(false), recording: signal(false),
+      paintPicker: signal(null), dismissMenus: () => false, temporarySelect: signal(false),
+    });
+    app.key(typing);
+    expect(prevented).toBe(false);
+    field.remove();
+  });
+
   it('dispatches every command the template offers', () => {
     localStorage.clear();
     const { app } = shell();
