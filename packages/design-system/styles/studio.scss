@@ -826,8 +826,20 @@ hr {
   --checker-size: 8px;
   background: repeating-conic-gradient(#d6d9de 0% 25%, #ffffff 0% 50%) 0 / calc(var(--checker-size) * 2) calc(var(--checker-size) * 2);
 }
-.background-options {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+/*
+ * The quick backgrounds share the width of the panel in equal columns, a little closer
+ * together than other swatches, so the last one ends where the other controls end.
+ */
+.paint-options.background-options {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  gap: 2px;
+  width: 100%;
+}
+.paint-options.background-options button {
+  min-width: 0;
+  padding: 5px 2px;
 }
 .artboard-label {
   position: absolute;
@@ -1013,6 +1025,8 @@ canvas {
 .properties-content .kind-icon {
   width: 14px;
   height: 14px;
+  /* A loose icon takes the colour of the theme, as the icons inside buttons do. */
+  filter: var(--icon);
 }
 .document-row {
   display: flex;

@@ -77,6 +77,14 @@
           ><button [disabled]="!commandEnabled('outlineText')" (click)="runCommand('outlineText')">
             {{ t("Create outlines") }}<kbd>{{ shortcut("outlineText") }}</kbd>
           </button>
+          <div class="menu-section-label">{{ t("Lock") }}</div>
+          @for (id of lockMenuCommands; track id) {
+            <button [disabled]="!commandEnabled(id)" (click)="runCommand(id)">{{ t(commandLabel(id)) }}<kbd>{{ shortcut(id) }}</kbd></button>
+          }
+          <div class="menu-section-label">{{ t("Hide") }}</div>
+          @for (id of hideMenuCommands; track id) {
+            <button [disabled]="!commandEnabled(id)" (click)="runCommand(id)">{{ t(commandLabel(id)) }}<kbd>{{ shortcut(id) }}</kbd></button>
+          }
           <div class="menu-section-label">{{ t("Path") }}</div>
           @for (id of pathMenuCommands; track id) {
             <button [disabled]="!commandEnabled(id)" (click)="runCommand(id)">{{ t(commandLabel(id)) }}<kbd>{{ shortcut(id) }}</kbd></button>

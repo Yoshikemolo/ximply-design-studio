@@ -316,6 +316,9 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   readonly settingsCategory = signal<"cursor" | "selection" | "anchors" | "measurement" | "appearance" | "shortcuts">("cursor");
   /** The commands of Object > Path, and those the path panel offers, in Illustrator's order. */
   readonly pathMenuCommands = ["joinPaths", "averageAnchors", "simplifyPath", "outlineStroke", "selectStray"] as const;
+  /** Object > Lock and Object > Hide, with their companions, in the order Illustrator gives them. */
+  readonly lockMenuCommands = ["lockSelection", "lockAbove", "lockOthers", "unlockAll"] as const;
+  readonly hideMenuCommands = ["hideSelection", "hideAbove", "hideOthers", "showAll"] as const;
   readonly pathPanelCommands = ["convertCorner", "convertSmooth", "removeAnchors", "joinPaths", "cutAtAnchors", "averageAnchors", "simplifyPath"] as const;
   readonly averageAxes = [
     { id: "horizontal", label: "Horizontal" },
@@ -1653,6 +1656,9 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     // The clipboard actions say what they need: something selected, or something copied.
     if (["copy", "cut", "duplicate", "duplicateSeries", "outlineStroke"].includes(id)) return this.editor.selectedLayers().length > 0;
     if (id === "outlineText") return this.editor.selectedLayers().some((layer) => layer.kind === "text");
+    if (["lockSelection", "lockAbove", "lockOthers", "hideSelection", "hideAbove", "hideOthers"].includes(id)) return this.editor.selectedLayers().some((layer) => !layer.guide);
+    if (id === "unlockAll") return this.editor.document().layers.some((layer) => layer.locked && !layer.guide);
+    if (id === "showAll") return this.editor.document().layers.some((layer) => !layer.visible && !layer.guide);
     const paths = this.editor.selectedLayers().some((layer) => layer.kind === "path" && !!layer.curves);
     if (["joinPaths", "simplifyPath"].includes(id)) return paths;
     if (["averageAnchors", "convertCorner", "convertSmooth", "removeAnchors", "cutAtAnchors"].includes(id))
@@ -1711,6 +1717,14 @@ export class AppComponent implements AfterViewInit, OnDestroy {
       cutAtAnchors: () => this.editor.cutAtSelectedAnchors(),
       selectStray: () => this.editor.selectStrayPoints(),
       toggleMultipleHandles: () => this.preferences.updatePathSettings({ showHandlesMultiple: !this.preferences.pathSettings().showHandlesMultiple }),
+      lockSelection: () => this.editor.lockOrHide("locked", "selection"),
+      lockAbove: () => this.editor.lockOrHide("locked", "above"),
+      lockOthers: () => this.editor.lockOrHide("locked", "others"),
+      unlockAll: () => this.editor.unlockOrShowAll("locked"),
+      hideSelection: () => this.editor.lockOrHide("hidden", "selection"),
+      hideAbove: () => this.editor.lockOrHide("hidden", "above"),
+      hideOthers: () => this.editor.lockOrHide("hidden", "others"),
+      showAll: () => this.editor.unlockOrShowAll("hidden"),
       eraserSmaller: () => this.resizeEraser(-1),
       eraserLarger: () => this.resizeEraser(1),
       remove: () => this.editor.remove(),

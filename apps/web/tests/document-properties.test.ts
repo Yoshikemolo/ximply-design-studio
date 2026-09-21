@@ -40,3 +40,12 @@ describe('document properties', () => {
     expect(e.updatePageSetup({ width: 900 })).toBe(true);
   });
 });
+
+describe('the document heading of Properties', () => {
+  it('tints its document icon with the theme, like every other icon', async () => {
+    const { readFileSync } = await import('node:fs');
+    const styles = readFileSync('packages/design-system/styles/studio.scss', 'utf8');
+    const rule = styles.slice(styles.indexOf('.properties-content .kind-icon {'));
+    expect(rule.slice(0, rule.indexOf('}'))).toContain('filter: var(--icon)');
+  });
+});

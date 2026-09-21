@@ -24,6 +24,7 @@ None.
 
 ## New features
 
+- Lock and hide objects as Illustrator does: Lock and Hide the selection with Ctrl+2 and Ctrl+3, the artwork above it that overlaps it, or everything outside its top-level groups with Ctrl+Alt+Shift+2 and Ctrl+Alt+Shift+3; Unlock All with Ctrl+Alt+2 and Show All with Ctrl+Alt+3 bring every object back and select it. Keys with a digit are read by their place on the keyboard, so they work on layouts whose Ctrl+Alt types a character of its own.
 - Use the studio on a phone. The column of tools and the panels become drawers that slide in from the left and right edges, opened with a swipe from the edge or a tap on its handle and closed with a swipe back or a tap outside; the menus fold behind a menu button, with the credits of the footer fixed at their foot; and the page fits the screen, with the drawers scrolling only down.
 - Open context menus with a long press, since a phone has no right button; the canvas, the layers and the guides each open their own.
 - Zoom and pan the canvas with two fingers, and scale the selection in proportion, turn it and move it with two fingers that land on it, around its pivot and as one step.
@@ -37,6 +38,8 @@ None.
 
 ## Fixes
 
+- Tint the document icon of Properties with the theme, as every other icon is.
+- Lay the quick backgrounds of the document out in equal columns across the panel, a little closer together, so No color ends where the other controls end instead of against the edge.
 - Give everything in Properties the side margins the other panels have; only its transform fields had them.
 - Let a page change keep up to the thousand layers a document may hold; it still refused more than a hundred and fifty.
 

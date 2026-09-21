@@ -1349,6 +1349,71 @@ export class EditorService {
     this.changed();
     return true;
   }
+  /**
+   * Object > Lock and Object > Hide, as Illustrator CS3 has them. Selection acts on the
+   * selected objects; All Artwork Above on the objects stacked above the selection that
+   * overlap it; Other Layers on everything outside the top-level groups of the selection,
+   * each object being a layer of its own here. Locked or hidden objects leave the
+   * selection. Guides keep their own lock and are never touched.
+   */
+  lockOrHide(key: "locked" | "hidden", scope: "selection" | "above" | "others"): number {
+    const selected = this.selectedLayers().filter((l) => !l.guide);
+    if (!selected.length) { this.status.set(key === "locked" ? "Select the objects to lock." : "Select the objects to hide."); return 0; }
+    const layers = this.document().layers;
+    const ids = new Set(selected.map((l) => l.id));
+    let targets: Layer[];
+    if (scope === "selection") targets = selected;
+    else if (scope === "above") {
+      const bounds = selectionBounds(selected);
+      const lowest = Math.min(...selected.map((l) => layers.indexOf(l)));
+      targets = layers.filter((l, index) => {
+        if (index <= lowest || ids.has(l.id) || l.guide) return false;
+        const b = selectionBounds([l]);
+        return b.x < bounds.x + bounds.width && b.x + b.width > bounds.x && b.y < bounds.y + bounds.height && b.y + b.height > bounds.y;
+      });
+    } else {
+      const groups = new Set(selected.map((l) => l.groupPath?.[0] ?? "layer:" + l.id));
+      targets = layers.filter((l) => !l.guide && !groups.has(l.groupPath?.[0] ?? "layer:" + l.id));
+    }
+    targets = targets.filter((l) => (key === "locked" ? !l.locked : l.visible));
+    if (!targets.length) { this.status.set("There is nothing more to change."); return 0; }
+    const changed = new Set(targets.map((l) => l.id));
+    this.commitStep(this.document());
+    this.document.update((d) => ({
+      ...d,
+      layers: d.layers.map((l) => (changed.has(l.id) ? (key === "locked" ? { ...l, locked: true } : { ...l, visible: false }) : l)),
+    }));
+    // What was locked or hidden cannot stay selected.
+    const kept = this.selectedIds().filter((id) => !changed.has(id));
+    this.selectedIds.set(kept);
+    this.selectedId.set(kept.at(-1) ?? null);
+    this.activeNodes.set([]);
+    this.status.set(`${key === "locked" ? "Locked" : "Hid"} ${changed.size} object${changed.size > 1 ? "s" : ""}.`);
+    this.changed();
+    return changed.size;
+  }
+  /**
+   * Object > Unlock All and Object > Show All: every locked, or hidden, object comes back,
+   * and those are what is selected afterwards.
+   */
+  unlockOrShowAll(key: "locked" | "hidden"): number {
+    const targets = this.document().layers.filter((l) => !l.guide && (key === "locked" ? l.locked : !l.visible));
+    if (!targets.length) { this.status.set(key === "locked" ? "There are no locked objects." : "There are no hidden objects."); return 0; }
+    const changed = new Set(targets.map((l) => l.id));
+    this.commitStep(this.document());
+    this.document.update((d) => ({
+      ...d,
+      layers: d.layers.map((l) => (changed.has(l.id) ? (key === "locked" ? { ...l, locked: false } : { ...l, visible: true }) : l)),
+    }));
+    // The objects that come back are selected, unless they are still hidden or locked.
+    const selectable = this.document().layers.filter((l) => changed.has(l.id) && l.visible && !l.locked).map((l) => l.id);
+    this.selectedIds.set(selectable);
+    this.selectedId.set(selectable.at(-1) ?? null);
+    this.activeNodes.set([]);
+    this.status.set(`${key === "locked" ? "Unlocked" : "Showed"} ${changed.size} object${changed.size > 1 ? "s" : ""}.`);
+    this.changed();
+    return changed.size;
+  }
   toggle(id: string, key: "visible" | "locked") {
     this.commitStep(this.document());
     const layer = this.document().layers.find((l) => l.id === id)!;

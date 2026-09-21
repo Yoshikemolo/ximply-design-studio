@@ -114,6 +114,14 @@ export const COMMANDS: Command[] = [
   { id: "cutAtAnchors", label: "Cut path at selected anchor points", keys: [] },
   { id: "selectStray", label: "Select stray points", keys: [] },
   { id: "toggleMultipleHandles", label: "Show handles for multiple selected anchors", keys: [] },
+  { id: "lockSelection", label: "Lock selection", keys: ["Mod+2"] },
+  { id: "lockAbove", label: "Lock all artwork above", keys: [] },
+  { id: "lockOthers", label: "Lock other layers", keys: ["Mod+Alt+Shift+2"] },
+  { id: "unlockAll", label: "Unlock all", keys: ["Mod+Alt+2"] },
+  { id: "hideSelection", label: "Hide selection", keys: ["Mod+3"] },
+  { id: "hideAbove", label: "Hide all artwork above", keys: [] },
+  { id: "hideOthers", label: "Hide other layers", keys: ["Mod+Alt+Shift+3"] },
+  { id: "showAll", label: "Show all", keys: ["Mod+Alt+3"] },
   { id: "eraserSmaller", label: "Decrease eraser diameter", keys: ["["] },
   { id: "eraserLarger", label: "Increase eraser diameter", keys: ["]"] },
   { id: "remove", label: "Delete", keys: ["Delete", "Backspace"] },
@@ -142,17 +150,23 @@ export interface KeyInput {
   shiftKey: boolean;
   isComposing?: boolean;
   getModifierState?: (key: string) => boolean;
+  /** The place of the key on the keyboard, such as Digit2, whatever it types. */
+  code?: string;
 }
 export function eventChord(e: KeyInput): string | null {
+  // A digit held with Ctrl or Command is read from its place on the keyboard, not from
+  // the character it types, so Ctrl+Alt+2 and Ctrl+Alt+Shift+3 work on every layout,
+  // those whose Ctrl+Alt is AltGr included.
+  const digit = (e.ctrlKey || e.metaKey) && /^Digit[0-9]$/.test(e.code ?? "") ? e.code!.slice(5) : null;
   if (
     e.isComposing ||
-    e.getModifierState?.("AltGraph") ||
+    (!digit && e.getModifierState?.("AltGraph")) ||
     ["Control", "Meta", "Alt", "Shift", "Dead", "Unidentified"].includes(e.key)
   )
     return null;
   let key =
-    e.key === " " ? "Space" : e.key.length === 1 ? e.key.toUpperCase() : e.key;
-  const shift = e.shiftKey && (key.length !== 1 || /^[A-Z]$/.test(key));
+    digit ?? (e.key === " " ? "Space" : e.key.length === 1 ? e.key.toUpperCase() : e.key);
+  const shift = e.shiftKey && (digit !== null || key.length !== 1 || /^[A-Z]$/.test(key));
   return [
     ...(e.ctrlKey || e.metaKey ? ["Mod"] : []),
     ...(e.altKey ? ["Alt"] : []),
@@ -196,10 +210,13 @@ export function normalizeChord(input: string): string {
   const normalized =
     key.length === 1 ? key.toUpperCase() : aliases[key.toLowerCase()];
   if (!normalized) throw new Error("Invalid shortcut");
+  // A digit held with Ctrl or Command is read by its place on the keyboard, so Shift may
+  // join it; any other symbol is written as the character Shift produces.
   if (
     modifiers.has("Shift") &&
     normalized.length === 1 &&
-    !/^[A-Z]$/.test(normalized)
+    !/^[A-Z]$/.test(normalized) &&
+    !(modifiers.has("Mod") && /^[0-9]$/.test(normalized))
   )
     throw new Error("Use the resulting symbol without Shift");
   return [
