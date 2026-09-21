@@ -114,6 +114,7 @@ Generated titles and paths only; authoritative content remains in each linked do
 - [DOC-OPERATIONS-0001 — CI/CD status and activation](operations/cicd-status.md)
 - [DOC-OPERATIONS-0002 — Container build and CI/CD implementation contract](operations/container-builds.md)
 - [DOC-OPERATIONS-0003 — Local development](operations/local-development.md)
+- [DOC-OPERATIONS-0006 — Preview host deployment](operations/preview-host.md)
 - [DOC-OPERATIONS-0004 — Operations and recovery design](operations/recovery.md)
 - [DOC-OPERATIONS-0005 — Container runbooks](operations/runbooks.md)
 - [DOC-PLANNING-0001 — Feature backlog](planning/backlog.md)
