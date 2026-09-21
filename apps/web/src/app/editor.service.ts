@@ -1191,7 +1191,7 @@ export class EditorService {
   previewDocument(): StudioDocument {
     let base: StudioDocument;
     try { base = syncBlends(syncProcedurals(this.document())); } catch { base = this.document(); }
-    const ghosts = this.duplicationGhosts();
+    const ghosts = [...this.duplicationGhosts(), ...this.simplifyGhosts()];
     return ghosts.length ? { ...base, layers: [...ghosts, ...base.layers] } : base;
   }
   /**
@@ -3732,6 +3732,228 @@ export class EditorService {
     }
     this.setLayer(g.id, { curves });
   }
+  /** The chosen anchors of every selected object, as layer, path and index. */
+  private chosenAnchors(): Array<{ layer: Layer; path: number; index: number }> {
+    const result: Array<{ layer: Layer; path: number; index: number }> = [];
+    for (const layer of this.selectedLayers()) {
+      if (!layer.curves || this.isEffectivelyLocked(layer)) continue;
+      for (const key of this.anchorKeysOf(layer.id)) {
+        const [path, index] = key.split(":").map(Number);
+        if (layer.curves[path]?.nodes[index]) result.push({ layer, path, index });
+      }
+    }
+    return result;
+  }
+  /**
+   * Object > Path > Join. Two chosen endpoints are joined; a path whose own two endpoints
+   * are chosen, or a whole open path, is closed; two whole open paths are joined at their
+   * nearest endpoints. Endpoints that lie on each other become one anchor, a corner or a
+   * smooth point, which is why the caller may be asked for the kind first.
+   */
+  joinSelection(kind?: "corner" | "smooth"): "joined" | "chooseKind" | "nothing" {
+    const ends = this.chosenAnchors().filter(({ layer, path, index }) => {
+      const p = layer.curves![path];
+      return !p.closed && (index === 0 || index === p.nodes.length - 1);
+    });
+    let pair: Array<{ layer: Layer; path: number; atStart: boolean }> = [];
+    if (ends.length === 2) pair = ends.map((e) => ({ layer: e.layer, path: e.path, atStart: e.index === 0 }));
+    else if (!this.chosenAnchors().length) {
+      const open = this.selectedLayers().filter((l) => l.curves?.length === 1 && !l.curves[0].closed && l.curves[0].nodes.length > 1 && !this.isEffectivelyLocked(l));
+      if (open.length === 1) pair = [{ layer: open[0], path: 0, atStart: true }, { layer: open[0], path: 0, atStart: false }];
+      else if (open.length === 2) {
+        const candidates = [true, false].flatMap((a) => [true, false].map((b) => {
+          const pa = open[0].curves![0].nodes, pb = open[1].curves![0].nodes;
+          const wa = worldPoint(open[0], (a ? pa[0] : pa[pa.length - 1]).point), wb = worldPoint(open[1], (b ? pb[0] : pb[pb.length - 1]).point);
+          return { a, b, distance: Math.hypot(wa.x - wb.x, wa.y - wb.y) };
+        })).sort((x, y) => x.distance - y.distance);
+        pair = [{ layer: open[0], path: 0, atStart: candidates[0].a }, { layer: open[1], path: 0, atStart: candidates[0].b }];
+      }
+    }
+    if (pair.length !== 2) { this.status.set("Choose two endpoints of open paths to join."); return "nothing"; }
+    const [first, second] = pair;
+    const endPoint = (e: typeof first) => {
+      const nodes = e.layer.curves![e.path].nodes;
+      return worldPoint(e.layer, (e.atStart ? nodes[0] : nodes[nodes.length - 1]).point);
+    };
+    const a = endPoint(first), b = endPoint(second);
+    const coincident = Math.hypot(a.x - b.x, a.y - b.y) <= 0.5;
+    if (coincident && !kind) return "chooseKind";
+    const before = this.document();
+    if (first.layer.id === second.layer.id && first.path === second.path) {
+      const curves = structuredClone(first.layer.curves!);
+      curves[first.path] = closeByJoin(curves[first.path], kind ?? "corner");
+      this.commitStep(before);
+      this.setLayer(first.layer.id, fitCurves(first.layer, curves));
+    } else {
+      const target = first.layer;
+      const other = second.layer.id === target.id
+        ? second.layer.curves![second.path]
+        : mapCurves([second.layer.curves![second.path]], (p) => localPoint(target, worldPoint(second.layer, p)))[0];
+      const joined = joinPaths(target.curves![first.path], first.atStart, other, second.atStart, kind ?? "corner");
+      const curves = structuredClone(target.curves!);
+      curves[first.path] = joined;
+      if (second.layer.id === target.id) curves.splice(second.path, 1);
+      this.commitStep(before);
+      this.document.update((d) => ({
+        ...d,
+        layers: d.layers
+          .map((l) => {
+            if (l.id === target.id) return fitCurves(target, curves);
+            if (l.id === second.layer.id && second.layer.id !== target.id) {
+              const rest = l.curves!.filter((_, i) => i !== second.path);
+              return rest.length ? fitCurves(l, rest) : null;
+            }
+            return l;
+          })
+          .filter((l): l is Layer => !!l),
+      }));
+      this.selectedIds.set([target.id]);
+      this.selectedId.set(target.id);
+    }
+    this.activeNodes.set([]);
+    this.otherAnchors.set({});
+    this.activeSegments.set([]);
+    this.status.set("Joined.");
+    this.changed();
+    return "joined";
+  }
+  /** Object > Path > Average: moves the chosen anchors to their common position. */
+  averageSelection(axis: "horizontal" | "vertical" | "both"): boolean {
+    const chosen = this.chosenAnchors();
+    if (chosen.length < 2) { this.status.set("Choose two or more anchors to average."); return false; }
+    const worlds = chosen.map(({ layer, path, index }) => worldPoint(layer, layer.curves![path].nodes[index].point));
+    const targets = averagePoints(worlds, axis);
+    const before = this.document();
+    const updates = new Map<string, CurvePath[]>();
+    chosen.forEach(({ layer, path, index }, i) => {
+      const curves = updates.get(layer.id) ?? structuredClone(layer.curves!);
+      curves[path].nodes[index] = placeAnchor(curves[path].nodes[index], localPoint(layer, targets[i]));
+      updates.set(layer.id, curves);
+    });
+    this.commitStep(before);
+    this.document.update((d) => ({ ...d, layers: d.layers.map((l) => (updates.has(l.id) ? fitCurves(l, updates.get(l.id)!) : l)) }));
+    this.changed();
+    return true;
+  }
+  /** Converts the chosen anchors to corners without handles, or to smooth points. */
+  convertSelectedAnchors(kind: "corner" | "smooth"): boolean {
+    const chosen = this.chosenAnchors();
+    if (!chosen.length) { this.status.set("Choose the anchors to convert."); return false; }
+    const before = this.document();
+    const updates = new Map<string, CurvePath[]>();
+    for (const { layer, path, index } of chosen) {
+      const curves = updates.get(layer.id) ?? structuredClone(layer.curves!);
+      const p = curves[path], node = p.nodes[index];
+      if (kind === "corner") p.nodes[index] = anchor(node.point);
+      else {
+        // A smooth point takes handles along the line between its neighbours, a third of the way to each.
+        const n = p.nodes.length;
+        const prev = p.closed || index > 0 ? p.nodes[(index - 1 + n) % n].point : node.point;
+        const next = p.closed || index < n - 1 ? p.nodes[(index + 1) % n].point : node.point;
+        const dx = next.x - prev.x, dy = next.y - prev.y, length = Math.hypot(dx, dy) || 1;
+        const back = Math.hypot(node.point.x - prev.x, node.point.y - prev.y) / 3;
+        const ahead = Math.hypot(next.x - node.point.x, next.y - node.point.y) / 3;
+        p.nodes[index] = {
+          point: { ...node.point },
+          incoming: { x: node.point.x - (dx / length) * back, y: node.point.y - (dy / length) * back },
+          outgoing: { x: node.point.x + (dx / length) * ahead, y: node.point.y + (dy / length) * ahead },
+          smooth: true,
+        };
+      }
+      updates.set(layer.id, curves);
+    }
+    this.commitStep(before);
+    this.document.update((d) => ({ ...d, layers: d.layers.map((l) => (updates.has(l.id) ? fitCurves(l, updates.get(l.id)!) : l)) }));
+    this.changed();
+    return true;
+  }
+  /** Removes the chosen anchors and keeps each path whole, as Remove Selected Anchor Points does. */
+  removeSelectedAnchors(): boolean {
+    const chosen = this.chosenAnchors();
+    if (!chosen.length) { this.status.set("Choose the anchors to remove."); return false; }
+    const before = this.document();
+    const updates = new Map<string, CurvePath[]>();
+    const byLayer = new Map<string, Array<{ path: number; index: number }>>();
+    for (const c of chosen) byLayer.set(c.layer.id, [...(byLayer.get(c.layer.id) ?? []), { path: c.path, index: c.index }]);
+    for (const [id, list] of byLayer) {
+      const layer = this.document().layers.find((l) => l.id === id)!;
+      let curves = structuredClone(layer.curves!);
+      // Later anchors go first so the earlier indices stay right.
+      for (const { path, index } of [...list].sort((a, b) => b.path - a.path || b.index - a.index)) curves[path] = deleteAnchorKeepingShape(curves[path], index);
+      curves = curves.filter((c) => c.nodes.length > 1);
+      updates.set(id, curves);
+    }
+    this.commitStep(before);
+    this.document.update((d) => ({ ...d, layers: d.layers.flatMap((l) => (!updates.has(l.id) ? [l] : updates.get(l.id)!.length ? [fitCurves(l, updates.get(l.id)!)] : [])) }));
+    this.activeNodes.set([]);
+    this.otherAnchors.set({});
+    this.selectedIds.update((ids) => ids.filter((id) => this.document().layers.some((l) => l.id === id)));
+    this.selectedId.set(this.selectedIds().at(-1) ?? null);
+    this.changed();
+    return true;
+  }
+  /** Cuts the paths at the chosen anchors; each cut leaves two endpoints on top of each other. */
+  cutAtSelectedAnchors(): boolean {
+    const layer = this.selected();
+    const keys = layer ? this.anchorKeysOf(layer.id) : [];
+    if (!layer?.curves || !keys.length || this.isEffectivelyLocked(layer)) { this.status.set("Choose the anchors to cut the path at."); return false; }
+    const pieces = layer.curves.flatMap((path, pi) => cutAtAnchors(path, keys.filter((k) => +k.split(":")[0] === pi).map((k) => +k.split(":")[1])));
+    if (pieces.length === layer.curves.length && pieces.every((p, i) => p.closed === layer.curves![i].closed)) { this.status.set("The path cannot be cut at an endpoint."); return false; }
+    this.replaceWithPieces(this.document(), layer, pieces, []);
+    this.status.set(`Cut into ${pieces.length} paths.`);
+    return true;
+  }
+  /** Select > Object > Stray Points: paths made of a single anchor. */
+  selectStrayPoints(): number {
+    const stray = this.document().layers.filter((l) => l.kind === "path" && !l.guide && !l.dimension && !l.procedural && l.visible && !this.isEffectivelyLocked(l)
+      && ((l.curves && l.curves.every((c) => c.nodes.length <= 1)) || (!l.curves && l.points.length <= 1)));
+    this.selectedIds.set(stray.map((l) => l.id));
+    this.selectedId.set(stray.at(-1)?.id ?? null);
+    this.activeNodes.set([]);
+    this.status.set(stray.length ? `Selected ${stray.length} stray point${stray.length > 1 ? "s" : ""}.` : "There are no stray points.");
+    return stray.length;
+  }
+  private simplifyBefore?: { document: StudioDocument; ids: string[] };
+  /**
+   * Object > Path > Simplify, previewed on the selected paths while its dialog is open.
+   * Returns the anchor counts before and after, which the dialog shows.
+   */
+  previewSimplify(options: SimplifyOptions, show = true): { original: number; current: number } {
+    if (!this.simplifyBefore) this.simplifyBefore = { document: this.document(), ids: this.selectedLayers().filter((l) => l.kind === "path" && l.curves && !this.isEffectivelyLocked(l) && !l.dimension && !l.procedural).map((l) => l.id) };
+    const base = this.simplifyBefore;
+    let original = 0, current = 0;
+    const layers = base.document.layers.map((l) => {
+      if (!base.ids.includes(l.id) || !l.curves) return l;
+      const simplified = l.curves.map((c) => simplifyPath(c, options));
+      original += l.curves.reduce((n, c) => n + c.nodes.length, 0);
+      current += simplified.reduce((n, c) => n + c.nodes.length, 0);
+      return fitCurves(l, simplified);
+    });
+    // With the preview off the dialog still counts, but the paths stay as they were.
+    this.document.set(show ? { ...base.document, layers } : base.document);
+    return { original, current };
+  }
+  /** Keeps the previewed simplification as one step, or puts the paths back. */
+  finishSimplify(apply: boolean) {
+    const base = this.simplifyBefore;
+    this.simplifyBefore = undefined;
+    if (!base) return;
+    if (!apply) { this.document.set(base.document); this.revision.update((x) => x + 1); return; }
+    this.commitStep(base.document);
+    this.activeNodes.set([]);
+    this.changed();
+  }
+  /** Simplify's Show Original: the paths as they were, drawn thin behind the preview. */
+  readonly simplifyShowOriginal = signal(false);
+  private simplifyGhosts(): Layer[] {
+    const base = this.simplifyBefore;
+    if (!base || !this.simplifyShowOriginal()) return [];
+    return base.document.layers
+      .filter((l) => base.ids.includes(l.id))
+      .map((l) => ({ ...l, id: "__original__" + l.id, fill: "none", stroke: "#e2304d", strokeWidth: 1 / Math.max(0.1, this.zoom()), brushStroke: undefined, lineEnds: undefined, opacity: 0.8 }));
+  }
+  /** Whether a Simplify preview is open; the original is still what undo returns to. */
+  simplifying() { return !!this.simplifyBefore; }
   pathAction(
     action:
       | "close"
@@ -3756,10 +3978,7 @@ export class EditorService {
     if (action === "close")
       curves = curves.map((c) => ({ ...c, closed: !c.closed }));
     if (action === "smooth") curves = curves.map((c) => smoothPath(c));
-    if (action === "simplify")
-      curves = curves.map((c) =>
-        polyline(simplifyPoints(flatten(c), 2), c.closed),
-      );
+    if (action === "simplify") curves = curves.map((c) => simplifyPath(c, DEFAULT_SIMPLIFY));
     if (action === "cleanup") curves = curves.filter((c) => c.nodes.length > 1);
     if (action === "average") {
       const nodes = curves.flatMap((c, i) =>

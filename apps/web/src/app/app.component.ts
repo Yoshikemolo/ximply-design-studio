@@ -9,6 +9,8 @@ import { BlendEasing } from "../../../../packages/domain/src/object-blend";
 import { FONT_FAMILIES, defaultTypography, defaultTextLayout, TextTypography, TextLayoutOptions } from "../../../../packages/domain/src/text-layout";
 import { measurementUnits, isUnit, snapPoint, fromPixels, toPixels, formatMeasurement, rulerTicks as makeRulerTicks, SnapConfig } from "../../../../packages/domain/src/measurements";
 import { PreferencesService } from "./preferences.service";
+import { DEFAULT_SIMPLIFY, FreehandToolOptions, PAINTBRUSH_DEFAULTS, PENCIL_DEFAULTS, SMOOTH_DEFAULTS, SimplifyOptions, validFreehandTool } from "../../../../packages/domain/src/path-fit";
+import { BrushStroke, DEFAULT_BRUSH_STROKE } from "../../../../packages/domain/src/brush-stroke";
 import {
   COMMANDS,
   eventChord,
@@ -301,11 +303,20 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   readonly settingsCategories = [
     { id: "cursor", label: "Cursor", icon: "select" },
     { id: "selection", label: "Selection and transforms", icon: "direct" },
+    { id: "anchors", label: "Selection and anchor display", icon: "addAnchor" },
     { id: "measurement", label: "Units and snapping", icon: "rulers" },
     { id: "appearance", label: "Appearance", icon: "theme" },
     { id: "shortcuts", label: "Keyboard shortcuts", icon: "keyboard" },
   ] as const;
-  readonly settingsCategory = signal<"cursor" | "selection" | "measurement" | "appearance" | "shortcuts">("cursor");
+  readonly settingsCategory = signal<"cursor" | "selection" | "anchors" | "measurement" | "appearance" | "shortcuts">("cursor");
+  /** The commands of Object > Path, and those the path panel offers, in Illustrator's order. */
+  readonly pathMenuCommands = ["joinPaths", "averageAnchors", "simplifyPath", "outlineStroke", "selectStray"] as const;
+  readonly pathPanelCommands = ["convertCorner", "convertSmooth", "removeAnchors", "joinPaths", "cutAtAnchors", "averageAnchors", "simplifyPath"] as const;
+  readonly averageAxes = [
+    { id: "horizontal", label: "Horizontal" },
+    { id: "vertical", label: "Vertical" },
+    { id: "both", label: "Both" },
+  ] as const;
   readonly commandList = COMMANDS;
   readonly recording = signal<string | null>(null);
   readonly toolGroup = signal("Draw");
@@ -373,6 +384,19 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     effect(() => { editor.setGuidesLocked(preferences.guidesLocked()); });
     effect(() => {
       editor.snapAngle.set(preferences.snapAngle());
+    });
+    effect(() => {
+      // The path settings the preferences keep drive the tools and the anchor display.
+      const settings = preferences.pathSettings();
+      editor.pencilOptions.set(settings.pencil);
+      editor.paintbrushOptions.set(settings.paintbrush);
+      editor.smoothOptions.set(settings.smooth);
+      editor.activeBrushStroke.set(settings.brush);
+      editor.autoAddDelete.set(settings.autoAddDelete);
+      editor.anchorDisplay.set(settings.anchorDisplay);
+      editor.handleStyle.set(settings.handleStyle);
+      editor.showHandlesMultiple.set(settings.showHandlesMultiple);
+      editor.highlightAnchors.set(settings.highlightAnchors);
     });
     effect(() => {
       editor.document();
@@ -973,6 +997,84 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     if (event.button !== 0) return;
     if (this.editor.resetPivotAt(this.point(event))) event.preventDefault();
   }
+  // Object > Path: Join asks for the kind of a joined point, Average for its axis, and
+  // Simplify previews its result while its dialog is open.
+  readonly joinDialog = signal(false);
+  readonly averageDialog = signal(false);
+  readonly averageAxis = signal<"horizontal" | "vertical" | "both">("both");
+  readonly simplifyDialog = signal(false);
+  readonly simplifySettings = signal<SimplifyOptions & { preview: boolean; showOriginal: boolean }>({ ...DEFAULT_SIMPLIFY, preview: true, showOriginal: false });
+  readonly simplifyCounts = signal<{ original: number; current: number } | null>(null);
+  runJoin(kind?: "corner" | "smooth") {
+    const result = this.editor.joinSelection(kind);
+    this.joinDialog.set(result === "chooseKind");
+  }
+  openAverage() {
+    this.dismissMenus();
+    this.averageDialog.set(true);
+  }
+  applyAverage() {
+    if (this.editor.averageSelection(this.averageAxis())) this.averageDialog.set(false);
+  }
+  openSimplify() {
+    this.dismissMenus();
+    if (!this.editor.selectedLayers().some((l) => l.kind === "path" && l.curves)) { this.editor.status.set("Select the paths to simplify."); return; }
+    this.simplifyDialog.set(true);
+    this.updateSimplify({});
+  }
+  updateSimplify(change: Partial<SimplifyOptions & { preview: boolean; showOriginal: boolean }>) {
+    const next = { ...this.simplifySettings(), ...change };
+    next.precision = Math.min(100, Math.max(0, Number(next.precision) || 0));
+    next.angleThreshold = Math.min(180, Math.max(0, Number(next.angleThreshold) || 0));
+    this.simplifySettings.set(next);
+    this.editor.simplifyShowOriginal.set(next.showOriginal);
+    this.simplifyCounts.set(this.editor.previewSimplify(next, next.preview));
+  }
+  finishSimplify(apply: boolean) {
+    if (apply) this.editor.previewSimplify(this.simplifySettings(), true);
+    this.editor.simplifyShowOriginal.set(false);
+    this.editor.finishSimplify(apply);
+    this.simplifyDialog.set(false);
+    this.simplifyCounts.set(null);
+  }
+  // The option dialogs of the freehand tools, opened by double-clicking the tool.
+  readonly toolOptions = signal<"path" | "paintbrush" | "smooth" | null>(null);
+  readonly toolOptionsDraft = signal<FreehandToolOptions>({ ...PENCIL_DEFAULTS });
+  openToolOptions(id: ToolId) {
+    if (id !== "path" && id !== "paintbrush" && id !== "smooth") return;
+    this.flyout.set(null);
+    const current = id === "path" ? this.editor.pencilOptions() : id === "paintbrush" ? this.editor.paintbrushOptions() : { ...PENCIL_DEFAULTS, ...this.editor.smoothOptions() };
+    this.toolOptionsDraft.set({ ...current });
+    this.brushDraft.set({ ...this.editor.activeBrushStroke() });
+    this.toolOptions.set(id);
+  }
+  /** The calligraphic brush the Paintbrush dialog edits until it is applied. */
+  readonly brushDraft = signal<BrushStroke>({ ...DEFAULT_BRUSH_STROKE });
+  toolOptionsTitle(id: "path" | "paintbrush" | "smooth") {
+    return id === "path" ? "Pencil tool options" : id === "paintbrush" ? "Paintbrush tool options" : "Smooth tool options";
+  }
+  setBrushStroke(key: "angle" | "roundness" | "diameter", value: number) {
+    if (!Number.isFinite(value)) return;
+    const limits = { angle: [-180, 180], roundness: [0, 100], diameter: [0.1, 1296] }[key];
+    this.brushDraft.update((brush) => ({ ...brush, [key]: Math.min(limits[1], Math.max(limits[0], value)) }));
+  }
+  setToolOption<K extends keyof FreehandToolOptions>(key: K, value: FreehandToolOptions[K]) {
+    this.toolOptionsDraft.update((draft) => ({ ...draft, [key]: value }));
+  }
+  resetToolOptions() {
+    const id = this.toolOptions();
+    this.toolOptionsDraft.set({ ...(id === "paintbrush" ? PAINTBRUSH_DEFAULTS : id === "smooth" ? { ...PENCIL_DEFAULTS, ...SMOOTH_DEFAULTS } : PENCIL_DEFAULTS) });
+  }
+  applyToolOptions() {
+    const id = this.toolOptions();
+    const draft = validFreehandTool(this.toolOptionsDraft(), id === "paintbrush" ? PAINTBRUSH_DEFAULTS : PENCIL_DEFAULTS);
+    if (id === "path") this.editor.pencilOptions.set(draft);
+    if (id === "paintbrush") this.editor.paintbrushOptions.set(draft);
+    if (id === "smooth") this.editor.smoothOptions.set({ fidelity: draft.fidelity, smoothness: draft.smoothness });
+    if (id === "paintbrush") this.editor.activeBrushStroke.set({ ...this.brushDraft() });
+    this.preferences.saveToolOptions({ pencil: this.editor.pencilOptions(), paintbrush: this.editor.paintbrushOptions(), smooth: this.editor.smoothOptions(), brush: this.editor.activeBrushStroke() });
+    this.toolOptions.set(null);
+  }
   // Duplication in series: the dialog holds the settings until they are applied.
   readonly arrayDialog = signal(false);
   readonly arraySettings = signal<ArraySettings>({ ...DEFAULT_ARRAY });
@@ -1320,6 +1422,10 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     // The clipboard actions say what they need: something selected, or something copied.
     if (["copy", "cut", "duplicate", "duplicateSeries", "outlineStroke"].includes(id)) return this.editor.selectedLayers().length > 0;
     if (id === "outlineText") return this.editor.selectedLayers().some((layer) => layer.kind === "text");
+    const paths = this.editor.selectedLayers().some((layer) => layer.kind === "path" && !!layer.curves);
+    if (["joinPaths", "simplifyPath"].includes(id)) return paths;
+    if (["averageAnchors", "convertCorner", "convertSmooth", "removeAnchors", "cutAtAnchors"].includes(id))
+      return this.editor.selectedLayers().some((layer) => this.editor.anchorKeysOf(layer.id).length > 0);
     if (id === "transformAgain") return this.editor.selectedLayers().length > 0 && !!this.editor.lastTransform();
     if (["paste", "pasteInFront", "pasteInBack"].includes(id)) return this.editor.canPaste();
     return true;
@@ -1365,6 +1471,15 @@ export class AppComponent implements AfterViewInit, OnDestroy {
       toggleOutline: () => this.editor.toggleOutlineView(),
       outlineStroke: () => this.editor.outlineStrokeSelection(),
       outlineText: () => { void this.editor.outlineTextSelection().catch((error) => this.notify(error)); },
+      joinPaths: () => this.runJoin(),
+      averageAnchors: () => this.openAverage(),
+      simplifyPath: () => this.openSimplify(),
+      convertCorner: () => this.editor.convertSelectedAnchors("corner"),
+      convertSmooth: () => this.editor.convertSelectedAnchors("smooth"),
+      removeAnchors: () => this.editor.removeSelectedAnchors(),
+      cutAtAnchors: () => this.editor.cutAtSelectedAnchors(),
+      selectStray: () => this.editor.selectStrayPoints(),
+      toggleMultipleHandles: () => this.preferences.updatePathSettings({ showHandlesMultiple: !this.preferences.pathSettings().showHandlesMultiple }),
       remove: () => this.editor.remove(),
       finish: () => this.editor.finishPath(),
       cancel: () => {
@@ -1594,7 +1709,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   activeSettingsCategory() {
     return this.settingsCategories.find(category => category.id === this.settingsCategory())!;
   }
-  selectSettingsCategory(id: "cursor" | "selection" | "measurement" | "appearance" | "shortcuts") {
+  selectSettingsCategory(id: "cursor" | "selection" | "anchors" | "measurement" | "appearance" | "shortcuts") {
     this.recording.set(null);
     this.settingsCategory.set(id);
     const panel = document.getElementById("settings-panel");

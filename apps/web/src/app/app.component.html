@@ -76,6 +76,11 @@
           ><button [disabled]="!commandEnabled('outlineText')" (click)="runCommand('outlineText')">
             {{ t("Create outlines") }}<kbd>{{ shortcut("outlineText") }}</kbd>
           </button>
+          <div class="menu-section-label">{{ t("Path") }}</div>
+          @for (id of pathMenuCommands; track id) {
+            <button [disabled]="!commandEnabled(id)" (click)="runCommand(id)">{{ t(commandLabel(id)) }}<kbd>{{ shortcut(id) }}</kbd></button>
+          }
+          <hr />
           <button (click)="runCommand('group')">
             {{ t("Group") }}<kbd>{{ shortcut("group") }}</kbd></button
           ><button (click)="runCommand('ungroup')">
@@ -216,6 +221,7 @@
                 [attr.aria-label]="t(familyTool(family).label)"
                 [title]="commandTitle('tool.' + familyTool(family).id)"
                 (click)="chooseTool(familyTool(family).id)"
+                (dblclick)="openToolOptions(familyTool(family).id)"
               >
                 <img
                   [src]="'/assets/icons/' + familyTool(family).icon + '.svg'"
@@ -637,22 +643,12 @@
             }
             @if (editor.selected()?.kind === "path") {
               <div class="path-actions">
-                @for (
-                  action of [
-                    ["close", "Open / close path"],
-                    ["extend", "Continue path"],
-                    ["smooth", "Smooth"],
-                    ["simplify", "Simplify"],
-                    ["average", "Average selected anchors"],
-                    ["join", "Join subpaths"],
-                    ["cleanup", "Remove stray anchors"],
-                  ];
-                  track action[0]
-                ) {
-                  <button (click)="editor.pathAction($any(action[0]))">
-                    {{ t(action[1]) }}
-                  </button>
+                <button (click)="editor.pathAction('close')">{{ t("Open / close path") }}</button>
+                <button (click)="editor.pathAction('extend')">{{ t("Continue path") }}</button>
+                @for (id of pathPanelCommands; track id) {
+                  <button [disabled]="!commandEnabled(id)" (click)="runCommand(id)" [title]="commandTitle(id)">{{ t(commandLabel(id)) }}</button>
                 }
+                <button [attr.aria-pressed]="preferences.pathSettings().showHandlesMultiple" (click)="runCommand('toggleMultipleHandles')" [title]="commandTitle('toggleMultipleHandles')">{{ preferences.pathSettings().showHandlesMultiple ? "✓" : "○" }} {{ t("Handles of multiple anchors") }}</button>
               </div>
             }
             @if (
@@ -1396,6 +1392,14 @@
         />°</label
       >
             }
+            @case ('anchors') {
+      @let paths = preferences.pathSettings();
+      <label class="setting-toggle">{{ t("Anchors") }}<select [value]="paths.anchorDisplay" (change)="preferences.updatePathSettings({ anchorDisplay: $any(text($event)) })"><option value="small">{{ t("All small") }}</option><option value="mixed">{{ t("Selected large, unselected small") }}</option><option value="large">{{ t("All large") }}</option></select></label>
+      <label class="setting-toggle">{{ t("Handles") }}<select [value]="paths.handleStyle" (change)="preferences.updatePathSettings({ handleStyle: $any(text($event)) })"><option value="small">{{ t("Small solid circles") }}</option><option value="large">{{ t("Large solid circles") }}</option><option value="cross">{{ t("Open crosses") }}</option></select></label>
+      <button class="setting-switch" type="button" role="switch" [attr.aria-checked]="paths.highlightAnchors" (click)="preferences.updatePathSettings({ highlightAnchors: !paths.highlightAnchors })"><span>{{ t("Highlight anchors on mouse over") }}</span><span class="setting-switch-track" aria-hidden="true"></span></button>
+      <button class="setting-switch" type="button" role="switch" [attr.aria-checked]="paths.showHandlesMultiple" (click)="preferences.updatePathSettings({ showHandlesMultiple: !paths.showHandlesMultiple })"><span>{{ t("Show handles when multiple anchors are selected") }}</span><span class="setting-switch-track" aria-hidden="true"></span></button>
+      <button class="setting-switch" type="button" role="switch" [attr.aria-checked]="!paths.autoAddDelete" (click)="preferences.updatePathSettings({ autoAddDelete: !paths.autoAddDelete })"><span>{{ t("Disable auto add and delete") }}</span><span class="setting-switch-track" aria-hidden="true"></span></button>
+            }
             @case ('appearance') {
       <div class="measurement-settings">
         <label>{{ t('Theme') }}<select [value]="theme()" (change)="theme.set(text($event))"><option value="dark">{{ t('Dark theme') }}</option><option value="light">{{ t('Light theme') }}</option></select></label>
@@ -1487,6 +1491,7 @@
         [class.active]="activeTool() === tool.id"
         [title]="commandTitle('tool.' + tool.id)"
         (click)="chooseTool(tool.id)"
+        (dblclick)="openToolOptions(tool.id)"
       >
         <img [src]="'/assets/icons/' + tool.icon + '.svg'" alt="" /><span>{{
           t(tool.label)
@@ -1561,6 +1566,67 @@
     <p id="confirm-message">{{ t(pending.message) }}</p>
     <div class="dialog-actions"><button type="button" autofocus (click)="confirmation.set(null)">{{ t("Cancel") }}</button><button type="button" class="danger" (click)="confirm()">{{ t(pending.action) }}</button></div>
   </section></div>
+}
+
+@if (joinDialog()) {
+  <div class="modal-backdrop"><form class="server-dialog" role="dialog" aria-modal="true" [attr.aria-label]="t('Join')" (submit)="$event.preventDefault(); runJoin('corner')" (keydown.escape)="joinDialog.set(false); $event.stopPropagation()">
+    <h2>{{ t('Join') }}</h2>
+    <p class="typography-note">{{ t('The endpoints lie on each other. Join them as a corner or as a smooth point.') }}</p>
+    <div class="dialog-actions"><button type="button" (click)="joinDialog.set(false)">{{ t('Cancel') }}</button><button type="button" (click)="runJoin('smooth')">{{ t('Smooth point') }}</button><button type="submit">{{ t('Corner') }}</button></div>
+  </form></div>
+}
+
+@if (averageDialog()) {
+  <div class="modal-backdrop"><form class="server-dialog" role="dialog" aria-modal="true" [attr.aria-label]="t('Average')" (submit)="$event.preventDefault(); applyAverage()" (keydown.escape)="averageDialog.set(false); $event.stopPropagation()">
+    <h2>{{ t('Average') }}</h2>
+    <fieldset class="radio-group"><legend>{{ t('Axis') }}</legend>
+      @for (axis of averageAxes; track axis.id) {
+        <label><input type="radio" name="average-axis" [value]="axis.id" [checked]="averageAxis() === axis.id" (change)="averageAxis.set(axis.id)" />{{ t(axis.label) }}</label>
+      }
+    </fieldset>
+    <div class="dialog-actions"><button type="button" (click)="averageDialog.set(false)">{{ t('Cancel') }}</button><button type="submit">{{ t('OK') }}</button></div>
+  </form></div>
+}
+
+@if (simplifyDialog()) {
+  @let simplify = simplifySettings();
+  <div class="modal-backdrop"><form class="server-dialog" role="dialog" aria-modal="true" [attr.aria-label]="t('Simplify')" (submit)="$event.preventDefault(); finishSimplify(true)" (keydown.escape)="finishSimplify(false); $event.stopPropagation()">
+    <h2>{{ t('Simplify') }}</h2>
+    <div class="section-label">{{ t('Simplify path') }}</div>
+    <label class="wide-label">{{ t('Curve precision') }} ({{ simplify.precision }}%)<input type="range" min="0" max="100" step="1" [value]="simplify.precision" (input)="updateSimplify({ precision: number($event) })" /></label>
+    <label class="wide-label">{{ t('Angle threshold') }} ({{ simplify.angleThreshold }}°)<input type="range" min="0" max="180" step="1" [value]="simplify.angleThreshold" (input)="updateSimplify({ angleThreshold: number($event) })" /></label>
+    @if (simplifyCounts(); as counts) {<p class="typography-note">{{ t('Original') }}: {{ counts.original }} {{ t('points') }} · {{ t('Current') }}: {{ counts.current }} {{ t('points') }}</p>}
+    <div class="section-label">{{ t('Options') }}</div>
+    <label class="wide-label toggle-row">{{ t('Straight lines') }}<input class="toggle-switch" type="checkbox" role="switch" [checked]="simplify.straightLines" (change)="updateSimplify({ straightLines: $any($event.target).checked })" /></label>
+    <label class="wide-label toggle-row">{{ t('Show original') }}<input class="toggle-switch" type="checkbox" role="switch" [checked]="simplify.showOriginal" (change)="updateSimplify({ showOriginal: $any($event.target).checked })" /></label>
+    <label class="wide-label toggle-row">{{ t('Preview') }}<input class="toggle-switch" type="checkbox" role="switch" [checked]="simplify.preview" (change)="updateSimplify({ preview: $any($event.target).checked })" /></label>
+    <div class="dialog-actions"><button type="button" (click)="finishSimplify(false)">{{ t('Cancel') }}</button><button type="submit">{{ t('OK') }}</button></div>
+  </form></div>
+}
+
+@if (toolOptions(); as optionsTool) {
+  @let draft = toolOptionsDraft();
+  <div class="modal-backdrop"><form class="server-dialog" role="dialog" aria-modal="true" [attr.aria-label]="t(toolOptionsTitle(optionsTool))" (submit)="$event.preventDefault(); applyToolOptions()" (keydown.escape)="toolOptions.set(null); $event.stopPropagation()">
+    <h2>{{ t(toolOptionsTitle(optionsTool)) }}</h2>
+    <div class="section-label">{{ t('Tolerances') }}</div>
+    <label class="wide-label">{{ t('Fidelity') }} ({{ draft.fidelity }} {{ t('pixels') }})<input type="range" min="0.5" max="20" step="0.5" [value]="draft.fidelity" (input)="setToolOption('fidelity', number($event))" /></label>
+    <label class="wide-label">{{ t('Smoothness') }} ({{ draft.smoothness }}%)<input type="range" min="0" max="100" step="1" [value]="draft.smoothness" (input)="setToolOption('smoothness', number($event))" /></label>
+    @if (optionsTool !== 'smooth') {
+      <div class="section-label">{{ t('Options') }}</div>
+      <label class="wide-label toggle-row">{{ t(optionsTool === 'path' ? 'Fill new pencil strokes' : 'Fill new brush strokes') }}<input class="toggle-switch" type="checkbox" role="switch" [checked]="draft.fill" (change)="setToolOption('fill', $any($event.target).checked)" /></label>
+      <label class="wide-label toggle-row">{{ t('Keep selected') }}<input class="toggle-switch" type="checkbox" role="switch" [checked]="draft.keepSelected" (change)="setToolOption('keepSelected', $any($event.target).checked)" /></label>
+      <label class="wide-label toggle-row">{{ t('Edit selected paths') }}<input class="toggle-switch" type="checkbox" role="switch" [checked]="draft.editSelected" (change)="setToolOption('editSelected', $any($event.target).checked)" /></label>
+      <label class="wide-label">{{ t('Within') }} ({{ draft.within }} {{ t('pixels') }})<input type="range" min="2" max="20" step="1" [disabled]="!draft.editSelected" [value]="draft.within" (input)="setToolOption('within', number($event))" /></label>
+    }
+    @if (optionsTool === 'paintbrush') {
+      @let brush = brushDraft();
+      <div class="section-label">{{ t('Calligraphic brush') }}</div>
+      <label class="wide-label">{{ t('Angle') }} ({{ brush.angle }}°)<input type="range" min="-180" max="180" step="1" [value]="brush.angle" (input)="setBrushStroke('angle', number($event))" /></label>
+      <label class="wide-label">{{ t('Roundness') }} ({{ brush.roundness }}%)<input type="range" min="0" max="100" step="1" [value]="brush.roundness" (input)="setBrushStroke('roundness', number($event))" /></label>
+      <label class="wide-label">{{ t('Diameter') }} ({{ brush.diameter }} {{ t('pixels') }})<input type="range" min="0.5" max="100" step="0.5" [value]="brush.diameter" (input)="setBrushStroke('diameter', number($event))" /></label>
+    }
+    <div class="dialog-actions"><button type="button" (click)="resetToolOptions()">{{ t('Reset') }}</button><button type="button" (click)="toolOptions.set(null)">{{ t('Cancel') }}</button><button type="submit">{{ t('OK') }}</button></div>
+  </form></div>
 }
 
 @if (arrayDialog()) {
