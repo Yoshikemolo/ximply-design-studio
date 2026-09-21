@@ -1655,6 +1655,12 @@ textarea {
 .cursor-tool-badge.duplicating {
   opacity: 0.8;
 }
+/* The mark of a path tool: a new path, a continuation, a close, an added or deleted anchor. */
+.cursor-mark-badge {
+  width: 16px;
+  height: 16px;
+  padding: 2px;
+}
 .cursor-tool-badge {
   position: fixed;
   z-index: 90;

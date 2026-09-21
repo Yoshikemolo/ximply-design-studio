@@ -312,6 +312,8 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   readonly cursorPoint = signal<{ x: number; y: number } | null>(null);
   readonly temporaryPan = signal(false);
   readonly temporarySelect = signal(false);
+  /** Alt changes what several path tools do, and the icon beside the cursor says so. */
+  readonly altHeld = signal(false);
   readonly textEditing = signal<string | null>(null);
   readonly textDraft = signal("");
   readonly traceOptions = signal<TraceOptions>({
@@ -387,6 +389,15 @@ export class AppComponent implements AfterViewInit, OnDestroy {
       editor.boundingBoxVisible();
       editor.outlineView();
       editor.handleSize();
+      editor.activeNodes();
+      editor.activeSegments();
+      editor.otherAnchors();
+      editor.hoverAnchor();
+      editor.anchorDisplay();
+      editor.handleStyle();
+      editor.showHandlesMultiple();
+      editor.highlightAnchors();
+      editor.penId();
       this.textEditing();
       this.textDraft();
       this.schedule();
@@ -909,9 +920,29 @@ export class AppComponent implements AfterViewInit, OnDestroy {
             outline: this.editor.outlineView(),
             outlineInk: this.theme?.() === "light" ? "#202b3f" : "#e5e9f0",
             handleSize: this.editor.handleSize(),
+            anchors: this.anchorDisplay(),
           },
         );
     });
+  }
+  /** What the renderer needs to show anchors and handles as Illustrator does. */
+  private anchorDisplay() {
+    const editor = this.editor, primary = editor.selected(), layers = editor.selectedLayers();
+    const others: Record<string, { selected: string[]; handles: string[] }> = {};
+    for (const layer of layers) {
+      if (!layer.curves || (layers.length === 1 && layer.id === primary?.id)) continue;
+      const selected = editor.anchorKeysOf(layer.id);
+      if (selected.length) others[layer.id] = { selected, handles: [...editor.visibleHandles(layer)] };
+    }
+    const hover = editor.hoverAnchor();
+    return {
+      selected: primary ? editor.anchorKeysOf(primary.id) : [],
+      handles: primary?.curves ? [...editor.visibleHandles(primary)] : [],
+      hover: editor.highlightAnchors() && hover && hover.id === primary?.id ? hover.key : null,
+      size: editor.anchorDisplay(),
+      handleStyle: editor.handleStyle(),
+      others,
+    };
   }
   areaSelectionPath() {
     const area = this.editor.areaSelection();
@@ -1050,7 +1081,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
           alt: event.altKey,
           ctrl: event.ctrlKey,
         },
-        this.temporarySelect() ? "select" : undefined,
+        this.temporarySelect() ? this.temporarySelectionTool() : undefined,
       );
       if (tool === "text") {
         this.editor.end();
@@ -1060,6 +1091,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   }
   pointerMove(event: PointerEvent) {
     this.cursorPoint.set({ x: event.clientX, y: event.clientY });
+    if (this.altHeld && this.altHeld() !== event.altKey) this.altHeld.set(event.altKey);
     if (this.zoomDrag) { this.updateZoomArea(event); return; }
     if (this.pan) {
       const view = this.viewport!.nativeElement;
@@ -1070,6 +1102,8 @@ export class AppComponent implements AfterViewInit, OnDestroy {
         shift: event.shiftKey,
         alt: event.altKey,
         ctrl: event.ctrlKey,
+        // Space held during a Pen drag moves the anchor being placed.
+        ...(this.spaceHeld ? { space: true } : {}),
       });
   }
   pointerUp(event?: PointerEvent) {
@@ -1419,13 +1453,35 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   }
   activeTool(): ToolId {
     return this.temporarySelect() && !this.editor.isEditingCurve()
-      ? "select"
+      ? this.temporarySelectionTool()
       : this.editor.tool();
   }
+  /**
+   * The tool Ctrl gives while it is held: with a selection tool active, the other one;
+   * with any other tool, the selection tool used last, as in Illustrator.
+   */
+  temporarySelectionTool(): "select" | "direct" {
+    const tool = this.editor.tool();
+    if (tool === "select") return "direct";
+    if (tool === "direct") return "select";
+    return this.editor.lastSelectionTool?.() ?? "select";
+  }
   toolIcon() {
-    return this.temporaryPan()
-      ? "hand"
-      : (this.tools.find((t) => t.id === this.activeTool())?.icon ?? "select");
+    if (this.temporaryPan()) return "hand";
+    const tool = this.activeTool();
+    // Alt turns a tool into its partner while it is held, as in Illustrator.
+    if (this.altHeld?.()) {
+      const partner: Partial<Record<ToolId, ToolId>> = { pen: "convertAnchor", addAnchor: "deleteAnchor", deleteAnchor: "addAnchor", path: "smooth" };
+      const other = partner[tool];
+      if (other) return this.tools.find((t) => t.id === other)?.icon ?? other;
+    }
+    return this.tools.find((t) => t.id === tool)?.icon ?? "select";
+  }
+  /** The file of the mark a path tool shows beside the cursor. */
+  cursorMark(): string | null {
+    const mark = this.editor.pathCursor();
+    if (!mark || this.temporaryPan() || this.temporarySelect()) return null;
+    return mark === "newPath" ? "new-path" : mark;
   }
   cursorAxesPoint() {
     return this.preferences.cursorAxes() ? this.canvasCursorPosition() : null;
@@ -1831,6 +1887,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     if (!event.isComposing) this.temporarySelect.set(event.ctrlKey);
     // Alt pressed during a transform announces the duplication even without moving the pointer.
     this.editor?.setDuplicatingDrag(event.altKey);
+    this.altHeld?.set(event.altKey);
     if (
       event.key === "Escape" &&
       !event.isComposing &&
@@ -1883,6 +1940,8 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     if (!command) return;
     event.preventDefault();
     if (command === "panHold") {
+      // While the Pen is placing an anchor, Space moves the anchor instead of the view.
+      if (this.editor.isEditingCurve()) { this.spaceHeld = true; return; }
       this.temporaryPan.set(true);
       this.panKey = event.code;
       return;
@@ -1939,6 +1998,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   @HostListener("window:keyup", ["$event"]) keyUp(event: KeyboardEvent) {
     this.temporarySelect.set(event.ctrlKey);
     this.editor?.setDuplicatingDrag(event.altKey);
+    this.altHeld?.set(event.altKey);
     if (event.code === "Space") this.spaceHeld = false;
     if (event.code === this.panKey) {
       this.temporaryPan.set(false);

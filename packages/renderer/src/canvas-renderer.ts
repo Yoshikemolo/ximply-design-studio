@@ -52,6 +52,20 @@ export class CanvasRenderer {
       /** Ink of the outline view, which the shell picks from the theme. */
       outlineInk?: string;
       handleSize?: number;
+      /**
+       * How the anchors of the selected path are shown, as Illustrator's Selection and
+       * Anchor Display preferences set it: which are chosen (drawn solid), which handles
+       * show, which anchor is under the pointer, the sizes and the handle style.
+       */
+      anchors?: {
+        selected: string[];
+        handles: string[];
+        hover: string | null;
+        size: "small" | "mixed" | "large";
+        handleStyle: "small" | "large" | "cross";
+        /** Anchors chosen on the other selected objects, drawn on each of them. */
+        others?: Record<string, { selected: string[]; handles: string[] }>;
+      };
     } = { zoom: 1, direct: false },
   ) {
     if (canvas.width !== document.width) canvas.width = document.width;
@@ -129,30 +143,85 @@ export class CanvasRenderer {
         ctx.stroke();
       }
       if (interaction.direct && layer.curves && !layer.procedural && !layer.dimension)
-        for (const path of layer.curves)
-          for (const node of path.nodes) {
-            if (interaction.showHandles !== false)
-              for (const handle of [node.incoming, node.outgoing]) {
-                ctx.beginPath();
-                ctx.moveTo(node.point.x, node.point.y);
-                ctx.lineTo(handle.x, handle.y);
-                ctx.stroke();
-                ctx.beginPath();
-                ctx.arc(handle.x, handle.y, 3 * unit, 0, Math.PI * 2);
-                ctx.fill();
-                ctx.stroke();
-              }
-            ctx.fillStyle = "#0d59f2";
-            ctx.fillRect(
-              node.point.x - size,
-              node.point.y - size,
-              size * 2,
-              size * 2,
-            );
-            ctx.fillStyle = "#ffffff";
-          }
+        this.anchors(ctx, layer, interaction.anchors, interaction.showHandles !== false, unit, size);
       ctx.restore();
     }
+    const others = interaction.direct ? interaction.anchors?.others ?? {} : {};
+    for (const other of selected) {
+      const info = others[other.id];
+      if (!info || !other.curves || other.id === layer?.id) continue;
+      const unit = 1 / Math.max(0.1, interaction.zoom), size = (interaction.handleSize ?? 4) * unit;
+      ctx.save();
+      this.transform(ctx, other);
+      this.anchors(ctx, other, { ...interaction.anchors!, selected: info.selected, handles: info.handles, hover: null }, true, unit, size);
+      ctx.restore();
+    }
+  }
+  /** Anchors and handles of one path, solid where chosen and hollow elsewhere. */
+  private anchors(
+    ctx: CanvasRenderingContext2D,
+    layer: Layer,
+    display: NonNullable<Parameters<CanvasRenderer["draw"]>[6]>["anchors"],
+    showHandles: boolean,
+    unit: number,
+    size: number,
+  ) {
+    const chosen = new Set(display?.selected ?? []);
+    // Without anchors chosen the whole path is selected, and all its anchors show solid.
+    const whole = !display || chosen.size === 0;
+    const handles = display ? new Set(display.handles) : null;
+    const large = size * 1.5;
+    const anchorSize = (on: boolean) => (display?.size === "large" || (display?.size === "mixed" && on) ? large : size);
+    const handleRadius = (display?.handleStyle === "large" ? 4.5 : 3) * unit;
+    layer.curves!.forEach((path, pi) =>
+      path.nodes.forEach((node, ni) => {
+        for (const part of ["incoming", "outgoing"] as const) {
+          const handle = node[part];
+          const shown = handles ? handles.has(`${pi}:${ni}:${part}`) : showHandles;
+          if (!shown || (handle.x === node.point.x && handle.y === node.point.y)) continue;
+          ctx.strokeStyle = "#0d59f2";
+          ctx.lineWidth = 1.2 * unit;
+          ctx.beginPath();
+          ctx.moveTo(node.point.x, node.point.y);
+          ctx.lineTo(handle.x, handle.y);
+          ctx.stroke();
+          if (display?.handleStyle === "cross") {
+            const arm = 3.5 * unit;
+            ctx.beginPath();
+            ctx.moveTo(handle.x - arm, handle.y);
+            ctx.lineTo(handle.x + arm, handle.y);
+            ctx.moveTo(handle.x, handle.y - arm);
+            ctx.lineTo(handle.x, handle.y + arm);
+            ctx.stroke();
+          } else {
+            ctx.fillStyle = "#0d59f2";
+            ctx.beginPath();
+            ctx.arc(handle.x, handle.y, handleRadius, 0, Math.PI * 2);
+            ctx.fill();
+          }
+        }
+      }),
+    );
+    layer.curves!.forEach((path, pi) =>
+      path.nodes.forEach((node, ni) => {
+        const key = `${pi}:${ni}`;
+        const on = whole || chosen.has(key);
+        const half = anchorSize(on);
+        ctx.lineWidth = 1.2 * unit;
+        ctx.strokeStyle = "#0d59f2";
+        ctx.fillStyle = on ? "#0d59f2" : "#ffffff";
+        ctx.fillRect(node.point.x - half, node.point.y - half, half * 2, half * 2);
+        ctx.strokeRect(node.point.x - half, node.point.y - half, half * 2, half * 2);
+        if (display?.hover === key) {
+          // The anchor under the pointer is ringed so it can be told from its neighbours.
+          const ring = half + 2.5 * unit;
+          ctx.lineWidth = 1.5 * unit;
+          ctx.strokeRect(node.point.x - ring, node.point.y - ring, ring * 2, ring * 2);
+        }
+      }),
+    );
+    ctx.fillStyle = "#ffffff";
+    ctx.lineWidth = 1.5 * unit;
   }
   private curve(ctx: CanvasRenderingContext2D, path: CurvePath) {
     if (!path.nodes.length) return;

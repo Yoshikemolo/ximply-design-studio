@@ -6,7 +6,7 @@ import { MarginGuides, MARGIN_GUIDE_PREFIX, marginGuidePositions, PageEdges, Pag
 import { Dimension, DimensionFormat, defaultDimensionFormat, dimensionGeometry } from "../../../../packages/domain/src/dimensions";
 import { LineEnds, defaultLineEnds, validLineEnds } from "../../../../packages/domain/src/line-endings";
 import { snapDimensionPoint, snapDimensionOffset, DimensionSnap } from "./dimension-snapping";
-import { AreaSelectionKind, SelectionArea, layerInsideArea, layerIntersectsArea } from "../../../../packages/domain/src/selection-area";
+import { AreaSelectionKind, SelectionArea, layerInsideArea, layerIntersectsArea, pointInPolygon, selectionAreaPolygon } from "../../../../packages/domain/src/selection-area";
 import { blendCompatible, blendProgress, interpolateBlendLayer, syncBlends, ObjectBlend, BlendEasing } from "../../../../packages/domain/src/object-blend";
 import { defaultTypography, defaultTextLayout, FONT_FAMILIES, layoutText, TextLayoutOptions, TextTypography } from "../../../../packages/domain/src/text-layout";
 import { snapPoint, SnapConfig, rulerSnapSteps } from "../../../../packages/domain/src/measurements";
@@ -993,10 +993,10 @@ export class EditorService {
   readonly areaSelection = signal<SelectionArea | null>(null);
   /** Objects the area touches, or only the ones it encloses. */
   readonly areaSelectionMode = signal<"intersect" | "inside">("intersect");
-  private areaGesture?: { ids: string[]; primary: string | null; nodes: string[]; shift: boolean; moved: boolean };
-  private startAreaSelection(point: Point, kind: AreaSelectionKind, shift: boolean) {
+  private areaGesture?: { ids: string[]; primary: string | null; nodes: string[]; shift: boolean; moved: boolean; anchors?: boolean };
+  private startAreaSelection(point: Point, kind: AreaSelectionKind, shift: boolean, anchors = false) {
     this.lastAreaSelection.set(kind);
-    this.areaGesture = { ids: this.selectedLayers().map(layer => layer.id), primary: this.selectedId(), nodes: [...this.activeNodes()], shift, moved: false };
+    this.areaGesture = { ids: this.selectedLayers().map(layer => layer.id), primary: this.selectedId(), nodes: [...this.activeNodes()], shift, moved: false, anchors };
     this.areaSelection.set({ kind, start: point, end: point, points: [point] });
   }
   private moveAreaSelection(point: Point) {
@@ -1009,6 +1009,7 @@ export class EditorService {
     this.areaSelection.set(area);
     gesture.moved ||= Math.hypot(point.x - area.start.x, point.y - area.start.y) >= 3 / this.zoom();
     if (!gesture.moved) return;
+    if (gesture.anchors) { this.selectAnchorsInArea(area, gesture.shift, gesture); return; }
     const layers = this.document().layers.filter(layer => layer.visible && !layer.guide && !this.isEffectivelyLocked(layer));
     const units = new Map<string, Layer[]>();
     for (const layer of layers) {
@@ -1475,6 +1476,7 @@ export class EditorService {
     if (target) this.reorderLayer(source.id, target.id, delta < 0 ? "before" : "after");
   }
   remove() {
+    if (this.removeSelectedParts()) return;
     const ids = new Set(
       this.selectedLayers()
         .filter((l) => !this.isEffectivelyLocked(l))
@@ -2165,6 +2167,8 @@ export class EditorService {
     else if (g.mode === "penHandle") this.dragPenHandle(point, modifiers);
     else if (g.mode === "penClose") this.dragPenClose(point, modifiers);
     else if (g.mode.startsWith("convert:")) this.dragConvert(point, modifiers);
+    else if (g.mode === "anchors") this.dragAnchorsAcross(point, modifiers);
+    else if (g.mode.startsWith("segment:")) this.dragSegmentGesture(modifiers.shift ? snapDirection(g.start, point, this.snapAngle()) : point);
     else if (g.mode.startsWith("node:")) this.dragNode(point, modifiers);
     else if (
       [
@@ -2334,6 +2338,13 @@ export class EditorService {
       this.setLayer(g.id, fitCurves(layer, layer.curves));
     if (g.mode === "penClose") { this.penId.set(null); this.activeNodes.set([]); }
     if (g.mode === "pathEraser") this.finishPathEraser(g);
+    if (g.mode === "anchors") {
+      for (const id of this.anchorOriginals?.keys() ?? []) {
+        const moved = this.document().layers.find((l) => l.id === id);
+        if (moved?.curves) this.setLayer(id, fitCurves(moved, moved.curves));
+      }
+      this.anchorOriginals = undefined;
+    }
     this.penDrag = undefined;
     if (this.painting)
       this.setLayer(g.id, {
@@ -3225,6 +3236,144 @@ export class EditorService {
   }
   /** The brush the Paintbrush applies to new strokes. */
   readonly activeBrushStroke = signal<BrushStroke>({ ...DEFAULT_BRUSH_STROKE });
+  /** Anchors chosen on selected objects other than the primary one, as "path:index" keys by layer. */
+  readonly otherAnchors = signal<Record<string, string[]>>({});
+  /** Segments chosen on the primary object, as "path:segment" keys. */
+  readonly activeSegments = signal<string[]>([]);
+  /** Anchor and handle display, as Illustrator's Selection and Anchor Display preferences set it. */
+  readonly showHandlesMultiple = signal(true);
+  readonly anchorDisplay = signal<"small" | "mixed" | "large">("mixed");
+  readonly handleStyle = signal<"small" | "large" | "cross">("small");
+  readonly highlightAnchors = signal(true);
+  /** The anchors chosen on a layer, whether it is the primary object or another selected one. */
+  anchorKeysOf(id: string): string[] {
+    if (id === this.selectedId()) return this.selectedAnchorKeys();
+    return this.selectedIds().includes(id) ? this.otherAnchors()[id] ?? [] : [];
+  }
+  /**
+   * The handles shown, which are also the only ones a press can take: those of the chosen
+   * anchors and of the segments that meet them, and those of chosen segments. With several
+   * anchors chosen on one path the preference decides; without it only chosen segments
+   * show theirs, as in Illustrator.
+   */
+  visibleHandles(layer: Layer): Set<string> {
+    const visible = new Set<string>();
+    if (!this.showHandles() || !layer.curves) return visible;
+    const anchors = this.anchorKeysOf(layer.id);
+    const perPath = new Map<number, number>();
+    for (const key of anchors) { const pi = +key.split(":")[0]; perPath.set(pi, (perPath.get(pi) ?? 0) + 1); }
+    for (const key of anchors) {
+      const [pi, ni] = key.split(":").map(Number);
+      const path = layer.curves[pi];
+      if (!path?.nodes[ni] || (!this.showHandlesMultiple() && (perPath.get(pi) ?? 0) > 1)) continue;
+      const n = path.nodes.length;
+      visible.add(`${pi}:${ni}:incoming`).add(`${pi}:${ni}:outgoing`);
+      if (path.closed || ni > 0) visible.add(`${pi}:${(ni - 1 + n) % n}:outgoing`);
+      if (path.closed || ni < n - 1) visible.add(`${pi}:${(ni + 1) % n}:incoming`);
+    }
+    if (layer.id === this.selectedId()) {
+      for (const key of this.activeSegments()) {
+        const [pi, si] = key.split(":").map(Number);
+        const path = layer.curves[pi];
+        if (!path || si >= path.nodes.length) continue;
+        visible.add(`${pi}:${si}:outgoing`).add(`${pi}:${(si + 1) % path.nodes.length}:incoming`);
+      }
+    }
+    // A handle that lies on its anchor is not drawn and cannot be taken.
+    for (const key of [...visible]) {
+      const [pi, ni, part] = key.split(":");
+      const node = layer.curves[+pi]?.nodes[+ni];
+      const handle = node?.[part as "incoming" | "outgoing"];
+      if (!node || !handle || Math.hypot(handle.x - node.point.x, handle.y - node.point.y) < 1e-6) visible.delete(key);
+    }
+    return visible;
+  }
+  /** The segment of a path within a couple of screen pixels of the pointer. */
+  private segmentAt(layer: Layer, point: Point): { path: number; segment: number; t: number } | null {
+    if (!layer.curves) return null;
+    const local = localPoint(layer, point);
+    let best: { path: number; segment: number; t: number; distance: number } | null = null;
+    layer.curves.forEach((path, pi) => {
+      const near = nearestOnPath(path, local);
+      if (near && (!best || near.distance < best.distance)) best = { path: pi, segment: near.segment, t: near.t, distance: near.distance };
+    });
+    const found = best as { path: number; segment: number; t: number; distance: number } | null;
+    return found && found.distance <= 3 / this.zoom() ? { path: found.path, segment: found.segment, t: found.t } : null;
+  }
+  /** Drags a chosen segment: a curve is reshaped through the grabbed point, a line moves whole. */
+  private dragSegmentGesture(point: Point) {
+    const g = this.gesture!;
+    const [, pi, si, t] = g.mode.split(":");
+    const curves = structuredClone(g.original.curves!), path = curves[+pi];
+    const a = path.nodes[+si], bIndex = (+si + 1) % path.nodes.length, b = path.nodes[bIndex];
+    const from = localPoint(g.original, g.start), to = localPoint(g.original, point);
+    const moved = dragSegment(a, b, +t, { x: to.x - from.x, y: to.y - from.y });
+    path.nodes[+si] = moved.a;
+    path.nodes[bIndex] = moved.b;
+    this.setLayer(g.id, { curves });
+  }
+  /**
+   * Removes the chosen anchors and segments, as Delete does with the Direct Selection
+   * tool: an anchor goes with the segments on both of its sides, and what remains of the
+   * path stays in place as open paths. Returns false when nothing was chosen.
+   */
+  removeSelectedParts(): boolean {
+    const layers = this.selectedLayers().filter((layer) => layer.curves && !this.isEffectivelyLocked(layer) && !layer.guide);
+    const targets = layers.filter((layer) => this.anchorKeysOf(layer.id).length || (layer.id === this.selectedId() && this.activeSegments().length));
+    if (!targets.length || this.drawingLayer()) return false;
+    const before = this.document();
+    const updates = new Map<string, Layer | null>();
+    for (const layer of targets) {
+      const anchors = this.anchorKeysOf(layer.id), segments = layer.id === this.selectedId() ? this.activeSegments() : [];
+      const pieces = layer.curves!.flatMap((path, pi) => removeParts(
+        path,
+        anchors.filter((key) => +key.split(":")[0] === pi).map((key) => +key.split(":")[1]),
+        segments.filter((key) => +key.split(":")[0] === pi).map((key) => +key.split(":")[1]),
+      ));
+      updates.set(layer.id, pieces.length ? fitCurves(layer, pieces) : null);
+    }
+    this.commitStep(before);
+    this.document.update((d) => ({ ...d, layers: d.layers.flatMap((l) => (updates.has(l.id) ? (updates.get(l.id) ? [updates.get(l.id)!] : []) : [l])) }));
+    const kept = this.selectedIds().filter((id) => updates.get(id) !== null && this.document().layers.some((l) => l.id === id));
+    this.selectedIds.set(kept);
+    this.selectedId.set(kept.at(-1) ?? null);
+    this.activeNodes.set([]);
+    this.activeSegments.set([]);
+    this.otherAnchors.set({});
+    this.changed();
+    return true;
+  }
+  /** Chooses the anchors inside a marquee drawn with the Direct Selection tool, across objects. */
+  private selectAnchorsInArea(area: SelectionArea, shift: boolean, previous: { ids: string[]; primary: string | null; nodes: string[] }) {
+    const polygon = selectionAreaPolygon(area);
+    const inside = (p: Point) => pointInPolygon(p, polygon);
+    const found = new Map<string, string[]>();
+    for (const layer of this.document().layers) {
+      if (!layer.visible || layer.guide || layer.dimension || layer.procedural || this.isEffectivelyLocked(layer) || !["path", "rectangle", "ellipse"].includes(layer.kind)) continue;
+      const curves = this.editableCurves(layer);
+      const keys: string[] = [];
+      curves.forEach((path, pi) => path.nodes.forEach((node, ni) => { if (inside(worldPoint(layer, node.point))) keys.push(`${pi}:${ni}`); }));
+      if (keys.length) found.set(layer.id, keys);
+    }
+    if (shift && previous.primary) {
+      const union = new Set([...(found.get(previous.primary) ?? []), ...previous.nodes]);
+      found.set(previous.primary, [...union]);
+    }
+    const ids = [...new Set([...(shift ? previous.ids : []), ...found.keys()])].filter((id) => this.document().layers.some((l) => l.id === id));
+    // Rectangles and ellipses become paths, so their anchors can be edited.
+    for (const id of found.keys()) {
+      const layer = this.document().layers.find((l) => l.id === id)!;
+      if (!layer.curves) this.setLayer(id, { kind: "path", curves: this.editableCurves(layer) });
+    }
+    const primary = ids.at(-1) ?? null;
+    this.selectedIds.set(ids);
+    this.selectedId.set(primary);
+    this.activeNodes.set(primary ? found.get(primary) ?? [] : []);
+    const others: Record<string, string[]> = {};
+    for (const [id, keys] of found) if (id !== primary) others[id] = keys;
+    this.otherAnchors.set(others);
+    this.activeSegments.set([]);
+  }
   private editableCurves(layer: Layer): CurvePath[] {
     if (layer.curves) return structuredClone(layer.curves);
     if (layer.kind === "path") return [polyline(layer.points)];
@@ -3254,10 +3403,11 @@ export class EditorService {
       | { path: number; index: number; part: "point" | "incoming" | "outgoing" }
       | undefined;
     let distance = 9 / this.zoom();
+    const visible = this.visibleHandles(layer);
     layer.curves?.forEach((path, pathIndex) => {
       path.nodes.forEach((node, index) => {
         for (const part of ["point", "incoming", "outgoing"] as const) {
-          if (part !== "point" && !this.showHandles()) continue;
+          if (part !== "point" && !visible.has(`${pathIndex}:${index}:${part}`)) continue;
           const world = worldPoint(layer, node[part]);
           const candidate = Math.hypot(world.x - point.x, world.y - point.y);
           if (candidate < distance) {
@@ -3383,69 +3533,103 @@ export class EditorService {
     this.cutPending.set(null);
     this.cutPreview.set(null);
   }
+  /**
+   * The Direct Selection tool, and the Path Eraser, as Illustrator uses them. A press on an
+   * anchor or a visible handle takes it; a press within a couple of pixels of a segment
+   * chooses the segment, and a drag reshapes it; a press inside a filled path chooses all
+   * its anchors; a press on empty canvas starts a marquee that chooses the anchors inside
+   * it, across objects. Shift adds to what is chosen and takes back what already was.
+   */
   private startPathEdit(
     point: Point,
     before: StudioDocument,
     modifiers: { shift?: boolean; alt?: boolean; ctrl?: boolean },
     tool = this.tool(),
   ) {
-    let layer = this.selected();
+    const editable = (candidate: Layer | null | undefined): Layer | null => {
+      if (!candidate || this.isEffectivelyLocked(candidate) || !candidate.visible || candidate.guide || candidate.dimension || candidate.procedural) return null;
+      if (!["path", "rectangle", "ellipse"].includes(candidate.kind)) return null;
+      return candidate.curves ? candidate : { ...candidate, kind: "path", curves: this.editableCurves(candidate) };
+    };
+    // Anchors and segments of the selected objects come first, the frontmost object after.
+    let layer: Layer | null = null;
     let hit: ReturnType<EditorService["findCurveNode"]>;
-    if (layer && !this.isEffectivelyLocked(layer) && layer.visible && !layer.guide) {
-      if (
-        !layer.curves &&
-        ["path", "rectangle", "ellipse"].includes(layer.kind)
-      )
-        layer = { ...layer, kind: "path", curves: this.editableCurves(layer) };
-      hit = this.findCurveNode(layer, point);
+    let segment: ReturnType<EditorService["segmentAt"]> = null;
+    for (const candidate of [...this.selectedLayers()].reverse().map(editable)) {
+      if (!candidate) continue;
+      hit = this.findCurveNode(candidate, point);
+      if (hit) { layer = candidate; break; }
     }
-    if (!hit) {
-      layer = pick(this.document().layers.filter(layer=>!layer.dimension || this.dimensionsVisible()), point) ?? null;
-      if (layer) {
-        if (
-          !layer.curves &&
-          ["path", "rectangle", "ellipse"].includes(layer.kind)
-        )
-          layer = {
-            ...layer,
-            kind: "path",
-            curves: this.editableCurves(layer),
-          };
-        hit = this.findCurveNode(layer, point);
+    if (!layer && tool === "direct") {
+      for (const candidate of [...this.selectedLayers()].reverse().map(editable)) {
+        if (!candidate) continue;
+        segment = this.segmentAt(candidate, point);
+        if (segment) { layer = candidate; break; }
       }
     }
-    if (
-      !layer ||
-      this.isEffectivelyLocked(layer) ||
-      !layer.visible || layer.dimension || layer.procedural ||
-      ["image", "text"].includes(layer.kind)
-    ) {
-      this.selectedId.set(null);
+    const picked = !layer ? pick(this.document().layers.filter((l) => !l.dimension || this.dimensionsVisible()), point) ?? null : null;
+    if (!layer && picked) {
+      layer = editable(picked);
+      if (layer) {
+        hit = this.findCurveNode(layer, point);
+        if (!hit && tool === "direct") segment = this.segmentAt(layer, point);
+      } else if (picked && tool === "direct") {
+        // A text or an image is taken whole by the Direct Selection tool.
+        if (!this.isEffectivelyLocked(picked)) this.selectLayer(picked.id, !!modifiers.shift);
+        return;
+      }
+    }
+    if (!layer) {
+      if (tool === "direct") {
+        if (!modifiers.shift) { this.activeNodes.set([]); this.activeSegments.set([]); this.otherAnchors.set({}); }
+        this.startAreaSelection(point, "rectangle", !!modifiers.shift, true);
+      } else this.selectedId.set(null);
       return;
     }
-    if (this.selectedId() !== layer.id) this.activeNodes.set([]);
-    this.selectedIds.set([layer.id]);
-    this.selectedId.set(layer.id);
-    const curves = this.editableCurves(layer),
-      p = localPoint(layer, point);
+    const curves = structuredClone(layer.curves!);
+    const target = layer;
+    // Shift keeps the anchors chosen on the other objects; a plain press starts again.
+    if (this.selectedId() !== target.id) {
+      if (modifiers.shift && this.selectedId()) {
+        const previous = this.selectedId()!;
+        this.otherAnchors.update((all) => ({ ...all, [previous]: this.activeNodes() }));
+        this.selectedIds.update((ids) => [...ids.filter((id) => id !== target.id), target.id]);
+        this.activeNodes.set(this.otherAnchors()[target.id] ?? []);
+      } else {
+        this.selectedIds.set([target.id]);
+        this.activeNodes.set([]);
+        this.otherAnchors.set({});
+      }
+      this.activeSegments.set([]);
+      this.selectedId.set(target.id);
+    } else if (!this.selectedIds().includes(target.id)) this.selectedIds.set([target.id]);
+    this.setLayer(target.id, { kind: "path", curves });
     if (tool === "pathEraser") {
-      this.gesture = {
-        before,
-        start: point,
-        last: point,
-        id: layer.id,
-        points: [],
-        original: layer,
-        mode: tool,
-      };
+      this.gesture = { before, start: point, last: point, id: target.id, points: [], original: structuredClone({ ...target, curves }), mode: tool };
       this.erasePath(point);
       return;
     }
-    if (!hit) {
-      this.setLayer(layer.id, { kind: "path", curves });
+    if (segment) {
+      const key = `${segment.path}:${segment.segment}`;
+      if (modifiers.shift) {
+        this.activeSegments.update((keys) => keys.includes(key) ? keys.filter((k) => k !== key) : [...keys, key]);
+      } else if (!this.activeSegments().includes(key)) {
+        this.activeSegments.set([key]);
+        this.activeNodes.set([]);
+      }
+      this.gesture = { before, start: point, last: point, id: target.id, points: [], original: structuredClone({ ...target, curves }), mode: `segment:${segment.path}:${segment.segment}:${segment.t}` };
       return;
     }
-    this.setLayer(layer.id, { kind: "path", curves });
+    if (!hit) {
+      // A press inside a filled path chooses all of its anchors, and a drag moves them.
+      const filled = target.fill !== "none" && target.fill !== "transparent" && curves.some((c) => c.closed);
+      if (tool === "direct" && filled) {
+        this.activeNodes.set(curves.flatMap((path, pi) => path.nodes.map((_, ni) => `${pi}:${ni}`)));
+        this.activeSegments.set([]);
+        this.gesture = { before, start: point, last: point, id: target.id, points: [], original: structuredClone({ ...target, curves }), mode: "node:0:0:point" };
+      }
+      return;
+    }
     const key = hit.path + ":" + hit.index;
     const deselectNodeOnClick =
       modifiers.shift && hit.part === "point" && this.activeNodes().includes(key)
@@ -3454,17 +3638,52 @@ export class EditorService {
     if (modifiers.shift && hit.part === "point") {
       if (!this.activeNodes().includes(key))
         this.activeNodes.update((keys) => [...keys, key]);
-    } else if (!this.activeNodes().includes(key)) this.activeNodes.set([key]);
+    } else if (hit.part === "point" && !this.activeNodes().includes(key)) {
+      this.activeNodes.set([key]);
+      this.otherAnchors.set({});
+      this.selectedIds.set([target.id]);
+    }
+    if (hit.part === "point" && !modifiers.shift) this.activeSegments.set([]);
+    const others = Object.entries(this.otherAnchors()).filter(([id, keys]) => keys.length && this.selectedIds().includes(id));
+    if (hit.part === "point" && others.length && this.activeNodes().includes(key)) {
+      // Anchors chosen on several objects move together.
+      const ids = [target.id, ...others.map(([id]) => id)];
+      this.gesture = { before, start: point, last: point, id: target.id, points: [], original: structuredClone({ ...target, curves }), mode: "anchors", ids, deselectNodeOnClick };
+      this.anchorOriginals = new Map(ids.map((id) => [id, structuredClone(this.document().layers.find((l) => l.id === id)!)]));
+      return;
+    }
     this.gesture = {
       before,
       start: point,
       last: point,
-      id: layer.id,
+      id: target.id,
       points: [],
-      original: structuredClone({ ...layer, curves }),
+      original: structuredClone({ ...target, curves }),
       mode: "node:" + hit.path + ":" + hit.index + ":" + hit.part,
       deselectNodeOnClick,
     };
+  }
+  private anchorOriginals?: Map<string, Layer>;
+  /** Moves the anchors chosen on every object by the drag, handles and all. */
+  private dragAnchorsAcross(point: Point, modifiers: { shift?: boolean }) {
+    const g = this.gesture!;
+    const end = modifiers.shift ? snapDirection(g.start, point, this.snapAngle()) : point;
+    const dx = end.x - g.start.x, dy = end.y - g.start.y;
+    const updates = new Map<string, Layer>();
+    for (const [id, original] of this.anchorOriginals ?? []) {
+      const keys = new Set(this.anchorKeysOf(id));
+      if (!original.curves || !keys.size) continue;
+      const curves = original.curves.map((path, pi) => ({
+        ...path,
+        nodes: path.nodes.map((node, ni) => {
+          if (!keys.has(`${pi}:${ni}`)) return node;
+          const at = worldPoint(original, node.point);
+          return placeAnchor(node, localPoint(original, { x: at.x + dx, y: at.y + dy }));
+        }),
+      }));
+      updates.set(id, { ...original, curves });
+    }
+    this.document.update((d) => ({ ...d, layers: d.layers.map((l) => updates.get(l.id) ?? l) }));
   }
   private dragNode(
     point: Point,

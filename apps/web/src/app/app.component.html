@@ -1296,6 +1296,16 @@
       [style.left.px]="cursor.x + 14"
       [style.top.px]="cursor.y + 18"
     />
+    @if (cursorMark(); as mark) {
+      <img
+        class="cursor-tool-badge cursor-mark-badge"
+        [src]="'/assets/icons/cursor-' + mark + '.svg'"
+        alt=""
+        aria-hidden="true"
+        [style.left.px]="cursor.x + 36"
+        [style.top.px]="cursor.y + 18"
+      />
+    }
     @if (editor.duplicatingDrag()) {
       <img
         class="cursor-tool-badge duplicating"
