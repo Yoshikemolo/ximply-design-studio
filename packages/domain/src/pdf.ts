@@ -1,5 +1,6 @@
 import { Layer, StudioDocument, defaultStrokeStyle } from './document';
 import { CurvePath, worldPoint } from './curves';
+import { brushOutline } from './brush-stroke';
 import { ellipsePath, polyline } from './shapes';
 import { materializeProcedural, projectionCurves, projectionDash } from './procedural';
 
@@ -158,7 +159,16 @@ function pageContent(source: PdfPageSource): PageContent {
     if (fill && fill.alpha > 0 && drawn.length) {
       parts.push(`q ${alphaName(layer.opacity * fill.alpha, layer.opacity)} ${colourOperator(fill, false)}\n${pathOperators(drawn.map((path) => ({ ...path, closed: true })))}\nf* Q`);
     }
-    if (stroke && stroke.alpha > 0 && width > 0 && drawn.length) {
+    if (layer.brushStroke && layer.curves && stroke && stroke.alpha > 0 && width > 0) {
+      // A brushed path is the area its nib sweeps, measured on the object and placed on the page.
+      const rings = layer.curves
+        .filter((_, index) => !projection[index])
+        .flatMap((path) => brushOutline(path, layer.brushStroke!, width))
+        .filter((ring) => ring.length > 2)
+        .map((ring) => ring.map((point) => worldPoint(layer, point)));
+      const operators = rings.map((ring) => `${round(ring[0].x)} ${round(ring[0].y)} m ${ring.slice(1).map((point) => `${round(point.x)} ${round(point.y)} l`).join(' ')} h`).join('\n');
+      if (operators) parts.push(`q ${alphaName(layer.opacity * stroke.alpha, layer.opacity)} ${colourOperator(stroke, false)}\n${operators}\nf Q`);
+    } else if (stroke && stroke.alpha > 0 && width > 0 && drawn.length) {
       if (style.alignment && style.alignment !== 'center') skipped.add('inside and outside strokes');
       parts.push(`q ${alphaName(layer.opacity, layer.opacity * stroke.alpha)} ${colourOperator(stroke, true)} ${settings}\n${pathOperators([...closed, ...open])}\nS Q`);
     }

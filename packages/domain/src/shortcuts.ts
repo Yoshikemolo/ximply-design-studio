@@ -21,7 +21,7 @@ export const COMMANDS: Command[] = [
     line: ["Line", "\\"],
     path: ["Pencil", "N"],
     text: ["Text", "T"],
-    brush: ["Brush", "B"],
+    paintbrush: ["Paintbrush", "B"],
     eraser: ["Eraser", "Shift+E"],
     rotate: ["Rotate", "R"],
     hand: ["Pan", "H"],
@@ -37,6 +37,9 @@ export const COMMANDS: Command[] = [
     grid: "Rectangular grid",
     polar: "Polar grid",
     flare: "Flare",
+    brush: "Raster brush",
+    reshape: "Reshape",
+    groupSelect: "Group selection",
     smooth: "Smooth",
     pathEraser: "Path eraser",
     symbolShift: "Symbol shifter",
@@ -102,6 +105,17 @@ export const COMMANDS: Command[] = [
   { id: "toggleOutline", label: "Outline view", keys: ["Mod+Y"] },
   { id: "outlineStroke", label: "Outline stroke", keys: [] },
   { id: "outlineText", label: "Create outlines", keys: ["Mod+Shift+O"] },
+  { id: "joinPaths", label: "Join", keys: ["Mod+J"] },
+  { id: "averageAnchors", label: "Average", keys: ["Mod+Alt+J"] },
+  { id: "simplifyPath", label: "Simplify", keys: [] },
+  { id: "convertCorner", label: "Convert selected anchors to corner", keys: [] },
+  { id: "convertSmooth", label: "Convert selected anchors to smooth", keys: [] },
+  { id: "removeAnchors", label: "Remove selected anchor points", keys: [] },
+  { id: "cutAtAnchors", label: "Cut path at selected anchor points", keys: [] },
+  { id: "selectStray", label: "Select stray points", keys: [] },
+  { id: "toggleMultipleHandles", label: "Show handles for multiple selected anchors", keys: [] },
+  { id: "eraserSmaller", label: "Decrease eraser diameter", keys: ["["] },
+  { id: "eraserLarger", label: "Increase eraser diameter", keys: ["]"] },
   { id: "remove", label: "Delete", keys: ["Delete", "Backspace"] },
   { id: "finish", label: "Finish path", keys: ["Enter"] },
   { id: "cancel", label: "Cancel", keys: ["Escape"] },
@@ -201,12 +215,25 @@ export function validateShortcuts(value: unknown): ShortcutMap {
     used = new Map<string, string>();
   if (Object.keys(input).some((id) => !COMMANDS.some((c) => c.id === id)))
     throw new Error("Unknown command");
+  // A chord a new command takes over from another command, when the saved settings still
+  // give that command its old default rather than a choice of the person's own.
+  const reassigned: Record<string, { from: string; chord: string }> = {
+    "tool.paintbrush": { from: "tool.brush", chord: "B" },
+  };
+  const source = { ...input };
+  for (const [id, move] of Object.entries(reassigned)) {
+    const old = source[move.from];
+    if (source[id] === undefined && Array.isArray(old) && old.length === 1 && typeof old[0] === "string" && normalizeChord(old[0]) === move.chord) {
+      source[move.from] = [];
+      source[id] = [move.chord];
+    }
+  }
   for (const command of COMMANDS) {
     // Settings saved before a command existed say nothing about it. The command takes
     // its own keys, minus any chord the saved settings already gave to another command.
-    const taken = (chord: string) => Object.values(input).some((value) => Array.isArray(value)
+    const taken = (chord: string) => Object.values(source).some((value) => Array.isArray(value)
       && value.some((key) => typeof key === "string" && normalizeChord(key) === chord));
-    const keys = input[command.id] ?? command.keys.filter((chord) => !taken(chord));
+    const keys = source[command.id] ?? command.keys.filter((chord) => !taken(chord));
     if (
       !Array.isArray(keys) ||
       keys.length > 2 ||

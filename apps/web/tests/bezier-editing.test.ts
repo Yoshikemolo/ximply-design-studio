@@ -38,6 +38,8 @@ describe("Bézier pointer editing", () => {
 
   it.each(["ctrl", "alt"] as const)("moves a handle independently with %s and restores coupling on release", (modifier) => {
     const editor = setup();
+    // Handles show, and can be taken, once their anchor is chosen, as in Illustrator.
+    editor.activeNodes.set(["0:0"]);
     const anchor = point(editor, "point"), opposite = point(editor, "incoming");
     editor.start(point(editor, "outgoing"));
     editor.move({ x: anchor.x, y: anchor.y + 40 }, { [modifier]: true });
@@ -53,6 +55,8 @@ describe("Bézier pointer editing", () => {
   it("snaps handles in world coordinates on transformed paths and preserves undo/redo", () => {
     const editor = setup({ rotation: 37, skewX: 22, flipX: true });
     editor.snapAngle.set(30);
+    // Handles show, and can be taken, once their anchor is chosen, as in Illustrator.
+    editor.activeNodes.set(["0:0"]);
     const original = structuredClone(editor.document());
     const anchor = point(editor, "point"), opposite = point(editor, "incoming");
     editor.start(point(editor, "outgoing"));
@@ -92,6 +96,8 @@ describe("Bézier pointer editing", () => {
   it("edits selected path nodes with Select while body dragging still moves the object", () => {
     const editor = setup();
     editor.setTool("select");
+    // Handles show, and can be taken, once their anchor is chosen, as in Illustrator.
+    editor.activeNodes.set(["0:0"]);
     const outgoing = point(editor, "outgoing"), anchor = point(editor, "point");
     editor.start(outgoing);
     expect(editor.isEditingCurve()).toBe(true);
@@ -134,7 +140,7 @@ describe("Bézier pointer editing", () => {
     expect(editor.activeNodes()).toEqual(["0:0"]);
   });
 
-  it("constrains new Pen tangents using the configured angle and handles Ctrl during the drag", () => {
+  it("constrains new Pen tangents using the configured angle and splits the handles with Alt during the drag", () => {
     const editor = new EditorService();
     editor.setTool("pen");
     editor.snapAngle.set(30);
@@ -142,14 +148,19 @@ describe("Bézier pointer editing", () => {
     editor.move({ x: 130, y: 140 }, { shift: true });
     expectPoint(point(editor, "outgoing"), { x: 125, y: 100 + 50 * Math.sin(Math.PI / 3) });
     expectPoint(point(editor, "incoming"), { x: 75, y: 100 - 50 * Math.sin(Math.PI / 3) });
-    editor.move({ x: 130, y: 140 }, { ctrl: true });
+    // As in Illustrator, Alt pressed during the drag leaves the incoming handle where it
+    // was and lets the outgoing one go on alone, which makes the anchor a corner.
+    editor.move({ x: 130, y: 140 }, { alt: true });
     expectPoint(point(editor, "outgoing"), { x: 130, y: 140 });
-    expectPoint(point(editor, "incoming"), { x: 100, y: 100 });
+    expectPoint(point(editor, "incoming"), { x: 75, y: 100 - 50 * Math.sin(Math.PI / 3) });
+    expect(editor.selected()!.curves![0].nodes[0].smooth).toBe(false);
     editor.cancel();
     expect(editor.document().layers).toHaveLength(0);
   });
   it("keeps the opposite handle's world length on skewed paths", () => {
     const editor = setup({ rotation: 28, skewX: 35, flipX: true });
+    // Handles show, and can be taken, once their anchor is chosen, as in Illustrator.
+    editor.activeNodes.set(["0:0"]);
     const anchor = point(editor, "point"), opposite = point(editor, "incoming");
     const length = Math.hypot(opposite.x - anchor.x, opposite.y - anchor.y);
     editor.start(point(editor, "outgoing"));

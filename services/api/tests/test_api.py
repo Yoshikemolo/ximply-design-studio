@@ -668,6 +668,32 @@ class NativeDrawingTests(unittest.TestCase):
             self.layer['textLayout'] = {'sizing': 'fixed', 'wrap': True, 'hyphenate': False, 'fit': True}
             self.assert_round_trip(self.document)
 
+    def test_brush_stroke_round_trip(self):
+        self.layer['curves'] = [{'closed': False, 'nodes': [
+            {'point': {'x': 0, 'y': 0}, 'incoming': {'x': 0, 'y': 0}, 'outgoing': {'x': 30, 'y': 0}, 'smooth': False},
+            {'point': {'x': 90, 'y': 0}, 'incoming': {'x': 60, 'y': 0}, 'outgoing': {'x': 90, 'y': 0}, 'smooth': False}]}]
+        self.layer['brushStroke'] = {'kind': 'calligraphic', 'angle': 30, 'roundness': 40, 'diameter': 6}
+        self.assert_round_trip(self.document)
+
+    def test_brush_stroke_bounds_and_owner(self):
+        self.layer['curves'] = [{'closed': False, 'nodes': [
+            {'point': {'x': 0, 'y': 0}, 'incoming': {'x': 0, 'y': 0}, 'outgoing': {'x': 30, 'y': 0}, 'smooth': False},
+            {'point': {'x': 90, 'y': 0}, 'incoming': {'x': 60, 'y': 0}, 'outgoing': {'x': 90, 'y': 0}, 'smooth': False}]}]
+        for field, invalid in {'angle': [-181, 181, '30', True], 'roundness': [-1, 101, None],
+                               'diameter': [0, 1297, '6'], 'kind': ['art', None]}.items():
+            for value in invalid:
+                with self.subTest(field=field, value=value):
+                    self.layer['brushStroke'] = {'kind': 'calligraphic', 'angle': 30, 'roundness': 40, 'diameter': 6}
+                    self.layer['brushStroke'][field] = value
+                    self.assert_invalid(self.document)
+        self.layer['brushStroke'] = {'kind': 'calligraphic', 'angle': 30, 'roundness': 40, 'diameter': 6, 'extra': 1}
+        self.assert_invalid(self.document)
+        # A brush stroke belongs to a plain path, never to a rectangle, a text or an image.
+        self.layer['brushStroke'] = {'kind': 'calligraphic', 'angle': 30, 'roundness': 40, 'diameter': 6}
+        del self.layer['curves']
+        self.layer['kind'] = 'rectangle'
+        self.assert_invalid(self.document)
+
     def test_dimension_format_bounds_and_types(self):
         for field, invalid in {'scale': [0, -1, 1000001, True, '2'],
                                'unit': ['yd', '', None], 'decimals': [-1, 9, 1.5, True, '2'],

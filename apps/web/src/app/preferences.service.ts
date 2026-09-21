@@ -5,6 +5,60 @@ import {
   validateShortcuts,
 } from "../../../../packages/domain/src/shortcuts";
 import { isUnit, Unit } from "../../../../packages/domain/src/measurements";
+import { FreehandOptions, FreehandToolOptions, PAINTBRUSH_DEFAULTS, PENCIL_DEFAULTS, SMOOTH_DEFAULTS, validFreehandTool } from "../../../../packages/domain/src/path-fit";
+import { BrushStroke, DEFAULT_BRUSH_STROKE, validBrushStroke } from "../../../../packages/domain/src/brush-stroke";
+
+/**
+ * The settings of drawing and editing paths: the option dialogs of the Pencil, the
+ * Paintbrush and the Smooth tool, the brush the Paintbrush applies, whether the Pen adds
+ * and deletes anchors by itself, and how anchors and handles are displayed.
+ */
+export interface PathSettings {
+  pencil: FreehandToolOptions;
+  paintbrush: FreehandToolOptions;
+  smooth: FreehandOptions;
+  brush: BrushStroke;
+  autoAddDelete: boolean;
+  anchorDisplay: "small" | "mixed" | "large";
+  handleStyle: "small" | "large" | "cross";
+  showHandlesMultiple: boolean;
+  highlightAnchors: boolean;
+  /** The Eraser's nib: angle in degrees, roundness in percent and diameter in pixels. */
+  eraser: { angle: number; roundness: number; diameter: number };
+}
+export const PATH_SETTINGS_DEFAULTS: PathSettings = {
+  pencil: { ...PENCIL_DEFAULTS },
+  paintbrush: { ...PAINTBRUSH_DEFAULTS },
+  smooth: { ...SMOOTH_DEFAULTS },
+  brush: { ...DEFAULT_BRUSH_STROKE },
+  autoAddDelete: true,
+  anchorDisplay: "mixed",
+  handleStyle: "small",
+  showHandlesMultiple: true,
+  highlightAnchors: true,
+  eraser: { angle: 0, roundness: 100, diameter: 10 },
+};
+/** Reads stored path settings, keeping the default for anything missing or invalid. */
+export function validPathSettings(value: unknown): PathSettings {
+  const input = (value && typeof value === "object" ? value : {}) as Record<string, unknown>;
+  const pick = <T extends string>(v: unknown, allowed: readonly T[], fallback: T): T => (allowed.includes(v as T) ? (v as T) : fallback);
+  const smooth = validFreehandTool({ ...PENCIL_DEFAULTS, ...(input["smooth"] as object) }, { ...PENCIL_DEFAULTS, ...SMOOTH_DEFAULTS });
+  return {
+    pencil: validFreehandTool(input["pencil"], PENCIL_DEFAULTS),
+    paintbrush: validFreehandTool(input["paintbrush"], PAINTBRUSH_DEFAULTS),
+    smooth: { fidelity: smooth.fidelity, smoothness: smooth.smoothness },
+    brush: validBrushStroke(input["brush"]) ? { ...(input["brush"] as BrushStroke) } : { ...DEFAULT_BRUSH_STROKE },
+    autoAddDelete: typeof input["autoAddDelete"] === "boolean" ? input["autoAddDelete"] : true,
+    anchorDisplay: pick(input["anchorDisplay"], ["small", "mixed", "large"] as const, "mixed"),
+    handleStyle: pick(input["handleStyle"], ["small", "large", "cross"] as const, "small"),
+    showHandlesMultiple: typeof input["showHandlesMultiple"] === "boolean" ? input["showHandlesMultiple"] : true,
+    highlightAnchors: typeof input["highlightAnchors"] === "boolean" ? input["highlightAnchors"] : true,
+    eraser: validBrushStroke({ kind: "calligraphic", ...(input["eraser"] as object) }) && (input["eraser"] as { diameter: number }).diameter >= 1
+      ? (({ angle, roundness, diameter }) => ({ angle, roundness, diameter }))(input["eraser"] as { angle: number; roundness: number; diameter: number })
+      : { angle: 0, roundness: 100, diameter: 10 },
+  };
+}
+const PATH_SETTINGS_KEY = "xds-path-settings";
 export type AreaSelectionMode = "rectangle" | "ellipse" | "lasso";
 export interface MeasurementSettings {
   distanceUnit: Unit;
@@ -101,6 +155,28 @@ export class PreferencesService {
   readonly rulerSnapRadius = signal(measurementDefaults.rulerSnapRadius);
   readonly guideSnapRadius = signal(measurementDefaults.guideSnapRadius);
   readonly gridSnapRadius = signal(measurementDefaults.gridSnapRadius);
+  readonly pathSettings = signal<PathSettings>(PreferencesService.loadPathSettings());
+  private static loadPathSettings(): PathSettings {
+    try { return validPathSettings(JSON.parse(localStorage.getItem(PATH_SETTINGS_KEY) ?? "{}")); }
+    catch { return structuredClone(PATH_SETTINGS_DEFAULTS); }
+  }
+  /** Changes some of the path settings and keeps them for the next session. */
+  updatePathSettings(change: Partial<PathSettings>): boolean {
+    const next = validPathSettings({ ...this.pathSettings(), ...change });
+    try {
+      localStorage.setItem(PATH_SETTINGS_KEY, JSON.stringify(next));
+      this.pathSettings.set(next);
+      this.error.set("");
+      return true;
+    } catch {
+      this.error.set("Settings could not be saved.");
+      return false;
+    }
+  }
+  /** Keeps the options the tool dialogs set. */
+  saveToolOptions(options: Pick<PathSettings, "pencil" | "paintbrush" | "smooth" | "brush">): boolean {
+    return this.updatePathSettings(options);
+  }
   readonly layoutBlocks = signal<Record<LayoutBlock, boolean>>({ tools: true, appearance: true, workspace: true, measurement: true, dimensions: true, pivot: true, selection: true });
   constructor() {
     try {
