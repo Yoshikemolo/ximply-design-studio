@@ -29,6 +29,8 @@ None.
 
 ## Improvements
 
+- Carry a licence at last: the Ximply Design Studio Limited Use Licence, which lets anyone read the software and run it to evaluate it, to study it or for their own internal use, and keeps distribution, modification and commercial use for the author, who may grant them in writing. The decision record and the readme say so, and the manifest points at the file.
+- Show the editor at work in the readme, above the address of the published preview, so the link is the first thing the page offers.
 - Point the readme at the published preview, https://xds.ximplicity.es, and clone the default branch instead of a branch that was retired.
 - Publish the editor on the owner's preview address with `scripts/deploy-production.ps1`, which builds the checkout, uploads it under the commit it was built from, moves the link the web server reads and reloads it only after the configuration is accepted, keeping the earlier releases so a return to one of them is a single command.
 - Name the import command Import, not Import image: it reads drawings as well as pictures.

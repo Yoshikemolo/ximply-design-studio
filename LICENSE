@@ -1,0 +1,65 @@
+Ximply Design Studio — Limited Use Licence
+Version 1.0, 2026-09-21
+
+Copyright (c) 2026 Ximplicity Software Solutions, by Jorge Rodriguez Rengel
+(Yoshikemolo). All rights reserved.
+
+This is a proprietary licence. It is not an open source licence and not a free
+software licence. Every right that is not granted below is reserved by the copyright
+holder, who is referred to here as the author.
+
+1. What you may do
+
+   1.1 You may read this software and its documentation, and you may run it for your
+       own evaluation, study or internal use.
+   1.2 You may make the copies that running and evaluating it require, such as a local
+       clone, a build for yourself and a backup, provided this licence travels with
+       every copy.
+
+2. What you may not do without the written permission of the author
+
+   2.1 Distribute, publish, sublicense, lend, rent, host for others or otherwise make
+       this software or any part of it available to anyone else, in source or in built
+       form.
+   2.2 Modify, adapt, translate or build anything derived from it, or remove or alter
+       any notice of authorship, copyright or licence it carries.
+   2.3 Use it, in whole or in part, for a commercial purpose, including selling it,
+       selling access to it, offering it as a service, or using it in the production of
+       goods or services you are paid for.
+   2.4 Reverse engineer, decompile or disassemble it, except to the extent that the law
+       where you are gives you a right that cannot be signed away.
+
+3. Permission
+
+   Permission for anything in section 2 is granted only in writing by the author, may
+   be limited in scope and time, and covers only what it says. Requests go to
+   Ximplicity Software Solutions, https://ximplicity.es.
+
+4. Third-party material
+
+   This repository carries material that belongs to others, such as dependencies,
+   fonts and icons, under their own licences, which continue to apply and are not
+   changed by this licence. Any drawing, logo or illustration shown in the
+   documentation or in a screenshot belongs to whoever owns it; its appearance here
+   illustrates the software and grants no right over it.
+
+5. No warranty
+
+   The software is provided as it is, without warranty of any kind, express or implied,
+   including the warranties of merchantability, fitness for a particular purpose and
+   non-infringement. It is preview software and has not passed its quality gate.
+
+6. No liability
+
+   To the extent the law allows, the author is not liable for any claim, damage, loss of
+   data, loss of profit or other liability arising from the software or its use.
+
+7. End of the licence
+
+   This licence ends by itself if you break any of its terms. When it ends you must stop
+   using the software and destroy the copies you hold.
+
+8. Law
+
+   This licence is governed by the law of Spain, and the courts of Spain are the ones
+   that hear a dispute about it, unless the law where you are requires otherwise.
