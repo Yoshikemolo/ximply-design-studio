@@ -43,7 +43,10 @@ function Write-Step([string]$message) {
 }
 
 function Invoke-Remote([string]$command) {
-    $output = & ssh -o BatchMode=yes -o IdentitiesOnly=yes -o ConnectTimeout=20 -i $IdentityFile "$User@$Server" $command 2>&1
+    # What the host writes to its error stream is joined to its output there, not here:
+    # Windows PowerShell turns a native command's error stream into failures of its own,
+    # and a command such as nginx -t writes to it even when it is content.
+    $output = & ssh -o BatchMode=yes -o IdentitiesOnly=yes -o ConnectTimeout=20 -i $IdentityFile "$User@$Server" "{ $command ; } 2>&1"
     if ($LASTEXITCODE -ne 0) {
         throw "The host refused the command: $command`n$output"
     }
@@ -108,7 +111,7 @@ $null = Invoke-Remote "rm -rf $release.incoming && mkdir -p $release.incoming"
 $archive = Join-Path ([System.IO.Path]::GetTempPath()) "xds-$commit.tar.gz"
 & tar -czf $archive -C $build .
 if ($LASTEXITCODE -ne 0) { throw 'The build could not be packed.' }
-& scp -o BatchMode=yes -o IdentitiesOnly=yes -i $IdentityFile $archive "${User}@${Server}:$release.tar.gz"
+& scp -q -o BatchMode=yes -o IdentitiesOnly=yes -i $IdentityFile $archive "${User}@${Server}:$release.tar.gz"
 if ($LASTEXITCODE -ne 0) { throw 'The build could not be copied to the host.' }
 Remove-Item $archive -Force
 $null = Invoke-Remote "tar -xzf $release.tar.gz -C $release.incoming && rm -f $release.tar.gz && rm -rf $release && mv $release.incoming $release && chown -R www-data:www-data $release"
