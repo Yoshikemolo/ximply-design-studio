@@ -19,7 +19,7 @@
           </button>
           <hr />
           <button (click)="imageFile.click()">
-            {{ t("Import image")
+            {{ t("Import")
             }}<kbd>{{ shortcut("importImage") }}</kbd></button
           ><button (click)="editor.exportPng()">
             {{ t("Export PNG") }}<kbd>{{ shortcut("exportPng") }}</kbd></button
@@ -203,7 +203,8 @@
       </section>
     }
   </div>
-  <main class="workspace" [class.no-panels]="!panels()">
+  <main class="workspace" [class.no-panels]="!panels()" [class.no-tools]="!preferences.layoutBlocks().tools">
+    @if (preferences.layoutBlocks().tools) {
     <aside class="toolrail" [attr.aria-label]="t('Drawing tools')">
       @for (section of toolbarSections; track section.id) {
         <div class="tool-section" role="group" [attr.aria-label]="t(section.label)">
@@ -221,10 +222,7 @@
                   alt=""
                 />
               </button>
-              @if (
-                family.tools.length > 1 ||
-                ["rotate", "mirror", "scale", "zoom"].includes(family.id)
-              ) {
+              @if (familyHasOptions(family)) {
                 <button
                   class="family-expander"
                   [attr.aria-label]="t('More tools') + ' · ' + t(family.label)"
@@ -301,7 +299,7 @@
             <button
               (click)="imageFile.click()"
               [title]="commandTitle('importImage')"
-              [attr.aria-label]="t('Import image')"
+              [attr.aria-label]="t('Import')"
             >
               <img src="/assets/icons/image.svg" alt="" />
             </button>
@@ -317,6 +315,7 @@
         </div>
       </div>
     </aside>
+    }
     <section class="canvas-area">
       <div class="document-tabs" role="tablist" [attr.aria-label]="t('Documents')">
         @for (tab of editor.tabs(); track tab.id) {
@@ -1107,22 +1106,47 @@
     <span class="status-dot"></span
     ><span role="status" class="status-text">{{ t(editor.status()) }}</span>
     <div class="header-spacer"></div>
-    <a
-      class="footer-brand"
-      href="https://ximplicity.es"
-      target="_blank"
-      rel="noopener noreferrer"
-      >Ximplicity</a
-    ><button (click)="openAbout()">
-      {{ t("About") }} · {{ currentVersion() }}
+    <span class="credits"
+      >&copy; {{ year }}.
+      <a href="https://ximplicity.es" target="_blank" rel="noopener noreferrer"
+        >Ximplicity Software Solutions</a
+      >, by Jorge Rodriguez Rengel (<a
+        href="https://github.com/yoshikemolo"
+        target="_blank"
+        rel="noopener noreferrer"
+        >Yoshikemolo</a
+      >). {{ t("All Rights Reserved.") }}</span
+    ><button class="version" (click)="openAbout()" [title]="t('About')">
+      XIMPLY DESIGN STUDIO v{{ currentVersion() }}
     </button>
+    <div class="socials">
+      <a
+        href="https://www.linkedin.com/in/jorge-rodriguez-rengel/"
+        target="_blank"
+        rel="noopener noreferrer"
+        title="LinkedIn"
+        ><img src="/assets/icons/linkedin.svg" alt="" /><span class="visually-hidden">LinkedIn</span></a
+      ><a
+        href="https://ximplicity.es"
+        target="_blank"
+        rel="noopener noreferrer"
+        title="Ximplicity"
+        ><img src="/assets/icons/ximplicity.svg" alt="" /><span class="visually-hidden">Ximplicity</span></a
+      ><a
+        href="https://github.com/Yoshikemolo/ximply-design-studio"
+        target="_blank"
+        rel="noopener noreferrer"
+        title="GitHub"
+        ><img src="/assets/icons/github.svg" alt="" /><span class="visually-hidden">GitHub</span></a
+      >
+    </div>
   </footer>
 </div>
 <input
   #imageFile
   class="visually-hidden"
   type="file"
-  accept="image/png,image/jpeg,image/webp,image/svg+xml,.svg,.dxf,.ai,.pdf"
+  accept="image/png,image/jpeg,image/webp,image/svg+xml,.svg,.dxf,.ai,.pdf,.eps"
   (change)="imageInput($event)"
 /><input
   #projectFile
@@ -1240,7 +1264,8 @@
   <div class="spatial-overlay">
     <div class="spatial-toolbar">
       <strong>{{ t("Spatial preview") }}</strong
-      ><span>Drag to orbit · Scroll to zoom · Right-drag to pan</span
+      ><span>{{ spatialParallax() ? t("Move the pointer to look around the planes") : t("Drag to orbit, scroll to zoom, right-drag to pan") }}</span
+      ><button (click)="toggleParallax()" [class.active]="spatialParallax()">{{ spatialParallax() ? t("Orbit view") : t("Parallax view") }}</button
       ><button (click)="closeSpatial()">{{ t("Back to canvas") }}</button>
     </div>
     <div class="spatial-host" #spatialHost></div>
@@ -1477,7 +1502,7 @@
 }
 
 @if (paintPicker()) {
-  <section class="paint-popover" role="dialog" [attr.aria-label]="t('Appearance')" [style.left.px]="paintPicker()!.x" [style.top.px]="paintPicker()!.y" [style.--popover-top.px]="paintPicker()!.y">
+  <section #paintPopover class="paint-popover" role="dialog" [attr.aria-label]="t('Appearance')" [style.left.px]="paintPicker()!.x" [style.top.px]="paintPicker()!.y" [style.--popover-top.px]="paintPicker()!.y">
     <header><strong>{{ t(paintTarget() === 'fill' ? 'Fill' : 'Stroke') }}</strong><button (click)="paintPicker.set(null)" [attr.aria-label]="t('Close')">×</button></header>
     <label>{{ t('Color') }}<input type="color" [value]="paintBaseColor()" (input)="setPaintBaseColor(text($event))" /></label>
     <label>{{ t("Paint opacity") }}<input type="range" min="0" max="100" [value]="paintOpacity()" (input)="setPaintOpacity(number($event))" />{{ paintOpacity() }}%</label>

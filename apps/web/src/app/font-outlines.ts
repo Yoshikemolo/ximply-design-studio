@@ -36,15 +36,17 @@ export class FontOutlines {
     return commandsToCurves(font.getPath(text, x, y, size).commands);
   }
 }
-/** Font paths speak in move, line, curve and close; this editor speaks in cubic nodes. */
+/**
+ * Font paths speak in move, line, curve and close; this editor speaks in cubic nodes.
+ * A contour of a glyph is closed whether or not the font writes the closing word, since
+ * an outline that does not close is not an outline.
+ */
 export function commandsToCurves(commands: readonly PathCommand[]): CurvePath[] {
   const curves: CurvePath[] = [];
   let nodes: ReturnType<typeof anchor>[] = [];
-  let closed = false;
   const flush = () => {
-    if (nodes.length > 1) curves.push({ nodes, closed });
+    if (nodes.length > 1) curves.push({ nodes, closed: true });
     nodes = [];
-    closed = false;
   };
   for (const command of commands) {
     if (command.type === "M") {
@@ -69,7 +71,6 @@ export function commandsToCurves(commands: readonly PathCommand[]): CurvePath[] 
       next.incoming = { x: command.x + (2 / 3) * (command.x1 - command.x), y: command.y + (2 / 3) * (command.y1 - command.y) };
       nodes.push(next);
     } else if (command.type === "Z") {
-      closed = true;
       // A closing point that repeats the first one is the same node once the path is closed.
       const first = nodes[0];
       if (nodes.length > 1 && Math.hypot(last.point.x - first.point.x, last.point.y - first.point.y) < 1e-6) {
@@ -77,7 +78,6 @@ export function commandsToCurves(commands: readonly PathCommand[]): CurvePath[] 
         nodes.pop();
       }
       flush();
-      closed = false;
     }
   }
   flush();

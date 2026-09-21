@@ -39,7 +39,7 @@ export interface MeasurementSettings {
   guideSnapRadius: number;
   gridSnapRadius: number;
 }
-export type LayoutBlock = "appearance" | "workspace" | "measurement" | "dimensions" | "pivot" | "selection";
+export type LayoutBlock = "tools" | "appearance" | "workspace" | "measurement" | "dimensions" | "pivot" | "selection";
 const measurementDefaults: MeasurementSettings = {
   distanceUnit: "px", fontUnit: "px", displayDecimals: 2, rulersVisible: false, guidesVisible: true, guidesLocked: false,
   gridVisible: false, snapRulers: false, snapGuides: false, snapGrid: false,
@@ -101,7 +101,7 @@ export class PreferencesService {
   readonly rulerSnapRadius = signal(measurementDefaults.rulerSnapRadius);
   readonly guideSnapRadius = signal(measurementDefaults.guideSnapRadius);
   readonly gridSnapRadius = signal(measurementDefaults.gridSnapRadius);
-  readonly layoutBlocks = signal<Record<LayoutBlock, boolean>>({ appearance: true, workspace: true, measurement: true, dimensions: true, pivot: true, selection: true });
+  readonly layoutBlocks = signal<Record<LayoutBlock, boolean>>({ tools: true, appearance: true, workspace: true, measurement: true, dimensions: true, pivot: true, selection: true });
   constructor() {
     try {
       const raw = localStorage.getItem("xds-input-settings");
@@ -234,7 +234,8 @@ export class PreferencesService {
     }
   }
   toggleLayoutBlock(key: LayoutBlock): boolean {
-    if (!["appearance", "workspace", "measurement", "dimensions"].includes(key)) return false;
+    // Every block the settings carry can be shown or hidden; a name they do not carry cannot.
+    if (!Object.prototype.hasOwnProperty.call(this.layoutBlocks(), key)) return false;
     try {
       const next = { ...this.layoutBlocks(), [key]: !this.layoutBlocks()[key] };
       this.persistExtended(this.measurements(), next);

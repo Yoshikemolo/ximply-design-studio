@@ -104,3 +104,4 @@
 | [SC-0098 — Outline view and proportional corner resizing](SC-0098.md) |
 | [SC-0099 — Properties of a whole selection](SC-0099.md) |
 | [SC-0100 — Outline stroke and text outlines](SC-0100.md) |
+| [SC-0101 — Spatial preview planes and parallax](SC-0101.md) |

@@ -31,6 +31,9 @@ import {
   signal,
 } from "@angular/core";
 import { FormsModule } from "@angular/forms";
+import type { SpatialPreview } from "./spatial";
+/** The commands a text field keeps for itself, because they edit the text it holds. */
+const FIELD_COMMANDS = ["undo", "redo", "copy", "cut", "paste", "pasteInFront", "pasteInBack", "selectAll", "remove", "finish", "cancel", "panHold"];
 import { EditorService, ContextAction, ContextTarget } from "./editor.service";
 import { ContextMenuComponent, ContextMenuEntry } from "./context-menu.component";
 import { SmartTableComponent } from "./smart-table.component";
@@ -203,7 +206,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   readonly quickColors = [{ value: "#000000", label: "Black" }, { value: "#ffffff", label: "White" }, { value: "none", label: "No color" }];
   readonly paintTarget = signal<"fill" | "stroke">("fill");
   readonly paintPicker = signal<{ x: number; y: number } | null>(null);
-  readonly contextBlocks = [{ id: "appearance", label: "Appearance" }, { id: "workspace", label: "Workspace" }, { id: "measurement", label: "Measurement" }, { id: "dimensions", label: "Dimensions" }, { id: "pivot", label: "Pivot" }, { id: "selection", label: "Selection" }] as const;
+  readonly contextBlocks = [{ id: "tools", label: "Tools" }, { id: "appearance", label: "Appearance" }, { id: "workspace", label: "Workspace" }, { id: "measurement", label: "Measurement" }, { id: "dimensions", label: "Dimensions" }, { id: "pivot", label: "Pivot" }, { id: "selection", label: "Selection" }] as const;
   readonly measurementAids = [{ id: "rulers", label: "Rulers" }, { id: "guides", label: "Guides" }, { id: "grid", label: "Grid" }] as const;
   readonly draggingGuideId = signal<string | null>(null);
   private guideDrag?: { axis: "vertical" | "horizontal"; pointerId: number; element: HTMLElement };
@@ -333,12 +336,15 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   readonly workspace = signal("Drawing");
   readonly about = signal(false);
   readonly spatial = signal(false);
+  readonly spatialParallax = signal(false);
   readonly dialog = signal(false);
   readonly projects = signal<{ id: string; name: string; updatedAt: string }[]>(
     [],
   );
   readonly apiToken = signal("");
   readonly releases = signal<Release[]>([]);
+  /** Year of the copyright line in the footer. */
+  readonly year = new Date().getFullYear();
   readonly currentVersion = signal("…");
   readonly chosenVersion = signal("");
   readonly noteGroups = signal<{ title: string; items: string[] }[]>([]);
@@ -346,7 +352,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   readonly panelOrder = signal(["properties", "layers"]);
   private frame = 0;
   private pan?: { x: number; y: number; left: number; top: number };
-  private disposeSpatial?: () => void;
+  private spatialView?: SpatialPreview;
   constructor(
     readonly editor: EditorService,
     readonly preferences: PreferencesService,
@@ -746,7 +752,19 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   openPaint(target: "fill" | "stroke", event: MouseEvent) {
     const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
     this.paintTarget.set(target);
-    this.paintPicker.set({ x: Math.max(8, Math.min(rect.right + 8, window.innerWidth - 260)), y: Math.max(8, Math.min(rect.top, window.innerHeight - 440)) });
+    // The popover opens beside the square and is placed properly once it has been measured.
+    this.paintPicker.set({ x: Math.max(8, Math.min(rect.right + 8, window.innerWidth - 260)), y: Math.max(8, rect.top) });
+  }
+  /**
+   * Keeps the appearance popover on the screen: once it is rendered its own height says
+   * where it fits, which the square alone cannot, since the two targets differ in height.
+   */
+  @ViewChild("paintPopover") set paintPopoverHost(element: ElementRef<HTMLElement> | undefined) {
+    const picker = this.paintPicker();
+    if (!element || !picker) return;
+    const height = element.nativeElement.offsetHeight;
+    const top = Math.max(8, Math.min(picker.y, window.innerHeight - height - 8));
+    if (Math.abs(top - picker.y) > 0.5) this.paintPicker.set({ ...picker, y: top });
   }
   paintBaseColor() {
     const color = this.paintColor(this.paintTarget());
@@ -863,7 +881,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
       this.wheelHandler,
     );
     cancelAnimationFrame(this.frame);
-    this.disposeSpatial?.();
+    this.spatialView?.dispose();
   }
   schedule() {
     cancelAnimationFrame(this.frame);
@@ -1109,7 +1127,33 @@ export class AppComponent implements AfterViewInit, OnDestroy {
       this.editor.updateLayer({ text });
     }
   }
+  /**
+   * The command a key runs while the writing of a text has the keyboard. A field owns the
+   * keys that edit its own text, so only a command of the editor held with the control or
+   * command key is taken from it.
+   */
+  private editorCommand(event: KeyboardEvent): string | undefined {
+    if (!event.ctrlKey && !event.metaKey) return undefined;
+    const command = matchShortcut(this.preferences.bindings(), event);
+    return command && !FIELD_COMMANDS.includes(command) ? command : undefined;
+  }
+  /** Commits the text being written and leaves its object selected. */
+  private finishTextEditing() {
+    const id = this.textEditing();
+    if (!id) return;
+    this.commitText();
+    this.editor.selectedId.set(id);
+    this.editor.selectedIds.set([id]);
+  }
   textKey(event: KeyboardEvent) {
+    const editorCommand = this.editorCommand(event);
+    if (editorCommand) {
+      event.preventDefault();
+      event.stopPropagation();
+      this.finishTextEditing();
+      this.runCommand(editorCommand);
+      return;
+    }
     event.stopPropagation();
     if (event.isComposing) return;
     if (event.key === "Escape") {
@@ -1164,10 +1208,10 @@ export class AppComponent implements AfterViewInit, OnDestroy {
         ?.tools.map((id) => this.tools.find((t) => t.id === id)!) ?? []
     );
   }
-  flyoutActions() {
-    const id = this.flyout();
+  /** Commands a tool family offers beside its tools, which give it a list of its own. */
+  flyoutActionsFor(id: string): string[] {
     return (
-      [...this.actionGroups, this.clipboardGroup].find((g) => g.id === id)?.commands ??
+      [...this.actionGroups, this.clipboardGroup].find((group) => group.id === id)?.commands ??
       (
         {
           rotate: ["rotateCW", "rotateCCW"],
@@ -1179,9 +1223,17 @@ export class AppComponent implements AfterViewInit, OnDestroy {
           paint: ["outlineStroke"],
           text: ["outlineText"],
         } as Record<string, string[]>
-      )[id ?? ""] ??
-      []
+      )[id] ?? []
     );
+  }
+  flyoutActions() {
+    return this.flyoutActionsFor(this.flyout() ?? "");
+  }
+  /** A family shows its arrow when it has more than one tool or a command of its own. */
+  familyHasOptions(family: { id: string; tools: readonly string[] }) {
+    return family.tools.length > 1
+      || ["rotate", "mirror", "scale", "zoom"].includes(family.id)
+      || this.flyoutActionsFor(family.id).length > 0;
   }
   isGeneratedBlendLayer(id: string) { return this.editor.document().blends?.some(blend => blend.stepIds.some(step => step.includes(id))) ?? false; }
   blendStepLimit() {
@@ -1247,6 +1299,49 @@ export class AppComponent implements AfterViewInit, OnDestroy {
       (this.shortcut(id) ? " (" + this.shortcut(id) + ")" : "")
     );
   }
+  /**
+   * What every command does. Menus, the toolbars, the context menu and the keyboard
+   * all read the same table, so a command can never reach one of them and not the others.
+   */
+  private commandActions(): Record<string, () => void> {
+    return {
+      documentFormat: () => this.openPageDialog("format"),
+      expandDocument: () => this.openPageDialog("expand"),
+      cropDocument: () => this.openPageDialog("crop"),
+      about: () => this.openAbout(),
+      importImage: () => this.imageFile?.nativeElement.click(),
+      exportPng: () => {
+        void this.editor.exportPng();
+      },
+      exportSvg: () => this.editor.exportSvg(),
+      undo: () => this.editor.undo(),
+      redo: () => this.editor.redo(),
+      save: () => this.editor.save(),
+      open: () => this.projectFile?.nativeElement.click(),
+      new: () => this.newDocument(),
+      duplicate: () => this.editor.duplicate(),
+      duplicateSeries: () => this.openArrayDialog(),
+      transformAgain: () => this.editor.transformAgain(),
+      copy: () => this.editor.copySelection(),
+      cut: () => this.editor.cutSelection(),
+      paste: () => this.editor.paste(),
+      pasteInFront: () => this.editor.paste("front"),
+      pasteInBack: () => this.editor.paste("back"),
+      toggleBoundingBox: () => this.editor.toggleBoundingBox(),
+      toggleOutline: () => this.editor.toggleOutlineView(),
+      outlineStroke: () => this.editor.outlineStrokeSelection(),
+      outlineText: () => { void this.editor.outlineTextSelection().catch((error) => this.notify(error)); },
+      remove: () => this.editor.remove(),
+      finish: () => this.editor.finishPath(),
+      cancel: () => {
+        if (this.guideDrag) this.cancelGuide();
+        this.editor.cancel();
+        this.editor.finishPath();
+      },
+      fit: () => this.fit(),
+      settings: () => this.openSettings(),
+    };
+  }
   runCommand(id: string) {
     this.flyout.set(null);
     if (!this.commandEnabled(id)) return;
@@ -1292,6 +1387,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
       return;
     }
     const actions: Record<string, () => void> = {
+      ...this.commandActions(),
       documentFormat: () => this.openPageDialog("format"),
       expandDocument: () => this.startPageEditing("resize"),
       cropDocument: () => this.startPageEditing("crop"),
@@ -1759,14 +1855,23 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     const target = event.target as HTMLElement;
     if (
       event.isComposing ||
-      target?.closest('input,textarea,select,[contenteditable="true"]') ||
       this.about() ||
       this.dialog() ||
       this.settings() ||
-      this.textEditing() ||
       this.spatial()
     )
       return;
+    // A field keeps the keys that write in it; a command of the editor still runs, as it
+    // does in Illustrator, and the text being written is committed before it does.
+    if (target?.closest('input,textarea,select,[contenteditable="true"]') || this.textEditing()) {
+      const editorCommand = this.editorCommand(event);
+      if (!editorCommand) return;
+      event.preventDefault();
+      this.finishTextEditing();
+      target?.blur?.();
+      this.runCommand(editorCommand);
+      return;
+    }
     if (event.code === "Space") {
       this.spaceHeld = true;
       if (event.ctrlKey || event.metaKey) {
@@ -1800,43 +1905,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
       this.chooseTool(command.slice(5) as ToolId);
       return;
     }
-    const action: Record<string, () => void> = {
-      documentFormat: () => this.openPageDialog("format"),
-      expandDocument: () => this.openPageDialog("expand"),
-      cropDocument: () => this.openPageDialog("crop"),
-      about: () => this.openAbout(),
-      importImage: () => this.imageFile?.nativeElement.click(),
-      exportPng: () => {
-        void this.editor.exportPng();
-      },
-      exportSvg: () => this.editor.exportSvg(),
-      undo: () => this.editor.undo(),
-      redo: () => this.editor.redo(),
-      save: () => this.editor.save(),
-      open: () => this.projectFile?.nativeElement.click(),
-      new: () => this.newDocument(),
-      duplicate: () => this.editor.duplicate(),
-      duplicateSeries: () => this.openArrayDialog(),
-      transformAgain: () => this.editor.transformAgain(),
-      copy: () => this.editor.copySelection(),
-      cut: () => this.editor.cutSelection(),
-      paste: () => this.editor.paste(),
-      pasteInFront: () => this.editor.paste("front"),
-      pasteInBack: () => this.editor.paste("back"),
-      toggleBoundingBox: () => this.editor.toggleBoundingBox(),
-      toggleOutline: () => this.editor.toggleOutlineView(),
-      outlineStroke: () => this.editor.outlineStrokeSelection(),
-      outlineText: () => { void this.editor.outlineTextSelection().catch((error) => this.notify(error)); },
-      remove: () => this.editor.remove(),
-      finish: () => this.editor.finishPath(),
-      cancel: () => {
-        if (this.guideDrag) this.cancelGuide();
-        this.editor.cancel();
-        this.editor.finishPath();
-      },
-      fit: () => this.fit(),
-      settings: () => this.openSettings(),
-    };
+    const action = this.commandActions();
     if (action[command]) action[command]();
     else if (
       ![
@@ -2011,18 +2080,21 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   }
   async spatialPreview() {
     this.spatial.set(true);
+    this.spatialParallax.set(false);
     try {
       const { createSpatialPreview } = await import("./spatial");
       requestAnimationFrame(async () => {
         try {
           if (this.spatialHost) {
-            const dispose = await createSpatialPreview(
+            const view = await createSpatialPreview(
               this.spatialHost.nativeElement,
               this.editor.document(),
               this.editor.renderer,
             );
-            if (this.spatial()) this.disposeSpatial = dispose;
-            else dispose();
+            if (this.spatial()) {
+              this.spatialView = view;
+              view.parallax(this.spatialParallax());
+            } else view.dispose();
           }
         } catch (error) {
           this.notify(error);
@@ -2034,9 +2106,15 @@ export class AppComponent implements AfterViewInit, OnDestroy {
       this.closeSpatial();
     }
   }
+  toggleParallax() {
+    const enabled = !this.spatialParallax();
+    this.spatialParallax.set(enabled);
+    this.spatialView?.parallax(enabled);
+  }
   closeSpatial() {
-    this.disposeSpatial?.();
-    this.disposeSpatial = undefined;
+    this.spatialView?.dispose();
+    this.spatialView = undefined;
     this.spatial.set(false);
+    this.spatialParallax.set(false);
   }
 }

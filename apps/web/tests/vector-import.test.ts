@@ -81,8 +81,21 @@ describe('vector import', () => {
     expect(e.document().layers).toHaveLength(0);
   });
 
+  it('places an encapsulated PostScript drawing', async () => {
+    const script = ['%!PS-Adobe-3.0 EPSF-3.0', '%%BoundingBox: 0 0 200 100', '%%EndComments', '%%EndSetup',
+      '1 0 0 setrgbcolor 10 10 m 110 10 l 110 60 l f', '%%EOF'].join(String.fromCharCode(10));
+    const buffer = Uint8Array.from([...script].map((character) => character.charCodeAt(0) & 0xff));
+    const e = new EditorService();
+    await e.importFile({ name: 'Logo.eps', size: buffer.length, type: '', arrayBuffer: async () => buffer.buffer } as unknown as File);
+    expect(e.document().layers).toHaveLength(1);
+    const [placed] = e.document().layers;
+    expect(placed.fill).toBe('#ff0000');
+    expect(placed.groupPath).toEqual(['Logo.eps']);
+    expect(() => parseDocument(JSON.stringify(e.document()))).not.toThrow();
+  });
+
   it('offers the readable formats in the import dialog', () => {
     const template = readFileSync('apps/web/src/app/app.component.html', 'utf-8');
-    expect(template).toContain('accept="image/png,image/jpeg,image/webp,image/svg+xml,.svg,.dxf,.ai,.pdf"');
+    expect(template).toContain('accept="image/png,image/jpeg,image/webp,image/svg+xml,.svg,.dxf,.ai,.pdf,.eps"');
   });
 });
