@@ -2138,3 +2138,217 @@ textarea,
 .vertical-ruler .ruler-tick.minor { width: 6px; right: 0; padding: 0; }
 
 .procedural-properties { border: 1px solid var(--border); border-radius: 6px; margin: 10px 0; padding: 8px; min-width: 0; legend { font-size: 11px; padding: 0 4px; } .property-grid input { min-width: 0; width: 100%; } }
+
+/*
+ * Phones. The tools and the panels become drawers that slide in from the left and right
+ * edges over the canvas, the menus fold behind a menu button with the credits at their
+ * foot, and the whole studio fits the screen: nothing scrolls sideways, the drawers only
+ * scroll down, and the canvas keeps every touch for itself so two fingers can zoom it.
+ */
+.menu-toggle,
+.drawer-handle,
+.menu-footer {
+  display: none;
+}
+@media (max-width: 720px) {
+  html,
+  body {
+    overflow: hidden;
+    overscroll-behavior: none;
+  }
+  .studio-shell {
+    width: 100vw;
+    height: 100dvh;
+    overflow: hidden;
+    touch-action: manipulation;
+    -webkit-touch-callout: none;
+  }
+  .menubar {
+    height: 52px;
+    gap: 6px;
+    padding: 0 8px 0 4px;
+  }
+  .header-workspace {
+    display: none;
+  }
+  .menu-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    padding: 10px;
+    border: 0;
+    background: transparent;
+  }
+  .menu-toggle img {
+    width: 24px;
+    height: 24px;
+  }
+  .menus {
+    position: fixed;
+    top: 52px;
+    left: 0;
+    bottom: 0;
+    width: min(84vw, 320px);
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0;
+    background: var(--panel);
+    border-right: 1px solid var(--border);
+    box-shadow: 10px 0 30px #0006;
+    transform: translateX(-105%);
+    transition: transform 0.22s ease;
+    overflow-x: hidden;
+    overflow-y: auto;
+    z-index: 60;
+  }
+  .menus.open {
+    transform: none;
+  }
+  .menus details,
+  .menus details:nth-child(2) {
+    display: block;
+    width: 100%;
+  }
+  .menus summary {
+    padding: 14px 18px;
+    font-size: 14px;
+    border-bottom: 1px solid var(--border);
+  }
+  .menus .menu-popover {
+    position: static;
+    min-width: 0;
+    padding: 4px 8px 10px;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+  }
+  .menus .menu-popover button {
+    min-height: 44px;
+    font-size: 14px;
+  }
+  .menu-footer {
+    position: sticky;
+    bottom: 0;
+    margin-top: auto;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    padding: 14px 16px calc(14px + env(safe-area-inset-bottom));
+    border-top: 1px solid var(--border);
+    background: var(--panel);
+    font-size: 11px;
+    text-align: center;
+  }
+  .menu-footer .credits {
+    display: block;
+  }
+  .menu-footer .socials {
+    display: flex;
+    justify-content: center;
+    gap: 14px;
+  }
+  .studio-shell > footer {
+    display: none;
+  }
+  .workspace,
+  .workspace.no-panels,
+  .workspace.no-tools,
+  .workspace.no-tools.no-panels {
+    position: relative;
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .toolrail,
+  .inspector {
+    position: fixed;
+    top: 52px;
+    bottom: 0;
+    z-index: 55;
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    touch-action: pan-y;
+    transition: transform 0.22s ease;
+  }
+  .toolrail {
+    left: 0;
+    max-width: 86vw;
+    padding: 12px 8px calc(12px + env(safe-area-inset-bottom));
+    box-shadow: 10px 0 30px #0006;
+    transform: translateX(-105%);
+  }
+  .inspector {
+    left: auto;
+    right: 0;
+    width: min(88vw, 340px);
+    box-shadow: -10px 0 30px #0006;
+    transform: translateX(105%);
+  }
+  .toolrail.drawer-open,
+  .inspector.drawer-open {
+    transform: none;
+  }
+  .inspector input,
+  .inspector select {
+    min-width: 0;
+    max-width: 100%;
+  }
+  .tool-section {
+    grid-template-columns: repeat(2, 44px);
+  }
+  .tool-family {
+    width: 44px;
+    height: 44px;
+  }
+  .drawer-handle {
+    position: absolute;
+    top: 50%;
+    z-index: 40;
+    display: block;
+    width: 16px;
+    height: 72px;
+    margin-top: -36px;
+    padding: 0;
+    background: var(--panel-raised);
+    border: 1px solid var(--border);
+  }
+  .drawer-handle.left {
+    left: 0;
+    border-left: 0;
+    border-radius: 0 10px 10px 0;
+  }
+  .drawer-handle.right {
+    right: 0;
+    border-right: 0;
+    border-radius: 10px 0 0 10px;
+  }
+  .drawer-handle span {
+    display: block;
+    width: 3px;
+    height: 30px;
+    margin: 0 auto;
+    border-radius: 2px;
+    background: var(--muted);
+  }
+  .drawer-backdrop {
+    position: fixed;
+    inset: 52px 0 0 0;
+    z-index: 50;
+    background: #0006;
+  }
+  .canvas-viewport,
+  .canvas-viewport canvas {
+    touch-action: none;
+    overscroll-behavior: contain;
+  }
+  .contextbar {
+    overflow-x: auto;
+    overflow-y: hidden;
+  }
+  .cursor-tool-badge {
+    display: none;
+  }
+}

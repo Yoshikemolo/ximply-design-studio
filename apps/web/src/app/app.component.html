@@ -1,11 +1,12 @@
 <div class="studio-shell">
   <header class="menubar">
+    <button class="menu-toggle" type="button" (click)="toggleMobileMenu()" [attr.aria-expanded]="mobileMenu()" [attr.aria-label]="t(mobileMenu() ? 'Close menu' : 'Open menu')" [title]="t(mobileMenu() ? 'Close menu' : 'Open menu')"><img [src]="'/assets/icons/' + (mobileMenu() ? 'close' : 'menu') + '.svg'" alt="" /></button>
     <a class="brand" href="/" aria-label="Ximply Design Studio"
       ><img src="/assets/icons/ximplicity-x.svg" alt="" /><span
         >ximply<span class="brand-sub">design studio</span></span
       ></a
     >
-    <nav class="menus" aria-label="Main menu">
+    <nav class="menus" aria-label="Main menu" [class.open]="mobileMenu()">
       <details>
         <summary>{{ t("File") }}</summary>
         <div class="menu-popover">
@@ -121,6 +122,9 @@
           </button>
         </div>
       </details>
+      @if (mobile()) {
+        <div class="menu-footer"><ng-container *ngTemplateOutlet="footerCredits"></ng-container></div>
+      }
     </nav>
     <button class="preview-badge" [title]="t('Local preview explanation')" [attr.aria-label]="t('Local preview') + ': ' + t('Local preview explanation')" (click)="openServerSettings()">{{ t("Local preview") }}</button>
     <div class="header-spacer"></div>
@@ -209,8 +213,15 @@
     }
   </div>
   <main class="workspace" [class.no-panels]="!panels()" [class.no-tools]="!preferences.layoutBlocks().tools">
+    @if (mobile()) {
+      <button class="drawer-handle left" type="button" (click)="openDrawer('tools')" [attr.aria-label]="t('Drawing tools')" [title]="t('Drawing tools')"><span></span></button>
+      <button class="drawer-handle right" type="button" (click)="openDrawer('panels')" [attr.aria-label]="t('Editor panels')" [title]="t('Editor panels')"><span></span></button>
+      @if (toolsOpen() || panelsOpen() || mobileMenu()) {
+        <div class="drawer-backdrop" (click)="closeDrawers()" aria-hidden="true"></div>
+      }
+    }
     @if (preferences.layoutBlocks().tools) {
-    <aside class="toolrail" [attr.aria-label]="t('Drawing tools')">
+    <aside class="toolrail" [class.drawer-open]="toolsOpen()" [attr.aria-label]="t('Drawing tools')">
       @for (section of toolbarSections; track section.id) {
         <div class="tool-section" role="group" [attr.aria-label]="t(section.label)">
           @for (family of section.families; track family.id) {
@@ -496,7 +507,7 @@
       </div>
     </section>
     @if (panels()) {
-      <aside class="inspector" aria-label="Editor panels">
+      <aside class="inspector" [class.drawer-open]="panelsOpen()" aria-label="Editor panels">
         <details class="panel drawing-options" open>
           <summary><span>{{ t("Drawing tools") }}</span></summary>
           <div class="drawing-controls">
@@ -1141,6 +1152,10 @@
     <span class="status-dot"></span
     ><span role="status" class="status-text">{{ t(editor.status()) }}</span>
     <div class="header-spacer"></div>
+    <ng-container *ngTemplateOutlet="footerCredits"></ng-container>
+  </footer>
+</div>
+<ng-template #footerCredits>
     <span class="credits"
       >&copy; {{ year }}.
       <a href="https://ximplicity.es" target="_blank" rel="noopener noreferrer"
@@ -1175,8 +1190,7 @@
         ><img src="/assets/icons/github.svg" alt="" /><span class="visually-hidden">GitHub</span></a
       >
     </div>
-  </footer>
-</div>
+</ng-template>
 <input
   #imageFile
   class="visually-hidden"

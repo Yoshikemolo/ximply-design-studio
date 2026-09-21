@@ -4180,6 +4180,42 @@ export class EditorService {
     return generateProcedural(layer);
   }
   /** Shifts a transform that works about the selection centre so the pivot stays put instead. */
+  /**
+   * Starts transforming the selection with two fingers: the selection scales in
+   * proportion, turns and travels with them, around its pivot. Returns false when there
+   * is nothing the fingers may transform.
+   */
+  startTouchTransform(): boolean {
+    const active = this.selectionLayer();
+    if (!active || this.gesture || this.selectedLayers().some((layer) => this.isEffectivelyLocked(layer))) return false;
+    this.gesture = {
+      before: structuredClone(this.document()),
+      start: { x: 0, y: 0 },
+      last: { x: 0, y: 1 },
+      id: active.id,
+      points: [],
+      original: structuredClone(active),
+      mode: "scale",
+      ids: this.selectedLayers().filter((l) => !l.guide).map((l) => l.id),
+    };
+    return true;
+  }
+  /** Applies the change of the two fingers since they landed, in document units for the shift. */
+  touchTransform(scale: number, rotation: number, shift: Point) {
+    const g = this.gesture;
+    if (!g || g.mode !== "scale") return;
+    const factor = Math.min(10, Math.max(0.05, Number.isFinite(scale) ? scale : 1));
+    const w = g.original.width, h = g.original.height;
+    const target = this.aroundPivot(g.original, {
+      ...g.original,
+      width: w * factor,
+      height: h * factor,
+      x: g.original.x + (w * (1 - factor)) / 2,
+      y: g.original.y + (h * (1 - factor)) / 2,
+      rotation: g.original.rotation + rotation,
+    });
+    this.transformSelection(g, { ...target, x: target.x + shift.x, y: target.y + shift.y });
+  }
   private aroundPivot(original: Layer, target: Layer): Layer {
     const pivot = this.pivot();
     const centre = { x: original.x + original.width / 2, y: original.y + original.height / 2 };

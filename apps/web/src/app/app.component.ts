@@ -20,6 +20,10 @@ import {
   canvasWheelZoom,
   isCanvasZoomGesture,
 } from "../../../../packages/domain/src/input";
+import { EDGE_ZONE, LONG_PRESS_MS, LONG_PRESS_SLOP, edgeSwipe, pairOf, twoFingerChange, zoomAround } from "../../../../packages/domain/src/touch";
+import { selectionBounds } from "../../../../packages/domain/src/arrange";
+/** The width below which the studio lays itself out for a phone. */
+const PHONE_QUERY = "(max-width: 720px)";
 import { ShapeOptions } from "../../../../packages/domain/src/shapes";
 import { TraceOptions } from "../../../../packages/domain/src/tracing";
 import {
@@ -33,6 +37,7 @@ import {
   signal,
 } from "@angular/core";
 import { FormsModule } from "@angular/forms";
+import { NgTemplateOutlet } from "@angular/common";
 import type { SpatialPreview } from "./spatial";
 /** The commands a text field keeps for itself, because they edit the text it holds. */
 const FIELD_COMMANDS = ["undo", "redo", "copy", "cut", "paste", "pasteInFront", "pasteInBack", "selectAll", "remove", "finish", "cancel", "panHold"];
@@ -107,7 +112,7 @@ const LEAF_TYPE_LABELS: Record<string, string> = { swing: "Hinged", sliding: "Sl
 @Component({
   selector: "xds-root",
   standalone: true,
-  imports: [FormsModule, ContextMenuComponent, SmartTableComponent],
+  imports: [FormsModule, NgTemplateOutlet, ContextMenuComponent, SmartTableComponent],
   templateUrl: "./app.component.html",
 })
 export class AppComponent implements AfterViewInit, OnDestroy {
@@ -932,6 +937,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     return translate(key, this.locale());
   }
   ngAfterViewInit() {
+    this.watchPhoneWidth();
     document.addEventListener("scroll", this.contextScrollHandler, true);
     this.viewport?.nativeElement.addEventListener("wheel", this.wheelHandler, {
       passive: false,
@@ -1013,6 +1019,172 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     }
     return `M${start.x} ${start.y}` + area.points.map(point => `L${point.x} ${point.y}`).join("") + "Z";
   }
+  // Phones. Below the phone width the tools and the panels become drawers that slide in
+  // from the left and right edges, the menus fold behind a menu button, a long press
+  // stands for the right button and two fingers zoom the canvas or transform the selection.
+  readonly mobile = signal(typeof matchMedia === "function" && matchMedia(PHONE_QUERY).matches);
+  readonly mobileMenu = signal(false);
+  readonly toolsOpen = signal(false);
+  readonly panelsOpen = signal(false);
+  private phoneQuery?: MediaQueryList;
+  private swipeStart: { point: { x: number; y: number }; id: number } | null = null;
+  private longPress?: { timer: ReturnType<typeof setTimeout>; id: number; x: number; y: number; target: EventTarget | null; native: boolean };
+  private touches = new Map<number, { x: number; y: number }>();
+  private pinch?: {
+    mode: "view" | "transform";
+    start: [{ x: number; y: number }, { x: number; y: number }];
+    ids: [number, number];
+    zoom: number;
+    origin: { x: number; y: number };
+  };
+  /** Follows the phone width, so turning a tablet or resizing a window switches the layout. */
+  watchPhoneWidth() {
+    if (typeof matchMedia !== "function") return;
+    this.phoneQuery = matchMedia(PHONE_QUERY);
+    this.phoneQuery.addEventListener?.("change", (event) => {
+      this.mobile.set(event.matches);
+      if (!event.matches) this.closeDrawers();
+    });
+  }
+  toggleMobileMenu() {
+    this.mobileMenu.update((open) => !open);
+    if (this.mobileMenu()) { this.toolsOpen.set(false); this.panelsOpen.set(false); }
+  }
+  openDrawer(side: "tools" | "panels") {
+    this.mobileMenu.set(false);
+    this.toolsOpen.set(side === "tools");
+    this.panelsOpen.set(side === "panels");
+  }
+  closeDrawers() {
+    this.toolsOpen.set(false);
+    this.panelsOpen.set(false);
+    this.mobileMenu.set(false);
+  }
+  /** A finger that lands near a side edge may be opening the drawer on that side. */
+  @HostListener("document:pointerdown", ["$event"]) touchStart(event: PointerEvent) {
+    if (event.pointerType !== "touch") return;
+    this.swipeStart = this.mobile() ? { point: { x: event.clientX, y: event.clientY }, id: event.pointerId } : null;
+    this.startLongPress(event);
+  }
+  @HostListener("document:pointermove", ["$event"]) touchMove(event: PointerEvent) {
+    if (event.pointerType !== "touch" || !this.longPress || this.longPress.id !== event.pointerId) return;
+    if (Math.hypot(event.clientX - this.longPress.x, event.clientY - this.longPress.y) > LONG_PRESS_SLOP) this.cancelLongPress();
+  }
+  @HostListener("document:pointerup", ["$event"]) touchEnd(event: PointerEvent) {
+    if (event.pointerType !== "touch") return;
+    this.cancelLongPress();
+    const start = this.swipeStart;
+    this.swipeStart = null;
+    if (!start || start.id !== event.pointerId || !this.mobile()) return;
+    const swipe = edgeSwipe(start.point, { x: event.clientX, y: event.clientY }, window.innerWidth, { left: this.toolsOpen(), right: this.panelsOpen() });
+    if (swipe === "openLeft") this.openDrawer("tools");
+    else if (swipe === "openRight") this.openDrawer("panels");
+    else if (swipe === "closeLeft") this.toolsOpen.set(false);
+    else if (swipe === "closeRight") this.panelsOpen.set(false);
+  }
+  @HostListener("document:pointercancel", ["$event"]) touchCancelled(event: PointerEvent) {
+    if (event.pointerType !== "touch") return;
+    this.cancelLongPress();
+    this.swipeStart = null;
+  }
+  /**
+   * A finger resting on the screen opens the context menu, since a phone has no right
+   * button. The press is turned into the context menu event of whatever it rests on, so
+   * the canvas, the layers and the guides each open their own menu; a browser that opens
+   * one by itself on a long press is left to do so.
+   */
+  private startLongPress(event: PointerEvent) {
+    this.cancelLongPress();
+    if (!event.isPrimary) return;
+    const target = event.target;
+    const press = { id: event.pointerId, x: event.clientX, y: event.clientY, target, native: false, timer: setTimeout(() => this.fireLongPress(), LONG_PRESS_MS) };
+    this.longPress = press;
+  }
+  private cancelLongPress() {
+    if (this.longPress) clearTimeout(this.longPress.timer);
+    this.longPress = undefined;
+  }
+  private fireLongPress() {
+    const press = this.longPress;
+    this.longPress = undefined;
+    if (!press || press.native || !(press.target instanceof Element)) return;
+    // A press that started a drawing gesture on the canvas gives it up for the menu.
+    if (press.target.closest("canvas") && this.pointerActive) this.pointerCancel();
+    this.syntheticContext = true;
+    press.target.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true, clientX: press.x, clientY: press.y, button: 2 }));
+    this.syntheticContext = false;
+  }
+  private syntheticContext = false;
+  @HostListener("document:contextmenu") nativeContext() {
+    // The browser opened a menu of its own on the long press, so ours is not needed.
+    if (!this.syntheticContext && this.longPress) { this.longPress.native = true; this.cancelLongPress(); }
+  }
+  /**
+   * Two fingers on the canvas. Landing on the selection, they scale it in proportion,
+   * turn it and move it around its pivot; anywhere else they zoom the canvas around
+   * themselves and pan it. Whatever the first finger had started is taken back.
+   */
+  private touchDown(event: PointerEvent): boolean {
+    if (event.pointerType !== "touch") return false;
+    this.touches.set(event.pointerId, { x: event.clientX, y: event.clientY });
+    if (this.touches.size !== 2) return this.touches.size > 2 || !!this.pinch;
+    this.cancelLongPress();
+    if (this.pointerActive) this.pointerCancel();
+    const [[idA, a], [idB, b]] = [...this.touches.entries()];
+    const middle = this.point({ clientX: (a.x + b.x) / 2, clientY: (a.y + b.y) / 2 } as PointerEvent);
+    const bounds = this.editor.selectedLayers().length ? selectionBounds(this.editor.selectedLayers()) : null;
+    const pad = 24 / this.editor.zoom();
+    const onSelection = !!bounds && middle.x >= bounds.x - pad && middle.x <= bounds.x + bounds.width + pad && middle.y >= bounds.y - pad && middle.y <= bounds.y + bounds.height + pad;
+    const mode = onSelection && this.editor.startTouchTransform() ? "transform" : "view";
+    const rect = this.canvas!.nativeElement.getBoundingClientRect();
+    this.pinch = { mode, start: [a, b], ids: [idA, idB], zoom: this.editor.zoom(), origin: { x: rect.left, y: rect.top } };
+    return true;
+  }
+  private touchMoveCanvas(event: PointerEvent): boolean {
+    if (event.pointerType !== "touch" || !this.touches.has(event.pointerId)) return false;
+    this.touches.set(event.pointerId, { x: event.clientX, y: event.clientY });
+    const pinch = this.pinch;
+    if (!pinch) return false;
+    const a = this.touches.get(pinch.ids[0]), b = this.touches.get(pinch.ids[1]);
+    if (!a || !b) return true;
+    const change = twoFingerChange(pinch.start, [a, b]);
+    if (pinch.mode === "transform") {
+      const zoom = this.editor.zoom();
+      this.editor.touchTransform(change.scale, change.rotation, { x: change.shift.x / zoom, y: change.shift.y / zoom });
+      return true;
+    }
+    const nextZoom = Math.min(3, Math.max(0.1, pinch.zoom * change.scale));
+    const fingers = pairOf(pinch.start[0], pinch.start[1]).middle, now = pairOf(a, b).middle;
+    const target = zoomAround(pinch.origin, pinch.zoom, nextZoom, fingers, now);
+    this.setZoom(nextZoom);
+    // The canvas takes its new size on the next frame; the view is then scrolled so the
+    // point under the fingers stays there.
+    requestAnimationFrame(() => {
+      const view = this.viewport?.nativeElement, canvas = this.canvas?.nativeElement;
+      if (!view || !canvas) return;
+      const rect = canvas.getBoundingClientRect();
+      view.scrollLeft += rect.left - target.x;
+      view.scrollTop += rect.top - target.y;
+    });
+    return true;
+  }
+  private touchUpCanvas(event: PointerEvent): boolean {
+    if (event.pointerType !== "touch") return false;
+    this.touches.delete(event.pointerId);
+    if (this.pinch && this.touches.size < 2) {
+      if (this.pinch.mode === "transform") this.editor.end();
+      this.pinch = undefined;
+      // The finger still down after a two-finger gesture draws nothing when it lifts.
+      this.pinchResidue = this.touches.size > 0;
+      return true;
+    }
+    if (this.pinchResidue) {
+      this.pinchResidue = this.touches.size > 0;
+      return true;
+    }
+    return false;
+  }
+  private pinchResidue = false;
   private point(event: MouseEvent) {
     const rect = this.canvas!.nativeElement.getBoundingClientRect();
     return {
@@ -1211,6 +1383,9 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   pointerDown(event: PointerEvent) {
     if (event.button !== 0) return;
     event.preventDefault();
+    if (this.touchDown(event)) return;
+    // Near a side edge a phone finger is opening a drawer, not drawing.
+    if (event.pointerType === "touch" && this.mobile() && (event.clientX <= EDGE_ZONE || event.clientX >= window.innerWidth - EDGE_ZONE)) return;
     this.canvas!.nativeElement.setPointerCapture(event.pointerId);
     this.pointerActive = true;
     if (this.zoomAreaActive(event)) { this.beginZoomArea(event); return; }
@@ -1246,6 +1421,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     }
   }
   pointerMove(event: PointerEvent) {
+    if (this.touchMoveCanvas(event) || this.pinchResidue) return;
     this.cursorPoint.set({ x: event.clientX, y: event.clientY });
     if (this.altHeld && this.altHeld() !== event.altKey) this.altHeld.set(event.altKey);
     if (this.zoomDrag) { this.updateZoomArea(event); return; }
@@ -1263,6 +1439,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
       });
   }
   pointerUp(event?: PointerEvent) {
+    if (event && this.touchUpCanvas(event)) return;
     this.pointerActive = false;
     if (this.zoomDrag) { this.endZoomArea(); return; }
     this.pan = undefined;
@@ -1712,6 +1889,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     return (this.preferences.bindings()[id] ?? []).join(" / ");
   }
   chooseTool(id: ToolId) {
+    if (this.mobile?.()) this.toolsOpen.set(false);
     this.commitText();
     this.editor.setTool(id);
     const mode = ({ selectRectangle: "rectangle", selectEllipse: "ellipse", selectLasso: "lasso" } as const)[id as "selectRectangle" | "selectEllipse" | "selectLasso"];

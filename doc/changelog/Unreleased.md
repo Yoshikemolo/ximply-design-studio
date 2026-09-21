@@ -24,6 +24,9 @@ None.
 
 ## New features
 
+- Use the studio on a phone. The column of tools and the panels become drawers that slide in from the left and right edges, opened with a swipe from the edge or a tap on its handle and closed with a swipe back or a tap outside; the menus fold behind a menu button, with the credits of the footer fixed at their foot; and the page fits the screen, with the drawers scrolling only down.
+- Open context menus with a long press, since a phone has no right button; the canvas, the layers and the guides each open their own.
+- Zoom and pan the canvas with two fingers, and scale the selection in proportion, turn it and move it with two fingers that land on it, around its pivot and as one step.
 - Show the properties of the document in Properties when nothing is selected, as Illustrator does: width and height in the ruler unit, the orientation, the ruler unit, the margin guides with their centre guides, the registration marks and the background, each applied at once while the rest of the page setup is kept, with the full Document dimensions dialog a button away.
 
 ## Improvements
