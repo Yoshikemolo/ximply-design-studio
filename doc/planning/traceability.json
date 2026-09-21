@@ -51,7 +51,8 @@
         "apps/web/tests/editor.test.ts",
         "apps/web/tests/preferences.test.ts",
         "apps/web/tests/menus.test.ts",
-        "apps/web/tests/input-behavior.test.ts"
+        "apps/web/tests/input-behavior.test.ts",
+        "apps/web/tests/tool-rail-visibility.test.ts"
       ],
       "evidence": [
         "doc/implementation/PLAN-0002-0001.md"

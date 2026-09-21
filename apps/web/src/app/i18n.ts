@@ -491,6 +491,7 @@ const ES: Record<string, string> = {
   "Reset adjustments": "Restablecer ajustes",
   "Spatial preview": "Vista espacial",
   "Back to canvas": "Volver al lienzo",
+  "Tools": "Herramientas",
   "Parallax view": "Vista de paralaje",
   "Orbit view": "Vista de órbita",
   "Move the pointer to look around the planes": "Mueve el puntero para mirar alrededor de los planos",

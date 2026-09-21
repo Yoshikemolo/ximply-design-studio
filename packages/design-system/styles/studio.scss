@@ -398,6 +398,12 @@ hr {
 .workspace.no-panels {
   grid-template-columns: 100px minmax(0, 1fr);
 }
+.workspace.no-tools {
+  grid-template-columns: minmax(0, 1fr) 270px;
+}
+.workspace.no-tools.no-panels {
+  grid-template-columns: minmax(0, 1fr);
+}
 .toolrail {
   display: flex;
   flex-direction: column;
@@ -1474,6 +1480,12 @@ textarea {
   .workspace.no-panels {
     grid-template-columns: 96px minmax(0, 1fr);
   }
+  .workspace.no-tools {
+    grid-template-columns: minmax(0, 1fr) 230px;
+  }
+  .workspace.no-tools.no-panels {
+    grid-template-columns: minmax(0, 1fr);
+  }
   .contextbar {
     gap: 12px;
   }
@@ -1505,6 +1517,10 @@ textarea {
   }
   .workspace.no-panels {
     grid-template-columns: 96px minmax(0, 1fr);
+  }
+  .workspace.no-tools,
+  .workspace.no-tools.no-panels {
+    grid-template-columns: minmax(0, 1fr);
   }
   .inspector {
     position: absolute;

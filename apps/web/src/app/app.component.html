@@ -203,7 +203,8 @@
       </section>
     }
   </div>
-  <main class="workspace" [class.no-panels]="!panels()">
+  <main class="workspace" [class.no-panels]="!panels()" [class.no-tools]="!preferences.layoutBlocks().tools">
+    @if (preferences.layoutBlocks().tools) {
     <aside class="toolrail" [attr.aria-label]="t('Drawing tools')">
       @for (section of toolbarSections; track section.id) {
         <div class="tool-section" role="group" [attr.aria-label]="t(section.label)">
@@ -314,6 +315,7 @@
         </div>
       </div>
     </aside>
+    }
     <section class="canvas-area">
       <div class="document-tabs" role="tablist" [attr.aria-label]="t('Documents')">
         @for (tab of editor.tabs(); track tab.id) {
