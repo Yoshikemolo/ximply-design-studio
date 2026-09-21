@@ -1,5 +1,6 @@
 /** Trusted built-in descriptors; shortcut assignments belong to the command registry. */
 export type ToolId =
+  | "groupSelect"
   | "paintbrush"
   | "reshape"
   | "wall"
@@ -156,6 +157,7 @@ export const TOOLS: ToolPlugin[] = [
     icon: id,
     group: "Paths" as const,
   })),
+  { id: "groupSelect", label: "Group selection", icon: "groupSelect", group: "Select" },
   { id: "paintbrush", label: "Paintbrush", icon: "paintbrush", group: "Paint" },
   { id: "brush", label: "Raster brush", icon: "brush", group: "Paint" },
   { id: "reshape", label: "Reshape", icon: "reshape", group: "Paths" },
@@ -199,7 +201,7 @@ export const TOOL_FAMILIES: ToolFamily[] = [
   { id: "architecture", label: "Floor plan tools", tools: ["wall", "door", "window", "pillar", "stair"] },
   { id: "dimensions", label: "Dimensions", tools: ["dimensionSmart", "dimensionLinear", "dimensionAngular", "dimensionChain", "dimensionRadius", "dimensionDiameter"] },
   { id: "selection", label: "Select", tools: ["select", "selectRectangle", "selectEllipse", "selectLasso"] },
-  { id: "direct", label: "Direct selection", tools: ["direct"] },
+  { id: "direct", label: "Direct selection tools", tools: ["direct", "groupSelect"] },
   {
     id: "pen",
     label: "Bézier tools",

@@ -64,6 +64,8 @@ export class CanvasRenderer {
         hover: string | null;
         size: "small" | "mixed" | "large";
         handleStyle: "small" | "large" | "cross";
+        /** Focal points of the Reshape tool, drawn with a square around them. */
+        focal?: string[];
         /** Anchors chosen on the other selected objects, drawn on each of them. */
         others?: Record<string, { selected: string[]; handles: string[] }>;
       };
@@ -213,7 +215,7 @@ export class CanvasRenderer {
         ctx.fillStyle = on ? "#0d59f2" : "#ffffff";
         ctx.fillRect(node.point.x - half, node.point.y - half, half * 2, half * 2);
         ctx.strokeRect(node.point.x - half, node.point.y - half, half * 2, half * 2);
-        if (display?.hover === key) {
+        if (display?.hover === key || display?.focal?.includes(key)) {
           // The anchor under the pointer is ringed so it can be told from its neighbours.
           const ring = half + 2.5 * unit;
           ctx.lineWidth = 1.5 * unit;

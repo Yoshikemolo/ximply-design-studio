@@ -397,6 +397,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
       editor.handleStyle.set(settings.handleStyle);
       editor.showHandlesMultiple.set(settings.showHandlesMultiple);
       editor.highlightAnchors.set(settings.highlightAnchors);
+      editor.eraserShape.set(settings.eraser);
     });
     effect(() => {
       editor.document();
@@ -421,6 +422,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
       editor.handleStyle();
       editor.showHandlesMultiple();
       editor.highlightAnchors();
+      editor.reshapeFocal();
       editor.penId();
       this.textEditing();
       this.textDraft();
@@ -938,6 +940,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
               "addAnchor",
               "deleteAnchor",
               "convertAnchor",
+              "reshape",
             ].includes(this.activeTool()),
             showHandles: this.editor.showHandles(),
             boundingBox: this.editor.boundingBoxVisible(),
@@ -963,6 +966,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
       selected: primary ? editor.anchorKeysOf(primary.id) : [],
       handles: primary?.curves ? [...editor.visibleHandles(primary)] : [],
       hover: editor.highlightAnchors() && hover && hover.id === primary?.id ? hover.key : null,
+      focal: editor.tool() === "reshape" ? editor.reshapeFocal() : [],
       size: editor.anchorDisplay(),
       handleStyle: editor.handleStyle(),
       others,
@@ -1038,9 +1042,21 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     this.simplifyCounts.set(null);
   }
   // The option dialogs of the freehand tools, opened by double-clicking the tool.
-  readonly toolOptions = signal<"path" | "paintbrush" | "smooth" | null>(null);
+  readonly toolOptions = signal<"path" | "paintbrush" | "smooth" | "eraser" | null>(null);
   readonly toolOptionsDraft = signal<FreehandToolOptions>({ ...PENCIL_DEFAULTS });
+  /** [ and ] change the Eraser's diameter while the Eraser is the tool, as in Illustrator. */
+  resizeEraser(step: number) {
+    if (this.editor.tool() !== "eraser") return;
+    this.editor.resizeEraser(step);
+    this.preferences.updatePathSettings({ eraser: this.editor.eraserShape() });
+  }
   openToolOptions(id: ToolId) {
+    if (id === "eraser") {
+      this.flyout.set(null);
+      this.brushDraft.set({ kind: "calligraphic", ...this.editor.eraserShape() });
+      this.toolOptions.set("eraser");
+      return;
+    }
     if (id !== "path" && id !== "paintbrush" && id !== "smooth") return;
     this.flyout.set(null);
     const current = id === "path" ? this.editor.pencilOptions() : id === "paintbrush" ? this.editor.paintbrushOptions() : { ...PENCIL_DEFAULTS, ...this.editor.smoothOptions() };
@@ -1050,8 +1066,8 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   }
   /** The calligraphic brush the Paintbrush dialog edits until it is applied. */
   readonly brushDraft = signal<BrushStroke>({ ...DEFAULT_BRUSH_STROKE });
-  toolOptionsTitle(id: "path" | "paintbrush" | "smooth") {
-    return id === "path" ? "Pencil tool options" : id === "paintbrush" ? "Paintbrush tool options" : "Smooth tool options";
+  toolOptionsTitle(id: "path" | "paintbrush" | "smooth" | "eraser") {
+    return id === "path" ? "Pencil tool options" : id === "paintbrush" ? "Paintbrush tool options" : id === "eraser" ? "Eraser tool options" : "Smooth tool options";
   }
   setBrushStroke(key: "angle" | "roundness" | "diameter", value: number) {
     if (!Number.isFinite(value)) return;
@@ -1063,10 +1079,18 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   }
   resetToolOptions() {
     const id = this.toolOptions();
+    if (id === "eraser") { this.brushDraft.set({ kind: "calligraphic", angle: 0, roundness: 100, diameter: 10 }); return; }
     this.toolOptionsDraft.set({ ...(id === "paintbrush" ? PAINTBRUSH_DEFAULTS : id === "smooth" ? { ...PENCIL_DEFAULTS, ...SMOOTH_DEFAULTS } : PENCIL_DEFAULTS) });
   }
   applyToolOptions() {
     const id = this.toolOptions();
+    if (id === "eraser") {
+      const { angle, roundness, diameter } = this.brushDraft();
+      this.editor.eraserShape.set({ angle, roundness, diameter: Math.max(1, diameter) });
+      this.preferences.updatePathSettings({ eraser: this.editor.eraserShape() });
+      this.toolOptions.set(null);
+      return;
+    }
     const draft = validFreehandTool(this.toolOptionsDraft(), id === "paintbrush" ? PAINTBRUSH_DEFAULTS : PENCIL_DEFAULTS);
     if (id === "path") this.editor.pencilOptions.set(draft);
     if (id === "paintbrush") this.editor.paintbrushOptions.set(draft);
@@ -1480,6 +1504,8 @@ export class AppComponent implements AfterViewInit, OnDestroy {
       cutAtAnchors: () => this.editor.cutAtSelectedAnchors(),
       selectStray: () => this.editor.selectStrayPoints(),
       toggleMultipleHandles: () => this.preferences.updatePathSettings({ showHandlesMultiple: !this.preferences.pathSettings().showHandlesMultiple }),
+      eraserSmaller: () => this.resizeEraser(-1),
+      eraserLarger: () => this.resizeEraser(1),
       remove: () => this.editor.remove(),
       finish: () => this.editor.finishPath(),
       cancel: () => {
@@ -1586,7 +1612,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     const tool = this.activeTool();
     // Alt turns a tool into its partner while it is held, as in Illustrator.
     if (this.altHeld?.()) {
-      const partner: Partial<Record<ToolId, ToolId>> = { pen: "convertAnchor", addAnchor: "deleteAnchor", deleteAnchor: "addAnchor", path: "smooth" };
+      const partner: Partial<Record<ToolId, ToolId>> = { pen: "convertAnchor", addAnchor: "deleteAnchor", deleteAnchor: "addAnchor", path: "smooth", direct: "groupSelect", scissors: "addAnchor" };
       const other = partner[tool];
       if (other) return this.tools.find((t) => t.id === other)?.icon ?? other;
     }

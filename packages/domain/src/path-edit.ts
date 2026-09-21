@@ -491,3 +491,48 @@ export function closeFreehand(path: CurvePath, tolerance: number): CurvePath {
   }
   return closeByJoin(path);
 }
+
+/** The length along a path from its first anchor to each anchor, and the whole length. */
+function anchorPositions(path: CurvePath): { positions: number[]; total: number } {
+  const count = segmentCount(path), n = path.nodes.length;
+  const positions = [0];
+  for (let segment = 0; segment < count; segment++) {
+    const a = path.nodes[segment], b = path.nodes[(segment + 1) % n];
+    const samples = sampleSegment(a, b, 16);
+    let length = 0;
+    for (let i = 1; i < samples.length; i++) length += dist(samples[i], samples[i - 1]);
+    positions.push(positions[positions.length - 1] + length);
+  }
+  return { positions: positions.slice(0, n), total: positions[positions.length - 1] };
+}
+
+/**
+ * How far each anchor follows the focal points of the Reshape tool: a focal anchor all
+ * the way, the others less the farther along the path they lie, down to nothing at the
+ * ends of an open path or halfway round a closed one.
+ */
+export function reshapeWeights(path: CurvePath, focal: number[]): number[] {
+  const n = path.nodes.length;
+  if (!n || !focal.length) return path.nodes.map(() => 0);
+  const { positions, total } = anchorPositions(path);
+  return path.nodes.map((_, i) => {
+    if (focal.includes(i)) return 1;
+    let weight = 0;
+    for (const f of focal) {
+      let reach: number, distance: number;
+      if (path.closed) {
+        const direct = Math.abs(positions[i] - positions[f]);
+        distance = Math.min(direct, total - direct);
+        reach = total / 2;
+      } else if (i < f) {
+        reach = positions[f] - positions[0];
+        distance = positions[f] - positions[i];
+      } else {
+        reach = positions[n - 1] - positions[f];
+        distance = positions[i] - positions[f];
+      }
+      if (reach > 0) weight = Math.max(weight, 1 - distance / reach);
+    }
+    return Math.min(1, Math.max(0, weight));
+  });
+}

@@ -16,10 +16,7 @@ import {
   booleanLayers,
   selectionBounds,
 } from "../../../../packages/domain/src/arrange";
-import {
-  eraseFilled,
-  eraseStroke,
-} from "../../../../packages/domain/src/erase";
+import { convexHull, eraseArea } from "../../../../packages/domain/src/erase";
 import {
   nineSlice,
   symbolEffect,
@@ -66,9 +63,9 @@ import { pdfArtwork, pdfFirstPage, pdfObjects } from "../../../../packages/domai
 import { epsArtwork, epsPostScript } from "../../../../packages/domain/src/eps-import";
 import { knifeCut, scissorCut } from "../../../../packages/domain/src/cut";
 import { outlineStroke } from "../../../../packages/domain/src/outline-stroke";
-import { PathParameter, averagePoints, closeByJoin, closeFreehand, concatPieces, cutAtAnchors, deleteAnchor as deleteAnchorKeepingShape, dragSegment, joinPaths, nearestOnPath, placeAnchor, rangesNear, redrawPath, removeParts, removeRanges, stretch } from "../../../../packages/domain/src/path-edit";
+import { PathParameter, averagePoints, closeByJoin, closeFreehand, concatPieces, cutAtAnchors, deleteAnchor as deleteAnchorKeepingShape, dragSegment, joinPaths, nearestOnPath, placeAnchor, rangesNear, redrawPath, removeParts, removeRanges, reshapeWeights, stretch } from "../../../../packages/domain/src/path-edit";
 import { DEFAULT_SIMPLIFY, FreehandOptions, FreehandToolOptions, PAINTBRUSH_DEFAULTS, PENCIL_DEFAULTS, SMOOTH_DEFAULTS, SimplifyOptions, fitFreehand, simplifyPath } from "../../../../packages/domain/src/path-fit";
-import { BrushStroke, DEFAULT_BRUSH_STROKE } from "../../../../packages/domain/src/brush-stroke";
+import { BrushStroke, DEFAULT_BRUSH_STROKE, nibOutline } from "../../../../packages/domain/src/brush-stroke";
 import { textOutlineGroups } from "../../../../packages/domain/src/text-outline";
 import { FontOutlines } from "./font-outlines";
 import { PdfImage, PdfPageSource, pdfDocument } from "../../../../packages/domain/src/pdf";
@@ -1883,9 +1880,17 @@ export class EditorService {
       if (!this.startConvert(point, before)) this.status.set("Press on an anchor or a handle to convert it.");
       return;
     }
+    if (tool === "reshape") { this.startReshape(point, before, modifiers); return; }
+    // Alt turns the Direct Selection tool into the Group Selection tool while it is held.
+    if (tool === "groupSelect" || (tool === "direct" && modifiers.alt)) { this.groupSelectClick(point, before, modifiers); return; }
     if (tool === "addAnchor" || tool === "deleteAnchor") {
       // Alt turns each of the two tools into the other one, as it does in Illustrator.
       this.anchorToolClick(point, before, (tool === "addAnchor") !== !!modifiers.alt ? "add" : "delete");
+      return;
+    }
+    if (tool === "scissors" && modifiers.alt) {
+      // Alt turns the Scissors into the Add Anchor tool while it is held.
+      this.anchorToolClick(point, before, "add");
       return;
     }
     if (tool === "scissors" || tool === "knife") {
@@ -2013,24 +2018,10 @@ export class EditorService {
       return;
     }
     if (tool === "eraser") {
-      const active = this.selected();
-      if (
-        active &&
-        !this.isEffectivelyLocked(active) &&
-        !active.guide && !active.dimension && !active.procedural &&
-        active.visible &&
-        ["path", "rectangle", "ellipse"].includes(active.kind)
-      ) {
-        this.gesture = {
-          before,
-          start: point,
-          last: point,
-          id: active.id,
-          points: [],
-          original: active,
-          mode: "vectorEraser",
-        };
-        this.eraseVector(point);
+      // An image or paint layer is erased as pixels; everything else as vector artwork.
+      const selected = this.selectedLayers();
+      if (!(selected.length === 1 && selected[0].kind === "image")) {
+        this.startVectorEraser(point, before, modifiers);
         return;
       }
     }
@@ -2168,6 +2159,7 @@ export class EditorService {
     else if (g.mode === "penClose") this.dragPenClose(point, modifiers);
     else if (g.mode.startsWith("convert:")) this.dragConvert(point, modifiers);
     else if (g.mode === "anchors") this.dragAnchorsAcross(point, modifiers);
+    else if (g.mode === "reshape") this.dragReshape(modifiers.shift ? snapDirection(g.start, point, this.snapAngle()) : point);
     else if (g.mode.startsWith("segment:")) this.dragSegmentGesture(modifiers.shift ? snapDirection(g.start, point, this.snapAngle()) : point);
     else if (g.mode.startsWith("node:")) this.dragNode(point, modifiers);
     else if (
@@ -2206,7 +2198,7 @@ export class EditorService {
           ),
         ),
       );
-    } else if (g.mode === "vectorEraser") this.eraseVector(point);
+    } else if (g.mode === "vectorEraser") this.dragVectorEraser(point, modifiers);
     else if (g.mode === "pathEraser") this.erasePath(point);
     else if (g.mode === "spray" || g.mode.startsWith("symbol"))
       this.paintSymbols(point, modifiers.alt);
@@ -2334,10 +2326,11 @@ export class EditorService {
       this.setLayer(g.id, { curves });
     }
     const layer = this.document().layers.find((l) => l.id === g.id);
-    if (layer?.curves && (["pen", "penHandle", "penClose"].includes(g.mode) || g.mode.startsWith("node:") || g.mode.startsWith("convert:") || g.mode.startsWith("segment:")))
+    if (layer?.curves && (["pen", "penHandle", "penClose", "reshape"].includes(g.mode) || g.mode.startsWith("node:") || g.mode.startsWith("convert:") || g.mode.startsWith("segment:")))
       this.setLayer(g.id, fitCurves(layer, layer.curves));
     if (g.mode === "penClose") { this.penId.set(null); this.activeNodes.set([]); }
     if (g.mode === "pathEraser") this.finishPathEraser(g);
+    if (g.mode === "vectorEraser") this.finishVectorEraser();
     if (g.mode === "anchors") {
       for (const id of this.anchorOriginals?.keys() ?? []) {
         const moved = this.document().layers.find((l) => l.id === id);
@@ -3374,6 +3367,98 @@ export class EditorService {
     this.otherAnchors.set(others);
     this.activeSegments.set([]);
   }
+  /** The focal anchors of the Reshape tool on the selected path, as "path:index" keys. */
+  readonly reshapeFocal = signal<string[]>([]);
+  /**
+   * The Reshape tool. A press on an anchor of the selected path makes it a focal point, and
+   * a press on a segment adds an anchor there and makes that the focal point; Shift adds
+   * more. Dragging then pulls the focal points all the way and the rest of the path along
+   * with them, less the farther along the path an anchor lies, so the ends stay put and
+   * the overall shape is stretched rather than bent.
+   */
+  private startReshape(point: Point, before: StudioDocument, modifiers: { shift?: boolean }) {
+    let layer = this.selected();
+    if (!layer || !["path", "rectangle", "ellipse"].includes(layer.kind) || this.isEffectivelyLocked(layer) || layer.dimension || layer.procedural) {
+      const picked = pick(this.document().layers, point);
+      if (!picked || !["path", "rectangle", "ellipse"].includes(picked.kind) || this.isEffectivelyLocked(picked)) { this.status.set("Select the path to reshape."); return; }
+      this.selectedIds.set([picked.id]);
+      this.selectedId.set(picked.id);
+      this.reshapeFocal.set([]);
+      layer = picked;
+    }
+    let target: Layer = layer.curves ? layer : { ...layer, kind: "path", curves: this.editableCurves(layer) };
+    let key: string | null = null;
+    const radius = 9 / this.zoom();
+    target.curves!.forEach((path, pi) => path.nodes.forEach((node, ni) => {
+      const world = worldPoint(target, node.point);
+      if (!key && Math.hypot(world.x - point.x, world.y - point.y) <= radius) key = `${pi}:${ni}`;
+    }));
+    if (!key) {
+      const segment = this.segmentAt(target, point);
+      if (!segment) { if (!modifiers.shift) this.reshapeFocal.set([]); return; }
+      // A press on a segment adds the focal anchor there, without changing the shape.
+      const curves = structuredClone(target.curves!);
+      curves[segment.path] = splitSegment(curves[segment.path], segment.segment, segment.t);
+      target = { ...target, curves };
+      this.setLayer(target.id, { kind: "path", curves });
+      key = `${segment.path}:${segment.segment + 1}`;
+      // Focal keys after the new anchor on the same path move one place along.
+      this.reshapeFocal.update((keys) => keys.map((k) => {
+        const [pi, ni] = k.split(":").map(Number);
+        return pi === segment.path && ni > segment.segment ? `${pi}:${ni + 1}` : k;
+      }));
+    } else this.setLayer(target.id, { kind: "path", curves: target.curves });
+    const chosen = key as string;
+    this.reshapeFocal.update((keys) => modifiers.shift ? (keys.includes(chosen) ? keys : [...keys, chosen]) : keys.includes(chosen) ? keys : [chosen]);
+    this.gesture = { before, start: point, last: point, id: target.id, points: [], original: structuredClone({ ...target, kind: "path" }), mode: "reshape" };
+  }
+  private dragReshape(point: Point) {
+    const g = this.gesture!;
+    const from = localPoint(g.original, g.start), to = localPoint(g.original, point);
+    const delta = { x: to.x - from.x, y: to.y - from.y };
+    const focal = this.reshapeFocal();
+    const curves = g.original.curves!.map((path, pi) => {
+      const focus = focal.filter((k) => +k.split(":")[0] === pi).map((k) => +k.split(":")[1]);
+      if (!focus.length) return path;
+      const weights = reshapeWeights(path, focus);
+      return {
+        ...path,
+        nodes: path.nodes.map((node, ni) => weights[ni] > 0 ? placeAnchor(node, { x: node.point.x + delta.x * weights[ni], y: node.point.y + delta.y * weights[ni] }) : node),
+      };
+    });
+    this.setLayer(g.id, { curves });
+  }
+  /**
+   * The Group Selection tool. The first press takes the object under the pointer by
+   * itself, even inside a group; each further press on it takes the next group out, up
+   * to the outermost one. Shift adds to what is selected.
+   */
+  private groupSelectClick(point: Point, before: StudioDocument, modifiers: { shift?: boolean }) {
+    const layer = pick(this.document().layers.filter((l) => !l.dimension || this.dimensionsVisible()), point);
+    if (!layer || this.isEffectivelyLocked(layer)) {
+      if (!modifiers.shift) { this.selectedIds.set([]); this.selectedId.set(null); }
+      this.groupLevel = null;
+      return;
+    }
+    const groups = layer.groupPath ?? [];
+    const again = this.groupLevel?.id === layer.id && this.selectedIds().includes(layer.id);
+    const level = again ? Math.min(groups.length, this.groupLevel!.level + 1) : 0;
+    this.groupLevel = { id: layer.id, level };
+    const members = level === 0
+      ? [layer.id]
+      : this.document().layers.filter((l) => {
+          const prefix = groups.slice(0, groups.length - level + 1);
+          return (l.groupPath ?? []).slice(0, prefix.length).join("/") === prefix.join("/");
+        }).map((l) => l.id);
+    const ids = modifiers.shift ? [...new Set([...this.selectedIds(), ...members])] : members;
+    this.selectedIds.set(ids);
+    this.selectedId.set(layer.id);
+    this.activeNodes.set([]);
+    this.otherAnchors.set({});
+    const active = this.selectionLayer();
+    if (active) this.gesture = { before, start: point, last: point, id: active.id, points: [], original: structuredClone(active), mode: "move", ids: this.selectedLayers().filter((l) => !l.guide).map((l) => l.id) };
+  }
+  private groupLevel: { id: string; level: number } | null = null;
   private editableCurves(layer: Layer): CurvePath[] {
     if (layer.curves) return structuredClone(layer.curves);
     if (layer.kind === "path") return [polyline(layer.points)];
@@ -4160,29 +4245,103 @@ export class EditorService {
     this.selectedIds.set(pieces.map((piece) => piece.id));
     this.selectedId.set(pieces[0].id);
   }
-  private eraseVector(point: Point) {
-    if(this.document().layers.find(l=>l.id===this.gesture?.id)?.dimension || this.document().layers.find(l=>l.id===this.gesture?.id)?.procedural)return;
-    const g = this.gesture!,
-      layer = this.document().layers.find((l) => l.id === g.id)!;
-    const paths = this.editableCurves(layer),
-      p = localPoint(layer, point),
-      radius = this.size() / 2;
-    const curves = [
-      ...eraseFilled(
-        paths.filter((c) => c.closed),
-        p,
-        radius,
-      ),
-      ...eraseStroke(
-        paths.filter((c) => !c.closed),
-        p,
-        radius,
-      ),
-    ];
-    if (curves.reduce((n, c) => n + c.nodes.length, 0) <= 20000)
-      this.setLayer(layer.id, { kind: "path", curves });
+  /** The Eraser's nib, as its options set it; Illustrator's default is a round 10 point nib. */
+  readonly eraserShape = signal<{ angle: number; roundness: number; diameter: number }>({ angle: 0, roundness: 100, diameter: 10 });
+  private eraserTargets: string[] = [];
+  private eraserMarquee = false;
+  /** The layers the Eraser works on: the selected ones, or every one when nothing is selected. */
+  private eraserLayers(): Layer[] {
+    const vector = (l: Layer) => l.visible && !l.guide && !l.dimension && !l.procedural && !this.isEffectivelyLocked(l) && ["path", "rectangle", "ellipse"].includes(l.kind);
+    const selected = this.selectedLayers();
+    return (selected.length ? selected : this.document().layers).filter(vector);
   }
-
+  /**
+   * The Eraser on vector artwork: the nib erases whatever it passes over, across every
+   * object when nothing is selected. Shift keeps the drag on a horizontal, vertical or
+   * diagonal line, and Alt draws a marquee whose whole area is erased on release.
+   */
+  private startVectorEraser(point: Point, before: StudioDocument, modifiers: { alt?: boolean }) {
+    this.eraserTargets = this.eraserLayers().map((l) => l.id);
+    if (!this.eraserTargets.length) { this.status.set("There is nothing here the Eraser can erase."); return; }
+    this.eraserMarquee = !!modifiers.alt;
+    this.gesture = { before, start: point, last: point, id: this.eraserTargets[0], points: [point], original: this.document().layers.find((l) => l.id === this.eraserTargets[0])!, mode: "vectorEraser" };
+    if (this.eraserMarquee) this.areaSelection.set({ kind: "rectangle", start: point, end: point, points: [point] });
+    else this.eraseAlong(point, point);
+  }
+  private dragVectorEraser(point: Point, modifiers: { shift?: boolean; alt?: boolean }) {
+    const g = this.gesture!;
+    if (this.eraserMarquee) {
+      let end = point;
+      if (modifiers.shift) {
+        // Alt with Shift keeps the marquee square.
+        const side = Math.max(Math.abs(point.x - g.start.x), Math.abs(point.y - g.start.y));
+        end = { x: g.start.x + Math.sign(point.x - g.start.x || 1) * side, y: g.start.y + Math.sign(point.y - g.start.y || 1) * side };
+      }
+      this.areaSelection.set({ kind: "rectangle", start: g.start, end, points: [g.start] });
+      return;
+    }
+    const to = modifiers.shift ? snapDirection(g.start, point, 45) : point;
+    this.eraseAlong(g.points[g.points.length - 1], to);
+    g.points.push(to);
+  }
+  /** Erases with the nib at every step from one pointer position to the next, so fast drags leave no gaps. */
+  private eraseAlong(from: Point, to: Point) {
+    const shape = this.eraserShape();
+    const brush = { kind: "calligraphic" as const, ...shape };
+    // The nib is convex, so the area it sweeps in a straight move is the hull of its two ends.
+    this.eraseAreas([convexHull([...nibOutline(brush, from), ...nibOutline(brush, to)])]);
+  }
+  private eraseAreas(areas: Point[][]) {
+    const updates = new Map<string, Layer>();
+    for (const id of this.eraserTargets) {
+      const layer = this.document().layers.find((l) => l.id === id);
+      if (!layer) continue;
+      let curves = this.editableCurves(layer);
+      for (const area of areas) curves = eraseArea(curves, area.map((p) => localPoint(layer, p)));
+      if (curves.reduce((n, c) => n + c.nodes.length, 0) > 20000) continue;
+      updates.set(id, curves.length ? { ...layer, kind: "path", curves } : { ...layer, kind: "path", curves: [] });
+    }
+    this.document.update((d) => ({ ...d, layers: d.layers.map((l) => updates.get(l.id) ?? l) }));
+  }
+  /** Ends an erasure: a marquee erases its area, emptied objects go and cut paths come apart. */
+  private finishVectorEraser() {
+    const area = this.areaSelection();
+    if (this.eraserMarquee && area) {
+      const { start, end } = area;
+      this.eraseAreas([[start, { x: end.x, y: start.y }, end, { x: start.x, y: end.y }]]);
+      this.areaSelection.set(null);
+    }
+    this.eraserMarquee = false;
+    const pieces: Layer[] = [];
+    this.document.update((d) => ({
+      ...d,
+      layers: d.layers.flatMap((l) => {
+        if (!this.eraserTargets.includes(l.id)) return [l];
+        if (!l.curves?.length) return [];
+        const open = l.curves.filter((c) => !c.closed);
+        if (open.length < 2 || open.length !== l.curves.length) return [fitCurves(l, l.curves)];
+        // Open paths the Eraser cut in pieces become one object per piece.
+        return open.map((path) => {
+          const fresh = fitCurves({ ...newLayer("path", crypto.randomUUID(), { x: 0, y: 0 }), rotation: 0 }, [this.worldCurve(l, path)]);
+          const piece = { ...l, ...fresh, id: fresh.id, kind: "path" as const, rotation: 0, flipX: false, flipY: false, skewX: 0, points: [] };
+          pieces.push(piece);
+          return [piece];
+        }).flat();
+      }),
+    }));
+    const kept = this.selectedIds().filter((id) => this.document().layers.some((l) => l.id === id));
+    if (this.selectedIds().length) {
+      const ids = [...kept, ...pieces.map((p) => p.id)];
+      this.selectedIds.set(ids);
+      this.selectedId.set(ids.at(-1) ?? null);
+    }
+    this.eraserTargets = [];
+  }
+  /** Changes the Eraser's diameter by a step, as [ and ] do in Illustrator. */
+  resizeEraser(step: number) {
+    this.eraserShape.update((shape) => ({ ...shape, diameter: Math.min(1296, Math.max(1, Math.round(shape.diameter + step))) }));
+    this.status.set(`Eraser diameter: ${this.eraserShape().diameter} px`);
+  }
   defineSymbol() {
     const layer = this.selected();
     if (!layer || this.isEffectivelyLocked(layer) || layer.guide || layer.dimension || layer.procedural) return;

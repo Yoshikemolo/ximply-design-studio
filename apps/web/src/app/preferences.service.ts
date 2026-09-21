@@ -23,6 +23,8 @@ export interface PathSettings {
   handleStyle: "small" | "large" | "cross";
   showHandlesMultiple: boolean;
   highlightAnchors: boolean;
+  /** The Eraser's nib: angle in degrees, roundness in percent and diameter in pixels. */
+  eraser: { angle: number; roundness: number; diameter: number };
 }
 export const PATH_SETTINGS_DEFAULTS: PathSettings = {
   pencil: { ...PENCIL_DEFAULTS },
@@ -34,6 +36,7 @@ export const PATH_SETTINGS_DEFAULTS: PathSettings = {
   handleStyle: "small",
   showHandlesMultiple: true,
   highlightAnchors: true,
+  eraser: { angle: 0, roundness: 100, diameter: 10 },
 };
 /** Reads stored path settings, keeping the default for anything missing or invalid. */
 export function validPathSettings(value: unknown): PathSettings {
@@ -50,6 +53,9 @@ export function validPathSettings(value: unknown): PathSettings {
     handleStyle: pick(input["handleStyle"], ["small", "large", "cross"] as const, "small"),
     showHandlesMultiple: typeof input["showHandlesMultiple"] === "boolean" ? input["showHandlesMultiple"] : true,
     highlightAnchors: typeof input["highlightAnchors"] === "boolean" ? input["highlightAnchors"] : true,
+    eraser: validBrushStroke({ kind: "calligraphic", ...(input["eraser"] as object) }) && (input["eraser"] as { diameter: number }).diameter >= 1
+      ? (({ angle, roundness, diameter }) => ({ angle, roundness, diameter }))(input["eraser"] as { angle: number; roundness: number; diameter: number })
+      : { angle: 0, roundness: 100, diameter: 10 },
   };
 }
 const PATH_SETTINGS_KEY = "xds-path-settings";

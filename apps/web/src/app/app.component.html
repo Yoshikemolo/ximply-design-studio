@@ -1608,19 +1608,21 @@
   @let draft = toolOptionsDraft();
   <div class="modal-backdrop"><form class="server-dialog" role="dialog" aria-modal="true" [attr.aria-label]="t(toolOptionsTitle(optionsTool))" (submit)="$event.preventDefault(); applyToolOptions()" (keydown.escape)="toolOptions.set(null); $event.stopPropagation()">
     <h2>{{ t(toolOptionsTitle(optionsTool)) }}</h2>
+    @if (optionsTool !== 'eraser') {
     <div class="section-label">{{ t('Tolerances') }}</div>
     <label class="wide-label">{{ t('Fidelity') }} ({{ draft.fidelity }} {{ t('pixels') }})<input type="range" min="0.5" max="20" step="0.5" [value]="draft.fidelity" (input)="setToolOption('fidelity', number($event))" /></label>
     <label class="wide-label">{{ t('Smoothness') }} ({{ draft.smoothness }}%)<input type="range" min="0" max="100" step="1" [value]="draft.smoothness" (input)="setToolOption('smoothness', number($event))" /></label>
-    @if (optionsTool !== 'smooth') {
+    }
+    @if (optionsTool !== 'smooth' && optionsTool !== 'eraser') {
       <div class="section-label">{{ t('Options') }}</div>
       <label class="wide-label toggle-row">{{ t(optionsTool === 'path' ? 'Fill new pencil strokes' : 'Fill new brush strokes') }}<input class="toggle-switch" type="checkbox" role="switch" [checked]="draft.fill" (change)="setToolOption('fill', $any($event.target).checked)" /></label>
       <label class="wide-label toggle-row">{{ t('Keep selected') }}<input class="toggle-switch" type="checkbox" role="switch" [checked]="draft.keepSelected" (change)="setToolOption('keepSelected', $any($event.target).checked)" /></label>
       <label class="wide-label toggle-row">{{ t('Edit selected paths') }}<input class="toggle-switch" type="checkbox" role="switch" [checked]="draft.editSelected" (change)="setToolOption('editSelected', $any($event.target).checked)" /></label>
       <label class="wide-label">{{ t('Within') }} ({{ draft.within }} {{ t('pixels') }})<input type="range" min="2" max="20" step="1" [disabled]="!draft.editSelected" [value]="draft.within" (input)="setToolOption('within', number($event))" /></label>
     }
-    @if (optionsTool === 'paintbrush') {
+    @if (optionsTool === 'paintbrush' || optionsTool === 'eraser') {
       @let brush = brushDraft();
-      <div class="section-label">{{ t('Calligraphic brush') }}</div>
+      <div class="section-label">{{ t(optionsTool === 'eraser' ? 'Eraser shape' : 'Calligraphic brush') }}</div>
       <label class="wide-label">{{ t('Angle') }} ({{ brush.angle }}°)<input type="range" min="-180" max="180" step="1" [value]="brush.angle" (input)="setBrushStroke('angle', number($event))" /></label>
       <label class="wide-label">{{ t('Roundness') }} ({{ brush.roundness }}%)<input type="range" min="0" max="100" step="1" [value]="brush.roundness" (input)="setBrushStroke('roundness', number($event))" /></label>
       <label class="wide-label">{{ t('Diameter') }} ({{ brush.diameter }} {{ t('pixels') }})<input type="range" min="0.5" max="100" step="0.5" [value]="brush.diameter" (input)="setBrushStroke('diameter', number($event))" /></label>
