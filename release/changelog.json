@@ -1,6 +1,123 @@
 {
-  "currentVersion": "0.6.0",
+  "currentVersion": "0.7.0",
   "entries": [
+    {
+      "version": "0.7.0",
+      "date": "2026-09-22",
+      "summary": "Gradients, patterns, swatches and colour modes, lock and hide as in Illustrator, and a studio that works on a phone",
+      "breakingChanges": [
+        "Documents that carry a gradient or pattern fill, patterns or swatches are refused by 0.6.0 and earlier editors and APIs, which do not know those fields (ADR-0033, proposed). Migration: to open such a document in an earlier version, set the fills back to plain colours and remove its patterns and swatches."
+      ],
+      "changes": [
+        {
+          "type": "Feature",
+          "description": "Lock and hide objects as Illustrator does: Lock and Hide the selection with Ctrl+2 and Ctrl+3, the artwork above it that overlaps it, or everything outside its top-level groups with Ctrl+Alt+Shift+2 and Ctrl+Alt+Shift+3; Unlock All with Ctrl+Alt+2 and Show All with Ctrl+Alt+3 bring every object back and select it. Keys with a digit are read by their place on the keyboard, so they work on layouts whose Ctrl+Alt types a character of its own."
+        },
+        {
+          "type": "Feature",
+          "description": "Use the studio on a phone. The column of tools and the panels become drawers that slide in from the left and right edges, opened with a swipe from the edge or a tap on its handle and closed with a swipe back or a tap outside; the menus fold behind a menu button, with the credits of the footer fixed at their foot; and the page fits the screen, with the drawers scrolling only down."
+        },
+        {
+          "type": "Feature",
+          "description": "Switch documents on a phone from a list in the header, between the application icon and the language, which also makes a new document and closes the one shown; the strip of tabs gives its height to the canvas. The document is renamed in Properties, where its name now sits with the rest of the page."
+        },
+        {
+          "type": "Feature",
+          "description": "Paint shapes and text with gradients and patterns, stored in the native format with the patterns and swatches of the document and checked on open by the editor and the API. A linear gradient crosses the object along its angle and a radial one spreads from its centre, each with its colour stops and midpoints, and turns with the object; a pattern tiles its artwork from the document origin, as Illustrator lays patterns out. Both are drawn on the canvas and written to SVG and PDF: a gradient as a PDF shading clipped to its shape and a pattern as a tiling pattern, with transparent gradient stops and transparency inside a pattern tile reported as not carried."
+        },
+        {
+          "type": "Feature",
+          "description": "Choose the fill in the paint popover as a colour, a gradient, a pattern or none. The gradient editor sets the type, the angle and each stop with its location and midpoint, adds a stop in the widest gap, removes one and reverses the gradient; the pattern picker lists the patterns of the document and five ready-made ones. A gradient or pattern chosen with nothing selected fills the objects drawn next."
+        },
+        {
+          "type": "Feature",
+          "description": "Drag the Gradient tool (G) across the selection to set where its gradient starts and ends, across every selected object at once and in one undo step; Shift keeps the line to 45 degrees."
+        },
+        {
+          "type": "Feature",
+          "description": "Blend gradients between objects: the steps mix the two gradients stop by stop and turn between their angles or lines, and a gradient blended with a flat colour fades into that colour at both of its ends, step by step, or out to transparent when the other end has no fill. Patterns are not mixed; each step keeps the pattern of the nearer end."
+        },
+        {
+          "type": "Feature",
+          "description": "Define a pattern from the selected vector artwork with Edit > Define Pattern; it joins the swatches of the document."
+        },
+        {
+          "type": "Feature",
+          "description": "Pick colours in the model you work in: Quick RGB, the default and the picker of earlier versions, RGB sliders, CMYK sliders, a grey level or a custom palette of your own. The model only changes how a colour is chosen; the document keeps it as before. CMYK uses the device formula, without colour management, so it is not a print separation."
+        },
+        {
+          "type": "Feature",
+          "description": "Show the Swatches panel from View > Layout, hidden by default: it lists the swatches of the document, starting from a default set, applies one to the fill or the stroke, filters them by kind, keeps the current fill as a new swatch and deletes the one chosen. Gradients and patterns fill objects only, since a stroke takes a colour."
+        },
+        {
+          "type": "Feature",
+          "description": "Open context menus with a long press, since a phone has no right button; the canvas, the layers and the guides each open their own."
+        },
+        {
+          "type": "Feature",
+          "description": "Zoom and pan the canvas with two fingers, and scale the selection in proportion, turn it and move it with two fingers that land on it, around its pivot and as one step."
+        },
+        {
+          "type": "Feature",
+          "description": "Show the properties of the document in Properties when nothing is selected, as Illustrator does: width and height in the ruler unit, the orientation, the ruler unit, the margin guides with their centre guides, the registration marks and the background, each applied at once while the rest of the page setup is kept, with the full Document dimensions dialog a button away."
+        },
+        {
+          "type": "Improvement",
+          "description": "Select a filled open curve by clicking inside its fill, as a closed one is, since the fill paints it as if closed; an open curve without a fill is still selected by its outline only, and locked or hidden curves never are."
+        },
+        {
+          "type": "Improvement",
+          "description": "Redraw the icons of the Bezier tools: the Pen as a fountain-pen nib, Add Anchor Point, Delete Anchor Point and Convert Anchor Point as the same nib with a plus, a minus or a small square at its top left corner. The Paintbrush and the raster brush now show a brush with a pointed tip, above a vector path or a painted stroke."
+        },
+        {
+          "type": "Improvement",
+          "description": "Make the strip of document tabs 38 pixels high and each tab 36, so the tabs sit inside the strip."
+        },
+        {
+          "type": "Improvement",
+          "description": "Bring the agent instructions in line with the project as it is: the promotion from dev to release and main without qa and demo branches, the docs branches, the licence, the imitation of Illustrator's behaviour and keys, and the preview publishing rules."
+        },
+        {
+          "type": "Improvement",
+          "description": "Bring the contribution guide in line with the licence and the way the project works now: outside contributions need the author's written agreement first, work reaches dev through pull requests and goes on to release and main, the checks are the ones the project runs, and the paused Sonar check is never taken as a pass."
+        },
+        {
+          "type": "Fix",
+          "description": "Draw the marks of tool icons without a background the icon cannot resolve: a plus, a minus or a square on a badge filled from a theme variable showed as a solid dot, since an icon loaded as a picture does not see the page's variables."
+        },
+        {
+          "type": "Fix",
+          "description": "Tint the document icon of Properties with the theme, as every other icon is."
+        },
+        {
+          "type": "Fix",
+          "description": "Lay the quick backgrounds of the document out in equal columns across the panel, a little closer together, so No color ends where the other controls end instead of against the edge."
+        },
+        {
+          "type": "Fix",
+          "description": "Give everything in Properties the side margins the other panels have; only its transform fields had them."
+        },
+        {
+          "type": "Fix",
+          "description": "Let a page change keep up to the thousand layers a document may hold; it still refused more than a hundred and fifty."
+        },
+        {
+          "type": "Engineering",
+          "description": "Record the paint extension of the native format as a proposed decision, ADR-0033, awaiting owner review, with the scenarios of paints, SC-0107, and of the phone layout, SC-0108."
+        },
+        {
+          "type": "Engineering",
+          "description": "Keep the paint model, its validation, the blending of gradients and the colour models in the domain package, tested against geometric and colour oracles; a PDF rendered by MuPDF painted the same pixels as the canvas."
+        },
+        {
+          "type": "Engineering",
+          "description": "Record the owner's decisions on 0.6.0: ADR-0032, the brush carried by a path in the native format, is accepted, and the drawing tools are accepted visually for the maturity of this preview. The strict Sonar gate remains outstanding, so no scenario is marked Verified."
+        }
+      ],
+      "capabilityStatus": "local-preview",
+      "markdown": "0.7.0.md",
+      "source": "doc/changelog/0.7.0.md"
+    },
     {
       "version": "0.6.0",
       "date": "2026-09-22",

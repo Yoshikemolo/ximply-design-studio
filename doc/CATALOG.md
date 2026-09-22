@@ -70,6 +70,7 @@ Generated titles and paths only; authoritative content remains in each linked do
 - [REL-0023 — Multi-document workbench, construction tools and drafting dimensions](changelog/0.4.0.md)
 - [REL-0024 — Interchange, transformation and type](changelog/0.5.0.md)
 - [REL-0025 — Bezier drawing as Illustrator does it](changelog/0.6.0.md)
+- [REL-0026 — Colour, gradients and patterns, and the studio on a phone](changelog/0.7.0.md)
 - [REL-0003 — Pending changes](changelog/Unreleased.md)
 - [DOC-ROOT-0002 — Code and contract map](code-map.md)
 - [DOC-ENGINEERING-0001 — Documentation navigation migration](engineering/context-migration.md)
