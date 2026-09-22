@@ -2278,6 +2278,14 @@ textarea,
 
 .procedural-properties { border: 1px solid var(--border); border-radius: 6px; margin: 10px 0; padding: 8px; min-width: 0; legend { font-size: 11px; padding: 0 4px; } .property-grid input { min-width: 0; width: 100%; } }
 
+/* On a phone the version picker goes below the brand, the close button staying beside it. */
+@media (max-width: 720px) {
+  .modal-backdrop .about-dialog .about-head > header { flex-wrap: wrap; row-gap: 10px; }
+  .modal-backdrop .about-head .about-brand { order: 1; flex-basis: calc(100% - 48px); }
+  .modal-backdrop .about-head .about-close { order: 2; }
+  .modal-backdrop .about-head .release-picker { order: 3; flex-basis: 100%; }
+  .modal-backdrop .about-head .release-picker select { max-width: none; width: 100%; }
+}
 /*
  * Phones. The tools and the panels become drawers that slide in from the left and right
  * edges over the canvas, the menus fold behind a menu button with the credits at their
@@ -2520,11 +2528,19 @@ textarea,
   flex-shrink: 0;
   border-bottom: 1px solid var(--border);
 }
+/* The brand, the version picker level with the name and the close button, on one row. */
 .about-dialog .about-head > header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
   border-bottom: 0;
-  padding-bottom: 8px;
+  padding-bottom: 0;
 }
-.about-head .release-picker { padding: 8px 0 14px; }
+.about-head .about-brand { flex: 1 1 auto; min-width: 0; }
+.about-head .release-picker { padding: 0; flex-shrink: 0; }
+.about-head .about-close { flex-shrink: 0; align-self: flex-start; line-height: 1; padding: 0 4px; }
+.about-dialog .about-head h2 { margin: 0 0 4px; }
+.about-dialog .about-head header p { margin: 0; }
 .about-dialog > .release-notes {
   flex: 1 1 auto;
   min-height: 0;
@@ -2540,12 +2556,11 @@ textarea,
 }
 /* The logo beside the name in the about screen, and the licence the build carries. */
 .about-brand { display: flex; gap: 14px; align-items: center; }
-.about-logo { width: 56px; height: 56px; flex-shrink: 0; }
-.about-licence { margin: 12px 0; }
-.about-licence p { margin: 4px 0; }
-.licence-hash { display: flex; gap: 8px; align-items: baseline; font-size: 11px;
-  span { color: var(--muted); flex-shrink: 0; }
-  code { overflow-wrap: anywhere; user-select: all; } }
+.about-logo { width: 52px; height: 52px; flex-shrink: 0; }
+.licence-hash { display: flex; flex-wrap: wrap; gap: 4px 8px; align-items: baseline; margin: 10px 0 12px; font-size: 10px; color: var(--muted);
+  span { flex-shrink: 0; }
+  span + span::before { content: "·"; margin-right: 8px; }
+  code { overflow-wrap: anywhere; user-select: all; color: var(--text); } }
 
 /* The credits of the footer at the foot of the about screen, in the same style, wrapping where they do not fit. */
 .about-credits { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 8px 12px; margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--border); color: var(--muted); font-size: 10px; text-align: center;

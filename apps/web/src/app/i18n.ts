@@ -2,7 +2,7 @@ const ES: Record<string, string> = {
   "All Rights Reserved.": "Todos los derechos reservados.",
   "Outline stroke": "Contornear trazo",
   "Pixel Preview": "Previsualización de píxeles",
-  "Licence": "Licencia",
+  "Create with precision feels simple": "Crear con precisión resulta sencillo",
   "SHA-256 of the LICENSE file this build carries": "SHA-256 del archivo LICENSE que incluye esta versión",
   "Document tabs": "Pestañas de documentos",
   "Save as": "Guardar como",

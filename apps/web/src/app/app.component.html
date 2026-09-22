@@ -1288,45 +1288,33 @@
       aria-labelledby="about-title"
     >
       <div class="about-head">
-      <header>
-        <div class="about-brand">
-          <img class="about-logo" src="/assets/icons/ximplicity-x.svg" alt="" />
-          <div>
-            <small
-              ><a
-                href="https://ximplicity.es"
-                target="_blank"
-                rel="noopener noreferrer"
-                >XIMPLICITY</a
-              ></small
-            >
-            <h2 id="about-title">Ximply Design Studio</h2>
-            <p>{{ t("Create freely. Keep every layer.") }}</p>
+        <header>
+          <div class="about-brand">
+            <img class="about-logo" src="/assets/icons/ximplicity-x.svg" alt="" />
+            <div>
+              <h2 id="about-title">Ximply Design Studio</h2>
+              <p>{{ t("Create with precision feels simple") }}</p>
+            </div>
           </div>
-        </div>
-        <button (click)="closeAbout()" [attr.aria-label]="t('Close')">×</button>
-      </header>
-      @if (licence(); as licence) {
-        <div class="about-licence">
-          <h3>{{ t("Licence") }}</h3>
-          <p>{{ licence.name }}</p>
-          <p class="licence-hash"><span>SHA-256</span><code [title]="t('SHA-256 of the LICENSE file this build carries')">{{ licence.sha256 }}</code></p>
-        </div>
-      }
-      <div class="release-picker">
-        <h3>{{ t("Version") }}</h3>
-        <select
-          [value]="chosenVersion()"
-          (change)="selectVersion(text($event))"
-          aria-label="Release version"
-        >
-          @for (release of releases(); track release.version) {
-            <option [value]="release.version">
-              {{ release.version }} · {{ release.date }}
-            </option>
-          }
-        </select>
-      </div>
+          <div class="release-picker">
+            <select
+              [value]="chosenVersion()"
+              (change)="selectVersion(text($event))"
+              [attr.aria-label]="t('Version')"
+              [title]="t('Version')"
+            >
+              @for (release of releases(); track release.version) {
+                <option [value]="release.version">
+                  {{ release.version }} · {{ release.date }}
+                </option>
+              }
+            </select>
+          </div>
+          <button class="about-close" (click)="closeAbout()" [attr.aria-label]="t('Close')">×</button>
+        </header>
+        @if (licence(); as licence) {
+          <p class="licence-hash"><span>{{ licence.name }}</span><span>SHA-256</span><code [title]="t('SHA-256 of the LICENSE file this build carries')">{{ licence.sha256 }}</code></p>
+        }
       </div>
       @if (aboutError()) {
         <p role="alert">{{ aboutError() }}</p>

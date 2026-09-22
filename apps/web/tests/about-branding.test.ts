@@ -40,7 +40,15 @@ describe('an empty page', () => {
     const head = about.slice(about.indexOf('class="about-head"'), about.indexOf('class="release-notes"'));
     expect(head).toContain('id="about-title"');
     expect(head).toContain('class="licence-hash"');
-    expect(head).toContain('aria-label="Release version"');
+    // The name of the product sits level with the version picker and the close button, with
+    // the tagline below it and no heading over the licence or link above the name.
+    const header = head.slice(0, head.indexOf('</header>'));
+    expect(header).toContain('class="release-picker"');
+    expect(header).toContain('class="about-close"');
+    expect(header).toContain('t("Create with precision feels simple")');
+    expect(head).not.toContain('XIMPLICITY');
+    expect(head).not.toContain('t("Licence")');
+    expect(head).toContain(`[attr.aria-label]="t('Version')"`);
     expect(about.indexOf('class="release-notes"')).toBeLessThan(about.indexOf('class="about-credits"'));
     const styles = readFileSync('packages/design-system/styles/studio.scss', 'utf8');
     expect(styles).toMatch(/\.about-dialog \{\s*display: flex;\s*flex-direction: column;\s*overflow: hidden;/);
