@@ -81,6 +81,10 @@
         },
         {
           "type": "Fix",
+          "description": "Turn the selection with the Rotate tool by the angle measured about its pivot, as Illustrator measures it about the reference point. The angle was measured about the centre of the object, so with the pivot elsewhere a pointer passing near the centre swung the object round the pivot and could carry it off the page; right at the pivot the angle now holds until the pointer is clear of it."
+        },
+        {
+          "type": "Fix",
           "description": "Draw the icons of the active toggles of the context bar white on their blue background in the light theme, where they were dark, as they already were in the dark theme."
         },
         {

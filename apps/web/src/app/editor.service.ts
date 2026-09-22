@@ -3151,7 +3151,13 @@ export class EditorService {
     // Alt held during a transform leaves the original behind, which the cursor announces.
     if (["move", "rotate", "scale", "shear"].includes(g.mode)) this.duplicatingDrag.set(!!modifiers.alt);
     if (["rectangle", "ellipse", "line", "rounded", "polygon", "star", "arc", "spiral", "grid", "polar", "flare"].includes(g.mode) || g.mode.startsWith("resize:")) point = this.snap(point);
-    if (g.mode === "rotate")
+    if (g.mode === "rotate") {
+      // The angle is measured about the pivot the rotation turns about, as in Illustrator. Right
+      // at the pivot there is no direction to read, so the last angle holds until the pointer
+      // is clear of it, and a drag that starts there takes its first clear point as its start.
+      const pivot = this.pivot(), clear = 6 / this.zoom();
+      if (Math.hypot(point.x - pivot.x, point.y - pivot.y) < clear) return;
+      if (Math.hypot(g.start.x - pivot.x, g.start.y - pivot.y) < clear) { g.start = point; return; }
       this.transformSelection(g, this.aroundPivot(g.original, {
         ...g.original,
         rotation: rotationFromDrag(
@@ -3160,8 +3166,10 @@ export class EditorService {
           point,
           modifiers.shift,
           this.snapAngle(),
+          pivot,
         ),
       }));
+    }
     else if (g.mode === "scale") this.dragScale(g, point, !!modifiers.shift);
     else if (g.mode === "shear") this.dragShear(g, point, !!modifiers.shift);
     else if (g.mode === "pen") this.dragPenAnchor(point, modifiers);
