@@ -48,6 +48,7 @@ import { TOOLS, ToolId, TOOL_FAMILIES, ToolFamily } from "./tools";
 import { translate } from "./i18n";
 import { BLENDS, Layer, StrokeStyle, blankDocument, defaultStrokeStyle, svgExport } from "../../../../packages/domain/src/document";
 import { LIQUIFY_DEFAULTS, LiquifyOptions, LiquifyTool } from "../../../../packages/domain/src/liquify";
+import { DEFAULT_WARP, WARP_LABELS, WARP_STYLES, WarpSettings } from "../../../../packages/domain/src/envelope";
 import { COLOR_MODES, ColorMode, GradientPaint, PatternDefinition, PRESET_PATTERNS, PresetPattern, Swatch, cmykToRgb, gradientColorAt, grayToRgb, presetPattern, renderedStops, rgbToCmyk, rgbToGray, validGradient } from "../../../../packages/domain/src/paint";
 import { createSampleDocument } from "../../../../packages/domain/src/sample";
 interface Release {
@@ -730,6 +731,48 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     if (applied) this.affineDialog.set(null);
     else this.notify(new Error("The transformation cannot be applied to this selection."));
   }
+  /** Object > Envelope Distort, in the order Illustrator gives it. */
+  readonly envelopeMenuCommands = ["envelopeWarp", "envelopeMesh", "envelopeTop", "envelopeRelease", "envelopeOptions", "envelopeExpand", "envelopeEdit", "envelopeResetWarp", "envelopeResetMesh"] as const;
+  readonly warpStyles = WARP_STYLES.map((id) => ({ id, label: WARP_LABELS[id] }));
+  /** The envelope dialogs: Warp Options to make or reset, the mesh size to make or reset, and Envelope Options. */
+  readonly envelopeDialog = signal<"warp" | "resetWarp" | "mesh" | "resetMesh" | "options" | null>(null);
+  warpDraft: WarpSettings = { ...DEFAULT_WARP };
+  warpPreview = true;
+  meshDraft = { rows: 4, columns: 4, maintainShape: true };
+  fidelityDraft = 50;
+  openEnvelopeDialog(kind: "warp" | "resetWarp" | "mesh" | "resetMesh" | "options") {
+    const envelope = this.editor.selectedEnvelope()?.envelope;
+    if (kind === "resetWarp" && envelope?.warp) this.warpDraft = { ...envelope.warp };
+    if (kind === "resetMesh" && envelope) this.meshDraft = { rows: envelope.mesh.rows, columns: envelope.mesh.columns, maintainShape: true };
+    if (kind === "options" && envelope) this.fidelityDraft = envelope.fidelity;
+    this.envelopeDialog.set(kind);
+    if (kind === "warp" && this.warpPreview) this.previewWarp();
+  }
+  /** Shows the warp on the canvas while the dialog is open, as Preview does in Illustrator. */
+  previewWarp() {
+    if (this.envelopeDialog() !== "warp") return;
+    if (this.warpPreview) this.editor.makeEnvelope("warp", { warp: { ...this.warpDraft } }, true);
+    else this.editor.cancelEnvelopePreview();
+  }
+  setWarp<K extends keyof WarpSettings>(key: K, value: WarpSettings[K]) {
+    this.warpDraft = { ...this.warpDraft, [key]: value };
+    this.previewWarp();
+  }
+  setWarpNumber(key: "bend" | "horizontal" | "vertical", event: Event) {
+    const value = Math.round(this.number(event));
+    if (Number.isFinite(value) && value >= -100 && value <= 100) this.setWarp(key, value);
+  }
+  applyEnvelopeDialog() {
+    const kind = this.envelopeDialog(), d = this.meshDraft;
+    const done = kind === "warp" ? this.editor.makeEnvelope("warp", { warp: { ...this.warpDraft } })
+      : kind === "resetWarp" ? this.editor.resetEnvelopeWithWarp({ ...this.warpDraft })
+        : kind === "mesh" ? this.editor.makeEnvelope("mesh", { rows: Math.round(d.rows), columns: Math.round(d.columns) })
+          : kind === "resetMesh" ? this.editor.resetEnvelopeWithMesh(Math.round(d.rows), Math.round(d.columns), d.maintainShape)
+            : this.editor.setEnvelopeFidelity(this.fidelityDraft);
+    if (done) this.envelopeDialog.set(null);
+    else this.notify(new Error(this.editor.status() || "The envelope cannot be changed that way."));
+  }
+  cancelEnvelopeDialog() { this.editor.cancelEnvelopePreview(); this.envelopeDialog.set(null); }
   /** The options dialog of a liquify tool, opened by double-clicking it, and its values. */
   readonly liquifyDialog = signal<LiquifyTool | null>(null);
   liquifyDraft: LiquifyOptions = { ...LIQUIFY_DEFAULTS.warp };
@@ -1164,6 +1207,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
             ].includes(this.activeTool()),
             showHandles: this.editor.showHandles(),
             boundingBox: this.editor.boundingBoxVisible(),
+            meshNode: this.editor.meshNode()?.index,
             quad: this.activeTool() === "freeTransform" ? (this.editor.freeQuad() ?? this.editor.freeTransformQuad() ?? undefined) : undefined,
             outline: this.editor.outlineView(),
             outlineInk: this.theme?.() === "light" ? "#202b3f" : "#e5e9f0",
@@ -1857,10 +1901,16 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     if (["averageAnchors", "convertCorner", "convertSmooth", "removeAnchors", "cutAtAnchors"].includes(id))
       return this.editor.selectedLayers().some((layer) => this.editor.anchorKeysOf(layer.id).length > 0);
     if (id === "transformAgain") return this.editor.selectedLayers().length > 0 && !!this.editor.lastTransform();
+    if (["envelopeWarp", "envelopeMesh"].includes(id)) return this.editor.selectedLayers().some((layer) => !layer.guide && !layer.envelope);
+    if (id === "envelopeTop") return this.editor.selectedLayers().length > 1;
+    if (["envelopeRelease", "envelopeExpand", "envelopeResetWarp", "envelopeResetMesh"].includes(id)) return this.editor.selectedEnvelope()?.envelope?.editing === "envelope";
+    if (["envelopeOptions", "envelopeEdit"].includes(id)) return !!this.editor.selectedEnvelope();
     if (["scaleDialog", "shearDialog", "transformEach"].includes(id)) return this.editor.selectedLayers().some((layer) => !layer.guide && !layer.locked);
     if (["paste", "pasteInFront", "pasteInBack"].includes(id)) return this.editor.canPaste();
     return true;
   }
+  /** Edit Contents becomes Edit Envelope while the contents are being edited, as in Illustrator. */
+  envelopeEditLabel() { return this.editor.selectedEnvelope()?.envelope?.editing === "contents" ? "Edit envelope" : "Edit contents"; }
   commandLabel(id: string) {
     return this.commandList.find((c) => c.id === id)?.label ?? this.tools.find(tool => "tool." + tool.id === id)?.label ?? id;
   }
@@ -1894,6 +1944,15 @@ export class AppComponent implements AfterViewInit, OnDestroy {
       duplicateSeries: () => this.openArrayDialog(),
       transformAgain: () => this.editor.transformAgain(),
       scaleDialog: () => this.openAffineDialog("scale"),
+      envelopeWarp: () => this.openEnvelopeDialog("warp"),
+      envelopeMesh: () => this.openEnvelopeDialog("mesh"),
+      envelopeTop: () => this.editor.makeEnvelope("object"),
+      envelopeRelease: () => this.editor.releaseEnvelope(),
+      envelopeOptions: () => this.openEnvelopeDialog("options"),
+      envelopeExpand: () => this.editor.expandEnvelope(),
+      envelopeEdit: () => this.editor.toggleEnvelopeEditing(),
+      envelopeResetWarp: () => this.openEnvelopeDialog("resetWarp"),
+      envelopeResetMesh: () => this.openEnvelopeDialog("resetMesh"),
       shearDialog: () => this.openAffineDialog("shear"),
       transformEach: () => this.openAffineDialog("each"),
       copy: () => this.editor.copySelection(),

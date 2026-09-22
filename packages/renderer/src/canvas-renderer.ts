@@ -6,9 +6,11 @@ import { Point } from "../../domain/src/document";
 import { defaultTypography, layoutText, textFont, TextMeasurement, TextTypography } from "../../domain/src/text-layout";
 import { selectionBounds } from "../../domain/src/arrange";
 import { newLayer, defaultStrokeStyle, strokeBounds } from "../../domain/src/document";
+import { worldPoint } from "../../domain/src/curves";
 import { CurvePath } from "../../domain/src/curves";
 import { Layer, StudioDocument } from "../../domain/src/document";
 import { gradientGeometry, PatternDefinition, renderedStops } from "../../domain/src/paint";
+import { materializeEnvelopes } from "../../domain/src/envelope";
 /** Makes the off-screen canvas a pattern tile is drawn on. */
 export type CanvasFactory = (width: number, height: number) => HTMLCanvasElement;
 const browserCanvas: CanvasFactory = (width, height) => {
@@ -69,6 +71,8 @@ export class CanvasRenderer {
        * coordinates; it replaces the bounding box and follows a distortion.
        */
       quad?: Point[];
+      /** The mesh node chosen on the selected envelope, whose handles are drawn. */
+      meshNode?: number;
       /** Outline view: the artwork is drawn as hairline contours without its paints. */
       outline?: boolean;
       /** Ink of the outline view, which the shell picks from the theme. */
@@ -102,7 +106,7 @@ export class CanvasRenderer {
     }
     const hairline = 1 / Math.max(0.1, interaction.zoom || 1);
     this.usePatterns(document, ctx);
-    for (const layer of materializeProcedural(document).layers)
+    for (const layer of materializeEnvelopes(materializeProcedural(document)).layers)
       if (layer.visible && !layer.guide)
         this.layer(
           ctx,
@@ -126,6 +130,7 @@ export class CanvasRenderer {
             ...selectionBounds(selected),
           }
         : selected[0];
+    if (selected.length === 1 && selected[0].envelope?.editing === "envelope") this.mesh(ctx, selected[0], interaction.zoom, interaction.meshNode);
     if (layer && interaction.quad?.length === 4) {
       const unit = 1 / Math.max(0.1, interaction.zoom), size = (interaction.handleSize ?? 4) * unit, q = interaction.quad;
       ctx.save();
@@ -329,6 +334,37 @@ export class CanvasRenderer {
     if (layer.kind === "image") return { ...outlined, kind: "rectangle", source: "", curves: undefined };
     if (layer.kind === "text") return { ...layer, fill: ink, stroke: "none", opacity: 1, blend: "source-over" };
     return outlined;
+  }
+  /** The mesh of a selected envelope: its edges, its nodes, and the handles of the chosen node. */
+  private mesh(ctx: CanvasRenderingContext2D, layer: Layer, zoom: number, chosen?: number) {
+    const mesh = layer.envelope!.mesh, unit = 1 / Math.max(0.1, zoom), w = (p: Point) => worldPoint(layer, p);
+    const at = (i: number, j: number) => mesh.nodes[i * (mesh.columns + 1) + j];
+    ctx.save();
+    ctx.strokeStyle = "#0d59f2";
+    ctx.lineWidth = unit;
+    ctx.beginPath();
+    for (let i = 0; i <= mesh.rows; i++)
+      for (let j = 0; j <= mesh.columns; j++) {
+        const n = at(i, j), p = w(n.point);
+        if (j < mesh.columns) { const m = at(i, j + 1), a = w(n.right), b = w(m.left), q = w(m.point); ctx.moveTo(p.x, p.y); ctx.bezierCurveTo(a.x, a.y, b.x, b.y, q.x, q.y); }
+        if (i < mesh.rows) { const m = at(i + 1, j), a = w(n.down), b = w(m.up), q = w(m.point); ctx.moveTo(p.x, p.y); ctx.bezierCurveTo(a.x, a.y, b.x, b.y, q.x, q.y); }
+      }
+    ctx.stroke();
+    const size = 3 * unit;
+    mesh.nodes.forEach((n, index) => {
+      const p = w(n.point);
+      ctx.fillStyle = index === chosen ? "#0d59f2" : "#ffffff";
+      ctx.fillRect(p.x - size, p.y - size, size * 2, size * 2);
+      ctx.strokeRect(p.x - size, p.y - size, size * 2, size * 2);
+      if (index !== chosen) return;
+      for (const part of [n.left, n.right, n.up, n.down]) {
+        if (part.x === n.point.x && part.y === n.point.y) continue;
+        const h = w(part);
+        ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(h.x, h.y); ctx.stroke();
+        ctx.beginPath(); ctx.arc(h.x, h.y, size, 0, Math.PI * 2); ctx.fillStyle = "#0d59f2"; ctx.fill();
+      }
+    });
+    ctx.restore();
   }
   private usePatterns(document: StudioDocument, ctx: CanvasRenderingContext2D) {
     const patterns = document.patterns ?? [];

@@ -4,6 +4,7 @@ import { LineEnds, lineEndGeometry, pathLineEnds, validLineEnds } from "./line-e
 import { BrushStroke, brushOutline, brushOutlineSvg, validBrushStroke } from "./brush-stroke";
 import { FillPaint, MAX_PATTERNS, MAX_PATTERN_LAYERS, MAX_SWATCHES, PatternDefinition, Swatch, gradientGeometry, renderedStops, validFillPaint, validSwatch } from "./paint";
 import { ObjectBlend, syncBlends, validateBlends } from "./object-blend";
+import { Envelope, envelopeShell, mapMesh, materializeEnvelopes } from "./envelope";
 import { FONT_FAMILIES, layoutText, TextLayoutOptions, TextTypography, TextMeasurement } from "./text-layout";
 import {
   CurvePath,
@@ -62,6 +63,8 @@ export interface Layer {
   brushStroke?: BrushStroke;
   /** A gradient or a pattern painted inside the shape instead of the flat fill. */
   fillPaint?: FillPaint;
+  /** Objects drawn through a mesh, as Object > Envelope Distort makes them; the layer has no outline of its own. */
+  envelope?: Envelope;
   dimension?: Dimension;
   procedural?: Procedural;
   points: Point[];
@@ -217,6 +220,8 @@ export function hitTest(layer: Layer, point: Point): boolean {
   }
   const p = localPoint(layer, point),
     pad = Math.max(5, layer.strokeWidth * (layer.strokeStyle?.alignment === "outside" ? 1 : 0.5));
+  // An envelope is picked anywhere inside its box, as the objects it holds fill it.
+  if (layer.envelope) return p.x >= 0 && p.y >= 0 && p.x <= layer.width && p.y <= layer.height;
   if (layer.kind === "ellipse")
     return (
       ((p.x - layer.width / 2) / (layer.width / 2 + pad)) ** 2 +
@@ -283,6 +288,7 @@ export function resizeLayer(
     width,
     height,
     ...(layer.procedural ? {procedural:resizeProcedural(layer, width, height)} : {}),
+    ...(layer.envelope ? { envelope: { ...layer.envelope, mesh: mapMesh(layer.envelope.mesh, (p: Point) => ({ x: (p.x * width) / layer.width, y: (p.y * height) / layer.height })) } } : {}),
     ...(layer.dimension ? { dimension: { ...layer.dimension, anchors: layer.dimension.anchors.map(p => ({ x: p.x * width / layer.width, y: p.y * height / layer.height })), labelPosition: { x: layer.dimension.labelPosition.x * width / layer.width, y: layer.dimension.labelPosition.y * height / layer.height } } } : {}),
     ...(layer.curves
       ? {
@@ -478,11 +484,28 @@ export function parseDocument(text: string): StudioDocument {
       swatchIds.add(swatch.id);
     }
   }
+  // Envelopes: their contents are checked with the other layers, and contents being edited
+  // must be in the document under the envelope's group.
+  const envelopeLayers: unknown[] = [];
+  for (const layer of value["layers"] as Record<string, unknown>[]) {
+    if (!record(layer) || layer["envelope"] === undefined) continue;
+    const contents = envelopeShell(layer["envelope"]);
+    if (value["version"] !== 2 || !contents || layer["kind"] !== "path" || layer["curves"] !== undefined ||
+      !Array.isArray(layer["points"]) || layer["points"].length > 0 ||
+      ["brushStroke", "dimension", "procedural", "guide", "symbolId", "fillPaint", "lineEnds"].some((key) => layer[key] !== undefined))
+      throw new Error("Invalid envelope.");
+    const envelope = layer["envelope"] as Envelope;
+    if (envelope.editing === "contents" && !(value["layers"] as Record<string, unknown>[]).some((other) =>
+      record(other) && other["envelope"] === undefined && Array.isArray(other["groupPath"]) && other["groupPath"][0] === envelope.group))
+      throw new Error("Invalid envelope.");
+    envelopeLayers.push(...contents);
+  }
   const ids = new Set<string>();
   for (const layer of [
     ...value["layers"],
     ...definitions.map((s) => s.layer),
     ...patternLayers,
+    ...envelopeLayers,
   ]) {
     if (
       !record(layer) ||
@@ -756,7 +779,7 @@ function svgFill(l: Layer, index: number | string, patterns: Map<string, Pattern
 
 export function svgExport(doc: StudioDocument, measure?: TextMeasurement): string {
   const patterns = new Map((doc.patterns ?? []).map((pattern) => [pattern.id, pattern]));
-  const shapes = materializeProcedural(doc).layers
+  const shapes = materializeEnvelopes(materializeProcedural(doc)).layers
     .filter((l) => l.visible && !l.guide)
     .map((l, layerIndex) => svgLayer(l, layerIndex, patterns, measure))
     .join("\n");

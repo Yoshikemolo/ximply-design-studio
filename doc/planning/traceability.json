@@ -296,7 +296,8 @@
         "packages/domain/src/paint.ts",
         "packages/domain/src/affine.ts",
         "packages/domain/src/distort.ts",
-        "packages/domain/src/liquify.ts"
+        "packages/domain/src/liquify.ts",
+        "packages/domain/src/envelope.ts"
       ],
       "tests": [
         "packages/domain/tests/document.test.ts",
@@ -350,7 +351,9 @@
         "packages/domain/tests/distort.test.ts",
         "apps/web/tests/free-transform.test.ts",
         "packages/domain/tests/liquify.test.ts",
-        "apps/web/tests/liquify-tools.test.ts"
+        "apps/web/tests/liquify-tools.test.ts",
+        "packages/domain/tests/envelope.test.ts",
+        "apps/web/tests/envelope-editor.test.ts"
       ],
       "evidence": [
         "doc/implementation/PLAN-0002-0001.md",

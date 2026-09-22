@@ -37,4 +37,4 @@
 | [Carried faces and an in-process font reader for text outlines](ADR-0031.md) |
 | [Vector Paintbrush strokes carried by paths in the native format](ADR-0032.md) |
 | [Gradient and pattern fills, patterns and swatches in the native format](ADR-0033.md) |
-| [Envelope layers in the native format](ADR-0034.md) |
+| [Envelopes carried by path layers in the native format](ADR-0034.md) |

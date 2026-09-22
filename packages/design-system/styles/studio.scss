@@ -2422,3 +2422,11 @@ textarea,
 
 /* The brush of the liquify tools, drawn at the cursor. */
 .liquify-brush { position: fixed; z-index: 60; pointer-events: none; border: 1px solid #0d59f2; border-radius: 50%; box-shadow: 0 0 0 1px #ffffffaa; }
+
+/* The styles of Warp Options, as a grid of their pictures. */
+.warp-styles { display: grid; grid-template-columns: repeat(5, 1fr); gap: 4px; margin-bottom: 10px;
+  button { padding: 4px; min-height: 0; aspect-ratio: 1; border: 1px solid var(--border); border-radius: 4px; }
+  button.active { border-color: var(--accent); background: var(--accent-soft, var(--panel)); }
+  img { width: 100%; height: 100%; } }
+.envelope-dialog .channel { display: grid; grid-template-columns: 80px minmax(0, 1fr) 56px auto; gap: 6px; align-items: center; margin: 6px 0;
+  input[type=range], input[type=number] { width: 100%; min-width: 0; } }

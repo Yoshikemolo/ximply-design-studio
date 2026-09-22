@@ -1,4 +1,4 @@
-import { Layer, Point } from "./document";
+import type { Layer, Point } from "./document";
 import { CurvePath, fitCurves, worldPoint } from "./curves";
 import { ellipsePath, polyline } from "./shapes";
 

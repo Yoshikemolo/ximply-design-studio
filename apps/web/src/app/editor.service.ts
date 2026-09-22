@@ -13,6 +13,7 @@ import { defaultTypography, defaultTextLayout, FONT_FAMILIES, layoutText, TextLa
 import { snapPoint, SnapConfig, rulerSnapSteps } from "../../../../packages/domain/src/measurements";
 import { Affine, Linear, about, affineLayers, applyAffine, scaleLinear, shearLinear, transformLayers } from "../../../../packages/domain/src/affine";
 import { Quad, boxQuad, distortable, mapLayers, quadMap, worldCurves } from "../../../../packages/domain/src/distort";
+import { DEFAULT_WARP, Envelope, EnvelopeMesh, WarpSettings, contentBox, envelopeArtwork, envelopeMap, fitEnvelope, gridMesh, mapMesh, meshBounds, meshLines, meshOutline, meshPoint, objectMesh, resampleMesh, validWarp, warpMesh } from "../../../../packages/domain/src/envelope";
 import { LIQUIFY_DEFAULTS, LIQUIFY_TOOLS, LiquifyOptions, LiquifyTool, liquifyStep, refine, validLiquifyOptions } from "../../../../packages/domain/src/liquify";
 import {
   alignLayers,
@@ -1760,6 +1761,7 @@ export class EditorService {
     if (target) this.reorderLayer(source.id, target.id, delta < 0 ? "before" : "after");
   }
   remove() {
+    if (this.meshNode() && this.selectedEnvelope() && this.deleteMeshLines()) return;
     if (this.removeSelectedParts()) return;
     const ids = new Set(
       this.selectedLayers()
@@ -2177,6 +2179,280 @@ export class EditorService {
     }
     this.liquifyGesture = undefined;
   }
+  // ---- Envelopes: Object > Envelope Distort -------------------------------------------------
+  /** The envelope selected alone, if any, or the one whose contents are being edited. */
+  selectedEnvelope(): Layer | null {
+    const layers = this.selectedLayers();
+    if (layers.length === 1 && layers[0].envelope) return layers[0];
+    const group = layers[0]?.groupPath?.[0];
+    return (group && this.document().layers.find((l) => l.envelope?.editing === "contents" && l.envelope.group === group)) || null;
+  }
+  /**
+   * The next document with the selection put inside a new envelope, or the reason it cannot
+   * be. Envelopes hold paths and shapes; text must be outlined first, as its letters come
+   * from the fonts the application reads.
+   */
+  private buildEnvelope(base: StudioDocument, kind: "warp" | "mesh" | "object", options: { warp?: WarpSettings; rows?: number; columns?: number }): { next: StudioDocument; id: string } | string {
+    const ids = new Set(this.selectedIds().length ? this.selectedIds() : this.selectedId() ? [this.selectedId()!] : []);
+    const selected = base.layers.filter((layer) => ids.has(layer.id) && !layer.guide);
+    if (!selected.length) return "Select the objects to put in an envelope.";
+    if (selected.some((layer) => this.isEffectivelyLocked(layer))) return "Unlock the objects to put them in an envelope.";
+    if (selected.some((layer) => layer.kind === "text")) return "Create outlines of the text first (Ctrl+Shift+O), then make the envelope.";
+    if (selected.some((layer) => !distortable(layer) || layer.envelope)) return "Envelopes hold paths and shapes; pictures, symbols, dimensions, floor-plan objects and envelopes are left out.";
+    let contents = selected, mesh: EnvelopeMesh | null = null;
+    const top = selected[selected.length - 1];
+    if (kind === "object") {
+      if (selected.length < 2) return "Select the objects and, on top of them, the shape of the envelope.";
+      contents = selected.slice(0, -1);
+      const outline = worldCurves(top)?.find((path) => path.nodes.length > 1);
+      mesh = outline ? objectMesh(outline) : null;
+      if (!mesh) return "The top object has no outline an envelope can take.";
+    }
+    const source = contentBox(contents);
+    if (!source) return "The selection has nothing to put in an envelope.";
+    if (kind === "warp") mesh = warpMesh(source, options.warp ?? DEFAULT_WARP);
+    if (kind === "mesh") mesh = gridMesh(source, Math.round(options.rows ?? 4), Math.round(options.columns ?? 4));
+    if (!mesh || mesh.rows < 1 || mesh.columns < 1 || mesh.rows > 50 || mesh.columns > 50) return "Choose 1 to 50 rows and columns.";
+    const bounds = meshBounds(mesh);
+    const id = crypto.randomUUID();
+    const plain = contents.map(({ groupPath: _g, regroupPath: _r, ...layer }) => structuredClone(layer) as Layer);
+    const envelope: Envelope = {
+      contents: plain, source, mesh: mapMesh(mesh, (p) => ({ x: p.x - bounds.x, y: p.y - bounds.y })),
+      origin: kind === "warp" ? "warp" : kind === "mesh" ? "grid" : "object", ...(kind === "warp" ? { warp: { ...(options.warp ?? DEFAULT_WARP) } } : {}),
+      fidelity: 50, editing: "envelope", group: crypto.randomUUID(),
+    };
+    const shared = contents.every((layer) => layer.groupPath?.[0] && layer.groupPath[0] === contents[0].groupPath?.[0]) ? contents[0].groupPath : undefined;
+    const holder: Layer = {
+      ...newLayer("path", id, { x: bounds.x, y: bounds.y }, "none", "none", 0), name: "Envelope", width: bounds.width, height: bounds.height, points: [], envelope,
+      ...(shared ? { groupPath: [...shared] } : {}),
+    };
+    const at = base.layers.findIndex((layer) => layer.id === top.id);
+    const removed = new Set(selected.map((layer) => layer.id));
+    const layers = base.layers.flatMap((layer, index) => (index === at ? [holder] : removed.has(layer.id) ? [] : [layer]));
+    const next = { ...base, layers };
+    try { parseDocument(JSON.stringify(next)); } catch { return "The envelope cannot be made from this selection."; }
+    return { next, id };
+  }
+  private envelopePreviewBase?: StudioDocument;
+  /** Make With Warp, Make With Mesh or Make With Top Object; a preview is shown without a step until confirmed. */
+  makeEnvelope(kind: "warp" | "mesh" | "object", options: { warp?: WarpSettings; rows?: number; columns?: number } = {}, preview = false): boolean {
+    if (options.warp && !validWarp(options.warp)) return false;
+    const base = this.envelopePreviewBase ?? this.document();
+    const selection = { ids: [...this.selectedIds()], id: this.selectedId() };
+    const built = this.buildEnvelope(base, kind, options);
+    if (typeof built === "string") { this.status.set(built); return false; }
+    if (preview) {
+      this.envelopePreviewBase = base;
+      this.document.set(built.next);
+      // The preview keeps the selection it was made from, so the next preview starts there.
+      this.selectedIds.set(selection.ids);
+      this.selectedId.set(selection.id);
+      return true;
+    }
+    this.envelopePreviewBase = undefined;
+    this.commitStep(base);
+    this.document.set(built.next);
+    this.selectedIds.set([built.id]);
+    this.selectedId.set(built.id);
+    this.status.set("Made an envelope.");
+    this.changed();
+    return true;
+  }
+  /** Cancels a warp preview, leaving the document as it was. */
+  cancelEnvelopePreview() {
+    if (this.envelopePreviewBase) { this.document.set(this.envelopePreviewBase); this.envelopePreviewBase = undefined; }
+  }
+  private replaceEnvelope(id: string, change: (layer: Layer) => Layer | Layer[], status: string): boolean {
+    const before = this.document();
+    const layer = before.layers.find((l) => l.id === id);
+    if (!layer?.envelope || this.isEffectivelyLocked(layer)) return false;
+    const result = change(layer);
+    const replacement = Array.isArray(result) ? result : [result];
+    const next = { ...before, layers: before.layers.flatMap((l) => (l.id === id ? replacement : [l])) };
+    try { parseDocument(JSON.stringify(next)); } catch { this.status.set("The envelope cannot be changed that way."); return false; }
+    this.commitStep(before);
+    this.document.set(next);
+    const ids = replacement.map((l) => l.id);
+    this.selectedIds.set(Array.isArray(result) ? ids : [id]);
+    this.selectedId.set(Array.isArray(result) ? ids[ids.length - 1] ?? null : id);
+    this.meshNode.set(null);
+    this.status.set(status);
+    this.changed();
+    return true;
+  }
+  /** Object > Envelope Distort > Release: the objects as they were, and the envelope's shape as a path above them. */
+  releaseEnvelope(): boolean {
+    const layer = this.selectedEnvelope();
+    if (!layer || layer.envelope!.editing !== "envelope") return false;
+    return this.replaceEnvelope(layer.id, (l) => {
+      const outline = meshOutline(mapMesh(l.envelope!.mesh, (p) => worldPoint(l, p)));
+      const shape = fitCurves({ ...newLayer("path", crypto.randomUUID(), { x: 0, y: 0 }, "none", "#000000", 1), name: "Envelope shape", width: 1, height: 1 }, [outline]);
+      const group = l.groupPath ? { groupPath: [...l.groupPath] } : {};
+      return [...l.envelope!.contents.map((content) => ({ ...structuredClone(content), ...group })), { ...shape, ...group }];
+    }, "Released the envelope.");
+  }
+  /** Object > Envelope Distort > Expand: the distorted paths, and no envelope. */
+  expandEnvelope(): boolean {
+    const layer = this.selectedEnvelope();
+    if (!layer || layer.envelope!.editing !== "envelope") return false;
+    return this.replaceEnvelope(layer.id, (l) => envelopeArtwork(l).map((art, i) => ({ ...art, id: crypto.randomUUID(), name: l.envelope!.contents[i]?.name ?? art.name, ...(l.groupPath ? { groupPath: [...l.groupPath] } : {}) })), "Expanded the envelope.");
+  }
+  /**
+   * Edit Contents and Edit Envelope (Shift+Ctrl+V): the objects inside come out, undistorted
+   * and editable with every tool, under the envelope's group, while the envelope keeps
+   * drawing them through its mesh; going back takes them in again, recentred.
+   */
+  toggleEnvelopeEditing(): boolean {
+    const layer = this.selectedEnvelope();
+    if (!layer || this.isEffectivelyLocked(layer)) return false;
+    const envelope = layer.envelope!, before = this.document();
+    let next: StudioDocument, selection: string[];
+    if (envelope.editing === "envelope") {
+      const members = envelope.contents.map((content) => ({ ...structuredClone(content), groupPath: [envelope.group, ...(layer.groupPath ?? [])] }));
+      const holder = { ...layer, envelope: { ...envelope, contents: [], editing: "contents" as const } };
+      next = { ...before, layers: before.layers.flatMap((l) => (l.id === layer.id ? [holder, ...members] : [l])) };
+      selection = members.map((m) => m.id);
+      this.status.set("Editing the contents of the envelope.");
+    } else {
+      const members = before.layers.filter((l) => l.groupPath?.[0] === envelope.group && !l.envelope);
+      const contents = members.map(({ groupPath: _g, regroupPath: _r, ...content }) => content as Layer);
+      const source = contentBox(members) ?? envelope.source;
+      const holder = { ...layer, envelope: { ...envelope, contents, source, editing: "envelope" as const } };
+      const out = new Set(members.map((m) => m.id));
+      next = { ...before, layers: before.layers.filter((l) => !out.has(l.id)).map((l) => (l.id === layer.id ? holder : l)) };
+      selection = [layer.id];
+      this.status.set("Editing the envelope.");
+    }
+    try { parseDocument(JSON.stringify(next)); } catch { this.status.set("The envelope cannot be edited that way."); return false; }
+    this.commitStep(before);
+    this.document.set(next);
+    this.selectedIds.set(selection);
+    this.selectedId.set(selection[0] ?? null);
+    this.meshNode.set(null);
+    this.changed();
+    return true;
+  }
+  /** Envelope Options: the fidelity with which the contents follow the mesh. */
+  setEnvelopeFidelity(fidelity: number): boolean {
+    const layer = this.selectedEnvelope();
+    if (!layer || !Number.isFinite(fidelity) || fidelity < 0 || fidelity > 100) return false;
+    return this.replaceEnvelope(layer.id, (l) => ({ ...l, envelope: { ...l.envelope!, fidelity } }), "Set the envelope options.");
+  }
+  /** Reset With Warp: a new mesh from a warp style over the contents. */
+  resetEnvelopeWithWarp(warp: WarpSettings): boolean {
+    const layer = this.selectedEnvelope();
+    if (!layer || !validWarp(warp) || layer.envelope!.editing !== "envelope") return false;
+    return this.replaceEnvelope(layer.id, (l) => {
+      const box = { x: 0, y: 0, width: l.width, height: l.height };
+      return fitEnvelope({ ...l, envelope: { ...l.envelope!, mesh: warpMesh(box, warp), origin: "warp", warp: { ...warp } } });
+    }, "Reset the envelope with a warp.");
+  }
+  /** Reset With Mesh: a grid of rows and columns, keeping the envelope's shape when asked. */
+  resetEnvelopeWithMesh(rows: number, columns: number, maintainShape: boolean): boolean {
+    const layer = this.selectedEnvelope();
+    if (!layer || ![rows, columns].every((n) => Number.isInteger(n) && n >= 1 && n <= 50) || layer.envelope!.editing !== "envelope") return false;
+    return this.replaceEnvelope(layer.id, (l) => {
+      const mesh = maintainShape
+        ? resampleMesh(l.envelope!.mesh, Array.from({ length: columns + 1 }, (_, j) => j / columns), Array.from({ length: rows + 1 }, (_, i) => i / rows))
+        : gridMesh({ x: 0, y: 0, width: l.width, height: l.height }, rows, columns);
+      const { warp: _w, ...rest } = l.envelope!;
+      return fitEnvelope({ ...l, envelope: { ...rest, mesh, origin: "grid" } });
+    }, "Reset the envelope with a mesh.");
+  }
+  /** The mesh node chosen with the Direct Selection or Mesh tool, which Delete removes with its lines. */
+  readonly meshNode = signal<{ id: string; index: number } | null>(null);
+  private meshGesture?: { before: StudioDocument; id: string; index: number; part: "point" | "left" | "right" | "up" | "down"; moved: boolean };
+  /** A press with the Direct Selection or Mesh tool on a node or a handle of the selected envelope's mesh. */
+  private startMesh(point: Point, tool: string): boolean {
+    const layer = this.selectedEnvelope();
+    if (!layer || layer.envelope!.editing !== "envelope" || this.isEffectivelyLocked(layer)) return false;
+    const mesh = layer.envelope!.mesh, reach = 8 / this.zoom();
+    const chosen = this.meshNode()?.id === layer.id ? this.meshNode()!.index : -1;
+    const near = (p: Point) => Math.hypot(worldPoint(layer, p).x - point.x, worldPoint(layer, p).y - point.y) <= reach;
+    // The handles of the chosen node first, then any node.
+    if (chosen >= 0) for (const part of ["left", "right", "up", "down"] as const) {
+      const n = mesh.nodes[chosen];
+      if ((n[part].x !== n.point.x || n[part].y !== n.point.y) && near(n[part])) { this.meshGesture = { before: this.document(), id: layer.id, index: chosen, part, moved: false }; return true; }
+    }
+    const index = mesh.nodes.findIndex((n) => near(n.point));
+    if (index >= 0) {
+      this.meshNode.set({ id: layer.id, index });
+      this.meshGesture = { before: this.document(), id: layer.id, index, part: "point", moved: false };
+      return true;
+    }
+    if (tool === "mesh") return this.addMeshLines(layer, point);
+    return false;
+  }
+  private moveMesh(point: Point) {
+    const g = this.meshGesture!;
+    const layer = g.before.layers.find((l) => l.id === g.id)!;
+    const local = localPoint(layer, point);
+    const nodes = layer.envelope!.mesh.nodes.map((n, i) => {
+      if (i !== g.index) return n;
+      if (g.part !== "point") return { ...n, [g.part]: local };
+      // An anchor carries its handles with it.
+      const dx = local.x - n.point.x, dy = local.y - n.point.y, move = (p: Point) => ({ x: p.x + dx, y: p.y + dy });
+      return { point: local, left: move(n.left), right: move(n.right), up: move(n.up), down: move(n.down) };
+    });
+    const moved = { ...layer, envelope: { ...layer.envelope!, mesh: { ...layer.envelope!.mesh, nodes } } };
+    g.moved = true;
+    this.document.set({ ...g.before, layers: g.before.layers.map((l) => (l.id === g.id ? moved : l)) });
+  }
+  private endMesh() {
+    const g = this.meshGesture!;
+    this.meshGesture = undefined;
+    if (!g.moved) return;
+    // A warp whose mesh was moved by hand is no longer that style: it becomes a grid.
+    const plain = (l: Layer): Layer => { const { warp: _w, ...rest } = l.envelope!; return { ...l, envelope: { ...rest, origin: l.envelope!.origin === "warp" ? "grid" : l.envelope!.origin } }; };
+    const next = { ...this.document(), layers: this.document().layers.map((l) => (l.id === g.id ? fitEnvelope(plain(l)) : l)) };
+    try { parseDocument(JSON.stringify(next)); } catch { this.document.set(g.before); return; }
+    this.document.set(next);
+    this.commitStep(g.before);
+    this.changed();
+  }
+  /** Where on the grid a point of the page falls, as fractions u and v, by search and refinement. */
+  private meshParameters(layer: Layer, point: Point): { u: number; v: number } | null {
+    const mesh = layer.envelope!.mesh, local = localPoint(layer, point);
+    let best = { u: 0.5, v: 0.5, d: Infinity };
+    for (let i = 0; i <= 40; i++) for (let j = 0; j <= 40; j++) {
+      const p = meshPoint(mesh, j / 40, i / 40), d = Math.hypot(p.x - local.x, p.y - local.y);
+      if (d < best.d) best = { u: j / 40, v: i / 40, d };
+    }
+    for (let step = 1 / 80; step > 1e-5; step /= 2)
+      for (const [du, dv] of [[step, 0], [-step, 0], [0, step], [0, -step]]) {
+        const u = Math.max(0, Math.min(1, best.u + du)), v = Math.max(0, Math.min(1, best.v + dv)), p = meshPoint(mesh, u, v);
+        const d = Math.hypot(p.x - local.x, p.y - local.y);
+        if (d < best.d) best = { u, v, d };
+      }
+    return best.d <= 4 / this.zoom() ? best : null;
+  }
+  /** The Mesh tool: a click inside the mesh adds a row and a column through that point. */
+  private addMeshLines(layer: Layer, point: Point): boolean {
+    const at = this.meshParameters(layer, point);
+    if (!at) return false;
+    const { us, vs } = meshLines(layer.envelope!.mesh);
+    const fresh = (lines: number[], x: number) => (lines.some((l) => Math.abs(l - x) < 1e-3) ? lines : [...lines, x]);
+    const nextUs = fresh(us, at.u), nextVs = fresh(vs, at.v);
+    if (nextUs.length > 51 || nextVs.length > 51) { this.status.set("A mesh holds up to 50 rows and columns."); return true; }
+    const mesh = resampleMesh(layer.envelope!.mesh, nextUs, nextVs);
+    const index = mesh.us.findIndex((u) => Math.abs(u - at.u) < 1e-6) + mesh.vs.findIndex((v) => Math.abs(v - at.v) < 1e-6) * (mesh.columns + 1);
+    // An edited mesh is no longer a warp style: it becomes a grid.
+    this.replaceEnvelope(layer.id, (l) => { const { warp: _w, ...rest } = l.envelope!; return { ...l, envelope: { ...rest, mesh, origin: "grid" } }; }, "Added a row and a column to the mesh.");
+    this.meshNode.set({ id: layer.id, index });
+    return true;
+  }
+  /** Delete on a chosen mesh node removes the row and the column that cross there. */
+  private deleteMeshLines(): boolean {
+    const chosen = this.meshNode();
+    const layer = chosen && this.document().layers.find((l) => l.id === chosen.id);
+    if (!chosen || !layer?.envelope) return false;
+    const mesh = layer.envelope.mesh, j = chosen.index % (mesh.columns + 1), i = Math.floor(chosen.index / (mesh.columns + 1));
+    const us = mesh.us.filter((_, k) => k !== j || k === 0 || k === mesh.columns), vs = mesh.vs.filter((_, k) => k !== i || k === 0 || k === mesh.rows);
+    if (us.length === mesh.us.length && vs.length === mesh.vs.length) { this.status.set("The border of the mesh stays; choose a point inside it."); return true; }
+    const next = resampleMesh(mesh, us, vs);
+    this.replaceEnvelope(layer.id, (l) => { const { warp: _w, ...rest } = l.envelope!; return fitEnvelope({ ...l, envelope: { ...rest, mesh: next, origin: "grid" } }); }, "Removed a row and a column from the mesh.");
+    return true;
+  }
   private dragLinear(g: NonNullable<EditorService["gesture"]>, linear: Linear, point: Point) {
     const ids = new Set(g.ids ?? [g.id]);
     const layers = g.before.layers.filter((layer) => ids.has(layer.id) && !layer.guide);
@@ -2472,6 +2748,8 @@ export class EditorService {
     if (tool === "gradient") { this.startGradient(point); return; }
     if (tool === "freeTransform") { this.startFreeTransform(point); return; }
     if (this.isLiquifyTool(tool)) { this.startLiquify(tool, point, modifiers); return; }
+    if ((tool === "direct" || tool === "mesh") && this.startMesh(point, tool)) return;
+    if (tool === "mesh") { this.status.set("Click inside a selected envelope to add a row and a column to its mesh."); return; }
     if (tool === "paintBucket") { this.applyStyleAt(point); return; }
     if (["rectangle", "ellipse", "path", "paintbrush", "pen", "line", "rounded", "polygon", "star", "arc", "spiral", "grid", "polar", "flare", "text"].includes(tool)) point = this.snap(point);
     if (tool === "hand" || (tool === "brush" && ["none", "transparent"].includes(this.fill()))) return;
@@ -2760,6 +3038,7 @@ export class EditorService {
     if (this.gradientGesture) { this.moveGradient(point, !!modifiers.shift); return; }
     if (this.freeGesture) { this.moveFreeTransform(point, modifiers); return; }
     if (this.liquifyGesture) { this.moveLiquify(point); return; }
+    if (this.meshGesture) { this.moveMesh(point); return; }
     const draft=this.dimensionDraft();if(draft){const count=draft.kind==="chain"?Infinity:(draft.kind==="angular"?3:2);const placing=draft.ready===true||draft.points.length>=count;this.dimensionDraft.set({...draft,cursor:placing?this.dimensionOffsetPoint(draft.points,point):this.dimensionPoint(point,true)});if(placing)this.dimensionSnapTarget.set(null);return;}
     if(!this.gesture&&["dimensionSmart","dimensionLinear","dimensionAngular","dimensionChain","dimensionRadius","dimensionDiameter"].includes(this.tool())){this.hoverDimension(point);return;}
     if(!this.gesture&&!this.proceduralGesture&&this.tool()==='wall'){this.hoverWall(modifiers.shift&&this.wallChain()?snapDirection(this.wallChain()!,point,this.snapAngle()):point);return;}
@@ -2923,6 +3202,7 @@ export class EditorService {
     if (this.gradientGesture) { this.endGradient(); return; }
     if (this.freeGesture) { this.endFreeTransform(); return; }
     if (this.liquifyGesture) { this.endLiquify(); return; }
+    if (this.meshGesture) { this.endMesh(); return; }
     if (this.areaGesture) {
       if (!this.areaGesture.moved && !this.areaGesture.shift) { this.selectedId.set(null); this.selectedIds.set([]); this.activeNodes.set([]); }
       this.areaGesture = undefined; this.areaSelection.set(null); return;
@@ -3044,6 +3324,7 @@ export class EditorService {
     if (this.gradientGesture) { this.document.set(this.gradientGesture.before); this.gradientGesture = undefined; }
     if (this.freeGesture) { this.document.set(this.freeGesture.before); this.freeGesture = undefined; this.freeQuad.set(null); }
     if (this.liquifyGesture) { this.document.set(this.liquifyGesture.before); this.liquifyGesture = undefined; }
+    if (this.meshGesture) { this.document.set(this.meshGesture.before); this.meshGesture = undefined; }
     this.cancelGuideDrag();
     if (this.areaGesture) {
       this.selectedIds.set(this.areaGesture.ids); this.selectedId.set(this.areaGesture.primary); this.activeNodes.set(this.areaGesture.nodes);

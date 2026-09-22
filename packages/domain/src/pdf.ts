@@ -4,6 +4,7 @@ import { brushOutline } from './brush-stroke';
 import { ellipsePath, polyline } from './shapes';
 import { materializeProcedural, projectionCurves, projectionDash } from './procedural';
 import { GradientPaint, PatternDefinition, gradientGeometry, renderedStops } from './paint';
+import { materializeEnvelopes } from './envelope';
 
 /**
  * A small PDF writer for the documents this editor makes. It emits vector geometry, not a
@@ -147,7 +148,7 @@ interface PageContent {
 }
 /** Draws one document into a content stream, with the alpha states and images it needs. */
 function pageContent(source: PdfPageSource): PageContent {
-  const document = materializeProcedural(source.document);
+  const document = materializeEnvelopes(materializeProcedural(source.document));
   const images: { name: string; image: PdfImage }[] = [];
   const alphas: number[] = [];
   const shadings: string[] = [];

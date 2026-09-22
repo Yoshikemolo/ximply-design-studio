@@ -1,6 +1,7 @@
 /** Trusted built-in descriptors; shortcut assignments belong to the command registry. */
 export type ToolId =
   | "freeTransform"
+  | "mesh"
   | "warp"
   | "twirl"
   | "pucker"
@@ -174,6 +175,7 @@ export const TOOLS: ToolPlugin[] = [
   { id: "reshape", label: "Reshape", icon: "reshape", group: "Paths" },
   { id: "shear", label: "Shear", icon: "shear", group: "Paths" },
   { id: "freeTransform", label: "Free transform", icon: "free-transform", group: "Paths" },
+  { id: "mesh", label: "Mesh", icon: "mesh", group: "Paths" },
   ...(["warp", "twirl", "pucker", "bloat", "scallop", "crystallize", "wrinkle"] as ToolId[]).map((id) => ({
     id, label: id[0].toUpperCase() + id.slice(1), icon: "liquify-" + id, group: "Paths" as const,
   })),
@@ -242,6 +244,7 @@ export const TOOL_FAMILIES: ToolFamily[] = [
   { id: "scissors", label: "Scissors", tools: ["scissors", "knife"] },
   { id: "paint", label: "Brush tools", tools: ["paintbrush", "brush", "brushFlat", "brushCalligraphy", "brushMarker", "brushAirbrush", "brushPencil"] },
   { id: "eraser", label: "Eraser", tools: ["eraser"] },
+  { id: "mesh", label: "Mesh", tools: ["mesh"] },
   { id: "gradient", label: "Gradient", tools: ["gradient"] },
   { id: "style", label: "Style tools", tools: ["eyedropper", "paintBucket"] },
   { id: "rotate", label: "Rotate", tools: ["rotate"] },

@@ -747,6 +747,54 @@ class NativeDrawingTests(unittest.TestCase):
         self.document['swatches'] = [{'id': 'p', 'name': 'P', 'kind': 'pattern', 'patternId': 'missing'}]
         self.assert_invalid(self.document)
 
+    def envelope_layer(self, **extra):
+        content = {**self.layer, 'id': 'inside', 'kind': 'rectangle', 'width': 100, 'height': 50}
+        content.pop('curves', None)
+        point = lambda x, y: {'x': x, 'y': y}
+        node = lambda x, y: {'point': point(x, y), 'left': point(x, y), 'right': point(x, y), 'up': point(x, y), 'down': point(x, y)}
+        envelope = {'contents': [content], 'source': {'x': 0, 'y': 0, 'width': 100, 'height': 50},
+                    'mesh': {'rows': 1, 'columns': 1, 'us': [0, 1], 'vs': [0, 1], 'nodes': [node(0, 0), node(100, 0), node(0, 50), node(100, 50)]},
+                    'origin': 'grid', 'fidelity': 50, 'editing': 'envelope', 'group': 'env-group', **extra}
+        holder = {**self.layer, 'id': 'env', 'name': 'Envelope', 'width': 100, 'height': 50, 'points': [], 'envelope': envelope}
+        holder.pop('curves', None)
+        return holder
+
+    def test_envelope_round_trip(self):
+        self.document['layers'] = [self.envelope_layer()]
+        self.assert_round_trip(self.document)
+        warp = {'style': 'flag', 'axis': 'vertical', 'bend': -40, 'horizontal': 10, 'vertical': 0}
+        self.document['layers'] = [self.envelope_layer(origin='warp', warp=warp)]
+        self.assert_round_trip(self.document)
+
+    def test_envelope_contract(self):
+        cases = {
+            'fidelity': self.envelope_layer(fidelity=101),
+            'warp without origin': self.envelope_layer(warp={'style': 'flag', 'axis': 'horizontal', 'bend': 0, 'horizontal': 0, 'vertical': 0}),
+            'no contents': self.envelope_layer(contents=[]),
+            'mesh lines': self.envelope_layer(mesh={'rows': 1, 'columns': 1, 'us': [0, 0.5], 'vs': [0, 1], 'nodes': []}),
+        }
+        text = self.envelope_layer()
+        text['envelope']['contents'][0]['kind'] = 'text'
+        cases['text inside'] = text
+        outline = self.envelope_layer()
+        outline['curves'] = self.layer['curves']
+        cases['outline of its own'] = outline
+        for name, layer in cases.items():
+            with self.subTest(case=name):
+                self.document['layers'] = [layer]
+                self.assert_invalid(self.document)
+        # Contents being edited must be in the document under the envelope's group.
+        editing = self.envelope_layer(contents=[], editing='contents')
+        self.document['layers'] = [editing]
+        self.assert_invalid(self.document)
+        self.document['version'] = 1
+        self.document['layers'] = [self.envelope_layer()]
+        self.assert_invalid(self.document)
+        self.document['version'] = 2
+        member = {**self.layer, 'id': 'member', 'groupPath': ['env-group']}
+        self.document['layers'] = [editing, member]
+        self.assert_round_trip(self.document)
+
     def test_dimension_format_bounds_and_types(self):
         for field, invalid in {'scale': [0, -1, 1000001, True, '2'],
                                'unit': ['yd', '', None], 'decimals': [-1, 9, 1.5, True, '2'],

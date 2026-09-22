@@ -38,7 +38,7 @@ Generated titles and paths only; authoritative content remains in each linked do
 - [ADR-0031 — Carried faces and an in-process font reader for text outlines](adr/ADR-0031.md)
 - [ADR-0032 — Vector Paintbrush strokes carried by paths in the native format](adr/ADR-0032.md)
 - [ADR-0033 — Gradient and pattern fills, patterns and swatches in the native format](adr/ADR-0033.md)
-- [ADR-0034 — Envelope layers in the native format](adr/ADR-0034.md)
+- [ADR-0034 — Envelopes carried by path layers in the native format](adr/ADR-0034.md)
 - [DOC-ADR-0023 — Architecture Decision Records](adr/README.md)
 - [AI-ENG-0001 — AI-ENG-0001 — Project implementation profile](ai/methodology-adoption.md)
 - [DOC-ARCHITECTURE-0001 — Document model, rendering and performance](architecture/document-and-rendering.md)
