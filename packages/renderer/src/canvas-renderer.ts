@@ -341,7 +341,8 @@ export class CanvasRenderer {
     ctx.save();
     ctx.globalAlpha = layer.opacity;
     ctx.globalCompositeOperation = layer.blend;
-    ctx.lineWidth = 0.6;
+    // A pixel-wide stroke of each facet's own colour covers the seams its neighbours leave.
+    ctx.lineWidth = 1.2;
     ctx.lineJoin = "round";
     for (const facet of meshFacets(layer)) {
       ctx.beginPath();

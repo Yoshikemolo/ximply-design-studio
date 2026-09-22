@@ -362,7 +362,8 @@
         "packages/domain/tests/envelope.test.ts",
         "apps/web/tests/envelope-editor.test.ts",
         "packages/domain/tests/gradient-mesh.test.ts",
-        "apps/web/tests/gradient-mesh-editor.test.ts"
+        "apps/web/tests/gradient-mesh-editor.test.ts",
+        "packages/renderer/tests/gradient-mesh.test.ts"
       ],
       "evidence": [
         "doc/implementation/PLAN-0002-0001.md",
