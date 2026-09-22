@@ -1,4 +1,5 @@
 """Release-note oracles for current version, compatibility and generated assets."""
+import hashlib
 import json
 from pathlib import Path
 import shutil
@@ -15,10 +16,10 @@ class ChangelogTests(unittest.TestCase):
         for filename, content in outputs.items():
             self.assertEqual(content, (ROOT/filename).read_text(), filename)
         manifest = json.loads(outputs['release/changelog.json'])
-        self.assertEqual('0.7.0', manifest['currentVersion'])
-        self.assertEqual(['0.7.0', '0.6.0', '0.5.0', '0.4.0', '0.3.16-alpha.1', '0.3.15-alpha.1', '0.3.14-alpha.1', '0.3.13-alpha.1', '0.3.12-alpha.1', '0.3.11-alpha.1', '0.3.10-alpha.1', '0.3.9-alpha.1', '0.3.8-alpha.1', '0.3.7-alpha.1', '0.3.6-alpha.1', '0.3.5-alpha.1', '0.3.4-alpha.1', '0.3.3-alpha.1', '0.3.2-alpha.1', '0.3.1-alpha.1', '0.3.0-alpha.1', '0.2.0-alpha.2', '0.2.0-alpha.1', '0.1.0-design.2', '0.1.0-design.1'], [x['version'] for x in manifest['entries']])
+        self.assertEqual('0.9.0', manifest['currentVersion'])
+        self.assertEqual(['0.9.0', '0.8.0', '0.7.0', '0.6.0', '0.5.0', '0.4.0', '0.3.16-alpha.1', '0.3.15-alpha.1', '0.3.14-alpha.1', '0.3.13-alpha.1', '0.3.12-alpha.1', '0.3.11-alpha.1', '0.3.10-alpha.1', '0.3.9-alpha.1', '0.3.8-alpha.1', '0.3.7-alpha.1', '0.3.6-alpha.1', '0.3.5-alpha.1', '0.3.4-alpha.1', '0.3.3-alpha.1', '0.3.2-alpha.1', '0.3.1-alpha.1', '0.3.0-alpha.1', '0.2.0-alpha.2', '0.2.0-alpha.1', '0.1.0-design.2', '0.1.0-design.1'], [x['version'] for x in manifest['entries']])
         for entry in manifest['entries']:
-            if entry['version'] in ('0.7.0', '0.6.0', '0.5.0', '0.4.0', '0.3.14-alpha.1', '0.3.13-alpha.1', '0.3.0-alpha.1', '0.3.5-alpha.1', '0.3.7-alpha.1', '0.3.9-alpha.1', '0.3.10-alpha.1'):
+            if entry['version'] in ('0.9.0', '0.8.0', '0.7.0', '0.6.0', '0.5.0', '0.4.0', '0.3.14-alpha.1', '0.3.13-alpha.1', '0.3.0-alpha.1', '0.3.5-alpha.1', '0.3.7-alpha.1', '0.3.9-alpha.1', '0.3.10-alpha.1'):
                 self.assertTrue(any('Migration:' in note for note in entry['breakingChanges']))
             else:
                 self.assertEqual([], entry['breakingChanges'])
@@ -50,11 +51,26 @@ class ChangelogTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 sections(body)
 
+    def test_licence_hash_is_the_same_whatever_the_line_endings(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            shutil.copytree(ROOT/'doc/changelog', root/'doc/changelog')
+            shutil.copytree(ROOT/'release', root/'release')
+            text = (ROOT/'LICENSE').read_bytes().replace(b'\r\n', b'\n')
+            (root/'LICENSE').write_bytes(text)
+            unix = json.loads(build(root)['release/changelog.json'])['licence']
+            (root/'LICENSE').write_bytes(text.replace(b'\n', b'\r\n'))
+            windows = json.loads(build(root)['release/changelog.json'])['licence']
+            self.assertEqual(unix, windows)
+            self.assertEqual(hashlib.sha256(text).hexdigest(), unix['sha256'])
+            self.assertEqual(text.decode('utf-8').splitlines()[0].strip(), unix['name'])
+
     def test_missing_current_version_and_breaking_mismatch_fail(self):
         with tempfile.TemporaryDirectory() as folder:
             root = Path(folder)
             shutil.copytree(ROOT/'doc/changelog', root/'doc/changelog')
             shutil.copytree(ROOT/'release', root/'release')
+            shutil.copy(ROOT/'LICENSE', root/'LICENSE')
             (root/'release/version.json').write_text('{"version":"9.9.9"}')
             with self.assertRaisesRegex(ValueError, 'Current version'):
                 build(root)

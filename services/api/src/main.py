@@ -343,6 +343,96 @@ Procedural = Annotated[ProceduralWall | ProceduralDoor | ProceduralWindow | Proc
                        Field(discriminator='type')]
 
 
+class WarpSettings(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    style: Literal['arc', 'arcLower', 'arcUpper', 'arch', 'bulge', 'shellLower', 'shellUpper', 'flag', 'wave', 'fish', 'rise', 'fisheye', 'inflate', 'squeeze', 'twist']
+    axis: Literal['horizontal', 'vertical']
+    bend: Annotated[Number, Field(ge=-100, le=100)]
+    horizontal: Annotated[Number, Field(ge=-100, le=100)]
+    vertical: Annotated[Number, Field(ge=-100, le=100)]
+
+
+class MeshNode(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    point: Point
+    left: Point
+    right: Point
+    up: Point
+    down: Point
+
+
+Fraction = Annotated[Number, Field(ge=0, le=1)]
+
+
+class EnvelopeMesh(BaseModel):
+    """A grid of Coons patches: its lines across the source box and one node per crossing."""
+    model_config = ConfigDict(extra='forbid')
+    rows: Annotated[int, Field(ge=1, le=50, strict=True)]
+    columns: Annotated[int, Field(ge=1, le=50, strict=True)]
+    us: list[Fraction]
+    vs: list[Fraction]
+    nodes: list[MeshNode]
+
+    @model_validator(mode='after')
+    def grid(self):
+        def lines(values, count):
+            return len(values) == count + 1 and values[0] == 0 and values[-1] == 1 and all(b > a for a, b in zip(values, values[1:]))
+        if not lines(self.us, self.columns) or not lines(self.vs, self.rows) or len(self.nodes) != (self.rows + 1) * (self.columns + 1):
+            raise ValueError('Invalid envelope mesh')
+        return self
+
+
+class EnvelopeSource(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    x: Annotated[Number, Field(ge=-100000, le=100000)]
+    y: Annotated[Number, Field(ge=-100000, le=100000)]
+    width: Annotated[Number, Field(ge=0.001, le=100000)]
+    height: Annotated[Number, Field(ge=0.001, le=100000)]
+
+
+class Envelope(BaseModel):
+    """Objects kept whole and drawn through a mesh, mirrored from the editor (ADR-0034)."""
+    model_config = ConfigDict(extra='forbid')
+    contents: Annotated[list['Layer'], Field(max_length=200)]
+    source: EnvelopeSource
+    mesh: EnvelopeMesh
+    origin: Literal['warp', 'grid', 'object']
+    warp: WarpSettings | None = None
+    fidelity: Annotated[Number, Field(ge=0, le=100)]
+    editing: Literal['envelope', 'contents']
+    group: Annotated[str, Field(min_length=1, max_length=100)]
+
+    @model_validator(mode='before')
+    @classmethod
+    def no_null_warp(cls, value):
+        if isinstance(value, dict) and 'warp' in value and value['warp'] is None:
+            raise ValueError('Envelope warp cannot be null')
+        return value
+
+    @model_validator(mode='after')
+    def shape(self):
+        if (self.origin == 'warp') != (self.warp is not None) or (self.editing == 'envelope') != bool(self.contents):
+            raise ValueError('Invalid envelope')
+        if any(layer.kind not in ('rectangle', 'ellipse', 'path') or layer.symbolId is not None or layer.guide is not None or layer.dimension is not None
+               or layer.procedural is not None or layer.envelope is not None or layer.groupPath is not None or layer.regroupPath is not None
+               for layer in self.contents):
+            raise ValueError('Invalid envelope contents')
+        return self
+
+
+class GradientMesh(BaseModel):
+    """Colours that blend across a mesh of Coons patches, mirrored from the editor (ADR-0035)."""
+    model_config = ConfigDict(extra='forbid')
+    mesh: EnvelopeMesh
+    colors: list[Paint]
+
+    @model_validator(mode='after')
+    def one_colour_per_point(self):
+        if len(self.colors) != len(self.mesh.nodes) or 'none' in self.colors:
+            raise ValueError('A gradient mesh has one colour per mesh point')
+        return self
+
+
 class Layer(Point):
     id: Annotated[str, Field(min_length=1, max_length=100)]
     name: Annotated[str, Field(max_length=150)]
@@ -361,11 +451,14 @@ class Layer(Point):
     text: Annotated[str, Field(max_length=2000)]
     fontSize: Annotated[Number, Field(ge=1, le=500)]
     source: str
+    paintLayer: Literal[True] | None = None
     adjustments: Adjustments
     strokeStyle: StrokeStyle | None = None
     lineEnds: LineEnds | None = None
     brushStroke: BrushStroke | None = None
     fillPaint: FillPaint | None = None
+    envelope: Envelope | None = None
+    gradientMesh: GradientMesh | None = None
     dimension: Dimension | None = None
     procedural: Procedural | None = None
     regroupPath: Annotated[list[Annotated[str, Field(min_length=1, max_length=100)]], Field(max_length=16)] | None = None
@@ -383,8 +476,10 @@ class Layer(Point):
     @model_validator(mode='before')
     @classmethod
     def non_nullable_extensions(cls, value):
-        if isinstance(value, dict) and any(key in value and value[key] is None for key in ('curves', 'symbolId', 'traceSourceId', 'groupPath', 'flipX', 'flipY', 'skewX', 'guide', 'textLayout', 'typography', 'strokeStyle', 'lineEnds', 'brushStroke', 'fillPaint', 'dimension', 'regroupPath', 'procedural')):
+        if isinstance(value, dict) and any(key in value and value[key] is None for key in ('curves', 'symbolId', 'traceSourceId', 'groupPath', 'flipX', 'flipY', 'skewX', 'guide', 'textLayout', 'typography', 'strokeStyle', 'lineEnds', 'brushStroke', 'fillPaint', 'envelope', 'gradientMesh', 'dimension', 'regroupPath', 'procedural', 'paintLayer')):
             raise ValueError('Drawing extensions cannot be null')
+        if isinstance(value, dict) and 'paintLayer' in value and (value['paintLayer'] is not True or value.get('kind') != 'image'):
+            raise ValueError('Paint marker requires an image and true')
         return value
 
     @model_validator(mode='after')
@@ -407,6 +502,12 @@ class Layer(Point):
             raise ValueError('A brush stroke belongs to a plain path')
         if self.fillPaint is not None and self.kind not in ('rectangle', 'ellipse', 'path', 'text'):
             raise ValueError('Only shapes and text take a gradient or a pattern')
+        if self.envelope is not None and (self.kind != 'path' or self.curves is not None or self.points or any(
+                value is not None for value in (self.brushStroke, self.dimension, self.procedural, self.guide, self.symbolId, self.fillPaint, self.lineEnds))):
+            raise ValueError('An envelope is a path layer without an outline of its own')
+        if self.gradientMesh is not None and (self.kind != 'path' or self.curves is not None or self.points or any(
+                value is not None for value in (self.envelope, self.brushStroke, self.dimension, self.procedural, self.guide, self.symbolId, self.fillPaint, self.lineEnds))):
+            raise ValueError('A gradient mesh is a path layer whose mesh is its outline')
         return self
 
     @field_validator('source')
@@ -415,6 +516,9 @@ class Layer(Point):
         if value and not re.fullmatch(r'data:image/(png|jpeg|webp);base64,[A-Za-z0-9+/=]+', value):
             raise ValueError('Only embedded raster images are supported')
         return value
+
+
+Envelope.model_rebuild()
 
 
 class SymbolDefinition(BaseModel):
@@ -479,13 +583,28 @@ class Document(BaseModel):
         swatches = self.swatches or []
         if len({swatch.id for swatch in swatches}) != len(swatches):
             raise ValueError('Swatch identities must be unique')
-        referenced = [layer.fillPaint.patternId for layer in self.layers if isinstance(layer.fillPaint, PatternPaint)]
+        painted = self.layers + [content for layer in self.layers if layer.envelope for content in layer.envelope.contents]
+        referenced = [layer.fillPaint.patternId for layer in painted if isinstance(layer.fillPaint, PatternPaint)]
         referenced += [swatch.patternId for swatch in swatches if isinstance(swatch, PatternSwatch)]
         if any(pattern_id not in pattern_ids for pattern_id in referenced):
             raise ValueError('Unknown pattern reference')
         if self.version == 1 and (patterns or swatches or 'patterns' in self.model_fields_set or 'swatches' in self.model_fields_set
                                   or any(layer.fillPaint is not None for layer in self.layers)):
             raise ValueError('Gradients, patterns and swatches require native format 2')
+        for layer in self.layers:
+            if layer.envelope is None:
+                continue
+            if self.version == 1:
+                raise ValueError('Envelopes require native format 2')
+        if self.version == 1 and any(layer.gradientMesh is not None for layer in self.layers):
+            raise ValueError('Gradient meshes require native format 2')
+        for layer in self.layers:
+            if layer.envelope is None:
+                continue
+            group = layer.envelope.group
+            if layer.envelope.editing == 'contents' and not any(
+                    other.envelope is None and other.groupPath and other.groupPath[0] == group for other in self.layers):
+                raise ValueError('The contents of an envelope being edited are missing')
         return self
 
     @model_validator(mode='before')
@@ -507,7 +626,7 @@ class Document(BaseModel):
                 layer.curves is not None or layer.symbolId is not None or layer.traceSourceId is not None
                 or layer.guide is not None or layer.fill == 'none' or layer.stroke == 'none'
                 or layer.strokeStyle is not None or layer.lineEnds is not None or layer.brushStroke is not None
-                or layer.dimension is not None or layer.regroupPath is not None or layer.procedural is not None
+                or layer.dimension is not None or layer.regroupPath is not None or layer.procedural is not None or layer.paintLayer is not None
                 or layer.textLayout is not None or layer.typography is not None
                 or len(layer.fill) == 9 or len(layer.stroke) == 9
                 or layer.skewX is not None or layer.groupPath is not None or layer.flipX is not None or layer.flipY is not None
@@ -649,13 +768,17 @@ class FileDocumentRepository:
 def inline_document_schema() -> dict:
     schema = Document.model_json_schema()
     definitions = schema.pop('$defs', {})
-    def expand(value):
+    def expand(value, trail=()):
         if isinstance(value, dict):
             if '$ref' in value:
-                return expand(definitions[value['$ref'].split('/')[-1]])
-            return {key: expand(child) for key, child in value.items()}
+                name = value['$ref'].split('/')[-1]
+                # The layers inside an envelope are layers again: the schema stops there.
+                if name in trail:
+                    return {'type': 'object', 'description': f'A {name}, as defined above'}
+                return expand(definitions[name], trail + (name,))
+            return {key: expand(child, trail) for key, child in value.items()}
         if isinstance(value, list):
-            return [expand(child) for child in value]
+            return [expand(child, trail) for child in value]
         return value
     return expand(schema)
 

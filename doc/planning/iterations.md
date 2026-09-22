@@ -62,8 +62,8 @@ Do not move Planned to Verified just because scaffold files compile.
 
 ## Branching and operations additions
 
-Use feat/* and fix/* from dev, then qa/demo/release/main as defined in the GitFlow
-profile. ITER-0001 includes the general contribution harness, container build pipeline,
+Use feat/* and fix/* from dev, then release and main as defined in the GitFlow
+profile; qa and demo are environments, not branches. ITER-0001 includes the general contribution harness, container build pipeline,
 local same-origin ingress, shell/PowerShell runbooks and Sonar collector. Production
 deployment remains unconfigured until the owner supplies the target.
 

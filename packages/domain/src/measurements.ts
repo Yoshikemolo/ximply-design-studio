@@ -16,7 +16,8 @@ export function fromPixels(value: number, unit: Unit): number {
 export function formatMeasurement(value: number, unit: Unit): string {
   return Number(fromPixels(value, unit).toFixed(3)).toString();
 }
-export interface RulerTick { position: number; label: string; major: boolean }
+/** A ruler mark; `half` marks the minor one half way between two major ones, drawn longer. */
+export interface RulerTick { position: number; label: string; major: boolean; half?: true }
 export function rulerTicks(lengthPx: number, zoom: number, unit: Unit, stepPx: number, minorStepPx?: number): RulerTick[] {
   if (![lengthPx, zoom, stepPx].every(Number.isFinite) || lengthPx < 0 || zoom <= 0 || stepPx <= 0 || !isUnit(unit)) return [];
   const hasMinor = minorStepPx !== undefined && Number.isFinite(minorStepPx) && minorStepPx > 0;
@@ -33,7 +34,8 @@ export function rulerTicks(lengthPx: number, zoom: number, unit: Unit, stepPx: n
       const onMajor = Math.abs(position / stepPx - Math.round(position / stepPx)) < 1e-8;
       // Coincident ticks remain major, even when their label has been thinned.
       if (!major && ticks.some((tick) => Math.abs(tick.position - position) * zoom < 0.01)) continue;
-      ticks.push({ position, label: major ? formatMeasurement(position, unit) : "", major: major || onMajor });
+      const onHalf = !major && !onMajor && Math.abs((2 * position) / stepPx - Math.round((2 * position) / stepPx)) < 1e-8;
+      ticks.push({ position, label: major ? formatMeasurement(position, unit) : "", major: major || onMajor, ...(onHalf ? { half: true as const } : {}) });
     }
   };
   append(stepPx, true);

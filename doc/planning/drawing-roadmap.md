@@ -18,14 +18,15 @@ meaningful tests and the unchanged quality gate.
 
 | Iteration | Preview implementation | Next acceptance boundary |
 | --- | --- | --- |
-| Editable drawing | Cubic Pen; direct selection; add, delete and convert anchors; line, rectangle, rounded rectangle, ellipse, polygon, star, arc, spiral, rectangular grid, polar grid and flare | Verify construction parameters and cubic topology through native/API/SVG round trips; broader geometric degeneracy and interaction coverage |
-| Path refinement | Pencil; smooth, simplify, average, join/close, scissors, path eraser, filled-vector eraser and stray-point cleanup | Validate endpoint selection and topology semantics; improve freehand continuation/reshaping and curve-preserving boolean precision |
-| Transform and input | Rotate/Reflect/Scale tool families with triangular flyouts; corner and edge scaling, rotation handle, numeric group transforms, configurable Shift angle, editable shortcuts, inline text, tool cursor badge and canvas-local zoom | Browser acceptance across keyboard layouts, pointer devices, responsive layouts and accessibility modes |
+| Editable drawing | Cubic Pen with Illustrator's modifiers and cursor marks; direct and group selection; add, delete and convert anchors; line, rectangle, rounded rectangle, ellipse, polygon, star, arc, spiral, rectangular grid, polar grid and flare | Verify construction parameters and cubic topology through native/API/SVG round trips; broader geometric degeneracy and interaction coverage |
+| Path refinement | Pencil and vector Paintbrush with fidelity and smoothness; smooth, simplify, average, join/close, scissors, knife, path eraser, filled-vector eraser, outline stroke and stray-point cleanup | Validate endpoint selection and topology semantics; improve freehand continuation/reshaping and curve-preserving boolean precision |
+| Transform and input | Rotate/Reflect/Scale/Shear/Reshape tool families with triangular flyouts; Free Transform with free and perspective distortion; Scale, Shear and Transform Each dialogs; Transform Again and duplication in series about a movable pivot; corner and edge scaling, rotation handle, numeric group transforms, configurable Shift angle, editable shortcuts, inline text, tool cursor badge, Illustrator zoom and phone touch gestures | Browser acceptance across keyboard layouts, pointer devices, responsive layouts and accessibility modes |
 | Arrange and combine | Multiple selection, nested group/ungroup, six alignment directions, horizontal/vertical distribution and union/subtract/intersect/exclude | Groups retain nested membership through native round trips; vector-only boolean results match independent polygon area/topology oracles |
 | Raster tracing | Monochrome, grayscale and color scanline tracing; update, expand, release; retained source and template image | Contour fitting, larger images, named presets, richer preview and quantified fidelity/performance budgets |
 | Reusable artwork | Local symbol definitions/instances; redefine, replace, expand and library import/export | Editable registration and nine-slice guides; grouped artwork and complete graphic-style semantics |
 | Symbol painting | Spray, shift, scrunch, size, spin, stain, screen and initial style manipulation | Brush behavior parity, pressure control and reusable appearance libraries |
-| Precision and production | Planned | Rich snapping, units, rulers, color management, print export and production-scale performance |
+| Distortion and colour | Liquify tools; envelopes made with a warp, a mesh or a top object; gradient meshes; linear and radial gradients, patterns, swatches and colour models | Owner review of the proposed ADR-0034, ADR-0035 and ADR-0036, the strict quality gate and independent human review |
+| Precision and production | Page setup, units, rulers with major and minor marks, guides, grid, independent snapping, outline view, Pixel Preview, a sharp redraw of a magnified page, vector PDF export and browser printing | Color management, print separations, preflight and production-scale performance |
 | Wider studio | Planned in existing feature contracts | Docking, multiwindow, collaboration, masks, 3D modeling and animation |
 
 ## Explicit preview limits
@@ -53,6 +54,6 @@ establish complete behavioral parity; pending fidelity remains part of the scope
 
 [Implementation plan](../implementation/PLAN-0008-0001.md) describes acceptance,
 migration, contracts and evidence. [ADR-0023](../adr/ADR-0023.md) records the proposed
-geometry/dependency choice. [Current release notes](../changelog/0.3.0-alpha.1.md)
+geometry/dependency choice. [Current release notes](../changelog/0.9.0.md)
 describe the local preview. Continue using the existing FEAT and SC contracts;
 Verified requires the full quality policy and independent human review.

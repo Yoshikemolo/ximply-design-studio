@@ -6,9 +6,12 @@ import { Point } from "../../domain/src/document";
 import { defaultTypography, layoutText, textFont, TextMeasurement, TextTypography } from "../../domain/src/text-layout";
 import { selectionBounds } from "../../domain/src/arrange";
 import { newLayer, defaultStrokeStyle, strokeBounds } from "../../domain/src/document";
+import { worldPoint } from "../../domain/src/curves";
 import { CurvePath } from "../../domain/src/curves";
 import { Layer, StudioDocument } from "../../domain/src/document";
 import { gradientGeometry, PatternDefinition, renderedStops } from "../../domain/src/paint";
+import { materializeEnvelopes } from "../../domain/src/envelope";
+import { meshFacets } from "../../domain/src/gradient-mesh";
 /** Makes the off-screen canvas a pattern tile is drawn on. */
 export type CanvasFactory = (width: number, height: number) => HTMLCanvasElement;
 const browserCanvas: CanvasFactory = (width, height) => {
@@ -64,6 +67,13 @@ export class CanvasRenderer {
       showHandles?: boolean;
       /** The frame, the resizing handles and the rotation knob of the selection. */
       boundingBox?: boolean;
+      /**
+       * The box of the Free Transform tool, corners clockwise from the top left in page
+       * coordinates; it replaces the bounding box and follows a distortion.
+       */
+      quad?: Point[];
+      /** The mesh node chosen on the selected envelope, whose handles are drawn. */
+      meshNode?: number;
       /** Outline view: the artwork is drawn as hairline contours without its paints. */
       outline?: boolean;
       /** Ink of the outline view, which the shell picks from the theme. */
@@ -86,18 +96,28 @@ export class CanvasRenderer {
         others?: Record<string, { selected: string[]; handles: string[] }>;
       };
     } = { zoom: 1, direct: false },
+    /**
+     * A region of the page, in page units, to draw at a scale onto a canvas the size of that
+     * region: the sharp view of what is on screen when the page is magnified. Without it the
+     * whole page is drawn at one pixel per unit.
+     */
+    view?: { x: number; y: number; width: number; height: number; scale: number },
   ) {
-    if (canvas.width !== document.width) canvas.width = document.width;
-    if (canvas.height !== document.height) canvas.height = document.height;
+    const width = view ? Math.max(1, Math.round(view.width * view.scale)) : document.width;
+    const height = view ? Math.max(1, Math.round(view.height * view.scale)) : document.height;
+    if (canvas.width !== width) canvas.width = width;
+    if (canvas.height !== height) canvas.height = height;
     const ctx = canvas.getContext("2d")!;
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.clearRect(0, 0, canvas.width, canvas.height);
+    if (view) ctx.setTransform(view.scale, 0, 0, view.scale, -view.x * view.scale, -view.y * view.scale);
     if (!transparent && document.background !== "none") {
       ctx.fillStyle = document.background;
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.fillRect(0, 0, document.width, document.height);
     }
     const hairline = 1 / Math.max(0.1, interaction.zoom || 1);
     this.usePatterns(document, ctx);
-    for (const layer of materializeProcedural(document).layers)
+    for (const layer of materializeEnvelopes(materializeProcedural(document)).layers)
       if (layer.visible && !layer.guide)
         this.layer(
           ctx,
@@ -121,6 +141,21 @@ export class CanvasRenderer {
             ...selectionBounds(selected),
           }
         : selected[0];
+    if (selected.length === 1 && (selected[0].envelope?.editing === "envelope" || selected[0].gradientMesh)) this.mesh(ctx, selected[0], interaction.zoom, interaction.meshNode);
+    if (layer && interaction.quad?.length === 4) {
+      const unit = 1 / Math.max(0.1, interaction.zoom), size = (interaction.handleSize ?? 4) * unit, q = interaction.quad;
+      ctx.save();
+      ctx.strokeStyle = "#0d59f2";
+      ctx.fillStyle = "#ffffff";
+      ctx.lineWidth = 1.5 * unit;
+      ctx.beginPath();
+      q.forEach((p, i) => (i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y)));
+      ctx.closePath();
+      ctx.stroke();
+      const handles = [...q, ...q.map((p, i) => ({ x: (p.x + q[(i + 1) % 4].x) / 2, y: (p.y + q[(i + 1) % 4].y) / 2 }))];
+      for (const p of handles) { ctx.fillRect(p.x - size, p.y - size, size * 2, size * 2); ctx.strokeRect(p.x - size, p.y - size, size * 2, size * 2); }
+      ctx.restore();
+    }
     if (layer) {
       const zoom = Math.max(0.1, interaction.zoom),
         unit = 1 / zoom,
@@ -131,7 +166,7 @@ export class CanvasRenderer {
       ctx.fillStyle = "#ffffff";
       ctx.lineWidth = 1.5 * unit;
       // The bounding box can be hidden to see the artwork without its frame and handles.
-      if (interaction.boundingBox !== false) {
+      if (interaction.boundingBox !== false && !interaction.quad) {
         ctx.setLineDash([5 * unit, 3 * unit]);
         ctx.strokeRect(
           -3 * unit,
@@ -311,6 +346,56 @@ export class CanvasRenderer {
     if (layer.kind === "text") return { ...layer, fill: ink, stroke: "none", opacity: 1, blend: "source-over" };
     return outlined;
   }
+  /** A gradient mesh, as facets in the colour at their middle, each also stroked so no seam shows between them. */
+  private gradientMesh(ctx: CanvasRenderingContext2D, layer: Layer) {
+    ctx.save();
+    ctx.globalAlpha = layer.opacity;
+    ctx.globalCompositeOperation = layer.blend;
+    // A pixel-wide stroke of each facet's own colour covers the seams its neighbours leave.
+    ctx.lineWidth = 1.2;
+    ctx.lineJoin = "round";
+    for (const facet of meshFacets(layer)) {
+      ctx.beginPath();
+      facet.points.forEach((p, i) => (i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y)));
+      ctx.closePath();
+      ctx.fillStyle = facet.color;
+      ctx.strokeStyle = facet.color;
+      ctx.fill();
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+  /** The mesh of a selected envelope: its edges, its nodes, and the handles of the chosen node. */
+  private mesh(ctx: CanvasRenderingContext2D, layer: Layer, zoom: number, chosen?: number) {
+    const mesh = (layer.envelope ?? layer.gradientMesh)!.mesh, unit = 1 / Math.max(0.1, zoom), w = (p: Point) => worldPoint(layer, p);
+    const at = (i: number, j: number) => mesh.nodes[i * (mesh.columns + 1) + j];
+    ctx.save();
+    ctx.strokeStyle = "#0d59f2";
+    ctx.lineWidth = unit;
+    ctx.beginPath();
+    for (let i = 0; i <= mesh.rows; i++)
+      for (let j = 0; j <= mesh.columns; j++) {
+        const n = at(i, j), p = w(n.point);
+        if (j < mesh.columns) { const m = at(i, j + 1), a = w(n.right), b = w(m.left), q = w(m.point); ctx.moveTo(p.x, p.y); ctx.bezierCurveTo(a.x, a.y, b.x, b.y, q.x, q.y); }
+        if (i < mesh.rows) { const m = at(i + 1, j), a = w(n.down), b = w(m.up), q = w(m.point); ctx.moveTo(p.x, p.y); ctx.bezierCurveTo(a.x, a.y, b.x, b.y, q.x, q.y); }
+      }
+    ctx.stroke();
+    const size = 3 * unit;
+    mesh.nodes.forEach((n, index) => {
+      const p = w(n.point);
+      ctx.fillStyle = index === chosen ? "#0d59f2" : "#ffffff";
+      ctx.fillRect(p.x - size, p.y - size, size * 2, size * 2);
+      ctx.strokeRect(p.x - size, p.y - size, size * 2, size * 2);
+      if (index !== chosen) return;
+      for (const part of [n.left, n.right, n.up, n.down]) {
+        if (part.x === n.point.x && part.y === n.point.y) continue;
+        const h = w(part);
+        ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(h.x, h.y); ctx.stroke();
+        ctx.beginPath(); ctx.arc(h.x, h.y, size, 0, Math.PI * 2); ctx.fillStyle = "#0d59f2"; ctx.fill();
+      }
+    });
+    ctx.restore();
+  }
   private usePatterns(document: StudioDocument, ctx: CanvasRenderingContext2D) {
     const patterns = document.patterns ?? [];
     this.patterns = new Map(patterns.map((pattern) => [pattern.id, pattern]));
@@ -359,6 +444,7 @@ export class CanvasRenderer {
     painting?: HTMLCanvasElement,
   ) {
     if (l.dimension) { this.dimension(ctx, l); return; }
+    if (l.gradientMesh) { this.gradientMesh(ctx, l); return; }
     ctx.save();
     this.transform(ctx, l);
     ctx.globalAlpha = l.opacity;

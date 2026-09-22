@@ -15,7 +15,8 @@ describe('tool column visibility', () => {
 
   it('offers the tool column in the layout menu and gives the canvas its place', () => {
     const template = readFileSync('apps/web/src/app/app.component.html', 'utf8');
-    expect(template).toContain('@if (preferences.layoutBlocks().tools) {');
+    // The hidden column stays in the page as a drawer its edge handle opens.
+    expect(template).toContain('@if (toolsDrawer()) {');
     expect(template).toContain('[class.no-tools]="!preferences.layoutBlocks().tools"');
     const component = readFileSync('apps/web/src/app/app.component.ts', 'utf8');
     expect(component).toContain('{ id: "tools", label: "Tools" }');
