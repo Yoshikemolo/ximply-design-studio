@@ -244,12 +244,12 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     {
       id: "paint",
       label: "Painting and symbols",
-      families: ["paint", "eraser", "style", "symbols"],
+      families: ["paint", "eraser", "gradient", "mesh", "style", "symbols"],
     },
     {
       id: "transform",
       label: "Transform and arrange",
-      families: ["rotate", "mirror", "scale"],
+      families: ["rotate", "mirror", "scale", "liquify", "freeTransform"],
     },
     {
       id: "navigation",

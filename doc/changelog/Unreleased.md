@@ -40,7 +40,7 @@ Changes after 0.7.0 are recorded here until the next release.
 
 ## Fixes
 
-None.
+- Show the Gradient tool in the column of tools, with the Mesh tool beside it, and the liquify and Free Transform tools after Scale; the Gradient tool of 0.7.0 was only reachable with G.
 
 ## Security
 
