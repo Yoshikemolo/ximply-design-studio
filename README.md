@@ -2,18 +2,20 @@
 
 A layered vector and image editor by Ximplicity.
 
-**0.8.0 — single-user drawing workbench preview.** Work on several documents in tabs, on a desktop or a phone, set
+**0.9.0 — single-user drawing workbench preview.** Work on several documents in tabs, on a desktop or a phone, set
 the page up from paper, screen and animation formats, import SVG, DXF, Illustrator, PDF and
 EPS drawings as editable paths, draw floor plans with connected walls, openings, stairs and
 drafting dimensions, draw and edit Bezier paths with the Pen, the Pencil and a vector
 Paintbrush that behave as Illustrator's do, with its cursor marks, modifiers, fidelity and
 smoothness, join, average, simplify and reshape paths, fill with gradients and patterns
-from a Swatches panel in the colour model you work in, lock and hide objects, scale, shear, distort
-freely, in perspective, with the liquify tools or through envelopes, cut them with the scissors and the
-knife, paint with brush tips and their own control bar, trace
-images, reuse symbols, edit text inline and turn it into shapes, copy and paste with stacked
-pastes, repeat and duplicate transformations about a movable pivot, retouch images and save
-editable .xds projects or PNG, SVG and PDF output, printing included. The architecture for the broader professional platform
+from a Swatches panel in the colour model you work in, paint with gradient meshes, lock and
+hide objects, scale, shear, distort freely, in perspective, with the liquify tools or
+through envelopes, cut them with the scissors and the knife, paint with brush tips and their
+own control bar, trace images, reuse symbols, edit text inline and turn it into shapes, copy
+and paste with stacked pastes, repeat and duplicate transformations about a movable pivot,
+zoom as Illustrator does, with Pixel Preview and a sharp redraw of a magnified page, retouch
+images and save editable .xds projects, under another name with Save As, or PNG, SVG and PDF
+output, printing included. The architecture for the broader professional platform
 remains documented; this preview implements a bounded first slice and has not passed the
 strict quality gate.
 
@@ -46,32 +48,45 @@ Drawing and local project-file save/open do not require server authentication.
 
 [quick-install.md](quick-install.md) contains setup, server-storage authentication,
 keyboard shortcuts, cleanup and development commands.
-[trhouble-shooting.md](trhouble-shooting.md) covers common failures.
+[trouble-shooting.md](trouble-shooting.md) covers common failures.
 
-## Included in the alpha
+## Included in the preview
 
-- Cubic Pen, direct anchor editing, construction primitives and path refinement.
+- Several documents in tabs, File > Clear, Save and Save As, with local recovery per tab.
+- Cubic Pen, Pencil, vector Paintbrush, Smooth, Path Eraser, direct anchor editing,
+  construction primitives and path refinement, with Illustrator's modifiers and cursor marks.
 - Multiple selection, contextual grouping/regrouping, alignment/distribution and vector boolean operations.
-- Linear/angular dimension annotations with editable units, labels and endpoint markers.
-- Parametric 2D walls, hosted doors/windows and rectangular or circular pillars.
+- Linear, angular, chain, radius and diameter dimensions with editable units, labels and endpoint markers.
+- Parametric 2D walls, hosted doors/windows with their leaf mechanisms, stairs and rectangular or circular pillars.
 - Bounded scanline image tracing and local linked symbols with painting tools.
-- Freehand vector paths and inline editable text.
+- Inline editable text and text converted to outlines with Ctrl+Shift+O.
 - Layer selection, movement, corner/edge resizing, rotation handles, ordering, visibility, locks,
-  opacity and blend modes.
-- PNG/JPEG/WebP import, raster brush/eraser and non-destructive image adjustments.
-- Undo/redo, native .xds save/open, PNG export and supported-vector SVG export.
-- Rotate/Reflect/Scale tool families, triangular flyouts and numeric group transforms.
+  opacity and blend modes, with Illustrator's Lock and Hide commands.
+- Rotate, Reflect, Scale, Shear, Reshape and Free Transform tools, the Scale, Shear and
+  Transform Each dialogs, Transform Again and duplication in series about a movable pivot.
+- The seven liquify tools, envelopes made with a warp, a mesh or a top object, and
+  gradient meshes made with the Mesh tool (U) or Object > Create Gradient Mesh.
+- Fills with colours, linear and radial gradients and patterns, a Gradient tool, a
+  Swatches panel and Quick RGB, RGB, CMYK, greyscale and custom colour models.
+- PNG/JPEG/WebP import, raster brush tips, a paint layer cropped to what was painted,
+  eraser and non-destructive image adjustments.
+- SVG, DXF, PDF, EPS and PDF-compatible Illustrator import as editable paths.
+- Undo/redo, native .xds save/open, PNG, supported-vector SVG and vector PDF export, and printing.
+- Page setup, rulers with major and minor marks, guides, grid, independent snapping,
+  Zoom and Hand tools as in Illustrator, outline view and Pixel Preview.
 - Configurable collision-checked shortcuts, Shift angle constraints and tool cursor badge.
-- Shared fill/stroke palette with independent alpha, no-color and quick swatches.
-- Configurable distance/font units, rulers, guide layers, grid and independent snapping.
-- Dark/light themes, EN/ES interface labels and configurable context blocks.
+- Dark/light themes, EN/ES interface labels, View > Layout toggles for the tools, panels,
+  context bar and document tabs, with hidden columns reachable as drawers from an edge
+  handle, and a phone layout with drawers and a menu button.
 - Three.js layer-plane inspection with camera orbit, zoom and pan.
-- About screen with a version selector and bundled Markdown release notes.
+- About screen with the licence name and SHA-256, a version selector and bundled Markdown
+  release notes.
 - Bearer-protected FastAPI artifact storage for one local user.
 
-Native saves now use format 2; preserve original v1 files because older readers
-cannot open new saves. Tracing is capped at 64 pixels per side; curved vector erasure
-is sampled. Nonuniform group scaling preserves rotated child geometry through centered shear.
+Native saves use format 2; preserve original v1 files because older readers cannot
+open new saves, and a project that uses a newer field, such as an envelope, a gradient
+mesh or a paint layer, is refused by earlier versions. Tracing is capped at 64 pixels
+per side; curved vector erasure is sampled. Nonuniform group scaling preserves rotated child geometry through centered shear.
 Nine-slice insets are fixed; registration/slice-guide editing and full
 graphic styles remain pending. See the [drawing roadmap](doc/planning/drawing-roadmap.md).
 

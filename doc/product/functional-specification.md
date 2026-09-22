@@ -12,6 +12,9 @@ source: ["Project owner requirements and design foundation; methodology applicat
 # Functional specification
 
 Status: Proposed target. Every capability below is planned unless evidence explicitly states otherwise.
+The single-user local preview, version 0.9.0, delivers a bounded subset of sections 2 to 7,
+described in the release notes under doc/changelog and in the FEAT and SC records; no part
+of it is verified against the strict quality gate.
 
 ## 1. Product scope and actors
 

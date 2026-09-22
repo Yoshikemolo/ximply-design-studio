@@ -120,3 +120,4 @@
 | [SC-0114 — Gradient meshes](SC-0114.md) |
 | [SC-0115 — Sharp magnified view and Pixel Preview](SC-0115.md) |
 | [SC-0116 — Ruler marks and ruler snapping settings](SC-0116.md) |
+| [SC-0117 — Paint layers cropped to what is painted](SC-0117.md) |

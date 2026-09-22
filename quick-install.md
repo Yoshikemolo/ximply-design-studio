@@ -1,7 +1,7 @@
 # Quick install — local editor preview
 
 Version: see [release notes](CHANGELOG.md). This distribution is a single-user local
-alpha. It does not require a paid service or expose a public server.
+preview. It does not require a paid service or expose a public server.
 
 ## Docker Desktop route
 
@@ -10,7 +10,7 @@ Allow roughly 4 GB available memory for the initial build. Docker must use a loc
 socket context. Windows users should enable Docker Desktop's Linux containers.
 
 ```bash
-git clone --branch feat/drawing-preview https://github.com/Yoshikemolo/ximply-design-studio.git
+git clone --branch dev https://github.com/Yoshikemolo/ximply-design-studio.git
 cd ximply-design-studio
 ./scripts/local.sh start
 ```
@@ -18,7 +18,7 @@ cd ximply-design-studio
 PowerShell:
 
 ```powershell
-git clone --branch feat/drawing-preview https://github.com/Yoshikemolo/ximply-design-studio.git
+git clone --branch dev https://github.com/Yoshikemolo/ximply-design-studio.git
 Set-Location ximply-design-studio
 ./scripts/local.ps1 start
 ```
@@ -27,7 +27,7 @@ Open **http://localhost:8090**. The launcher creates an ignored `.env.local` wit
 random API token; it never prints the token. If your Python executable is named
 `python` on macOS/Linux, use `python scripts/local.py start` instead.
 
-Drawing, native save/open and PNG/SVG export work immediately without an API login.
+Drawing, native save/open and PNG/SVG/PDF export work immediately without an API login.
 For server storage, open `.env.local` locally, copy XDS_API_TOKEN, then use **File >
 Server** and paste it into the token field. Click Connect, then Save to server.
 The token stays only in page memory. Browser reload requires entering it again.
@@ -40,9 +40,11 @@ isolation. Keycloak and PostgreSQL integration remain later slices.
 2. Draw an ellipse or a freehand path. Edit fill, stroke and transforms in Properties.
 3. Use the Layers panel to reorder, hide, lock, duplicate or delete objects.
 4. Import a PNG/JPEG/WebP. Adjust brightness/contrast/saturation/blur in Properties.
-5. Select Brush to paint; select an image/paint layer and Eraser to remove pixels.
-6. Undo and redo. Save a .ximply project, reload the page and reopen that file.
-7. Export PNG or SVG. SVG preserves supported vectors and embeds raster layers;
+5. Choose the raster brush in the brush flyout to paint pixels; select an image or
+   paint layer and the Eraser (Shift+E) to remove pixels.
+6. Undo and redo. Save a .xds project, reload the page and reopen that file; File >
+   Save As (Shift+Ctrl+S) saves it under another name.
+7. Export PNG, SVG or PDF. SVG preserves supported vectors and embeds raster layers;
    downstream SVG applications may differ in filter/blend rendering.
 8. Open About from the footer and change the version selector.
 
@@ -56,17 +58,20 @@ with Enter. Use the Text tool over existing text to edit it inline. Transform ed
 handles change one dimension; the rotation handle turns the selected object. Hold
 Shift for the angle configured in Settings (default 45 degrees).
 
-Defaults: V Select, A Direct selection, P Pen, N Pencil, M Rectangle, L Ellipse,
-T Text, B Brush, Shift+E Eraser, R Rotate, O Reflect, S Scale, Z Zoom, H Pan; Ctrl/Cmd+Z Undo,
-Ctrl/Cmd+Shift+Z Redo, Ctrl/Cmd+Alt+D Duplicate, Ctrl/Cmd+G Group,
-Ctrl/Cmd+Shift+G Ungroup and Ctrl/Cmd+S Save.
+Defaults: V Select, A Direct selection, P Pen, N Pencil, B Paintbrush, M Rectangle,
+L Ellipse, T Text, Shift+E Eraser, C Scissors, R Rotate, O Reflect, S Scale, E Free
+Transform, Shift+R Warp, U Mesh, G Gradient, I Eyedropper, K Paint bucket, Z Zoom,
+H Pan; Ctrl/Cmd+Z Undo, Ctrl/Cmd+Shift+Z Redo, Ctrl/Cmd+Alt+D Duplicate, Ctrl/Cmd+G
+Group, Ctrl/Cmd+Shift+G Ungroup, Ctrl/Cmd+S Save, Ctrl/Cmd+Shift+S Save As, Ctrl/Cmd+Y
+Outline and Ctrl/Cmd+Alt+Y Pixel Preview. The raster brush has no default key.
 Use a tool family's triangular flyout to choose its sibling tools. Click elsewhere
 or press Escape to close the flyout. Reflect preserves editable mirror flags;
 nonuniform group resizing does not add arbitrary shear.
 Open Settings with Ctrl/Cmd+K to change shortcuts, the constraint angle and the
 cursor badge. Duplicate normalized key chords cannot be saved. Current assignments
 appear in tooltips and menus. Hold Ctrl+Space and scroll over the canvas to zoom the
-artwork without scaling the interface.
+artwork without scaling the interface; Ctrl+Space also holds the Zoom tool, so a click
+zooms in and a drag zooms to an area, and Ctrl+Alt+Space zooms out.
 
 New saves use native format 2. Format 1 files import, but earlier applications cannot
 read new saves. Preserve original files before migrating. Tracing is a 64-pixel-side
@@ -87,8 +92,9 @@ Two selected vector groups must have matching object counts and compatible conto
 **Expand blend** keeps every step as ordinary editable objects; ungroup and regroup
 these objects as needed. **Release blend** removes the intermediate objects and
 retains the endpoints. Save native format to preserve the editable relationship;
-SVG and PNG preserve the rendered result. The step limit also respects the existing
-150-layer document capacity. Text, raster images and editable blend spines are not
+SVG and PNG preserve the rendered result. The step limit also respects the
+document's layer capacity, and a document that keeps editable blends is still limited
+to 150 layers. Text, raster images and editable blend spines are not
 part of this preview.
 
 ## Stop, logs and cleanup
@@ -142,7 +148,7 @@ not establish this iteration's status. Current evidence belongs to the
 [drawing implementation plan](doc/implementation/PLAN-0008-0001.md). Visual browser
 acceptance, SonarQube and independent review remain pre-merge requirements.
 
-See [trhouble-shooting.md](trhouble-shooting.md) for diagnosis and the
+See [trouble-shooting.md](trouble-shooting.md) for diagnosis and the
 [drawing roadmap](doc/planning/drawing-roadmap.md) for bounded and pending features.
 
 ## Identify a feedback preview
@@ -151,5 +157,6 @@ Before starting, run `./scripts/local.ps1 info` on Windows or
 `./scripts/local.sh info` on Linux/macOS. This read-only action prints the checkout
 version, branch and commit without Docker. It identifies source files, not a running
 container. After pulling, restart with `stop` and `start` to rebuild the container;
-confirm version **0.8.0** in the application footer or About.
-The drawing features are on `feat/drawing-preview` until integration gates pass.
+confirm version **0.9.0** in the application footer or About.
+Integrated preview work is on `dev`; `release` and `main` carry only the versions the
+owner has promoted.

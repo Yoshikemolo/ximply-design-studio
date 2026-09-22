@@ -5,6 +5,7 @@ Application data and bundled Markdown are generated; do not edit them.
 
 [Unreleased](doc/changelog/Unreleased.md)
 
+- [0.9.0 — Gradient meshes, a sharp magnified view with Pixel Preview, wide screen drawers, Save As and cropped paint layers](doc/changelog/0.9.0.md)
 - [0.8.0 — Shear, the Scale and Transform Each dialogs, the Free Transform tool, the liquify tools and envelopes, as Illustrator has them](doc/changelog/0.8.0.md)
 - [0.7.0 — Gradients, patterns, swatches and colour modes, lock and hide as in Illustrator, and a studio that works on a phone](doc/changelog/0.7.0.md)
 - [0.6.0 — The Pen, the Pencil, the Paintbrush and path editing behave as a designer who knows Illustrator expects](doc/changelog/0.6.0.md)

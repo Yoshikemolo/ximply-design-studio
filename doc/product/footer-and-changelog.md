@@ -59,7 +59,7 @@ since the credits carry it. On a phone the selector goes below the name. They st
 foot; only the release notes between them, from the breaking changes on, scroll. On a
 screen too short to hold both, under 560 pixels high, the whole screen scrolls instead.
 
-The future Angular About route is `/about?version=<exact-version>`. The footer links
+The Angular About route is `/about?version=<exact-version>`. The footer links
 to the running version; changing the selector updates that parameter. Read versions
 from the bundled index, newest semantic version first; load only the selected
 Markdown asset named by the index. Resolve versions by exact manifest membership,
