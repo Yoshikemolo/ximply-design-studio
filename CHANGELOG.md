@@ -5,6 +5,7 @@ Application data and bundled Markdown are generated; do not edit them.
 
 [Unreleased](doc/changelog/Unreleased.md)
 
+- [0.7.0 — Gradients, patterns, swatches and colour modes, lock and hide as in Illustrator, and a studio that works on a phone](doc/changelog/0.7.0.md)
 - [0.6.0 — The Pen, the Pencil, the Paintbrush and path editing behave as a designer who knows Illustrator expects](doc/changelog/0.6.0.md)
 - [0.5.0 — Drawings come in and go out as vectors, artwork is copied, repeated and outlined, and text becomes shapes](doc/changelog/0.5.0.md)
 - [0.4.0 — Several documents in tabs, parametric construction tools, drafting dimensions, page setup, a movable transform pivot and brush controls](doc/changelog/0.4.0.md)

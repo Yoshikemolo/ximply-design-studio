@@ -110,3 +110,5 @@
 | [SC-0104 — Pencil, Smooth, Path Eraser and Eraser](SC-0104.md) |
 | [SC-0105 — Object Path commands and the Reshape tool](SC-0105.md) |
 | [SC-0106 — The vector Paintbrush and brushed paths](SC-0106.md) |
+| [SC-0107 — Gradient and pattern fills, patterns and swatches](SC-0107.md) |
+| [SC-0108 — The studio on a phone](SC-0108.md) |

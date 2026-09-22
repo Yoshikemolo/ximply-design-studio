@@ -1,8 +1,9 @@
 import { Procedural, defaultProcedural, generateProcedural, syncProcedurals, validProcedural } from "../../../../packages/domain/src/procedural";
+import { DEFAULT_GRADIENTS, FillPaint, GradientPaint, MAX_PATTERNS, MAX_SWATCHES, PatternDefinition, PresetPattern, Swatch, defaultSwatches, presetPattern, validFillPaint } from "../../../../packages/domain/src/paint";
 import { openingHost, wallSnapPoint, WallSnap } from "./procedural-placement";
 import { BrushSettings, BrushType, BRUSH_TYPES, brushStamps, defaultBrush, validBrushSettings } from "../../../../packages/domain/src/brush";
 import { wallAxis, wallBoolean, WallOperation } from "../../../../packages/domain/src/wall-boolean";
-import { MarginGuides, MARGIN_GUIDE_PREFIX, marginGuidePositions, PageEdges, PageSize, PAGE_MAXIMUM, PAGE_MINIMUM, pageSizeFits, RegistrationMarks, REGISTRATION_LAYER_NAME, registrationFits, registrationLayer, resizePage } from "../../../../packages/domain/src/page-setup";
+import { MarginGuides, MARGIN_GUIDE_PREFIX, marginGuidePositions, readPageSetup, PageEdges, PageSize, PAGE_MAXIMUM, PAGE_MINIMUM, pageSizeFits, RegistrationMarks, REGISTRATION_LAYER_NAME, registrationFits, registrationLayer, resizePage } from "../../../../packages/domain/src/page-setup";
 import { Dimension, DimensionFormat, defaultDimensionFormat, dimensionGeometry } from "../../../../packages/domain/src/dimensions";
 import { LineEnds, defaultLineEnds, validLineEnds } from "../../../../packages/domain/src/line-endings";
 import { snapDimensionPoint, snapDimensionOffset, DimensionSnap } from "./dimension-snapping";
@@ -804,6 +805,10 @@ export class EditorService {
   readonly styleScope = signal<StyleScope>("both");
   readonly strokeStyle = signal<StrokeStyle>({ ...defaultStrokeStyle });
   readonly fill = signal("#0d59f2");
+  /** The gradient or pattern new objects are filled with, over the fill colour; none by default. */
+  readonly fillPaint = signal<FillPaint | null>(null);
+  /** The gradient the Gradient tool applies to an object that has none yet. */
+  readonly gradient = signal<GradientPaint>(structuredClone(DEFAULT_GRADIENTS[0][1]));
   readonly stroke = signal("#163363");
   readonly size = signal(4);
   readonly zoom = signal(0.7);
@@ -910,7 +915,169 @@ export class EditorService {
   setPaint(target: "fill" | "stroke", color: string) {
     if (color !== "none" && color !== "transparent" && !/^#[0-9a-f]{6}([0-9a-f]{2})?$/i.test(color)) return;
     this[target].set(color === "transparent" ? "none" : color);
-    this.applyAppearance({ [target]: this[target]() });
+    if (target === "stroke") { this.applyAppearance({ stroke: this.stroke() }); return; }
+    // A colour replaces the gradient or pattern of the fill, as choosing a colour swatch does.
+    this.fillPaint.set(null);
+    this.applyFill(this.selectedPaintable(), this.fill(), null);
+  }
+  /** Objects whose fill can hold a gradient or a pattern: shapes, paths and text. */
+  private paintable(layer: Layer): boolean {
+    return ["rectangle", "ellipse", "path", "text"].includes(layer.kind) && !layer.guide && !layer.dimension && !layer.procedural && !this.isEffectivelyLocked(layer);
+  }
+  private selectedPaintable(): Set<string> {
+    return new Set(this.selectedLayers().filter((layer) => !this.isEffectivelyLocked(layer) && !layer.guide).map((layer) => layer.id));
+  }
+  private paintAvailable(paint: FillPaint): boolean {
+    return validFillPaint(paint, new Set((this.document().patterns ?? []).map((pattern) => pattern.id)));
+  }
+  /** Sets the fill colour and paint of objects as one step; a null paint leaves a plain colour. */
+  private applyFill(ids: Set<string>, fill: string | null, paint: FillPaint | null): boolean {
+    const before = this.document();
+    const layers = before.layers.map((layer) => {
+      if (!ids.has(layer.id)) return layer;
+      const { fillPaint: _old, ...rest } = layer;
+      const color = fill ?? layer.fill;
+      if (!paint || !this.paintable(layer)) return fill === null ? layer : { ...rest, fill: color };
+      return { ...rest, fill: color === "none" ? (paint.kind === "gradient" ? paint.stops[0].color : "#000000") : color, fillPaint: structuredClone(paint) };
+    });
+    if (JSON.stringify(layers) === JSON.stringify(before.layers)) return false;
+    this.commitStep(before);
+    this.expandGeneratedForIds(ids);
+    this.document.set({ ...this.document(), layers });
+    this.changed();
+    return true;
+  }
+  /**
+   * Fills the selection with a gradient or a pattern, or takes it off with null, and makes
+   * it the fill of new objects, as choosing a gradient or pattern swatch does in Illustrator.
+   */
+  setFillPaint(paint: FillPaint | null): boolean {
+    if (paint && !this.paintAvailable(paint)) return false;
+    this.fillPaint.set(paint ? structuredClone(paint) : null);
+    if (paint?.kind === "gradient") this.gradient.set(structuredClone(paint));
+    if (paint && this.fill() === "none") this.fill.set(paint.kind === "gradient" ? paint.stops[0].color : "#000000");
+    this.applyFill(this.selectedPaintable(), null, paint);
+    return true;
+  }
+  /** The fill paint shown for the selection: the first selected object's, or the default. */
+  currentFillPaint(): FillPaint | null {
+    const selected = this.selected();
+    return selected && !selected.guide ? selected.fillPaint ?? null : this.fillPaint();
+  }
+  /** Adds a ready-made pattern to the document, once, and gives back its id. */
+  usePresetPattern(kind: PresetPattern, color = "#000000"): string | null {
+    const id = `preset-${kind}-${color.slice(1, 7).toLowerCase()}`;
+    const patterns = this.document().patterns ?? [];
+    if (patterns.some((pattern) => pattern.id === id)) return id;
+    if (patterns.length >= MAX_PATTERNS) { this.status.set("The document holds as many patterns as it can."); return null; }
+    this.commitStep(this.document());
+    this.document.update((doc) => ({ ...doc, patterns: [...(doc.patterns ?? []), presetPattern(kind, id, color)] }));
+    this.changed();
+    return id;
+  }
+  /**
+   * Edit > Define Pattern: the selected vector artwork becomes the tile of a new pattern,
+   * which also joins the swatches. The artwork stays where it is.
+   */
+  definePattern(name?: string): string | null {
+    const artwork = this.selectedLayers().filter((layer) => ["rectangle", "ellipse", "path"].includes(layer.kind) && !layer.guide && !layer.dimension && !layer.procedural && !layer.symbolId && !layer.fillPaint);
+    if (!artwork.length || artwork.length !== this.selectedLayers().length) { this.status.set("Select vector artwork without gradients or patterns to define a pattern."); return null; }
+    const patterns = this.document().patterns ?? [];
+    if (patterns.length >= MAX_PATTERNS) { this.status.set("The document holds as many patterns as it can."); return null; }
+    const bounds = selectionBounds(artwork);
+    const id = "pattern-" + crypto.randomUUID();
+    const pattern: PatternDefinition = {
+      id, name: name?.trim() || `New Pattern ${patterns.length + 1}`,
+      width: Math.min(2048, Math.max(1, bounds.width)), height: Math.min(2048, Math.max(1, bounds.height)),
+      layers: artwork.map((layer) => {
+        const { groupPath: _group, regroupPath: _regroup, traceSourceId: _trace, ...plain } = layer;
+        return { ...structuredClone(plain), id: crypto.randomUUID(), x: layer.x - bounds.x, y: layer.y - bounds.y, locked: false, visible: true };
+      }),
+    };
+    const swatches = this.documentSwatches();
+    this.commitStep(this.document());
+    this.document.update((doc) => ({
+      ...doc,
+      patterns: [...(doc.patterns ?? []), pattern],
+      swatches: swatches.length < MAX_SWATCHES ? [...swatches, { id: "swatch-" + id, name: pattern.name, kind: "pattern", patternId: id }] : swatches,
+    }));
+    this.status.set(`Defined ${pattern.name}.`);
+    this.changed();
+    return id;
+  }
+  /** The swatches of the document; one without its own starts from the defaults. */
+  documentSwatches(): Swatch[] { return this.document().swatches ?? defaultSwatches(); }
+  private setSwatches(swatches: Swatch[]) {
+    this.commitStep(this.document());
+    this.document.update((doc) => ({ ...doc, swatches }));
+    this.changed();
+  }
+  /** New Swatch: the current fill, its gradient or pattern included, becomes a swatch. */
+  addSwatch(target: "fill" | "stroke" = "fill", name?: string): string | null {
+    const swatches = this.documentSwatches();
+    if (swatches.length >= MAX_SWATCHES) { this.status.set("The document holds as many swatches as it can."); return null; }
+    const selected = this.selected();
+    const color = selected && !selected.guide ? selected[target] : this[target]();
+    const paint = target === "fill" ? this.currentFillPaint() : null;
+    const id = "swatch-" + crypto.randomUUID();
+    let swatch: Swatch;
+    if (paint?.kind === "gradient") swatch = { id, name: name?.trim() || `Gradient ${swatches.filter((s) => s.kind === "gradient").length + 1}`, kind: "gradient", gradient: structuredClone(paint) };
+    else if (paint?.kind === "pattern") swatch = { id, name: name?.trim() || "Pattern", kind: "pattern", patternId: paint.patternId };
+    else if (color !== "none") swatch = { id, name: name?.trim() || color.toUpperCase(), kind: "color", color };
+    else { this.status.set("None cannot be kept as a swatch."); return null; }
+    this.setSwatches([...swatches, swatch]);
+    return id;
+  }
+  removeSwatch(id: string): boolean {
+    const swatches = this.documentSwatches();
+    if (!swatches.some((swatch) => swatch.id === id)) return false;
+    this.setSwatches(swatches.filter((swatch) => swatch.id !== id));
+    return true;
+  }
+  /**
+   * Applies a swatch to the fill or the stroke. Gradients and patterns fill only, since a
+   * stroke here is painted in a colour, as the strokes of Illustrator CS3 take no gradient.
+   */
+  applySwatch(id: string, target: "fill" | "stroke"): boolean {
+    const swatch = this.documentSwatches().find((s) => s.id === id);
+    if (!swatch) return false;
+    if (swatch.kind === "color") { this.setPaint(target, swatch.color); return true; }
+    if (target === "stroke") { this.status.set("Gradients and patterns fill objects; strokes take a colour."); return false; }
+    return this.setFillPaint(swatch.kind === "gradient" ? swatch.gradient : { kind: "pattern", patternId: swatch.patternId });
+  }
+  /**
+   * The Gradient tool: a drag across the selection sets where its gradient starts and ends,
+   * one line for every selected object, and gives a gradient to those that have none.
+   * Shift keeps the line to multiples of 45 degrees.
+   */
+  private gradientGesture?: { before: StudioDocument; start: Point; ids: Set<string> };
+  private startGradient(point: Point): boolean {
+    const ids = new Set(this.selectedLayers().filter((layer) => this.paintable(layer) && layer.fill !== "none").map((layer) => layer.id));
+    if (!ids.size) { this.status.set("Select filled objects to apply a gradient."); return false; }
+    this.gradientGesture = { before: this.document(), start: point, ids };
+    return true;
+  }
+  private moveGradient(point: Point, shift = false) {
+    const g = this.gradientGesture!;
+    const end = shift ? snapDirection(g.start, point, 45) : point;
+    if (Math.hypot(end.x - g.start.x, end.y - g.start.y) < 1) return;
+    const fraction = (layer: Layer, p: Point) => { const local = localPoint(layer, p); return { x: local.x / Math.max(1e-6, layer.width), y: local.y / Math.max(1e-6, layer.height) }; };
+    const clamp = (p: Point) => ({ x: Math.max(-100, Math.min(100, p.x)), y: Math.max(-100, Math.min(100, p.y)) });
+    this.document.set({
+      ...g.before,
+      layers: g.before.layers.map((layer) => {
+        if (!g.ids.has(layer.id)) return layer;
+        const base = layer.fillPaint?.kind === "gradient" ? layer.fillPaint : this.gradient();
+        return { ...layer, fillPaint: { ...structuredClone(base), vector: { start: clamp(fraction(layer, g.start)), end: clamp(fraction(layer, end)) } } };
+      }),
+    });
+  }
+  private endGradient() {
+    const g = this.gradientGesture!;
+    this.gradientGesture = undefined;
+    if (this.document() === g.before) return;
+    this.commitStep(g.before);
+    this.changed();
   }
   swapPaint() {
     const fill = this.fill();
@@ -1349,6 +1516,71 @@ export class EditorService {
     this.changed();
     return true;
   }
+  /**
+   * Object > Lock and Object > Hide, as Illustrator CS3 has them. Selection acts on the
+   * selected objects; All Artwork Above on the objects stacked above the selection that
+   * overlap it; Other Layers on everything outside the top-level groups of the selection,
+   * each object being a layer of its own here. Locked or hidden objects leave the
+   * selection. Guides keep their own lock and are never touched.
+   */
+  lockOrHide(key: "locked" | "hidden", scope: "selection" | "above" | "others"): number {
+    const selected = this.selectedLayers().filter((l) => !l.guide);
+    if (!selected.length) { this.status.set(key === "locked" ? "Select the objects to lock." : "Select the objects to hide."); return 0; }
+    const layers = this.document().layers;
+    const ids = new Set(selected.map((l) => l.id));
+    let targets: Layer[];
+    if (scope === "selection") targets = selected;
+    else if (scope === "above") {
+      const bounds = selectionBounds(selected);
+      const lowest = Math.min(...selected.map((l) => layers.indexOf(l)));
+      targets = layers.filter((l, index) => {
+        if (index <= lowest || ids.has(l.id) || l.guide) return false;
+        const b = selectionBounds([l]);
+        return b.x < bounds.x + bounds.width && b.x + b.width > bounds.x && b.y < bounds.y + bounds.height && b.y + b.height > bounds.y;
+      });
+    } else {
+      const groups = new Set(selected.map((l) => l.groupPath?.[0] ?? "layer:" + l.id));
+      targets = layers.filter((l) => !l.guide && !groups.has(l.groupPath?.[0] ?? "layer:" + l.id));
+    }
+    targets = targets.filter((l) => (key === "locked" ? !l.locked : l.visible));
+    if (!targets.length) { this.status.set("There is nothing more to change."); return 0; }
+    const changed = new Set(targets.map((l) => l.id));
+    this.commitStep(this.document());
+    this.document.update((d) => ({
+      ...d,
+      layers: d.layers.map((l) => (changed.has(l.id) ? (key === "locked" ? { ...l, locked: true } : { ...l, visible: false }) : l)),
+    }));
+    // What was locked or hidden cannot stay selected.
+    const kept = this.selectedIds().filter((id) => !changed.has(id));
+    this.selectedIds.set(kept);
+    this.selectedId.set(kept.at(-1) ?? null);
+    this.activeNodes.set([]);
+    this.status.set(`${key === "locked" ? "Locked" : "Hid"} ${changed.size} object${changed.size > 1 ? "s" : ""}.`);
+    this.changed();
+    return changed.size;
+  }
+  /**
+   * Object > Unlock All and Object > Show All: every locked, or hidden, object comes back,
+   * and those are what is selected afterwards.
+   */
+  unlockOrShowAll(key: "locked" | "hidden"): number {
+    const targets = this.document().layers.filter((l) => !l.guide && (key === "locked" ? l.locked : !l.visible));
+    if (!targets.length) { this.status.set(key === "locked" ? "There are no locked objects." : "There are no hidden objects."); return 0; }
+    const changed = new Set(targets.map((l) => l.id));
+    this.commitStep(this.document());
+    this.document.update((d) => ({
+      ...d,
+      layers: d.layers.map((l) => (changed.has(l.id) ? (key === "locked" ? { ...l, locked: false } : { ...l, visible: true }) : l)),
+    }));
+    // The objects that come back are selected, unless they are still hidden or locked.
+    const selectable = this.document().layers.filter((l) => changed.has(l.id) && l.visible && !l.locked).map((l) => l.id);
+    this.selectedIds.set(selectable);
+    this.selectedId.set(selectable.at(-1) ?? null);
+    this.activeNodes.set([]);
+    this.status.set(`${key === "locked" ? "Unlocked" : "Showed"} ${changed.size} object${changed.size > 1 ? "s" : ""}.`);
+    this.changed();
+    return changed.size;
+  }
   toggle(id: string, key: "visible" | "locked") {
     this.commitStep(this.document());
     const layer = this.document().layers.find((l) => l.id === id)!;
@@ -1461,7 +1693,7 @@ export class EditorService {
     }
     const marks = setup.marks && setup.marks !== "none" ? registrationLayer(setup.marks, size, crypto.randomUUID()) : null;
     if (marks) layers = [...layers, marks];
-    if (layers.length > 150) { this.status.set("Close a document before opening another."); return false; }
+    if (layers.length > MAX_LAYERS) { this.status.set("The document cannot hold more layers."); return false; }
     const next = { ...before, width: size.width, height: size.height, background: setup.background ?? before.background, layers };
     try { parseDocument(JSON.stringify(next)); } catch { this.status.set("The page settings cannot be applied."); return false; }
     this.commitStep(before);
@@ -1471,6 +1703,23 @@ export class EditorService {
     this.changed();
     this.status.set("Document dimensions updated");
     return true;
+  }
+  /** The margin guides and registration marks the active page carries now. */
+  pageSetup(): { margins: MarginGuides; marks: RegistrationMarks } {
+    return readPageSetup(this.document());
+  }
+  /**
+   * Changes one part of the page setup from the document properties, keeping the rest:
+   * its size, its margin guides and its registration marks.
+   */
+  updatePageSetup(change: { width?: number; height?: number; margins?: MarginGuides; marks?: RegistrationMarks }): boolean {
+    const current = this.pageSetup();
+    const document = this.document();
+    return this.applyPageSetup({
+      size: { width: Math.round(change.width ?? document.width), height: Math.round(change.height ?? document.height) },
+      margins: change.margins ?? current.margins,
+      marks: change.marks ?? current.marks,
+    });
   }
   /** Adds space on each edge and moves the artwork with the page. */
   expandPage(edges: PageEdges): boolean { return this.resizePageBy(edges, 1); }
@@ -1871,6 +2120,7 @@ export class EditorService {
     const areaTools: Partial<Record<ToolId, AreaSelectionKind>> = { selectRectangle: "rectangle", selectEllipse: "ellipse", selectLasso: "lasso" };
     if (areaTools[tool]) { this.startAreaSelection(point, areaTools[tool]!, !!modifiers.shift); return; }
     if (tool === "eyedropper") { this.sampleStyle(point); return; }
+    if (tool === "gradient") { this.startGradient(point); return; }
     if (tool === "paintBucket") { this.applyStyleAt(point); return; }
     if (["rectangle", "ellipse", "path", "paintbrush", "pen", "line", "rounded", "polygon", "star", "arc", "spiral", "grid", "polar", "flare", "text"].includes(tool)) point = this.snap(point);
     if (tool === "hand" || (tool === "brush" && ["none", "transparent"].includes(this.fill()))) return;
@@ -2122,6 +2372,8 @@ export class EditorService {
     );
     layer.strokeStyle = { ...this.strokeStyle() };
     if(layer.kind === "path") layer.lineEnds=structuredClone(this.lineEnds());
+    const paint = this.fillPaint();
+    if (paint && layer.fill !== "none" && this.paintAvailable(paint)) layer.fillPaint = structuredClone(paint);
     if (construct) {
       layer.name = tool[0].toUpperCase() + tool.slice(1);
       layer.curves = construction(
@@ -2154,6 +2406,7 @@ export class EditorService {
     if (this.pivotGesture) { this.setPivot(this.pivotPoint(point)); return; }
     if(this.proceduralGesture){const g=this.proceduralGesture;const end=modifiers.shift?snapDirection(g.start,point,this.snapAngle()):(g.type==='wall'?this.wallTarget(g.start,point,g.id):this.snap(point));try{const layer=this.proceduralLayer(g.type,g.start,end,g.id);const next=syncProcedurals({...g.before,layers:[...g.before.layers,layer]});parseDocument(JSON.stringify(next));this.document.set(next);this.selectedId.set(layer.id);this.selectedIds.set([layer.id]);}catch{/* Keep the last valid preview. */}return;}
     if(this.dimensionLabelGesture){const layer=this.document().layers.find(l=>l.id===this.dimensionLabelGesture!.id)!;this.setLayer(layer.id,{dimension:{...layer.dimension!,labelPosition:localPoint(layer,point)}});return;}
+    if (this.gradientGesture) { this.moveGradient(point, !!modifiers.shift); return; }
     const draft=this.dimensionDraft();if(draft){const count=draft.kind==="chain"?Infinity:(draft.kind==="angular"?3:2);const placing=draft.ready===true||draft.points.length>=count;this.dimensionDraft.set({...draft,cursor:placing?this.dimensionOffsetPoint(draft.points,point):this.dimensionPoint(point,true)});if(placing)this.dimensionSnapTarget.set(null);return;}
     if(!this.gesture&&["dimensionSmart","dimensionLinear","dimensionAngular","dimensionChain","dimensionRadius","dimensionDiameter"].includes(this.tool())){this.hoverDimension(point);return;}
     if(!this.gesture&&!this.proceduralGesture&&this.tool()==='wall'){this.hoverWall(modifiers.shift&&this.wallChain()?snapDirection(this.wallChain()!,point,this.snapAngle()):point);return;}
@@ -2324,6 +2577,7 @@ export class EditorService {
     }
     if(this.proceduralGesture){const g=this.proceduralGesture;this.proceduralGesture=undefined;const drawn=this.document().layers.find(l=>l.id===g.id);if(drawn){this.commitStep(g.before);this.changed();if(g.type==='wall'&&drawn.procedural?.type==='wall')this.wallChain.set(worldPoint(drawn,drawn.procedural.end));}return;}
     if(this.dimensionLabelGesture){this.commitStep(this.dimensionLabelGesture.before);this.dimensionLabelGesture=undefined;this.changed();return;}
+    if (this.gradientGesture) { this.endGradient(); return; }
     if (this.areaGesture) {
       if (!this.areaGesture.moved && !this.areaGesture.shift) { this.selectedId.set(null); this.selectedIds.set([]); this.activeNodes.set([]); }
       this.areaGesture = undefined; this.areaSelection.set(null); return;
@@ -2432,6 +2686,7 @@ export class EditorService {
     this.finishWallRun();
     this.dimensionDraft.set(null);this.dimensionSnapTarget.set(null);
     if(this.dimensionLabelGesture)this.document.set(this.dimensionLabelGesture.before);this.dimensionLabelGesture=undefined;
+    if (this.gradientGesture) { this.document.set(this.gradientGesture.before); this.gradientGesture = undefined; }
     this.cancelGuideDrag();
     if (this.areaGesture) {
       this.selectedIds.set(this.areaGesture.ids); this.selectedId.set(this.areaGesture.primary); this.activeNodes.set(this.areaGesture.nodes);
@@ -4163,6 +4418,42 @@ export class EditorService {
     return generateProcedural(layer);
   }
   /** Shifts a transform that works about the selection centre so the pivot stays put instead. */
+  /**
+   * Starts transforming the selection with two fingers: the selection scales in
+   * proportion, turns and travels with them, around its pivot. Returns false when there
+   * is nothing the fingers may transform.
+   */
+  startTouchTransform(): boolean {
+    const active = this.selectionLayer();
+    if (!active || this.gesture || this.selectedLayers().some((layer) => this.isEffectivelyLocked(layer))) return false;
+    this.gesture = {
+      before: structuredClone(this.document()),
+      start: { x: 0, y: 0 },
+      last: { x: 0, y: 1 },
+      id: active.id,
+      points: [],
+      original: structuredClone(active),
+      mode: "scale",
+      ids: this.selectedLayers().filter((l) => !l.guide).map((l) => l.id),
+    };
+    return true;
+  }
+  /** Applies the change of the two fingers since they landed, in document units for the shift. */
+  touchTransform(scale: number, rotation: number, shift: Point) {
+    const g = this.gesture;
+    if (!g || g.mode !== "scale") return;
+    const factor = Math.min(10, Math.max(0.05, Number.isFinite(scale) ? scale : 1));
+    const w = g.original.width, h = g.original.height;
+    const target = this.aroundPivot(g.original, {
+      ...g.original,
+      width: w * factor,
+      height: h * factor,
+      x: g.original.x + (w * (1 - factor)) / 2,
+      y: g.original.y + (h * (1 - factor)) / 2,
+      rotation: g.original.rotation + rotation,
+    });
+    this.transformSelection(g, { ...target, x: target.x + shift.x, y: target.y + shift.y });
+  }
   private aroundPivot(original: Layer, target: Layer): Layer {
     const pivot = this.pivot();
     const centre = { x: original.x + original.width / 2, y: original.y + original.height / 2 };
