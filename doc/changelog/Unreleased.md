@@ -40,4 +40,4 @@ None.
 
 ## Engineering
 
-None.
+- Record the owner's decisions on 0.7.0: ADR-0033, the gradients, patterns and swatches of the native format, is accepted, and the colour tools and the phone layout are accepted visually for the maturity of this preview. The strict Sonar gate remains outstanding, so no scenario is marked Verified.
