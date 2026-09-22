@@ -908,6 +908,22 @@ class NativeDrawingTests(unittest.TestCase):
                     self.layer['lineEnds'][side][field] = value
                     self.assert_invalid(self.document)
 
+    def test_paint_layer_marker_is_strict_and_requires_native_two_image(self):
+        self.layer.pop('curves', None)
+        self.layer['kind'] = 'image'
+        self.layer['paintLayer'] = True
+        for value in (False, None, 0, 1, 'true'):
+            self.layer['paintLayer'] = value
+            self.assert_invalid(self.document)
+        self.layer['paintLayer'] = True
+        self.layer['kind'] = 'rectangle'
+        self.assert_invalid(self.document)
+        self.layer['kind'] = 'image'
+        self.document['version'] = 1
+        self.assert_invalid(self.document)
+        self.document['version'] = 2
+        self.assert_round_trip(self.document)
+
     def test_new_extensions_require_version_two_and_non_null_regroup_path(self):
         for field, value in (('regroupPath', ['outer', 'inner']), ('dimension', self.dimension_data()),
                              ('lineEnds', {'start': {'kind': 'none', 'placement': 'tip', 'size': 1},

@@ -92,7 +92,7 @@ describe("editor command facade", () => {
       const source = e.selected()!.source,
         image = await loadImage(source);
       const pixelCanvas = createCanvas(1200, 800);
-      pixelCanvas.getContext("2d").drawImage(image, 0, 0);
+      pixelCanvas.getContext("2d").drawImage(image, e.selected()!.x, e.selected()!.y, e.selected()!.width, e.selected()!.height);
       expect([
         ...pixelCanvas.getContext("2d").getImageData(65, 50, 1, 1).data,
       ]).toEqual([255, 0, 0, 255]);
@@ -104,7 +104,7 @@ describe("editor command facade", () => {
       e.end();
       const erased = await loadImage(e.selected()!.source);
       pixelCanvas.getContext("2d").clearRect(0, 0, 1200, 800);
-      pixelCanvas.getContext("2d").drawImage(erased, 0, 0);
+      pixelCanvas.getContext("2d").drawImage(erased, e.selected()!.x, e.selected()!.y, e.selected()!.width, e.selected()!.height);
       expect(
         pixelCanvas.getContext("2d").getImageData(65, 50, 1, 1).data[3],
       ).toBe(0);
