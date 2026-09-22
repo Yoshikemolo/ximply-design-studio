@@ -32,6 +32,7 @@ None.
 
 ## Improvements
 
+- Fill the icon of the Selection tool, as Illustrator draws its black arrow, and keep the Direct Selection tool's icon as an outline, so the two are told apart at a glance.
 - Drag with the Scale tool as in Illustrator: the point pressed follows the pointer on each axis about the pivot, Shift keeps the proportions on a diagonal drag and scales one axis on a drag along it, and a click sets the reference point.
 - Repeat a scale or a shear with Transform Again (Ctrl+D) as the same map about the same point.
 - Gather the transformations of the selection in an Object > Transform section of the menu.
