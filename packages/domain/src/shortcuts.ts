@@ -130,6 +130,7 @@ export const COMMANDS: Command[] = [
   { id: "pasteInBack", label: "Paste in back", keys: ["Mod+B"] },
   { id: "toggleBoundingBox", label: "Show or hide the bounding box", keys: ["Mod+Shift+B"] },
   { id: "toggleOutline", label: "Outline view", keys: ["Mod+Y"] },
+  { id: "togglePixelPreview", label: "Pixel Preview", keys: ["Mod+Alt+Y"] },
   { id: "outlineStroke", label: "Outline stroke", keys: [] },
   { id: "outlineText", label: "Create outlines", keys: ["Mod+Shift+O"] },
   { id: "joinPaths", label: "Join", keys: ["Mod+J"] },

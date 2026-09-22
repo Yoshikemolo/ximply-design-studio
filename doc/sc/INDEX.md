@@ -118,3 +118,4 @@
 | [SC-0112 — Envelopes](SC-0112.md) |
 | [SC-0113 — Zooming as Illustrator does](SC-0113.md) |
 | [SC-0114 — Gradient meshes](SC-0114.md) |
+| [SC-0115 — Sharp magnified view and Pixel Preview](SC-0115.md) |

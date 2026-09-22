@@ -74,6 +74,8 @@
             {{ t(panels() ? "Hide panels" : "Show panels") }}</button
           ><button (click)="editor.toggleOutlineView()">
             {{ editor.outlineView() ? "✓" : "○" }} {{ t("Outline view") }}<kbd>{{ shortcut("toggleOutline") }}</kbd></button
+          ><button (click)="editor.togglePixelPreview()">
+            {{ editor.pixelPreview() ? "✓" : "○" }} {{ t("Pixel Preview") }}<kbd>{{ shortcut("togglePixelPreview") }}</kbd></button
           ><button (click)="spatialPreview()">{{ t("Spatial preview") }}</button
           >
           <div class="layout-menu"><strong>{{ t("Layout") }}</strong>
@@ -407,7 +409,7 @@
         class="canvas-viewport"
         #viewport
         (pointerleave)="cursorPoint.set(null)"
-        (scroll)="refreshCursorPosition()"
+        (scroll)="refreshCursorPosition(); holdDetail()"
       >
         <div
           class="artboard-surround"
@@ -444,6 +446,7 @@
             <canvas
               #canvas
               aria-label="Editable design canvas"
+              [class.pixel-preview]="editor.pixelPreview()"
               [style.cursor]="toolCursor()"
               (pointerdown)="pointerDown($event)"
               (dblclick)="canvasDoubleClick($event)"
@@ -454,6 +457,7 @@
               (pointercancel)="pointerCancel()"
               (lostpointercapture)="pointerLost()"
             ></canvas>
+            <canvas #detail class="detail-canvas" aria-hidden="true"></canvas>
             @if (zoomArea(); as zoom) {
               <div class="zoom-area-frame" aria-hidden="true" [style.left.px]="zoom.x" [style.top.px]="zoom.y" [style.width.px]="zoom.width" [style.height.px]="zoom.height"></div>
             }

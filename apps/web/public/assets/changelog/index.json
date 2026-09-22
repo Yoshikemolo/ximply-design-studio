@@ -45,6 +45,14 @@
         },
         {
           "type": "Improvement",
+          "description": "Draw a magnified page sharp. While the view pans, zooms or a gesture runs, the page is still drawn at one pixel per unit and magnified, which keeps it fast; once the view has been still for a moment, the part in view is drawn again at the screen's resolution, high pixel density screens included, and replaces it until the view moves again."
+        },
+        {
+          "type": "Improvement",
+          "description": "Show the artwork as its pixels with View > Pixel Preview (Alt+Ctrl+Y), as Illustrator does: one pixel per page unit, each a square when magnified. Snap to Pixel is not offered."
+        },
+        {
+          "type": "Improvement",
           "description": "Show in the about screen the logo of the header beside the name of the product, the licence the build carries with the SHA-256 of its LICENSE file, and the credits of the footer with the links to LinkedIn, Ximplicity and GitHub in the same style. An empty page shows the brand of the header above its call to action instead of a blue x."
         },
         {

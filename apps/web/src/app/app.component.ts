@@ -48,7 +48,11 @@ import { TOOLS, ToolId, TOOL_FAMILIES, ToolFamily } from "./tools";
 import { translate } from "./i18n";
 import { BLENDS, Layer, StrokeStyle, blankDocument, defaultStrokeStyle, svgExport } from "../../../../packages/domain/src/document";
 import { LIQUIFY_DEFAULTS, LiquifyOptions, LiquifyTool } from "../../../../packages/domain/src/liquify";
-import { ZOOM_MAX, ZOOM_MIN, stepZoom } from "../../../../packages/domain/src/zoom";
+import { ZOOM_MAX, ZOOM_MIN, detailRegion, stepZoom } from "../../../../packages/domain/src/zoom";
+import type { CanvasRenderer } from "../../../../packages/renderer/src/canvas-renderer";
+import type { StudioDocument } from "../../../../packages/domain/src/document";
+/** How long the view stays still before the part in view is drawn sharp. */
+const DETAIL_IDLE_MS = 120;
 import { DEFAULT_WARP, WARP_LABELS, WARP_STYLES, WarpSettings } from "../../../../packages/domain/src/envelope";
 import { COLOR_MODES, ColorMode, GradientPaint, PatternDefinition, PRESET_PATTERNS, PresetPattern, Swatch, cmykToRgb, gradientColorAt, grayToRgb, presetPattern, renderedStops, rgbToCmyk, rgbToGray, validGradient } from "../../../../packages/domain/src/paint";
 import { createSampleDocument } from "../../../../packages/domain/src/sample";
@@ -125,6 +129,8 @@ export class AppComponent implements AfterViewInit, OnDestroy {
       element.nativeElement.querySelector<HTMLElement>("#settings-tab-" + this.settingsCategory())?.focus();
   }
   @ViewChild("canvas") canvas?: ElementRef<HTMLCanvasElement>;
+  /** The visible part of the page drawn at the screen's resolution while the view is still. */
+  @ViewChild("detail") detail?: ElementRef<HTMLCanvasElement>;
   @ViewChild("viewport") viewport?: ElementRef<HTMLDivElement>;
   @ViewChild("spatialHost") spatialHost?: ElementRef<HTMLDivElement>;
   @ViewChild("imageFile") imageFile?: ElementRef<HTMLInputElement>;
@@ -436,6 +442,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
       editor.showHandles();
       editor.boundingBoxVisible();
       editor.outlineView();
+      editor.pixelPreview();
       editor.handleSize();
       editor.activeNodes();
       editor.activeSegments();
@@ -1216,20 +1223,15 @@ export class AppComponent implements AfterViewInit, OnDestroy {
       this.wheelHandler,
     );
     cancelAnimationFrame(this.frame);
+    clearTimeout(this.detailTimer);
     this.spatialView?.dispose();
   }
   schedule() {
     cancelAnimationFrame(this.frame);
     this.frame = requestAnimationFrame(() => {
-      if (this.canvas)
-        this.editor.renderer.draw(
-          this.canvas.nativeElement,
-          this.renderDocument(),
-          this.editor.selectedLayers().map((l) => l.id),
-          () => this.schedule(),
-          this.editor.painting,
-          false,
-          {
+      if (!this.canvas) return;
+      const document = this.renderDocument(), ids = this.editor.selectedLayers().map((l) => l.id);
+      const options = {
             zoom: this.editor.zoom(),
             direct: this.editor.isEditingCurve() || [
               "select",
@@ -1248,9 +1250,47 @@ export class AppComponent implements AfterViewInit, OnDestroy {
             outlineInk: this.theme?.() === "light" ? "#202b3f" : "#e5e9f0",
             handleSize: this.editor.handleSize(),
             anchors: this.anchorDisplay(),
-          },
-        );
+          };
+      // The whole page is drawn at one pixel per unit, which the browser magnifies while the
+      // view pans, zooms or a gesture runs; once still, the part in view is drawn again sharp.
+      this.editor.renderer.draw(this.canvas.nativeElement, document, ids, () => this.schedule(), this.editor.painting, false, options);
+      this.drawDetail(document, ids, options);
     });
+  }
+  /** Until when the sharp view waits, for the view to have been still for a moment. */
+  private detailHeldUntil = 0;
+  private detailTimer?: ReturnType<typeof setTimeout>;
+  private detailZoom = 0;
+  /** Hides the sharp view while the view moves and draws it again once it has been still. */
+  holdDetail() {
+    this.detailHeldUntil = performance.now() + DETAIL_IDLE_MS;
+    this.hideDetail();
+    clearTimeout(this.detailTimer);
+    this.detailTimer = setTimeout(() => this.schedule(), DETAIL_IDLE_MS + 10);
+  }
+  /** Draws the sharp view again after a gesture, even one that changed nothing. */
+  private restoreDetail() {
+    if (this.detail) this.schedule();
+  }
+  private hideDetail() {
+    const detail = this.detail?.nativeElement;
+    if (!detail) return;
+    detail.style.display = "none";
+    if (this.canvas) this.canvas.nativeElement.style.opacity = "";
+  }
+  private drawDetail(document: StudioDocument, ids: string[], options: Parameters<CanvasRenderer["draw"]>[6]) {
+    const detail = this.detail?.nativeElement, canvas = this.canvas?.nativeElement, view = this.viewport?.nativeElement;
+    if (!detail || !canvas || !view) return;
+    const zoom = this.editor.zoom();
+    if (zoom !== this.detailZoom) { this.detailZoom = zoom; this.holdDetail(); return; }
+    if (this.editor.pixelPreview() || this.pointerActive || this.pinch || performance.now() < this.detailHeldUntil) { this.hideDetail(); return; }
+    const bounds = view.getBoundingClientRect(), rect = canvas.getBoundingClientRect();
+    const region = detailRegion(rect, { left: bounds.left + view.clientLeft, top: bounds.top + view.clientTop, width: view.clientWidth, height: view.clientHeight }, zoom, window.devicePixelRatio || 1);
+    if (!region) { this.hideDetail(); return; }
+    this.editor.renderer.draw(detail, document, ids, () => this.schedule(), this.editor.painting, false, options, region.page);
+    Object.assign(detail.style, { display: "block", left: `${canvas.offsetLeft + region.css.left}px`, top: `${canvas.offsetTop + region.css.top}px`, width: `${region.css.width}px`, height: `${region.css.height}px` });
+    // The page canvas stays underneath to take the pointer, but is not seen through the sharp one.
+    canvas.style.opacity = "0";
   }
   /** What the renderer needs to show anchors and handles as Illustrator does. */
   private anchorDisplay() {
@@ -1657,6 +1697,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     if (event.pointerType === "touch" && this.mobile() && (event.clientX <= EDGE_ZONE || event.clientX >= window.innerWidth - EDGE_ZONE)) return;
     this.canvas!.nativeElement.setPointerCapture(event.pointerId);
     this.pointerActive = true;
+    this.hideDetail();
     const zoomMode = this.zoomMode(event);
     if (zoomMode) { this.beginZoomArea(event, zoomMode); return; }
     this.commitText();
@@ -1712,6 +1753,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   pointerUp(event?: PointerEvent) {
     if (event && this.touchUpCanvas(event)) return;
     this.pointerActive = false;
+    this.restoreDetail();
     if (this.zoomDrag) { this.endZoomArea(); return; }
     this.pan = undefined;
     this.stopLiquifyTimer();
@@ -1726,6 +1768,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   }
   pointerCancel() {
     this.pointerActive = false;
+    this.restoreDetail();
     if (this.zoomDrag) { this.zoomDrag = undefined; this.zoomArea.set(null); return; }
     if (this.guideDrag) this.cancelGuide();
     this.pan = undefined;
@@ -2002,6 +2045,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
       pasteInBack: () => this.editor.paste("back"),
       toggleBoundingBox: () => this.editor.toggleBoundingBox(),
       toggleOutline: () => this.editor.toggleOutlineView(),
+      togglePixelPreview: () => this.editor.togglePixelPreview(),
       outlineStroke: () => this.editor.outlineStrokeSelection(),
       outlineText: () => { void this.editor.outlineTextSelection().catch((error) => this.notify(error)); },
       joinPaths: () => this.runJoin(),

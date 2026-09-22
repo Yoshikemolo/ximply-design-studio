@@ -795,6 +795,16 @@ export class EditorService {
     this.status.set(this.outlineView() ? "Outline view" : "Preview view");
     this.revision.update((x) => x + 1);
   }
+  /**
+   * Pixel Preview: the artwork is shown as the pixels it rasterises to, one per page unit, as
+   * Illustrator shows it at 72 ppi; magnified, each pixel is a square instead of a sharp edge.
+   */
+  readonly pixelPreview = signal(false);
+  togglePixelPreview() {
+    this.pixelPreview.update((on) => !on);
+    this.status.set(this.pixelPreview() ? "Pixel Preview" : "Preview view");
+    this.revision.update((x) => x + 1);
+  }
   /** The frame and handles around the selection, which can be hidden while drawing. */
   readonly boundingBoxVisible = signal(true);
   toggleBoundingBox() {

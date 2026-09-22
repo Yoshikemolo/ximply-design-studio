@@ -863,6 +863,10 @@ canvas {
   display: block;
   touch-action: none;
 }
+/* Pixel Preview: each page pixel is shown as a square, not smoothed. */
+canvas.pixel-preview { image-rendering: pixelated; }
+/* The visible part of the page drawn sharp over the page canvas, which still takes the pointer. */
+.artboard canvas.detail-canvas { position: absolute; display: none; pointer-events: none; }
 .canvas-welcome {
   position: absolute;
   top: 50%;

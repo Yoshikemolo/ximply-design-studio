@@ -96,14 +96,24 @@ export class CanvasRenderer {
         others?: Record<string, { selected: string[]; handles: string[] }>;
       };
     } = { zoom: 1, direct: false },
+    /**
+     * A region of the page, in page units, to draw at a scale onto a canvas the size of that
+     * region: the sharp view of what is on screen when the page is magnified. Without it the
+     * whole page is drawn at one pixel per unit.
+     */
+    view?: { x: number; y: number; width: number; height: number; scale: number },
   ) {
-    if (canvas.width !== document.width) canvas.width = document.width;
-    if (canvas.height !== document.height) canvas.height = document.height;
+    const width = view ? Math.max(1, Math.round(view.width * view.scale)) : document.width;
+    const height = view ? Math.max(1, Math.round(view.height * view.scale)) : document.height;
+    if (canvas.width !== width) canvas.width = width;
+    if (canvas.height !== height) canvas.height = height;
     const ctx = canvas.getContext("2d")!;
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.clearRect(0, 0, canvas.width, canvas.height);
+    if (view) ctx.setTransform(view.scale, 0, 0, view.scale, -view.x * view.scale, -view.y * view.scale);
     if (!transparent && document.background !== "none") {
       ctx.fillStyle = document.background;
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.fillRect(0, 0, document.width, document.height);
     }
     const hairline = 1 / Math.max(0.1, interaction.zoom || 1);
     this.usePatterns(document, ctx);

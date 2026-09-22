@@ -97,14 +97,16 @@
         "SC-0011",
         "SC-0012",
         "SC-0108",
-        "SC-0113"
+        "SC-0113",
+        "SC-0115"
       ],
       "implementation": [
         "apps/web/src/app/editor.service.ts",
         "packages/domain/src/document.ts",
         "packages/domain/src/touch.ts",
         "apps/web/src/app/app.component.ts",
-        "packages/domain/src/zoom.ts"
+        "packages/domain/src/zoom.ts",
+        "packages/renderer/src/canvas-renderer.ts"
       ],
       "tests": [
         "packages/domain/tests/document.test.ts",
@@ -112,7 +114,10 @@
         "apps/web/tests/mobile.test.ts",
         "packages/domain/tests/touch.test.ts",
         "packages/domain/tests/zoom.test.ts",
-        "apps/web/tests/zoom-tool.test.ts"
+        "apps/web/tests/zoom-tool.test.ts",
+        "packages/domain/tests/detail-region.test.ts",
+        "packages/renderer/tests/detail-view.test.ts",
+        "apps/web/tests/sharp-view.test.ts"
       ],
       "evidence": [
         "doc/implementation/PLAN-0002-0001.md"
