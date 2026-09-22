@@ -412,14 +412,15 @@
           [style.min-width.px]="editor.document().width * editor.zoom() + 100"
           [style.min-height.px]="editor.document().height * editor.zoom() + 100"
         >
-          <div class="artboard-label">{{ t("Document") }} 01</div>
           <div
             class="artboard"
+            [class.with-rulers]="preferences.rulersVisible()"
             [class.checkered]="preferences.transparencyChecker()"
             [style.--checker-size.px]="preferences.transparencyCheckerSize()"
             [style.width.px]="editor.document().width * editor.zoom()"
             [style.height.px]="editor.document().height * editor.zoom()"
           >
+            <div class="artboard-label">{{ t("Document") }} 01</div>
             @if (preferences.rulersVisible()) {
               @let marker = rulerCursorPoint();
               <div class="canvas-ruler horizontal-ruler" [attr.aria-label]="t('Drag to create horizontal guide')" (pointerdown)="startGuide($event, 'horizontal')" (pointermove)="moveGuide($event)" (pointerup)="finishGuide($event)" (pointercancel)="cancelGuide()" (lostpointercapture)="cancelGuide()">

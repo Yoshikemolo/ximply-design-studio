@@ -822,6 +822,9 @@ hr {
   /* The page itself paints its background; this only shows through transparent areas. */
   background: #fff;
 }
+.artboard.with-rulers .artboard-label {
+  bottom: calc(100% + 31px);
+}
 .artboard.checkered {
   --checker-size: 8px;
   background: repeating-conic-gradient(#d6d9de 0% 25%, #ffffff 0% 50%) 0 / calc(var(--checker-size) * 2) calc(var(--checker-size) * 2);
@@ -841,10 +844,14 @@ hr {
   min-width: 0;
   padding: 5px 2px;
 }
+/* The name of the page sits just above it, and above the rulers when they are shown. */
 .artboard-label {
   position: absolute;
-  left: 28px;
-  top: 17px;
+  left: 0;
+  bottom: calc(100% + 6px);
+  white-space: nowrap;
+  pointer-events: none;
+  line-height: 1;
   font-size: 9px;
   letter-spacing: 1.5px;
   text-transform: uppercase;
