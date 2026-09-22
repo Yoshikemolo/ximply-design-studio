@@ -34,13 +34,14 @@ Changes after 0.6.0 are recorded here until the next release.
 
 ## Improvements
 
-- Redraw the icons of the Bezier tools as Illustrator draws them: the Pen as a fountain-pen nib, Add and Delete Anchor Point as the same nib with a plus or a minus at its top left corner, and Convert Anchor Point as the nib with a small square at its top right corner. The Paintbrush and the raster brush now show a brush with a pointed tip, above a vector path or a painted stroke.
+- Redraw the icons of the Bezier tools as Illustrator draws them: the Pen as a fountain-pen nib, Add Anchor Point, Delete Anchor Point and Convert Anchor Point as the same nib with a plus, a minus or a small square at its top left corner. The Paintbrush and the raster brush now show a brush with a pointed tip, above a vector path or a painted stroke.
 - Make the strip of document tabs 38 pixels high and each tab 36, so the tabs sit inside the strip.
 - Bring the agent instructions in line with the project as it is: the promotion from dev to release and main without qa and demo branches, the docs branches, the licence, the imitation of Illustrator's behaviour and keys, and the preview publishing rules.
 - Bring the contribution guide in line with the licence and the way the project works now: outside contributions need the author's written agreement first, work reaches dev through pull requests and goes on to release and main, the checks are the ones the project runs, and the paused Sonar check is never taken as a pass.
 
 ## Fixes
 
+- Draw the marks of tool icons without a background the icon cannot resolve: a plus, a minus or a square on a badge filled from a theme variable showed as a solid dot, since an icon loaded as a picture does not see the page's variables.
 - Tint the document icon of Properties with the theme, as every other icon is.
 - Lay the quick backgrounds of the document out in equal columns across the panel, a little closer together, so No color ends where the other controls end instead of against the edge.
 - Give everything in Properties the side margins the other panels have; only its transform fields had them.
