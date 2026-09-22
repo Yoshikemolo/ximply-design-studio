@@ -34,6 +34,7 @@ Changes after 0.6.0 are recorded here until the next release.
 
 ## Improvements
 
+- Select a filled open curve by clicking inside its fill, as a closed one is, since the fill paints it as if closed; an open curve without a fill is still selected by its outline only, and locked or hidden curves never are.
 - Redraw the icons of the Bezier tools as Illustrator draws them: the Pen as a fountain-pen nib, Add Anchor Point, Delete Anchor Point and Convert Anchor Point as the same nib with a plus, a minus or a small square at its top left corner. The Paintbrush and the raster brush now show a brush with a pointed tip, above a vector path or a painted stroke.
 - Make the strip of document tabs 38 pixels high and each tab 36, so the tabs sit inside the strip.
 - Bring the agent instructions in line with the project as it is: the promotion from dev to release and main without qa and demo branches, the docs branches, the licence, the imitation of Illustrator's behaviour and keys, and the preview publishing rules.

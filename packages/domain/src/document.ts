@@ -229,7 +229,10 @@ export function hitTest(layer: Layer, point: Point): boolean {
       const pts = flatten(curve);
       if (pts.some((b, i) => i > 0 && segmentDistance(p, pts[i - 1], b) <= pad))
         return true;
-      if (curve.closed)
+      // The inside of a closed contour selects the object. An open contour selects by its
+      // inside only when it is filled, since the fill paints it as if closed, and an
+      // unfilled open path is picked by its outline alone.
+      if (curve.closed || layer.fill !== "none")
         for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
           const a = pts[i],
             b = pts[j];
