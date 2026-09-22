@@ -25,7 +25,7 @@ meaningful tests and the unchanged quality gate.
 | Raster tracing | Monochrome, grayscale and color scanline tracing; update, expand, release; retained source and template image | Contour fitting, larger images, named presets, richer preview and quantified fidelity/performance budgets |
 | Reusable artwork | Local symbol definitions/instances; redefine, replace, expand and library import/export | Editable registration and nine-slice guides; grouped artwork and complete graphic-style semantics |
 | Symbol painting | Spray, shift, scrunch, size, spin, stain, screen and initial style manipulation | Brush behavior parity, pressure control and reusable appearance libraries |
-| Distortion and colour | Liquify tools; envelopes made with a warp, a mesh or a top object; gradient meshes; linear and radial gradients, patterns, swatches and colour models | Owner review of the proposed ADR-0034, ADR-0035 and ADR-0036, the strict quality gate and independent human review |
+| Distortion and colour | Liquify tools; envelopes made with a warp, a mesh or a top object; gradient meshes; linear and radial gradients, patterns, swatches and colour models | The strict quality gate and independent human review; ADR-0034, ADR-0035 and ADR-0036 are accepted |
 | Precision and production | Page setup, units, rulers with major and minor marks, guides, grid, independent snapping, outline view, Pixel Preview, a sharp redraw of a magnified page, vector PDF export and browser printing | Color management, print separations, preflight and production-scale performance |
 | Wider studio | Planned in existing feature contracts | Docking, multiwindow, collaboration, masks, 3D modeling and animation |
 
