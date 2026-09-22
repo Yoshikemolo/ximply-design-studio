@@ -2004,6 +2004,8 @@ textarea,
 .aid-pair button { padding: 5px 8px; border-radius: 0; }
 .aid-pair .magnet-toggle { border-left: 1px solid var(--border); padding: 4px; }
 .aid-pair button.active { background: var(--accent); color: white; }
+/* On the solid accent of an active toggle an icon is white in either theme, as on the primary buttons. */
+.aid-pair button.active img { filter: brightness(0) invert(1); }
 .rail-palette { width: 100%; padding: 10px 4px; border-top: 1px solid var(--border); }
 .overlapping-paints { position: relative; width: 68px; height: 68px; margin: auto; }
 .paint-trigger { position: relative; padding: 3px; border: 1px solid var(--muted); border-radius: 3px; background: repeating-conic-gradient(#ccc 0% 25%, #fff 0% 50%) 0 / 8px 8px; }

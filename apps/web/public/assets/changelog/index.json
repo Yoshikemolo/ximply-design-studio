@@ -81,6 +81,10 @@
         },
         {
           "type": "Fix",
+          "description": "Draw the icons of the active toggles of the context bar white on their blue background in the light theme, where they were dark, as they already were in the dark theme."
+        },
+        {
+          "type": "Fix",
           "description": "Keep the name of the page just above it, and above the rulers when they are shown; it was placed against the corner of the work area, where the rulers covered it once the page was larger than the view."
         },
         {
