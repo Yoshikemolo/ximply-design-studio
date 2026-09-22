@@ -261,12 +261,12 @@
   }
   <main class="workspace" [class.no-panels]="!panels()" [class.no-tools]="!preferences.layoutBlocks().tools">
     @if (toolsDrawer()) {
-      <button class="drawer-handle left" type="button" (click)="openDrawer('tools')" [attr.aria-label]="t('Drawing tools')" [title]="t('Drawing tools')"><span></span></button>
+      <button class="drawer-handle left" type="button" [class.open]="toolsOpen() && !mobile()" [attr.aria-expanded]="toolsOpen()" (click)="toggleDrawer('tools')" [attr.aria-label]="t('Drawing tools')" [title]="t('Drawing tools')"><span></span></button>
     }
     @if (panelsDrawer()) {
-      <button class="drawer-handle right" type="button" (click)="openDrawer('panels')" [attr.aria-label]="t('Editor panels')" [title]="t('Editor panels')"><span></span></button>
+      <button class="drawer-handle right" type="button" [class.open]="panelsOpen() && !mobile()" [attr.aria-expanded]="panelsOpen()" (click)="toggleDrawer('panels')" [attr.aria-label]="t('Editor panels')" [title]="t('Editor panels')"><span></span></button>
     }
-    @if ((toolsOpen() && toolsDrawer()) || (panelsOpen() && panelsDrawer()) || mobileMenu()) {
+    @if ((mobile() && (toolsOpen() || panelsOpen())) || mobileMenu()) {
       <div class="drawer-backdrop" (click)="closeDrawers()" aria-hidden="true"></div>
     }
     <aside class="toolrail" [class.drawer-open]="toolsOpen() && toolsDrawer()" [attr.aria-label]="t('Drawing tools')">

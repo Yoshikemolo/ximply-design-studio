@@ -29,20 +29,33 @@ describe('hidden columns on a wide screen', () => {
     expect([app.toolsDrawer(), app.panelsDrawer()]).toEqual([false, false]);
   });
 
-  it('become drawers that a handle or a swipe from their edge slides in, and a chosen tool closes', () => {
+  it('become drawers that their edge handle or a swipe from their edge slides in, and that stay open like a column', () => {
     const app = desktop();
     app.preferences.toggleLayoutBlock('tools');
     app.panels.set(false);
     expect([app.toolsDrawer(), app.panelsDrawer()]).toEqual([true, true]);
-    app.openDrawer('tools');
-    expect([app.toolsOpen(), app.panelsOpen()]).toEqual([true, false]);
-    app.chooseTool('rectangle');
-    expect(app.toolsOpen()).toBe(false);
     app.touchStart(touch('pointerdown', 1296));
     app.touchEnd(touch('pointerup', 1140));
-    expect(app.panelsOpen()).toBe(true);
+    expect([app.toolsOpen(), app.panelsOpen()]).toEqual([false, true]);
+    app.toggleDrawer('tools');
+    expect([app.toolsOpen(), app.panelsOpen()]).toEqual([true, true]);
+    // Choosing a tool leaves the drawer open, as the column of panels stays.
+    app.chooseTool('rectangle');
+    expect(app.toolsOpen()).toBe(true);
+    // The handle closes its own drawer again.
+    app.toggleDrawer('tools');
+    expect([app.toolsOpen(), app.panelsOpen()]).toEqual([false, true]);
     app.closeDrawers();
     expect(app.panelsOpen()).toBe(false);
+  });
+
+  it('draw no backdrop, so the canvas stays usable, and keep the handle on the edge of the open drawer', () => {
+    const template = readFileSync('apps/web/src/app/app.component.html', 'utf8');
+    expect(template).toContain('@if ((mobile() && (toolsOpen() || panelsOpen())) || mobileMenu()) {');
+    expect(template).toContain('[class.open]="toolsOpen() && !mobile()"');
+    const styles = readFileSync('packages/design-system/styles/studio.scss', 'utf8');
+    expect(styles).toContain('.drawer-handle.left.open { left: var(--tools-width); z-index: 56; }');
+    expect(styles).toContain('.drawer-handle.right.open { right: var(--panels-width); z-index: 56; }');
   });
 
   it('do not open from a swipe on the side of a column that is shown', () => {

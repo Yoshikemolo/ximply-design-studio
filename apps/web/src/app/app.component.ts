@@ -1366,8 +1366,21 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   }
   openDrawer(side: "tools" | "panels") {
     this.mobileMenu.set(false);
-    this.toolsOpen.set(side === "tools");
-    this.panelsOpen.set(side === "panels");
+    // On a phone one drawer covers the other; on a wider screen both may stay open.
+    if (this.mobile()) {
+      this.toolsOpen.set(side === "tools");
+      this.panelsOpen.set(side === "panels");
+    } else (side === "tools" ? this.toolsOpen : this.panelsOpen).set(true);
+  }
+  /**
+   * The edge handle of a drawer. On a phone it opens the drawer, which a tap outside closes;
+   * on a wider screen the drawer stays open like a column while the canvas is used, and the
+   * handle, which then sits on its edge, closes it again.
+   */
+  toggleDrawer(side: "tools" | "panels") {
+    const open = side === "tools" ? this.toolsOpen : this.panelsOpen;
+    if (!this.mobile() && open()) open.set(false);
+    else this.openDrawer(side);
   }
   closeDrawers() {
     this.toolsOpen.set(false);
@@ -2259,8 +2272,9 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     return (this.preferences.bindings()[id] ?? []).join(" / ");
   }
   chooseTool(id: ToolId) {
-    // A drawer closes when a tool is chosen, so the canvas is free to draw on.
-    this.toolsOpen?.set(false);
+    // On a phone the drawer closes when a tool is chosen, so the canvas is free to draw on;
+    // on a wider screen it stays open, as the column of panels does.
+    if (this.mobile?.()) this.toolsOpen.set(false);
     this.commitText();
     this.editor.setTool(id);
     const mode = ({ selectRectangle: "rectangle", selectEllipse: "ellipse", selectLasso: "lasso" } as const)[id as "selectRectangle" | "selectEllipse" | "selectLasso"];

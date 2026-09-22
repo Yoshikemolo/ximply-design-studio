@@ -507,6 +507,10 @@ hr {
   background: var(--muted);
 }
 .drawer-handle:hover span { background: var(--text); }
+/* On a wide screen an open drawer keeps its handle on its edge, to close it again. */
+.drawer-handle { transition: left 0.22s ease, right 0.22s ease; }
+.drawer-handle.left.open { left: var(--tools-width); z-index: 56; }
+.drawer-handle.right.open { right: var(--panels-width); z-index: 56; }
 .drawer-backdrop {
   position: absolute;
   inset: 0;
