@@ -1,6 +1,7 @@
 const ES: Record<string, string> = {
   "All Rights Reserved.": "Todos los derechos reservados.",
   "Outline stroke": "Contornear trazo",
+  "Context bar": "Barra de contexto",
   "Click inside an envelope to add a row and a column to its mesh; gradient meshes are not available yet.": "Haz clic dentro de una envolvente para añadir una fila y una columna a su malla; las mallas de degradado aún no están disponibles.",
   "Actual size": "Tamaño real",
   "Free distort": "Distorsión libre",

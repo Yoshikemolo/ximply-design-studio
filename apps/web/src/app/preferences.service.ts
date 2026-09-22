@@ -108,7 +108,7 @@ export interface MeasurementSettings {
   guideSnapRadius: number;
   gridSnapRadius: number;
 }
-export type LayoutBlock = "tools" | "appearance" | "workspace" | "measurement" | "dimensions" | "pivot" | "selection" | "swatches";
+export type LayoutBlock = "tools" | "appearance" | "workspace" | "measurement" | "dimensions" | "pivot" | "selection" | "swatches" | "contextBar";
 const measurementDefaults: MeasurementSettings = {
   distanceUnit: "px", fontUnit: "px", displayDecimals: 2, rulersVisible: false, guidesVisible: true, guidesLocked: false,
   gridVisible: false, snapRulers: false, snapGuides: false, snapGrid: false,
@@ -192,7 +192,7 @@ export class PreferencesService {
   saveToolOptions(options: Pick<PathSettings, "pencil" | "paintbrush" | "smooth" | "brush">): boolean {
     return this.updatePathSettings(options);
   }
-  readonly layoutBlocks = signal<Record<LayoutBlock, boolean>>({ tools: true, appearance: true, workspace: true, measurement: true, dimensions: true, pivot: true, selection: true, swatches: false });
+  readonly layoutBlocks = signal<Record<LayoutBlock, boolean>>({ tools: true, appearance: true, workspace: true, measurement: true, dimensions: true, pivot: true, selection: true, swatches: false, contextBar: true });
   /** How colours are chosen: Quick RGB by default, or RGB, CMYK, Grayscale or a custom palette. */
   readonly colorMode = signal<ColorMode>(readColorSettings().mode);
   readonly customPalette = signal<string[]>(readColorSettings().palette);
@@ -234,7 +234,7 @@ export class PreferencesService {
         if (saved.measurements?.rulerMinorStep === undefined) measurements.rulerMinorStep = Math.max(0.01, measurements.rulerStep / 10);
         for (const key of Object.keys(measurements) as (keyof MeasurementSettings)[]) validateMeasurement(key, measurements[key]);
         const layout = { ...this.layoutBlocks(), ...saved.layoutBlocks };
-        for (const key of ["appearance", "workspace", "measurement", "dimensions", "swatches"] as const)
+        for (const key of ["appearance", "workspace", "measurement", "dimensions", "swatches", "contextBar"] as const)
           if (typeof layout[key] !== "boolean") throw new Error("Invalid layout settings");
         this.bindings.set(validateShortcuts(saved.bindings));
         this.cursorIcon.set(saved.cursorIcon);

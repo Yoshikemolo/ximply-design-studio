@@ -173,83 +173,85 @@
       <img src="/assets/icons/export.svg" alt="" />
     </button>
   </header>
-  <div class="contextbar">
-    @if (preferences.layoutBlocks().appearance) {
-      <section class="context-block" [attr.aria-label]="t('Appearance')">
-        <span>{{ t("Appearance") }}</span>
-        @for (target of (editor.tool() === 'brush' ? fillOnly : paintTargets); track target) {
-          <button class="paint-trigger compact-paint" [class.no-paint]="paintColor(target) === 'none'" [style.--paint]="paintColor(target)" (click)="openPaint(target, $event)" [title]="t(target === 'fill' ? 'Fill' : 'Stroke')" [attr.aria-label]="t(target === 'fill' ? 'Fill' : 'Stroke')"><span [class.stroke-preview]="target === 'stroke'"></span></button>
-        }
-        <label>{{ t("Size") }} <input type="number" min="0" step="any" [value]="displayDistance(editor.size())" (change)="setToolSize($event)" /> {{ preferences.distanceUnit() }}</label>
-      </section>
-    }
-    @if (editor.tool() === 'freeTransform') {
-      <section class="context-block" role="group" [attr.aria-label]="t('Free transform')">
-        <span>{{ t('Free transform') }}</span>
-        <div class="segmented">
-          @for (mode of freeTransformModes; track mode.id) {
-            <button [class.active]="editor.freeTransformMode() === mode.id" [attr.aria-pressed]="editor.freeTransformMode() === mode.id" [title]="t(mode.label) + ' · ' + t(mode.hint)" [attr.aria-label]="t(mode.label)" (click)="editor.freeTransformMode.set(mode.id)"><img [src]="'/assets/icons/' + mode.icon + '.svg'" alt="" /></button>
+  @if (preferences.layoutBlocks().contextBar) {
+    <div class="contextbar">
+      @if (preferences.layoutBlocks().appearance) {
+        <section class="context-block" [attr.aria-label]="t('Appearance')">
+          <span>{{ t("Appearance") }}</span>
+          @for (target of (editor.tool() === 'brush' ? fillOnly : paintTargets); track target) {
+            <button class="paint-trigger compact-paint" [class.no-paint]="paintColor(target) === 'none'" [style.--paint]="paintColor(target)" (click)="openPaint(target, $event)" [title]="t(target === 'fill' ? 'Fill' : 'Stroke')" [attr.aria-label]="t(target === 'fill' ? 'Fill' : 'Stroke')"><span [class.stroke-preview]="target === 'stroke'"></span></button>
           }
-        </div>
-      </section>
-    }
-    @if (['eyedropper', 'paintBucket'].includes(editor.tool())) {
-      <section class="context-block style-scope" role="group" [attr.aria-label]="t('Style transfer scope')">
-        <span>{{ t('Style transfer scope') }}</span>
-        @for (scope of styleScopes; track scope.id) {<button [class.active]="editor.styleScope() === scope.id" [attr.aria-pressed]="editor.styleScope() === scope.id" [title]="t(scope.label)" [attr.aria-label]="t(scope.label)" (click)="setStyleScope(scope.id)"><img [src]="'/assets/icons/' + scope.icon + '.svg'" alt="" /></button>}
-      </section>
-    }
-    @if (preferences.layoutBlocks().measurement) {
-      <section class="context-block measurement-controls" [attr.aria-label]="t('Measurement')">
-        @for (aid of measurementAids; track aid.id) {
-          @if (aid.id === "guides") {<button class="guide-lock" [class.active]="preferences.guidesLocked()" [attr.aria-pressed]="preferences.guidesLocked()" [title]="t(preferences.guidesLocked() ? 'Unlock guides' : 'Lock guides')" [attr.aria-label]="t(preferences.guidesLocked() ? 'Unlock guides' : 'Lock guides')" (click)="preferences.setMeasurement('guidesLocked', !preferences.guidesLocked())"><img [src]="'/assets/icons/' + (preferences.guidesLocked() ? 'lock' : 'unlock') + '.svg'" alt="" /></button>}
-          <div class="aid-pair"><button [class.active]="aidVisible(aid.id)" [attr.aria-pressed]="aidVisible(aid.id)" [title]="t(aid.label)" [attr.aria-label]="t(aid.label)" (click)="toggleAid(aid.id)"><img [src]="'/assets/icons/' + (aid.id === 'grid' ? 'grid' : aid.id) + '.svg'" alt="" /></button><button class="magnet-toggle" [class.active]="aidSnaps(aid.id)" [attr.aria-pressed]="aidSnaps(aid.id)" [title]="t('Snap to') + ' ' + t(aid.label)" [attr.aria-label]="t('Snap to') + ' ' + t(aid.label)" (click)="toggleSnap(aid.id)"><img src="/assets/icons/magnet.svg" alt="" /></button></div>
-        }
-      </section>
-    }
-    @if (paintingTool(); as painting) {
-      <section class="context-block brush-controls" [attr.aria-label]="t(painting === 'brush' ? 'Brush' : 'Eraser')">
-        <svg class="brush-preview" viewBox="0 0 140 34" aria-hidden="true"><path [attr.d]="brushPreviewPath()" [attr.fill]="brushPreviewPaint()" fill-rule="nonzero" [attr.fill-opacity]="brush().opacity / 100"></path></svg>
-        @if (painting === 'brush') {
-          <div class="aid-pair brush-tips">
-            @for (type of brushTypes; track type) {
-              <button [class.active]="brush().type === type" [attr.aria-pressed]="brush().type === type" [title]="t(brushTypeLabels[type])" [attr.aria-label]="t(brushTypeLabels[type])" (click)="setBrush({type})"><img [src]="'/assets/icons/' + (type === 'round' ? 'brush' : type === 'pencil' ? 'pencil' : 'brush-' + type) + '.svg'" alt="" /></button>
+          <label>{{ t("Size") }} <input type="number" min="0" step="any" [value]="displayDistance(editor.size())" (change)="setToolSize($event)" /> {{ preferences.distanceUnit() }}</label>
+        </section>
+      }
+      @if (editor.tool() === 'freeTransform') {
+        <section class="context-block" role="group" [attr.aria-label]="t('Free transform')">
+          <span>{{ t('Free transform') }}</span>
+          <div class="segmented">
+            @for (mode of freeTransformModes; track mode.id) {
+              <button [class.active]="editor.freeTransformMode() === mode.id" [attr.aria-pressed]="editor.freeTransformMode() === mode.id" [title]="t(mode.label) + ' · ' + t(mode.hint)" [attr.aria-label]="t(mode.label)" (click)="editor.freeTransformMode.set(mode.id)"><img [src]="'/assets/icons/' + mode.icon + '.svg'" alt="" /></button>
             }
           </div>
-        }
-        <label class="brush-field">{{ t('Pressure') }}<input type="range" min="1" max="100" [value]="brush().pressure" (input)="setBrushNumber('pressure', $event)" /><small>{{ brush().pressure }}%</small></label>
-        <label class="brush-field">{{ t('Opacity') }}<input type="range" min="0" max="100" [value]="brush().opacity" (input)="setBrushNumber('opacity', $event)" /><small>{{ brush().opacity }}%</small></label>
-        <label class="brush-field">{{ t('Cadence') }}<input type="range" min="1" max="100" [value]="brush().cadence" (input)="setBrushNumber('cadence', $event)" /><small>{{ brush().cadence }}%</small></label>
-        <label class="brush-field">{{ t('Diffusion') }}<input type="range" min="0" max="100" [value]="brush().diffusion" (input)="setBrushNumber('diffusion', $event)" /><small>{{ brush().diffusion }}%</small></label>
-        @if (brush().type !== 'round') {
-          <label class="brush-field">{{ t('Tip angle') }}<input type="range" min="0" max="180" [value]="brush().angle" (input)="setBrushNumber('angle', $event)" /><small>{{ brush().angle }}°</small></label>
-        }
-        @if (painting === 'brush') {
-          <label class="brush-field">{{ t('Blend') }}<select [value]="brush().blend" (change)="setBrush({blend: $any(text($event))})">@for (mode of blends; track mode) {<option [value]="mode">{{ mode === 'source-over' ? t('Normal') : mode }}</option>}</select></label>
-        }
-        <label class="brush-field speed-field">{{ t('Speed variation') }}<span class="speed-mark small" aria-hidden="true"></span><input type="range" min="-100" max="100" [value]="brush().speedVariation" (input)="setBrushNumber('speedVariation', $event)" /><span class="speed-mark large" aria-hidden="true"></span><small>{{ brush().speedVariation }}</small></label>
-      </section>
-    }
-    @if (preferences.layoutBlocks().selection) {
-      <section class="context-block measurement-controls" [attr.aria-label]="t('Selection')">
-        <div class="aid-pair">
-          <button [class.active]="preferences.areaSelectionMode() === 'intersect'" [attr.aria-pressed]="preferences.areaSelectionMode() === 'intersect'" [title]="t('Intersection') + ' · ' + t('Select every object the area touches')" [attr.aria-label]="t('Intersection')" (click)="preferences.setMeasurement('areaSelectionMode', 'intersect')"><img src="/assets/icons/select-intersect.svg" alt="" /></button><button [class.active]="preferences.areaSelectionMode() === 'inside'" [attr.aria-pressed]="preferences.areaSelectionMode() === 'inside'" [title]="t('Inner') + ' · ' + t('Select only objects fully inside the area')" [attr.aria-label]="t('Inner')" (click)="preferences.setMeasurement('areaSelectionMode', 'inside')"><img src="/assets/icons/select-inner.svg" alt="" /></button>
-        </div>
-      </section>
-    }
-    @if (preferences.layoutBlocks().pivot) {
-      <section class="context-block measurement-controls" [attr.aria-label]="t('Pivot')">
-        <button class="dimension-lock" [class.active]="preferences.pivotLocked()" [attr.aria-pressed]="preferences.pivotLocked()" [title]="t(preferences.pivotLocked() ? 'Unlock pivot' : 'Lock pivot')" [attr.aria-label]="t(preferences.pivotLocked() ? 'Unlock pivot' : 'Lock pivot')" (click)="preferences.setMeasurement('pivotLocked', !preferences.pivotLocked())"><img [src]="preferences.pivotLocked() ? '/assets/icons/lock.svg' : '/assets/icons/unlock.svg'" alt="" /></button>
-        <div class="aid-pair"><button [class.active]="preferences.pivotVisible()" [attr.aria-pressed]="preferences.pivotVisible()" [title]="t('Show pivot')" [attr.aria-label]="t('Show pivot')" (click)="preferences.setMeasurement('pivotVisible', !preferences.pivotVisible())"><img src="/assets/icons/pivot.svg" alt="" /></button><button class="magnet-toggle" [class.active]="preferences.pivotSnap()" [attr.aria-pressed]="preferences.pivotSnap()" [title]="t('Snap the pivot')" [attr.aria-label]="t('Snap the pivot')" (click)="preferences.setMeasurement('pivotSnap', !preferences.pivotSnap())"><img src="/assets/icons/magnet.svg" alt="" /></button></div>
-      </section>
-    }
-    @if (preferences.layoutBlocks().dimensions) {
-      <section class="context-block measurement-controls" [attr.aria-label]="t('Dimensions')">
-        <button class="dimension-lock" [class.active]="preferences.dimensionsLocked()" [attr.aria-pressed]="preferences.dimensionsLocked()" [title]="t(preferences.dimensionsLocked() ? 'Unlock dimensions' : 'Lock dimensions')" [attr.aria-label]="t(preferences.dimensionsLocked() ? 'Unlock dimensions' : 'Lock dimensions')" (click)="preferences.setMeasurement('dimensionsLocked', !preferences.dimensionsLocked())"><img [src]="'/assets/icons/' + (preferences.dimensionsLocked() ? 'lock' : 'unlock') + '.svg'" alt="" /></button>
-        <div class="aid-pair"><button [class.active]="preferences.dimensionsVisible()" [attr.aria-pressed]="preferences.dimensionsVisible()" [title]="t('Show dimensions')" [attr.aria-label]="t('Show dimensions')" (click)="preferences.setMeasurement('dimensionsVisible', !preferences.dimensionsVisible())"><img src="/assets/icons/dimension-linear.svg" alt="" /></button><button class="magnet-toggle" [class.active]="preferences.dimensionsSnap()" [attr.aria-pressed]="preferences.dimensionsSnap()" [title]="t('Snap dimension points')" [attr.aria-label]="t('Snap dimension points')" (click)="preferences.setMeasurement('dimensionsSnap', !preferences.dimensionsSnap())"><img src="/assets/icons/magnet.svg" alt="" /></button></div>
-      </section>
-    }
-  </div>
+        </section>
+      }
+      @if (['eyedropper', 'paintBucket'].includes(editor.tool())) {
+        <section class="context-block style-scope" role="group" [attr.aria-label]="t('Style transfer scope')">
+          <span>{{ t('Style transfer scope') }}</span>
+          @for (scope of styleScopes; track scope.id) {<button [class.active]="editor.styleScope() === scope.id" [attr.aria-pressed]="editor.styleScope() === scope.id" [title]="t(scope.label)" [attr.aria-label]="t(scope.label)" (click)="setStyleScope(scope.id)"><img [src]="'/assets/icons/' + scope.icon + '.svg'" alt="" /></button>}
+        </section>
+      }
+      @if (preferences.layoutBlocks().measurement) {
+        <section class="context-block measurement-controls" [attr.aria-label]="t('Measurement')">
+          @for (aid of measurementAids; track aid.id) {
+            @if (aid.id === "guides") {<button class="guide-lock" [class.active]="preferences.guidesLocked()" [attr.aria-pressed]="preferences.guidesLocked()" [title]="t(preferences.guidesLocked() ? 'Unlock guides' : 'Lock guides')" [attr.aria-label]="t(preferences.guidesLocked() ? 'Unlock guides' : 'Lock guides')" (click)="preferences.setMeasurement('guidesLocked', !preferences.guidesLocked())"><img [src]="'/assets/icons/' + (preferences.guidesLocked() ? 'lock' : 'unlock') + '.svg'" alt="" /></button>}
+            <div class="aid-pair"><button [class.active]="aidVisible(aid.id)" [attr.aria-pressed]="aidVisible(aid.id)" [title]="t(aid.label)" [attr.aria-label]="t(aid.label)" (click)="toggleAid(aid.id)"><img [src]="'/assets/icons/' + (aid.id === 'grid' ? 'grid' : aid.id) + '.svg'" alt="" /></button><button class="magnet-toggle" [class.active]="aidSnaps(aid.id)" [attr.aria-pressed]="aidSnaps(aid.id)" [title]="t('Snap to') + ' ' + t(aid.label)" [attr.aria-label]="t('Snap to') + ' ' + t(aid.label)" (click)="toggleSnap(aid.id)"><img src="/assets/icons/magnet.svg" alt="" /></button></div>
+          }
+        </section>
+      }
+      @if (paintingTool(); as painting) {
+        <section class="context-block brush-controls" [attr.aria-label]="t(painting === 'brush' ? 'Brush' : 'Eraser')">
+          <svg class="brush-preview" viewBox="0 0 140 34" aria-hidden="true"><path [attr.d]="brushPreviewPath()" [attr.fill]="brushPreviewPaint()" fill-rule="nonzero" [attr.fill-opacity]="brush().opacity / 100"></path></svg>
+          @if (painting === 'brush') {
+            <div class="aid-pair brush-tips">
+              @for (type of brushTypes; track type) {
+                <button [class.active]="brush().type === type" [attr.aria-pressed]="brush().type === type" [title]="t(brushTypeLabels[type])" [attr.aria-label]="t(brushTypeLabels[type])" (click)="setBrush({type})"><img [src]="'/assets/icons/' + (type === 'round' ? 'brush' : type === 'pencil' ? 'pencil' : 'brush-' + type) + '.svg'" alt="" /></button>
+              }
+            </div>
+          }
+          <label class="brush-field">{{ t('Pressure') }}<input type="range" min="1" max="100" [value]="brush().pressure" (input)="setBrushNumber('pressure', $event)" /><small>{{ brush().pressure }}%</small></label>
+          <label class="brush-field">{{ t('Opacity') }}<input type="range" min="0" max="100" [value]="brush().opacity" (input)="setBrushNumber('opacity', $event)" /><small>{{ brush().opacity }}%</small></label>
+          <label class="brush-field">{{ t('Cadence') }}<input type="range" min="1" max="100" [value]="brush().cadence" (input)="setBrushNumber('cadence', $event)" /><small>{{ brush().cadence }}%</small></label>
+          <label class="brush-field">{{ t('Diffusion') }}<input type="range" min="0" max="100" [value]="brush().diffusion" (input)="setBrushNumber('diffusion', $event)" /><small>{{ brush().diffusion }}%</small></label>
+          @if (brush().type !== 'round') {
+            <label class="brush-field">{{ t('Tip angle') }}<input type="range" min="0" max="180" [value]="brush().angle" (input)="setBrushNumber('angle', $event)" /><small>{{ brush().angle }}°</small></label>
+          }
+          @if (painting === 'brush') {
+            <label class="brush-field">{{ t('Blend') }}<select [value]="brush().blend" (change)="setBrush({blend: $any(text($event))})">@for (mode of blends; track mode) {<option [value]="mode">{{ mode === 'source-over' ? t('Normal') : mode }}</option>}</select></label>
+          }
+          <label class="brush-field speed-field">{{ t('Speed variation') }}<span class="speed-mark small" aria-hidden="true"></span><input type="range" min="-100" max="100" [value]="brush().speedVariation" (input)="setBrushNumber('speedVariation', $event)" /><span class="speed-mark large" aria-hidden="true"></span><small>{{ brush().speedVariation }}</small></label>
+        </section>
+      }
+      @if (preferences.layoutBlocks().selection) {
+        <section class="context-block measurement-controls" [attr.aria-label]="t('Selection')">
+          <div class="aid-pair">
+            <button [class.active]="preferences.areaSelectionMode() === 'intersect'" [attr.aria-pressed]="preferences.areaSelectionMode() === 'intersect'" [title]="t('Intersection') + ' · ' + t('Select every object the area touches')" [attr.aria-label]="t('Intersection')" (click)="preferences.setMeasurement('areaSelectionMode', 'intersect')"><img src="/assets/icons/select-intersect.svg" alt="" /></button><button [class.active]="preferences.areaSelectionMode() === 'inside'" [attr.aria-pressed]="preferences.areaSelectionMode() === 'inside'" [title]="t('Inner') + ' · ' + t('Select only objects fully inside the area')" [attr.aria-label]="t('Inner')" (click)="preferences.setMeasurement('areaSelectionMode', 'inside')"><img src="/assets/icons/select-inner.svg" alt="" /></button>
+          </div>
+        </section>
+      }
+      @if (preferences.layoutBlocks().pivot) {
+        <section class="context-block measurement-controls" [attr.aria-label]="t('Pivot')">
+          <button class="dimension-lock" [class.active]="preferences.pivotLocked()" [attr.aria-pressed]="preferences.pivotLocked()" [title]="t(preferences.pivotLocked() ? 'Unlock pivot' : 'Lock pivot')" [attr.aria-label]="t(preferences.pivotLocked() ? 'Unlock pivot' : 'Lock pivot')" (click)="preferences.setMeasurement('pivotLocked', !preferences.pivotLocked())"><img [src]="preferences.pivotLocked() ? '/assets/icons/lock.svg' : '/assets/icons/unlock.svg'" alt="" /></button>
+          <div class="aid-pair"><button [class.active]="preferences.pivotVisible()" [attr.aria-pressed]="preferences.pivotVisible()" [title]="t('Show pivot')" [attr.aria-label]="t('Show pivot')" (click)="preferences.setMeasurement('pivotVisible', !preferences.pivotVisible())"><img src="/assets/icons/pivot.svg" alt="" /></button><button class="magnet-toggle" [class.active]="preferences.pivotSnap()" [attr.aria-pressed]="preferences.pivotSnap()" [title]="t('Snap the pivot')" [attr.aria-label]="t('Snap the pivot')" (click)="preferences.setMeasurement('pivotSnap', !preferences.pivotSnap())"><img src="/assets/icons/magnet.svg" alt="" /></button></div>
+        </section>
+      }
+      @if (preferences.layoutBlocks().dimensions) {
+        <section class="context-block measurement-controls" [attr.aria-label]="t('Dimensions')">
+          <button class="dimension-lock" [class.active]="preferences.dimensionsLocked()" [attr.aria-pressed]="preferences.dimensionsLocked()" [title]="t(preferences.dimensionsLocked() ? 'Unlock dimensions' : 'Lock dimensions')" [attr.aria-label]="t(preferences.dimensionsLocked() ? 'Unlock dimensions' : 'Lock dimensions')" (click)="preferences.setMeasurement('dimensionsLocked', !preferences.dimensionsLocked())"><img [src]="'/assets/icons/' + (preferences.dimensionsLocked() ? 'lock' : 'unlock') + '.svg'" alt="" /></button>
+          <div class="aid-pair"><button [class.active]="preferences.dimensionsVisible()" [attr.aria-pressed]="preferences.dimensionsVisible()" [title]="t('Show dimensions')" [attr.aria-label]="t('Show dimensions')" (click)="preferences.setMeasurement('dimensionsVisible', !preferences.dimensionsVisible())"><img src="/assets/icons/dimension-linear.svg" alt="" /></button><button class="magnet-toggle" [class.active]="preferences.dimensionsSnap()" [attr.aria-pressed]="preferences.dimensionsSnap()" [title]="t('Snap dimension points')" [attr.aria-label]="t('Snap dimension points')" (click)="preferences.setMeasurement('dimensionsSnap', !preferences.dimensionsSnap())"><img src="/assets/icons/magnet.svg" alt="" /></button></div>
+        </section>
+      }
+    </div>
+  }
   <main class="workspace" [class.no-panels]="!panels()" [class.no-tools]="!preferences.layoutBlocks().tools">
     @if (mobile()) {
       <button class="drawer-handle left" type="button" (click)="openDrawer('tools')" [attr.aria-label]="t('Drawing tools')" [title]="t('Drawing tools')"><span></span></button>
