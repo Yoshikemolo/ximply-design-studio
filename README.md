@@ -2,13 +2,14 @@
 
 A layered vector and image editor by Ximplicity.
 
-**0.7.0 — single-user drawing workbench preview.** Work on several documents in tabs, on a desktop or a phone, set
+**0.8.0 — single-user drawing workbench preview.** Work on several documents in tabs, on a desktop or a phone, set
 the page up from paper, screen and animation formats, import SVG, DXF, Illustrator, PDF and
 EPS drawings as editable paths, draw floor plans with connected walls, openings, stairs and
 drafting dimensions, draw and edit Bezier paths with the Pen, the Pencil and a vector
 Paintbrush that behave as Illustrator's do, with its cursor marks, modifiers, fidelity and
 smoothness, join, average, simplify and reshape paths, fill with gradients and patterns
-from a Swatches panel in the colour model you work in, lock and hide objects, cut them with the scissors and the
+from a Swatches panel in the colour model you work in, lock and hide objects, scale, shear, distort
+freely, in perspective, with the liquify tools or through envelopes, cut them with the scissors and the
 knife, paint with brush tips and their own control bar, trace
 images, reuse symbols, edit text inline and turn it into shapes, copy and paste with stacked
 pastes, repeat and duplicate transformations about a movable pivot, retouch images and save

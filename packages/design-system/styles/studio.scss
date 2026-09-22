@@ -2409,3 +2409,24 @@ textarea,
     display: none;
   }
 }
+
+/* The Scale, Shear and Transform Each dialogs of Object > Transform. */
+.affine-dialog { width: min(92vw, 340px); }
+.affine-dialog .radio-row { display: flex; align-items: center; gap: 8px; margin: 6px 0; }
+.affine-dialog .radio-row input[type=number] { width: 70px; }
+.affine-dialog .axis-choice { border: 0; padding: 0; margin: 8px 0; legend { color: var(--muted); font-size: 11px; } }
+.affine-dialog .each-options { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-top: 8px; }
+.reference-locator { display: grid; grid-template-columns: repeat(3, 14px); gap: 6px; padding: 6px; border: 1px solid var(--border); border-radius: 4px;
+  button { width: 14px; height: 14px; min-height: 0; padding: 0; border: 1px solid var(--muted); border-radius: 2px; background: var(--panel); }
+  button.active { background: var(--accent); border-color: var(--accent); } }
+
+/* The brush of the liquify tools, drawn at the cursor. */
+.liquify-brush { position: fixed; z-index: 60; pointer-events: none; border: 1px solid #0d59f2; border-radius: 50%; box-shadow: 0 0 0 1px #ffffffaa; }
+
+/* The styles of Warp Options, as a grid of their pictures. */
+.warp-styles { display: grid; grid-template-columns: repeat(5, 1fr); gap: 4px; margin-bottom: 10px;
+  button { padding: 4px; min-height: 0; aspect-ratio: 1; border: 1px solid var(--border); border-radius: 4px; }
+  button.active { border-color: var(--accent); background: var(--accent-soft, var(--panel)); }
+  img { width: 100%; height: 100%; } }
+.envelope-dialog .channel { display: grid; grid-template-columns: 80px minmax(0, 1fr) 56px auto; gap: 6px; align-items: center; margin: 6px 0;
+  input[type=range], input[type=number] { width: 100%; min-width: 0; } }

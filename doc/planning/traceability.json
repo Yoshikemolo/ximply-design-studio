@@ -96,19 +96,23 @@
         "SC-0010",
         "SC-0011",
         "SC-0012",
-        "SC-0108"
+        "SC-0108",
+        "SC-0113"
       ],
       "implementation": [
         "apps/web/src/app/editor.service.ts",
         "packages/domain/src/document.ts",
         "packages/domain/src/touch.ts",
-        "apps/web/src/app/app.component.ts"
+        "apps/web/src/app/app.component.ts",
+        "packages/domain/src/zoom.ts"
       ],
       "tests": [
         "packages/domain/tests/document.test.ts",
         "apps/web/tests/editor.test.ts",
         "apps/web/tests/mobile.test.ts",
-        "packages/domain/tests/touch.test.ts"
+        "packages/domain/tests/touch.test.ts",
+        "packages/domain/tests/zoom.test.ts",
+        "apps/web/tests/zoom-tool.test.ts"
       ],
       "evidence": [
         "doc/implementation/PLAN-0002-0001.md"
@@ -246,7 +250,8 @@
         "ADR-0029",
         "ADR-0031",
         "ADR-0032",
-        "ADR-0033"
+        "ADR-0033",
+        "ADR-0034"
       ],
       "scenarios": [
         "SC-0022",
@@ -262,7 +267,11 @@
         "SC-0104",
         "SC-0105",
         "SC-0106",
-        "SC-0107"
+        "SC-0107",
+        "SC-0109",
+        "SC-0110",
+        "SC-0111",
+        "SC-0112"
       ],
       "implementation": [
         "apps/web/src/app/editor.service.ts",
@@ -288,7 +297,11 @@
         "packages/domain/src/brush-stroke.ts",
         "packages/renderer/src/canvas-renderer.ts",
         "apps/web/src/app/tools.ts",
-        "packages/domain/src/paint.ts"
+        "packages/domain/src/paint.ts",
+        "packages/domain/src/affine.ts",
+        "packages/domain/src/distort.ts",
+        "packages/domain/src/liquify.ts",
+        "packages/domain/src/envelope.ts"
       ],
       "tests": [
         "packages/domain/tests/document.test.ts",
@@ -336,7 +349,15 @@
         "apps/web/tests/paint-ui.test.ts",
         "packages/domain/tests/hit-test.test.ts",
         "packages/domain/tests/pdf-paint.test.ts",
-        "packages/domain/tests/blend-paint.test.ts"
+        "packages/domain/tests/blend-paint.test.ts",
+        "packages/domain/tests/affine-map.test.ts",
+        "apps/web/tests/scale-shear.test.ts",
+        "packages/domain/tests/distort.test.ts",
+        "apps/web/tests/free-transform.test.ts",
+        "packages/domain/tests/liquify.test.ts",
+        "apps/web/tests/liquify-tools.test.ts",
+        "packages/domain/tests/envelope.test.ts",
+        "apps/web/tests/envelope-editor.test.ts"
       ],
       "evidence": [
         "doc/implementation/PLAN-0002-0001.md",

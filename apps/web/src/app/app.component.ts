@@ -47,6 +47,9 @@ import { SmartTableComponent } from "./smart-table.component";
 import { TOOLS, ToolId, TOOL_FAMILIES, ToolFamily } from "./tools";
 import { translate } from "./i18n";
 import { BLENDS, Layer, StrokeStyle, blankDocument, defaultStrokeStyle, svgExport } from "../../../../packages/domain/src/document";
+import { LIQUIFY_DEFAULTS, LiquifyOptions, LiquifyTool } from "../../../../packages/domain/src/liquify";
+import { ZOOM_MAX, ZOOM_MIN, stepZoom } from "../../../../packages/domain/src/zoom";
+import { DEFAULT_WARP, WARP_LABELS, WARP_STYLES, WarpSettings } from "../../../../packages/domain/src/envelope";
 import { COLOR_MODES, ColorMode, GradientPaint, PatternDefinition, PRESET_PATTERNS, PresetPattern, Swatch, cmykToRgb, gradientColorAt, grayToRgb, presetPattern, renderedStops, rgbToCmyk, rgbToGray, validGradient } from "../../../../packages/domain/src/paint";
 import { createSampleDocument } from "../../../../packages/domain/src/sample";
 interface Release {
@@ -242,12 +245,12 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     {
       id: "paint",
       label: "Painting and symbols",
-      families: ["paint", "eraser", "style", "symbols"],
+      families: ["paint", "eraser", "gradient", "mesh", "style", "symbols"],
     },
     {
       id: "transform",
       label: "Transform and arrange",
-      families: ["rotate", "mirror", "scale"],
+      families: ["rotate", "mirror", "scale", "liquify", "freeTransform"],
     },
     {
       id: "navigation",
@@ -328,6 +331,8 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   readonly pathMenuCommands = ["joinPaths", "averageAnchors", "simplifyPath", "outlineStroke", "selectStray"] as const;
   /** Object > Lock and Object > Hide, with their companions, in the order Illustrator gives them. */
   readonly lockMenuCommands = ["lockSelection", "lockAbove", "lockOthers", "unlockAll"] as const;
+  /** Object > Transform, in the order Illustrator gives it. */
+  readonly transformMenuCommands = ["transformAgain", "displacement", "rotation", "scaleDialog", "shearDialog", "transformEach"] as const;
   readonly hideMenuCommands = ["hideSelection", "hideAbove", "hideOthers", "showAll"] as const;
   readonly pathPanelCommands = ["convertCorner", "convertSmooth", "removeAnchors", "joinPaths", "cutAtAnchors", "averageAnchors", "simplifyPath"] as const;
   readonly averageAxes = [
@@ -701,6 +706,105 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     if (applied) { this.pageDialog.set(null); this.fit(); }
   }
   readonly transformDialog = signal<"displacement" | "rotation" | null>(null);
+  /** The Scale, Shear and Transform Each dialogs of Object > Transform, and their values. */
+  readonly affineDialog = signal<"scale" | "shear" | "each" | null>(null);
+  readonly referencePoints = ["top-left", "top", "top-right", "left", "center", "right", "bottom-left", "bottom", "bottom-right"] as const;
+  affineDraft = { uniform: true, scale: 100, horizontal: 100, vertical: 100, scaleStrokes: false, angle: 0, axis: "horizontal" as "horizontal" | "vertical" | "angle", axisAngle: 0,
+    moveX: 0, moveY: 0, rotation: 0, reflectX: false, reflectY: false, reference: "center" };
+  openAffineDialog(kind: "scale" | "shear" | "each") {
+    if (!this.editor.selectedLayers().some((layer) => !layer.guide)) { this.editor.status.set("Select the objects to transform."); return; }
+    this.flyout.set(null);
+    this.affineDraft = { ...this.affineDraft, scaleStrokes: this.editor.scaleStrokes(), moveX: 0, moveY: 0 };
+    this.affineDialog.set(kind);
+    setTimeout(() => window.document.querySelector<HTMLInputElement>(".affine-dialog input[type=number]")?.focus());
+  }
+  /** OK or Copy in the Scale, Shear or Transform Each dialog. */
+  applyAffineDialog(copy: boolean) {
+    const d = this.affineDraft, kind = this.affineDialog();
+    this.editor.setScaleStrokes(d.scaleStrokes);
+    const unit = this.preferences.distanceUnit();
+    const applied = kind === "scale"
+      ? this.editor.scaleSelection(d.uniform ? d.scale : d.horizontal, d.uniform ? d.scale : d.vertical, { copy, scaleStrokes: d.scaleStrokes })
+      : kind === "shear"
+        ? this.editor.shearSelection(d.angle, d.axis === "horizontal" ? 0 : d.axis === "vertical" ? 90 : d.axisAngle, { copy })
+        : this.editor.transformEach({ scaleX: d.horizontal, scaleY: d.vertical, moveX: toPixels(d.moveX, unit), moveY: toPixels(d.moveY, unit), rotation: d.rotation,
+            reflectX: d.reflectX, reflectY: d.reflectY, reference: d.reference, copy, scaleStrokes: d.scaleStrokes });
+    if (applied) this.affineDialog.set(null);
+    else this.notify(new Error("The transformation cannot be applied to this selection."));
+  }
+  readonly freeTransformModes = [
+    { id: "transform", label: "Free transform", icon: "free-transform", hint: "A corner scales; hold Ctrl to distort, Shift+Alt+Ctrl for perspective." },
+    { id: "distort", label: "Free distort", icon: "free-distort", hint: "A corner moves alone." },
+    { id: "perspective", label: "Perspective distort", icon: "perspective-distort", hint: "A corner moves with its neighbour, the other way." },
+  ] as const;
+  /** Object > Envelope Distort, in the order Illustrator gives it. */
+  readonly envelopeMenuCommands = ["envelopeWarp", "envelopeMesh", "envelopeTop", "envelopeRelease", "envelopeOptions", "envelopeExpand", "envelopeEdit", "envelopeResetWarp", "envelopeResetMesh"] as const;
+  readonly warpStyles = WARP_STYLES.map((id) => ({ id, label: WARP_LABELS[id] }));
+  /** The envelope dialogs: Warp Options to make or reset, the mesh size to make or reset, and Envelope Options. */
+  readonly envelopeDialog = signal<"warp" | "resetWarp" | "mesh" | "resetMesh" | "options" | null>(null);
+  warpDraft: WarpSettings = { ...DEFAULT_WARP };
+  warpPreview = true;
+  meshDraft = { rows: 4, columns: 4, maintainShape: true };
+  fidelityDraft = 50;
+  openEnvelopeDialog(kind: "warp" | "resetWarp" | "mesh" | "resetMesh" | "options") {
+    const envelope = this.editor.selectedEnvelope()?.envelope;
+    if (kind === "resetWarp" && envelope?.warp) this.warpDraft = { ...envelope.warp };
+    if (kind === "resetMesh" && envelope) this.meshDraft = { rows: envelope.mesh.rows, columns: envelope.mesh.columns, maintainShape: true };
+    if (kind === "options" && envelope) this.fidelityDraft = envelope.fidelity;
+    this.envelopeDialog.set(kind);
+    if (kind === "warp" && this.warpPreview) this.previewWarp();
+  }
+  /** Shows the warp on the canvas while the dialog is open, as Preview does in Illustrator. */
+  previewWarp() {
+    if (this.envelopeDialog() !== "warp") return;
+    if (this.warpPreview) this.editor.makeEnvelope("warp", { warp: { ...this.warpDraft } }, true);
+    else this.editor.cancelEnvelopePreview();
+  }
+  setWarp<K extends keyof WarpSettings>(key: K, value: WarpSettings[K]) {
+    this.warpDraft = { ...this.warpDraft, [key]: value };
+    this.previewWarp();
+  }
+  setWarpNumber(key: "bend" | "horizontal" | "vertical", event: Event) {
+    const value = Math.round(this.number(event));
+    if (Number.isFinite(value) && value >= -100 && value <= 100) this.setWarp(key, value);
+  }
+  applyEnvelopeDialog() {
+    const kind = this.envelopeDialog(), d = this.meshDraft;
+    const done = kind === "warp" ? this.editor.makeEnvelope("warp", { warp: { ...this.warpDraft } })
+      : kind === "resetWarp" ? this.editor.resetEnvelopeWithWarp({ ...this.warpDraft })
+        : kind === "mesh" ? this.editor.makeEnvelope("mesh", { rows: Math.round(d.rows), columns: Math.round(d.columns) })
+          : kind === "resetMesh" ? this.editor.resetEnvelopeWithMesh(Math.round(d.rows), Math.round(d.columns), d.maintainShape)
+            : this.editor.setEnvelopeFidelity(this.fidelityDraft);
+    if (done) this.envelopeDialog.set(null);
+    else this.notify(new Error(this.editor.status() || "The envelope cannot be changed that way."));
+  }
+  cancelEnvelopeDialog() { this.editor.cancelEnvelopePreview(); this.envelopeDialog.set(null); }
+  /** The options dialog of a liquify tool, opened by double-clicking it, and its values. */
+  readonly liquifyDialog = signal<LiquifyTool | null>(null);
+  liquifyDraft: LiquifyOptions = { ...LIQUIFY_DEFAULTS.warp };
+  openLiquifyOptions(tool: LiquifyTool) {
+    this.flyout.set(null);
+    this.liquifyDraft = { ...this.editor.liquifyOptions()[tool] };
+    this.liquifyDialog.set(tool);
+  }
+  applyLiquifyOptions() {
+    const tool = this.liquifyDialog();
+    if (tool && this.editor.setLiquifyOptions(tool, { ...this.liquifyDraft })) this.liquifyDialog.set(null);
+    else this.notify(new Error("Keep every option inside its range."));
+  }
+  resetLiquifyOptions() { const tool = this.liquifyDialog(); if (tool) this.liquifyDraft = { ...LIQUIFY_DEFAULTS[tool] }; }
+  /** The brush of the liquify tool in use, in screen pixels, drawn at the cursor. */
+  liquifyBrush(): { width: number; height: number; angle: number } | null {
+    const tool = this.activeTool();
+    if (!this.editor.isLiquifyTool(tool)) return null;
+    const o = this.editor.liquifyOptions()[tool], zoom = this.editor.zoom();
+    return { width: o.width * zoom, height: o.height * zoom, angle: o.angle };
+  }
+  /** While the button is held, Twirl, Pucker, Bloat and the detail tools keep acting in place. */
+  private liquifyTimer?: ReturnType<typeof setInterval>;
+  private stopLiquifyTimer() { if (this.liquifyTimer) { clearInterval(this.liquifyTimer); this.liquifyTimer = undefined; } }
+  /** An Alt-click with the Scale or Shear tool sets the reference point and opens its dialog. */
+  private altClick?: { tool: "scale" | "shear"; x: number; y: number };
   transformX = 0; transformY = 0; numericAngle = 0; transformCenterX = 0; transformCenterY = 0;
   openTransformDialog(kind: "displacement" | "rotation") {
     if (!this.editor.selectedLayers().length) return;
@@ -1109,6 +1213,8 @@ export class AppComponent implements AfterViewInit, OnDestroy {
             ].includes(this.activeTool()),
             showHandles: this.editor.showHandles(),
             boundingBox: this.editor.boundingBoxVisible(),
+            meshNode: this.editor.meshNode()?.index,
+            quad: this.activeTool() === "freeTransform" ? (this.editor.freeQuad() ?? this.editor.freeTransformQuad() ?? undefined) : undefined,
             outline: this.editor.outlineView(),
             outlineInk: this.theme?.() === "light" ? "#202b3f" : "#e5e9f0",
             handleSize: this.editor.handleSize(),
@@ -1382,6 +1488,11 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     this.preferences.updatePathSettings({ eraser: this.editor.eraserShape() });
   }
   openToolOptions(id: ToolId) {
+    if (id === "scale" || id === "shear") { this.openAffineDialog(id); return; }
+    // Double-clicking the Zoom tool shows the artwork at its actual size, and the Hand tool fits it.
+    if (id === "zoom") { this.flyout.set(null); this.setZoom(1); return; }
+    if (id === "hand") { this.flyout.set(null); this.fit(); return; }
+    if (this.editor.isLiquifyTool(id)) { this.openLiquifyOptions(id); return; }
     if (id === "eraser") {
       this.flyout.set(null);
       this.brushDraft.set({ kind: "calligraphic", ...this.editor.eraserShape() });
@@ -1517,14 +1628,13 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     if (event.pointerType === "touch" && this.mobile() && (event.clientX <= EDGE_ZONE || event.clientX >= window.innerWidth - EDGE_ZONE)) return;
     this.canvas!.nativeElement.setPointerCapture(event.pointerId);
     this.pointerActive = true;
-    if (this.zoomAreaActive(event)) { this.beginZoomArea(event); return; }
+    const zoomMode = this.zoomMode(event);
+    if (zoomMode) { this.beginZoomArea(event, zoomMode); return; }
     this.commitText();
-    this.temporarySelect.set(event.ctrlKey);
+    // Ctrl on a handle of the Free Transform box distorts, whether it was pressed before the
+    // drag or during it; elsewhere Ctrl gives the selection tool, as usual.
+    this.temporarySelect.set(event.ctrlKey && !(this.editor.tool() === "freeTransform" && this.editor.freeTransformHandleAt(this.point(event))));
     const tool = this.activeTool();
-    if (tool === "zoom" && !this.temporaryPan()) {
-      this.setZoom(this.editor.zoom() * (event.altKey ? 0.8 : 1.25));
-      return;
-    }
     if (tool === "hand" || this.temporaryPan()) {
       const view = this.viewport!.nativeElement;
       this.pan = {
@@ -1534,6 +1644,9 @@ export class AppComponent implements AfterViewInit, OnDestroy {
         top: view.scrollTop,
       };
     } else {
+      this.altClick = event.altKey && (tool === "scale" || tool === "shear") ? { tool, x: event.clientX, y: event.clientY } : undefined;
+      this.stopLiquifyTimer();
+      if (this.editor.isLiquifyTool(tool) && !event.altKey) this.liquifyTimer = setInterval(() => this.editor.liquifyTick(), 60);
       this.editor.start(
         this.point(event),
         {
@@ -1572,7 +1685,11 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     this.pointerActive = false;
     if (this.zoomDrag) { this.endZoomArea(); return; }
     this.pan = undefined;
+    this.stopLiquifyTimer();
     this.editor.end(event ? { alt: event.altKey } : undefined);
+    const click = this.altClick;
+    this.altClick = undefined;
+    if (click && event && Math.hypot(event.clientX - click.x, event.clientY - click.y) < 3) this.openAffineDialog(click.tool);
   }
   /** Browsers release capture after every pointerup; only an interrupted press cancels the gesture. */
   pointerLost() {
@@ -1583,6 +1700,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     if (this.zoomDrag) { this.zoomDrag = undefined; this.zoomArea.set(null); return; }
     if (this.guideDrag) this.cancelGuide();
     this.pan = undefined;
+    this.stopLiquifyTimer();
     this.editor.cancel();
   }
   private renderDocument() {
@@ -1713,7 +1831,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
           rotate: ["rotateCW", "rotateCCW"],
           mirror: ["mirrorH", "mirrorV"],
           scale: ["scaleUp", "scaleDown"],
-          zoom: ["zoomIn", "zoomOut", "fit"],
+          zoom: ["zoomIn", "zoomOut", "actualSize", "fit"],
           // Outlining a stroke belongs with the tools that draw one, and outlining a text
           // with the tool that writes it.
           paint: ["outlineStroke"],
@@ -1791,9 +1909,16 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     if (["averageAnchors", "convertCorner", "convertSmooth", "removeAnchors", "cutAtAnchors"].includes(id))
       return this.editor.selectedLayers().some((layer) => this.editor.anchorKeysOf(layer.id).length > 0);
     if (id === "transformAgain") return this.editor.selectedLayers().length > 0 && !!this.editor.lastTransform();
+    if (["envelopeWarp", "envelopeMesh"].includes(id)) return this.editor.selectedLayers().some((layer) => !layer.guide && !layer.envelope);
+    if (id === "envelopeTop") return this.editor.selectedLayers().length > 1;
+    if (["envelopeRelease", "envelopeExpand", "envelopeResetWarp", "envelopeResetMesh"].includes(id)) return this.editor.selectedEnvelope()?.envelope?.editing === "envelope";
+    if (["envelopeOptions", "envelopeEdit"].includes(id)) return !!this.editor.selectedEnvelope();
+    if (["scaleDialog", "shearDialog", "transformEach"].includes(id)) return this.editor.selectedLayers().some((layer) => !layer.guide && !layer.locked);
     if (["paste", "pasteInFront", "pasteInBack"].includes(id)) return this.editor.canPaste();
     return true;
   }
+  /** Edit Contents becomes Edit Envelope while the contents are being edited, as in Illustrator. */
+  envelopeEditLabel() { return this.editor.selectedEnvelope()?.envelope?.editing === "contents" ? "Edit envelope" : "Edit contents"; }
   commandLabel(id: string) {
     return this.commandList.find((c) => c.id === id)?.label ?? this.tools.find(tool => "tool." + tool.id === id)?.label ?? id;
   }
@@ -1826,6 +1951,18 @@ export class AppComponent implements AfterViewInit, OnDestroy {
       duplicate: () => this.editor.duplicate(),
       duplicateSeries: () => this.openArrayDialog(),
       transformAgain: () => this.editor.transformAgain(),
+      scaleDialog: () => this.openAffineDialog("scale"),
+      envelopeWarp: () => this.openEnvelopeDialog("warp"),
+      envelopeMesh: () => this.openEnvelopeDialog("mesh"),
+      envelopeTop: () => this.editor.makeEnvelope("object"),
+      envelopeRelease: () => this.editor.releaseEnvelope(),
+      envelopeOptions: () => this.openEnvelopeDialog("options"),
+      envelopeExpand: () => this.editor.expandEnvelope(),
+      envelopeEdit: () => this.editor.toggleEnvelopeEditing(),
+      envelopeResetWarp: () => this.openEnvelopeDialog("resetWarp"),
+      envelopeResetMesh: () => this.openEnvelopeDialog("resetMesh"),
+      shearDialog: () => this.openAffineDialog("shear"),
+      transformEach: () => this.openAffineDialog("each"),
       copy: () => this.editor.copySelection(),
       cut: () => this.editor.cutSelection(),
       paste: () => this.editor.paste(),
@@ -1922,8 +2059,9 @@ export class AppComponent implements AfterViewInit, OnDestroy {
       rotateCCW: () => this.editor.transformBy(-90),
       scaleUp: () => this.editor.transformBy(0, 2),
       scaleDown: () => this.editor.transformBy(0, 0.5),
-      zoomIn: () => this.setZoom(this.editor.zoom() * 1.25),
-      zoomOut: () => this.setZoom(this.editor.zoom() * 0.8),
+      zoomIn: () => this.zoomView("in"),
+      zoomOut: () => this.zoomView("out"),
+      actualSize: () => this.setZoom(1),
       fit: () => this.fit(),
     };
     actions[id]?.();
@@ -1942,7 +2080,10 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     return this.tools.filter((tool) => tool.group === this.toolGroup());
   }
   activeTool(): ToolId {
-    return this.temporarySelect() && !this.editor.isEditingCurve()
+    // Ctrl+Space and Ctrl+Alt+Space hold the Zoom tool over the tool in use.
+    if (this.zoomHold?.()) return "zoom";
+    // Ctrl pressed during a Free Transform drag distorts, as in Illustrator, rather than selecting.
+    return this.temporarySelect() && !this.editor.isEditingCurve() && !this.editor.freeQuad()
       ? this.temporarySelectionTool()
       : this.editor.tool();
   }
@@ -1958,6 +2099,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   }
   toolIcon() {
     if (this.temporaryPan()) return "hand";
+    if (this.activeTool() === "zoom") return this.zoomHold?.() === "out" || (this.altHeld?.() && !this.zoomHold?.()) ? "zoom-out" : "zoom-in";
     const tool = this.activeTool();
     // Alt turns a tool into its partner while it is held, as in Illustrator.
     if (this.altHeld?.()) {
@@ -2157,27 +2299,74 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   }
   /** Rectangle being dragged with the zoom area tool, in client coordinates. */
   readonly zoomArea = signal<{ x: number; y: number; width: number; height: number } | null>(null);
-  private zoomDrag?: { start: { x: number; y: number } };
-  private zoomAreaActive(event: { ctrlKey: boolean; metaKey?: boolean }) {
-    return this.activeTool() === "zoomArea" || (this.spaceHeld && (event.ctrlKey || event.metaKey === true));
+  private zoomDrag?: { start: { x: number; y: number }; last: { x: number; y: number }; mode: "in" | "out" | "area"; spaceAtStart: boolean; moved: boolean };
+  /**
+   * The Zoom tool held with the keys, as in Illustrator: Ctrl+Space zooms in and
+   * Ctrl+Alt+Space zooms out, and letting the keys go gives back the tool in use.
+   */
+  readonly zoomHold = signal<"in" | "out" | null>(null);
+  private updateZoomHold(event: KeyboardEvent) {
+    this.zoomHold?.set(this.spaceHeld && (event.ctrlKey || event.metaKey) && !this.textEditing?.() ? (event.altKey ? "out" : "in") : null);
   }
-  private beginZoomArea(event: PointerEvent) {
-    this.zoomDrag = { start: { x: event.clientX, y: event.clientY } };
-    this.zoomArea.set({ x: event.clientX, y: event.clientY, width: 0, height: 0 });
+  /** What a press on the canvas zooms: in or out with a click, or the area of a drag. */
+  private zoomMode(event: { ctrlKey: boolean; metaKey?: boolean; altKey: boolean }): "in" | "out" | "area" | null {
+    if (this.spaceHeld && (event.ctrlKey || event.metaKey === true)) return event.altKey ? "out" : "in";
+    const tool = this.activeTool();
+    if (tool === "zoomArea") return "area";
+    if (tool === "zoom" && !this.temporaryPan()) return event.altKey ? "out" : "in";
+    return null;
+  }
+  private zoomAreaActive(event: { ctrlKey: boolean; metaKey?: boolean; altKey?: boolean }) {
+    return this.zoomMode({ altKey: false, ...event }) !== null;
+  }
+  private beginZoomArea(event: PointerEvent, mode: "in" | "out" | "area" = this.zoomMode(event) ?? "area") {
+    this.zoomDrag = { start: { x: event.clientX, y: event.clientY }, last: { x: event.clientX, y: event.clientY }, mode, spaceAtStart: this.spaceHeld, moved: false };
+    if (mode === "area") this.zoomArea.set({ x: event.clientX, y: event.clientY, width: 0, height: 0 });
   }
   private updateZoomArea(event: PointerEvent) {
     const drag = this.zoomDrag;
     if (!drag) return;
+    // Space held during the drag of the Zoom tool moves the marquee instead of resizing it.
+    if (this.spaceHeld && !drag.spaceAtStart && drag.moved) {
+      drag.start = { x: drag.start.x + event.clientX - drag.last.x, y: drag.start.y + event.clientY - drag.last.y };
+    }
+    drag.last = { x: event.clientX, y: event.clientY };
+    drag.moved ||= drag.mode === "area" || Math.hypot(event.clientX - drag.start.x, event.clientY - drag.start.y) > 4;
+    if (!drag.moved) return;
     this.zoomArea.set({
       x: Math.min(drag.start.x, event.clientX), y: Math.min(drag.start.y, event.clientY),
       width: Math.abs(event.clientX - drag.start.x), height: Math.abs(event.clientY - drag.start.y),
     });
   }
-  /** Fits the dragged rectangle into the visible workspace and centres it. */
+  /**
+   * A click of the Zoom tool zooms in, or out with Alt, to the next preset about the point
+   * clicked, which comes to the centre of the view, as Illustrator does.
+   */
+  private zoomAt(client: { x: number; y: number }, direction: "in" | "out") {
+    const canvas = this.canvas?.nativeElement, view = this.viewport?.nativeElement;
+    const target = canvas ? this.point({ clientX: client.x, clientY: client.y } as MouseEvent) : null;
+    this.setZoom(stepZoom(this.editor.zoom(), direction));
+    if (!target || !view) return;
+    requestAnimationFrame(() => {
+      const rect = canvas!.getBoundingClientRect(), bounds = view.getBoundingClientRect(), doc = this.editor.document();
+      const at = { x: rect.left + (target.x * rect.width) / doc.width, y: rect.top + (target.y * rect.height) / doc.height };
+      view.scrollLeft += at.x - (bounds.left + view.clientWidth / 2);
+      view.scrollTop += at.y - (bounds.top + view.clientHeight / 2);
+    });
+  }
+  /** View > Zoom In and Zoom Out: the next preset about the centre of the view. */
+  zoomView(direction: "in" | "out") {
+    const view = this.viewport?.nativeElement;
+    if (!view || !this.canvas) { this.setZoom(stepZoom(this.editor.zoom(), direction)); return; }
+    const bounds = view.getBoundingClientRect();
+    this.zoomAt({ x: bounds.left + view.clientWidth / 2, y: bounds.top + view.clientHeight / 2 }, direction);
+  }
+  /** Fits the dragged rectangle into the visible workspace and centres it; a click zooms by a step. */
   private endZoomArea() {
-    const area = this.zoomArea(), view = this.viewport?.nativeElement;
+    const area = this.zoomArea(), view = this.viewport?.nativeElement, drag = this.zoomDrag;
     this.zoomDrag = undefined;
     this.zoomArea.set(null);
+    if (drag && !drag.moved && drag.mode !== "area") { this.zoomAt(drag.start, drag.mode); return; }
     if (!area || !view || area.width < 8 || area.height < 8) return;
     const zoom = this.editor.zoom();
     const bounds = view.getBoundingClientRect();
@@ -2206,7 +2395,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
       );
   }
   setZoom(value: number) {
-    this.editor.zoom.set(Math.min(3, Math.max(0.1, value)));
+    this.editor.zoom.set(Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, value)));
   }
   number(event: Event) {
     return Number((event.target as HTMLInputElement).value);
@@ -2413,6 +2602,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     }
     if (event.key === "Escape" && this.paintPicker?.()) { this.paintPicker.set(null); event.preventDefault(); return; }
     if (event.code === "Space" && !event.isComposing) this.spaceHeld = true;
+    this.updateZoomHold(event);
     const target = event.target as HTMLElement;
     if (
       event.isComposing ||
@@ -2504,6 +2694,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     this.editor?.setDuplicatingDrag(event.altKey);
     this.altHeld?.set(event.altKey);
     if (event.code === "Space") this.spaceHeld = false;
+    this.updateZoomHold(event);
     if (event.code === this.panKey) {
       this.temporaryPan.set(false);
       this.panKey = "";
@@ -2514,6 +2705,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     this.dismissMenus();
     this.flyout.set(null);
     this.spaceHeld = false;
+    this.zoomHold?.set(null);
     this.temporaryPan.set(false);
     this.temporarySelect.set(false);
     this.panKey = "";

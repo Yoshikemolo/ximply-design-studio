@@ -89,6 +89,14 @@
           ><button [disabled]="!commandEnabled('outlineText')" (click)="runCommand('outlineText')">
             {{ t("Create outlines") }}<kbd>{{ shortcut("outlineText") }}</kbd>
           </button>
+          <div class="menu-section-label">{{ t("Transform") }}</div>
+          @for (id of transformMenuCommands; track id) {
+            <button [disabled]="!commandEnabled(id)" (click)="runCommand(id)">{{ t(commandLabel(id)) }}<kbd>{{ shortcut(id) }}</kbd></button>
+          }
+          <div class="menu-section-label">{{ t("Envelope distort") }}</div>
+          @for (id of envelopeMenuCommands; track id) {
+            <button [disabled]="!commandEnabled(id)" (click)="runCommand(id)">{{ t(id === 'envelopeEdit' ? envelopeEditLabel() : commandLabel(id)) }}<kbd>{{ shortcut(id) }}</kbd></button>
+          }
           <div class="menu-section-label">{{ t("Lock") }}</div>
           @for (id of lockMenuCommands; track id) {
             <button [disabled]="!commandEnabled(id)" (click)="runCommand(id)">{{ t(commandLabel(id)) }}<kbd>{{ shortcut(id) }}</kbd></button>
@@ -173,6 +181,16 @@
           <button class="paint-trigger compact-paint" [class.no-paint]="paintColor(target) === 'none'" [style.--paint]="paintColor(target)" (click)="openPaint(target, $event)" [title]="t(target === 'fill' ? 'Fill' : 'Stroke')" [attr.aria-label]="t(target === 'fill' ? 'Fill' : 'Stroke')"><span [class.stroke-preview]="target === 'stroke'"></span></button>
         }
         <label>{{ t("Size") }} <input type="number" min="0" step="any" [value]="displayDistance(editor.size())" (change)="setToolSize($event)" /> {{ preferences.distanceUnit() }}</label>
+      </section>
+    }
+    @if (editor.tool() === 'freeTransform') {
+      <section class="context-block" role="group" [attr.aria-label]="t('Free transform')">
+        <span>{{ t('Free transform') }}</span>
+        <div class="segmented">
+          @for (mode of freeTransformModes; track mode.id) {
+            <button [class.active]="editor.freeTransformMode() === mode.id" [attr.aria-pressed]="editor.freeTransformMode() === mode.id" [title]="t(mode.label) + ' · ' + t(mode.hint)" [attr.aria-label]="t(mode.label)" (click)="editor.freeTransformMode.set(mode.id)"><img [src]="'/assets/icons/' + mode.icon + '.svg'" alt="" /></button>
+          }
+        </div>
       </section>
     }
     @if (['eyedropper', 'paintBucket'].includes(editor.tool())) {
@@ -1374,6 +1392,9 @@
   (change)="symbolsInput($event)"
 />
 @if (cursorPoint(); as cursor) {
+  @if (liquifyBrush(); as brush) {
+    <div class="liquify-brush" aria-hidden="true" [style.left.px]="cursor.x" [style.top.px]="cursor.y" [style.width.px]="brush.width" [style.height.px]="brush.height" [style.transform]="'translate(-50%, -50%) rotate(' + -brush.angle + 'deg)'"></div>
+  }
   @if (
     preferences.cursorIcon() &&
     !settings() &&
@@ -1888,6 +1909,96 @@
   </form></div>
 }
 
+@if (envelopeDialog(); as kind) {
+  <div class="modal-backdrop"><form class="server-dialog affine-dialog envelope-dialog" role="dialog" aria-modal="true" [attr.aria-label]="t(kind === 'options' ? 'Envelope options' : kind === 'warp' || kind === 'resetWarp' ? 'Warp options' : 'Envelope mesh')" (submit)="$event.preventDefault(); applyEnvelopeDialog()" (keydown.escape)="cancelEnvelopeDialog(); $event.stopPropagation()">
+    <h2>{{ t(kind === 'options' ? 'Envelope options' : kind === 'warp' || kind === 'resetWarp' ? 'Warp options' : 'Envelope mesh') }}</h2>
+    @if (kind === 'warp' || kind === 'resetWarp') {
+      <div class="warp-styles" role="radiogroup" [attr.aria-label]="t('Style')">
+        @for (style of warpStyles; track style.id) {
+          <button type="button" role="radio" [class.active]="warpDraft.style === style.id" [attr.aria-checked]="warpDraft.style === style.id" [title]="t(style.label)" [attr.aria-label]="t(style.label)" (click)="setWarp('style', style.id)"><img [src]="'/assets/icons/warp-' + style.id + '.svg'" alt="" /></button>
+        }
+      </div>
+      <div class="radio-row">
+        <label class="radio-row"><input type="radio" name="axis" [checked]="warpDraft.axis === 'horizontal'" (change)="setWarp('axis', 'horizontal')" />{{ t('Horizontal') }}</label>
+        <label class="radio-row"><input type="radio" name="axis" [checked]="warpDraft.axis === 'vertical'" (change)="setWarp('axis', 'vertical')" />{{ t('Vertical') }}</label>
+      </div>
+      <label class="channel">{{ t('Bend') }}<input type="range" min="-100" max="100" [value]="warpDraft.bend" (input)="setWarpNumber('bend', $event)" /><input type="number" min="-100" max="100" [value]="warpDraft.bend" (change)="setWarpNumber('bend', $event)" [attr.aria-label]="t('Bend')" />%</label>
+      <div class="section-label">{{ t('Distortion') }}</div>
+      <label class="channel">{{ t('Horizontal') }}<input type="range" min="-100" max="100" [value]="warpDraft.horizontal" (input)="setWarpNumber('horizontal', $event)" /><input type="number" min="-100" max="100" [value]="warpDraft.horizontal" (change)="setWarpNumber('horizontal', $event)" [attr.aria-label]="t('Horizontal distortion')" />%</label>
+      <label class="channel">{{ t('Vertical') }}<input type="range" min="-100" max="100" [value]="warpDraft.vertical" (input)="setWarpNumber('vertical', $event)" /><input type="number" min="-100" max="100" [value]="warpDraft.vertical" (change)="setWarpNumber('vertical', $event)" [attr.aria-label]="t('Vertical distortion')" />%</label>
+      @if (kind === 'warp') {<label class="radio-row"><input type="checkbox" name="preview" [(ngModel)]="warpPreview" (change)="previewWarp()" />{{ t('Preview') }}</label>}
+    } @else if (kind === 'options') {
+      <label class="channel">{{ t('Fidelity') }}<input type="range" min="0" max="100" name="fidelityRange" [(ngModel)]="fidelityDraft" /><input type="number" min="0" max="100" name="fidelity" [(ngModel)]="fidelityDraft" [attr.aria-label]="t('Fidelity')" />%</label>
+    } @else {
+      <div class="property-grid"><label>{{ t('Rows') }}<input type="number" min="1" max="50" step="1" name="rows" [(ngModel)]="meshDraft.rows" /></label><label>{{ t('Columns') }}<input type="number" min="1" max="50" step="1" name="columns" [(ngModel)]="meshDraft.columns" /></label></div>
+      @if (kind === 'resetMesh') {<label class="radio-row"><input type="checkbox" name="maintain" [(ngModel)]="meshDraft.maintainShape" />{{ t('Maintain envelope shape') }}</label>}
+    }
+    <div class="dialog-actions"><button type="button" (click)="cancelEnvelopeDialog()">{{ t('Cancel') }}</button><button type="submit">{{ t('OK') }}</button></div>
+  </form></div>
+}
+@if (liquifyDialog(); as tool) {
+  <div class="modal-backdrop"><form class="server-dialog affine-dialog liquify-dialog" role="dialog" aria-modal="true" [attr.aria-label]="t(tool[0].toUpperCase() + tool.slice(1) + ' tool options')" (submit)="$event.preventDefault(); applyLiquifyOptions()" (keydown.escape)="liquifyDialog.set(null); $event.stopPropagation()">
+    <h2>{{ t(tool[0].toUpperCase() + tool.slice(1) + ' tool options') }}</h2>
+    <div class="section-label">{{ t('Global brush dimensions') }}</div>
+    <div class="property-grid">
+      <label>{{ t('Width') }}<input type="number" min="1" max="1000" step="any" name="width" [(ngModel)]="liquifyDraft.width" /></label>
+      <label>{{ t('Height') }}<input type="number" min="1" max="1000" step="any" name="height" [(ngModel)]="liquifyDraft.height" /></label>
+      <label>{{ t('Angle') }} (°)<input type="number" min="-360" max="360" step="any" name="angle" [(ngModel)]="liquifyDraft.angle" /></label>
+      <label>{{ t('Intensity') }} (%)<input type="number" min="1" max="100" step="1" name="intensity" [(ngModel)]="liquifyDraft.intensity" /></label>
+    </div>
+    <div class="section-label">{{ t(tool[0].toUpperCase() + tool.slice(1) + ' options') }}</div>
+    @if (tool === 'twirl') {<label>{{ t('Twirl rate') }} (°)<input type="number" min="-180" max="180" step="any" name="twirlRate" [(ngModel)]="liquifyDraft.twirlRate" /></label>}
+    @if (tool === 'scallop' || tool === 'crystallize' || tool === 'wrinkle') {<label>{{ t('Complexity') }}<input type="number" min="0" max="15" step="1" name="complexity" [(ngModel)]="liquifyDraft.complexity" /></label>}
+    @if (tool === 'wrinkle') {
+      <div class="property-grid"><label>{{ t('Horizontal') }} (%)<input type="number" min="0" max="100" step="any" name="horizontal" [(ngModel)]="liquifyDraft.horizontal" /></label><label>{{ t('Vertical') }} (%)<input type="number" min="0" max="100" step="any" name="vertical" [(ngModel)]="liquifyDraft.vertical" /></label></div>
+    }
+    <label>{{ t('Detail') }}<input type="number" min="1" max="10" step="1" name="detail" [(ngModel)]="liquifyDraft.detail" /></label>
+    @if (tool === 'warp' || tool === 'twirl' || tool === 'pucker' || tool === 'bloat') {<label>{{ t('Simplify') }}<input type="number" min="0.2" max="100" step="any" name="simplify" [(ngModel)]="liquifyDraft.simplify" /></label>}
+    @if (tool === 'scallop' || tool === 'crystallize' || tool === 'wrinkle') {
+      <label class="radio-row"><input type="checkbox" name="affectAnchors" [(ngModel)]="liquifyDraft.affectAnchors" />{{ t('Brush affects anchor points') }}</label>
+      <label class="radio-row"><input type="checkbox" name="affectIn" [(ngModel)]="liquifyDraft.affectIn" />{{ t('Brush affects in tangent handles') }}</label>
+      <label class="radio-row"><input type="checkbox" name="affectOut" [(ngModel)]="liquifyDraft.affectOut" />{{ t('Brush affects out tangent handles') }}</label>
+    }
+    <p class="panel-tip">{{ t('Alt-drag with the tool to size the brush; add Shift for a circle.') }}</p>
+    <div class="dialog-actions"><button type="button" (click)="resetLiquifyOptions()">{{ t('Reset') }}</button><button type="button" (click)="liquifyDialog.set(null)">{{ t('Cancel') }}</button><button type="submit">{{ t('OK') }}</button></div>
+  </form></div>
+}
+@if (affineDialog(); as kind) {
+  <div class="modal-backdrop"><form class="server-dialog affine-dialog" role="dialog" aria-modal="true" [attr.aria-label]="t(kind === 'scale' ? 'Scale' : kind === 'shear' ? 'Shear' : 'Transform each')" (submit)="$event.preventDefault(); applyAffineDialog(false)" (keydown.escape)="affineDialog.set(null); $event.stopPropagation()">
+    <h2>{{ t(kind === 'scale' ? 'Scale' : kind === 'shear' ? 'Shear' : 'Transform each') }}</h2>
+    @if (kind === 'scale') {
+      <label class="radio-row"><input type="radio" name="uniform" [checked]="affineDraft.uniform" (change)="affineDraft.uniform = true" />{{ t('Uniform') }}</label>
+      <label>{{ t('Scale') }} (%)<input type="number" step="any" name="scale" [(ngModel)]="affineDraft.scale" [disabled]="!affineDraft.uniform" /></label>
+      <label class="radio-row"><input type="radio" name="uniform" [checked]="!affineDraft.uniform" (change)="affineDraft.uniform = false" />{{ t('Non-Uniform') }}</label>
+      <div class="property-grid"><label>{{ t('Horizontal') }} (%)<input type="number" step="any" name="horizontal" [(ngModel)]="affineDraft.horizontal" [disabled]="affineDraft.uniform" /></label><label>{{ t('Vertical') }} (%)<input type="number" step="any" name="vertical" [(ngModel)]="affineDraft.vertical" [disabled]="affineDraft.uniform" /></label></div>
+      <label class="radio-row"><input type="checkbox" name="strokes" [(ngModel)]="affineDraft.scaleStrokes" />{{ t('Scale strokes & effects') }}</label>
+    } @else if (kind === 'shear') {
+      <label>{{ t('Shear angle') }} (°)<input type="number" step="any" min="-359" max="359" name="angle" [(ngModel)]="affineDraft.angle" /></label>
+      <fieldset class="axis-choice"><legend>{{ t('Axis') }}</legend>
+        <label class="radio-row"><input type="radio" name="axis" [checked]="affineDraft.axis === 'horizontal'" (change)="affineDraft.axis = 'horizontal'" />{{ t('Horizontal') }}</label>
+        <label class="radio-row"><input type="radio" name="axis" [checked]="affineDraft.axis === 'vertical'" (change)="affineDraft.axis = 'vertical'" />{{ t('Vertical') }}</label>
+        <label class="radio-row"><input type="radio" name="axis" [checked]="affineDraft.axis === 'angle'" (change)="affineDraft.axis = 'angle'" />{{ t('Angle') }}<input type="number" step="any" min="-359" max="359" name="axisAngle" [(ngModel)]="affineDraft.axisAngle" [disabled]="affineDraft.axis !== 'angle'" [attr.aria-label]="t('Axis angle')" />°</label>
+      </fieldset>
+    } @else {
+      <div class="section-label">{{ t('Scale') }}</div>
+      <div class="property-grid"><label>{{ t('Horizontal') }} (%)<input type="number" step="any" name="eachH" [(ngModel)]="affineDraft.horizontal" /></label><label>{{ t('Vertical') }} (%)<input type="number" step="any" name="eachV" [(ngModel)]="affineDraft.vertical" /></label></div>
+      <div class="section-label">{{ t('Move') }}</div>
+      <div class="property-grid"><label>{{ t('Horizontal') }} ({{ preferences.distanceUnit() }})<input type="number" step="any" name="moveX" [(ngModel)]="affineDraft.moveX" /></label><label>{{ t('Vertical') }} ({{ preferences.distanceUnit() }})<input type="number" step="any" name="moveY" [(ngModel)]="affineDraft.moveY" /></label></div>
+      <label>{{ t('Rotate') }} (°)<input type="number" step="any" name="rotation" [(ngModel)]="affineDraft.rotation" /></label>
+      <div class="each-options">
+        <div>
+          <label class="radio-row"><input type="checkbox" name="eachStrokes" [(ngModel)]="affineDraft.scaleStrokes" />{{ t('Scale strokes & effects') }}</label>
+          <label class="radio-row"><input type="checkbox" name="reflectX" [(ngModel)]="affineDraft.reflectX" />{{ t('Reflect X') }}</label>
+          <label class="radio-row"><input type="checkbox" name="reflectY" [(ngModel)]="affineDraft.reflectY" />{{ t('Reflect Y') }}</label>
+        </div>
+        <div class="reference-locator" role="radiogroup" [attr.aria-label]="t('Reference point')">
+          @for (point of referencePoints; track point) {<button type="button" role="radio" [class.active]="affineDraft.reference === point" [attr.aria-checked]="affineDraft.reference === point" [attr.aria-label]="t('Reference point') + ': ' + point" (click)="affineDraft.reference = point"></button>}
+        </div>
+      </div>
+    }
+    <div class="dialog-actions"><button type="button" (click)="affineDialog.set(null)">{{ t('Cancel') }}</button><button type="button" (click)="applyAffineDialog(true)">{{ t('Copy') }}</button><button type="submit">{{ t('OK') }}</button></div>
+  </form></div>
+}
 @if (transformDialog(); as mode) {
   <div class="modal-backdrop"><form class="server-dialog transform-dialog" role="dialog" aria-modal="true" [attr.aria-label]="t(mode === 'displacement' ? 'Enter displacement' : 'Enter rotation')" (submit)="$event.preventDefault(); applyNumericTransform()" (keydown.escape)="transformDialog.set(null); $event.stopPropagation()">
     <h2>{{ t(mode === 'displacement' ? 'Enter displacement' : 'Enter rotation') }}</h2>

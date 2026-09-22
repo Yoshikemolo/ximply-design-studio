@@ -11,7 +11,10 @@ import { AreaSelectionKind, SelectionArea, layerInsideArea, layerIntersectsArea,
 import { blendCompatible, blendProgress, interpolateBlendLayer, syncBlends, ObjectBlend, BlendEasing } from "../../../../packages/domain/src/object-blend";
 import { defaultTypography, defaultTextLayout, FONT_FAMILIES, layoutText, TextLayoutOptions, TextTypography } from "../../../../packages/domain/src/text-layout";
 import { snapPoint, SnapConfig, rulerSnapSteps } from "../../../../packages/domain/src/measurements";
-import { transformLayers } from "../../../../packages/domain/src/affine";
+import { Affine, Linear, about, affineLayers, applyAffine, scaleLinear, shearLinear, transformLayers } from "../../../../packages/domain/src/affine";
+import { Quad, boxQuad, distortable, mapLayers, quadMap, worldCurves } from "../../../../packages/domain/src/distort";
+import { DEFAULT_WARP, Envelope, EnvelopeMesh, WarpSettings, contentBox, envelopeArtwork, envelopeMap, fitEnvelope, gridMesh, mapMesh, meshBounds, meshLines, meshOutline, meshPoint, objectMesh, resampleMesh, validWarp, warpMesh } from "../../../../packages/domain/src/envelope";
+import { LIQUIFY_DEFAULTS, LIQUIFY_TOOLS, LiquifyOptions, LiquifyTool, liquifyStep, refine, validLiquifyOptions } from "../../../../packages/domain/src/liquify";
 import {
   alignLayers,
   booleanLayers,
@@ -1202,6 +1205,10 @@ export class EditorService {
     mode: string;
     ids?: string[];
     deselectNodeOnClick?: string;
+    /** The linear map a Scale or Shear drag applies about the pivot, once it has moved. */
+    linear?: Linear;
+    /** The axis a Shear drag took from the way it started. */
+    axis?: "horizontal" | "vertical";
   };
   // Open documents. The active one lives in `document`, `history` and the selection signals;
   // inactive tabs keep their own snapshot so switching never mixes undo history or selection.
@@ -1364,7 +1371,7 @@ export class EditorService {
    */
   private duplicationGhosts(): Layer[] {
     const g = this.gesture;
-    if (!this.duplicatingDrag() || !g || !["move", "rotate", "scale"].includes(g.mode)) return [];
+    if (!this.duplicatingDrag() || !g || !["move", "rotate", "scale", "shear"].includes(g.mode)) return [];
     const ids = new Set(g.ids?.length ? g.ids : [g.id]);
     return g.before.layers
       .filter((layer) => ids.has(layer.id) && layer.visible && !layer.guide)
@@ -1754,6 +1761,7 @@ export class EditorService {
     if (target) this.reorderLayer(source.id, target.id, delta < 0 ? "before" : "after");
   }
   remove() {
+    if (this.meshNode() && this.selectedEnvelope() && this.deleteMeshLines()) return;
     if (this.removeSelectedParts()) return;
     const ids = new Set(
       this.selectedLayers()
@@ -1826,19 +1834,647 @@ export class EditorService {
    * The last transformation of the selection, kept so it can be repeated: how far it moved,
    * how much it turned and grew, and whether it left a copy behind.
    */
-  readonly lastTransform = signal<{ dx: number; dy: number; rotation: number; scale: number; duplicate: boolean; pivot: Point } | null>(null);
+  readonly lastTransform = signal<{ dx: number; dy: number; rotation: number; scale: number; duplicate: boolean; pivot: Point; matrix?: Linear } | null>(null);
   /** True while a drag will duplicate on release, which the cursor shows. */
   readonly duplicatingDrag = signal(false);
   /** Keeps the cursor honest while Alt is pressed or released without moving the pointer. */
   setDuplicatingDrag(alt: boolean) {
-    if (this.gesture && ["move", "rotate", "scale"].includes(this.gesture.mode)) this.duplicatingDrag.set(alt);
+    if (this.gesture && ["move", "rotate", "scale", "shear"].includes(this.gesture.mode)) this.duplicatingDrag.set(alt);
   }
-  private recordTransform(step: { dx?: number; dy?: number; rotation?: number; scale?: number; duplicate?: boolean; pivot?: Point }) {
+  private recordTransform(step: { dx?: number; dy?: number; rotation?: number; scale?: number; duplicate?: boolean; pivot?: Point; matrix?: Linear }) {
     // The pivot belongs to the transformation: a repeat turns and scales around the same point.
     const pivot = step.pivot ?? this.pivot();
-    const value = { dx: step.dx ?? 0, dy: step.dy ?? 0, rotation: step.rotation ?? 0, scale: step.scale ?? 1, duplicate: !!step.duplicate, pivot: { ...pivot } };
-    if (!value.dx && !value.dy && !value.rotation && value.scale === 1 && !value.duplicate) return;
+    const value = { dx: step.dx ?? 0, dy: step.dy ?? 0, rotation: step.rotation ?? 0, scale: step.scale ?? 1, duplicate: !!step.duplicate, pivot: { ...pivot }, ...(step.matrix ? { matrix: step.matrix } : {}) };
+    if (!value.dx && !value.dy && !value.rotation && value.scale === 1 && !value.duplicate && !step.matrix) return;
     this.lastTransform.set(value);
+  }
+  /** Scale Strokes & Effects: whether scaling also scales the weight of strokes; off by default. */
+  readonly scaleStrokes = signal<boolean>((() => { try { return JSON.parse(localStorage.getItem("xds-transform-settings") ?? "{}").scaleStrokes === true; } catch { return false; } })());
+  setScaleStrokes(value: boolean) {
+    this.scaleStrokes.set(value);
+    try { localStorage.setItem("xds-transform-settings", JSON.stringify({ scaleStrokes: value })); } catch { /* The choice stays for this session. */ }
+  }
+  /**
+   * Applies a linear map about a point, the pivot unless another is given, to the selected
+   * objects or to a copy of them, as one step. Chosen anchors of a single path move alone.
+   */
+  affineSelection(linear: Linear, options: { center?: Point; copy?: boolean; scaleStrokes?: boolean } = {}): boolean {
+    if (!linear.every(Number.isFinite) || Math.abs(linear[0] * linear[3] - linear[1] * linear[2]) < 1e-9) return false;
+    const layers = this.selectedLayers().filter((layer) => !layer.guide);
+    if (!layers.length || layers.some((layer) => this.isEffectivelyLocked(layer))) return false;
+    const center = options.center ?? this.pivot();
+    const m = about(linear, center);
+    this.recordTransform({ matrix: linear, duplicate: !!options.copy, pivot: center });
+    if (!options.copy && this.tool() === "direct" && this.activeNodes().length && layers.length === 1 && layers[0].curves)
+      return this.numericTransform((p) => applyAffine(m, p));
+    const before = this.document();
+    const mapped = affineLayers(layers, m, { scaleStrokes: options.scaleStrokes ?? this.scaleStrokes() });
+    const ids = new Set(layers.map((layer) => layer.id));
+    let next: StudioDocument;
+    let selection = [...ids];
+    if (options.copy) {
+      if (before.layers.length + mapped.length > MAX_LAYERS) { this.status.set("The document cannot hold more layers."); return false; }
+      const copies = mapped.map((layer) => ({ ...layer, id: crypto.randomUUID(), regroupPath: undefined }));
+      next = { ...before, layers: [...before.layers, ...copies] };
+      selection = copies.map((layer) => layer.id);
+    } else {
+      const byId = new Map(mapped.map((layer) => [layer.id, layer]));
+      next = { ...before, layers: before.layers.map((layer) => byId.get(layer.id) ?? layer) };
+      next = { ...next, layers: next.layers.map((layer) => ids.has(layer.id) ? this.detachUnselectedHost(layer, ids) : layer) };
+    }
+    try { next = syncProcedurals(next); parseDocument(JSON.stringify(next)); } catch { this.status.set("The transformation cannot be applied here."); return false; }
+    this.commitStep(before);
+    if (!options.copy) this.expandGeneratedForIds(ids);
+    this.document.set({ ...next, blends: this.document().blends });
+    this.selectedIds.set(selection);
+    this.selectedId.set(selection[0] ?? null);
+    this.carryPivot(center);
+    this.changed();
+    return true;
+  }
+  /** Object > Transform > Scale: horizontal and vertical percentages, negative ones reflecting. */
+  scaleSelection(horizontal: number, vertical: number, options: { center?: Point; copy?: boolean; scaleStrokes?: boolean } = {}): boolean {
+    if (![horizontal, vertical].every((n) => Number.isFinite(n) && n !== 0 && Math.abs(n) <= 100000)) return false;
+    return this.affineSelection(scaleLinear(horizontal / 100, vertical / 100), options);
+  }
+  /** Object > Transform > Shear: an angle from -359 to 359 along a horizontal, vertical or angled axis. */
+  shearSelection(angle: number, axis: number, options: { center?: Point; copy?: boolean } = {}): boolean {
+    if (!Number.isFinite(angle) || !Number.isFinite(axis) || Math.abs(angle) > 359 || Math.abs(axis) > 359) return false;
+    // A slant of a right angle or more has no finite shear; Illustrator folds it back the same way.
+    const slant = ((angle % 180) + 270) % 180 - 90;
+    if (Math.abs(Math.abs(slant) - 90) < 1e-6) return false;
+    return this.affineSelection(shearLinear(slant, axis), options);
+  }
+  /**
+   * Object > Transform > Transform Each: every selected object is scaled, moved, rotated and
+   * reflected about its own reference point, one of the nine of its box, as one step.
+   */
+  transformEach(options: { scaleX: number; scaleY: number; moveX: number; moveY: number; rotation: number; reflectX?: boolean; reflectY?: boolean; reference?: string; copy?: boolean; scaleStrokes?: boolean }): boolean {
+    const values = [options.scaleX, options.scaleY, options.moveX, options.moveY, options.rotation];
+    if (!values.every(Number.isFinite) || options.scaleX === 0 || options.scaleY === 0) return false;
+    const layers = this.selectedLayers().filter((layer) => !layer.guide);
+    if (!layers.length || layers.some((layer) => this.isEffectivelyLocked(layer))) return false;
+    const r = (options.rotation * Math.PI) / 180, cos = Math.cos(r), sin = Math.sin(r);
+    const sx = (options.scaleX / 100) * (options.reflectY ? -1 : 1), sy = (options.scaleY / 100) * (options.reflectX ? -1 : 1);
+    // Rotation after scale, with y down: a positive angle turns counterclockwise on screen, as in Illustrator.
+    const linear: Linear = [cos * sx, -sin * sx, sin * sy, cos * sy];
+    const reference = options.reference ?? "center";
+    const before = this.document();
+    const mapped = layers.map((layer) => {
+      const box = selectionBounds([layer]);
+      const fx = reference.includes("left") ? 0 : reference.includes("right") ? 1 : 0.5;
+      const fy = reference.includes("top") ? 0 : reference.includes("bottom") ? 1 : 0.5;
+      const m = about(linear, { x: box.x + box.width * fx, y: box.y + box.height * fy });
+      return affineLayers([layer], { ...m, e: m.e + options.moveX, f: m.f + options.moveY }, { scaleStrokes: options.scaleStrokes ?? this.scaleStrokes() })[0];
+    });
+    const ids = new Set(layers.map((layer) => layer.id));
+    let next: StudioDocument;
+    let selection = [...ids];
+    if (options.copy) {
+      if (before.layers.length + mapped.length > MAX_LAYERS) { this.status.set("The document cannot hold more layers."); return false; }
+      const copies = mapped.map((layer) => ({ ...layer, id: crypto.randomUUID(), regroupPath: undefined }));
+      next = { ...before, layers: [...before.layers, ...copies] };
+      selection = copies.map((layer) => layer.id);
+    } else {
+      const byId = new Map(mapped.map((layer) => [layer.id, layer]));
+      next = { ...before, layers: before.layers.map((layer) => byId.get(layer.id) ?? layer) };
+    }
+    try { next = syncProcedurals(next); parseDocument(JSON.stringify(next)); } catch { this.status.set("The transformation cannot be applied here."); return false; }
+    this.commitStep(before);
+    this.document.set({ ...next, blends: this.document().blends });
+    this.selectedIds.set(selection);
+    this.selectedId.set(selection[0] ?? null);
+    this.changed();
+    return true;
+  }
+  /**
+   * The Scale tool: the point pressed follows the pointer, scaling about the pivot on each
+   * axis. Shift keeps the proportions on a diagonal drag and scales one axis on a drag
+   * that runs along it.
+   */
+  private dragScale(g: NonNullable<EditorService["gesture"]>, point: Point, shift: boolean) {
+    const pivot = this.pivot();
+    const from = { x: g.start.x - pivot.x, y: g.start.y - pivot.y }, to = { x: point.x - pivot.x, y: point.y - pivot.y };
+    const guard = (n: number) => (Math.abs(n) < 0.01 ? (n < 0 ? -0.01 : 0.01) : n);
+    let sx = Math.abs(from.x) > 1 ? to.x / from.x : 1, sy = Math.abs(from.y) > 1 ? to.y / from.y : 1;
+    if (shift) {
+      const run = { x: Math.abs(point.x - g.start.x), y: Math.abs(point.y - g.start.y) }, slope = Math.tan(Math.PI / 8);
+      if (run.y <= run.x * slope) sy = 1;
+      else if (run.x <= run.y * slope) sx = 1;
+      else sx = sy = Math.hypot(to.x, to.y) / Math.max(1, Math.hypot(from.x, from.y));
+    }
+    this.dragLinear(g, scaleLinear(guard(sx), guard(sy)), point);
+  }
+  /**
+   * The Shear tool: a drag that starts up or down shears along the vertical axis and one
+   * that starts sideways along the horizontal axis, the point pressed following the
+   * pointer; Shift keeps the original width or height.
+   */
+  private dragShear(g: NonNullable<EditorService["gesture"]>, point: Point, shift: boolean) {
+    const pivot = this.pivot();
+    if (!g.axis) {
+      if (Math.hypot(point.x - g.start.x, point.y - g.start.y) < 3 / this.zoom()) return;
+      g.axis = Math.abs(point.y - g.start.y) > Math.abs(point.x - g.start.x) ? "vertical" : "horizontal";
+    }
+    const from = { x: g.start.x - pivot.x, y: g.start.y - pivot.y };
+    let linear: Linear;
+    if (g.axis === "vertical") {
+      // y moves in proportion to the distance from the pivot across; x may stretch unless Shift holds it.
+      const across = Math.abs(from.x) > 1 ? from.x : 1;
+      const k = (point.y - g.start.y) / across, sx = shift || Math.abs(from.x) <= 1 ? 1 : (point.x - pivot.x) / from.x;
+      linear = [sx, k, 0, 1];
+    } else {
+      const across = Math.abs(from.y) > 1 ? from.y : 1;
+      const k = (point.x - g.start.x) / across, sy = shift || Math.abs(from.y) <= 1 ? 1 : (point.y - pivot.y) / from.y;
+      linear = [1, 0, k, sy];
+    }
+    if (Math.abs(linear[0] * linear[3] - linear[1] * linear[2]) < 1e-4) return;
+    this.dragLinear(g, linear, point);
+  }
+  /**
+   * The Free Transform tool (E). Its box is the bounds of the selection: a drag inside moves,
+   * a handle scales against the opposite one, Shift keeping proportions and Alt scaling from
+   * the centre, and a drag outside rotates, Shift by 45 degrees. Ctrl+Alt held on a side
+   * handle shears along that side; Ctrl held on a corner handle distorts freely, and
+   * Shift+Alt+Ctrl distorts in perspective. The modifiers are read as the drag goes, as in
+   * Illustrator, where they are pressed after the drag begins.
+   */
+  private freeGesture?: { before: StudioDocument; ids: Set<string>; box: { x: number; y: number; width: number; height: number }; start: Point; handle: string; quad: Quad; changed: boolean };
+  readonly freeQuad = signal<Quad | null>(null);
+  /**
+   * The mode of the Free Transform tool, as its widget offers it in later Illustrator
+   * versions: a corner scales in Free Transform, and moves alone in Free Distort, or with its
+   * neighbour in Perspective Distort, without holding Ctrl.
+   */
+  readonly freeTransformMode = signal<"transform" | "distort" | "perspective">("transform");
+  /** The box the Free Transform tool shows: the one it is dragging, or the bounds of the selection. */
+  freeTransformQuad(): Quad | null {
+    if (this.freeGesture) return this.freeGesture.quad;
+    const layers = this.selectedLayers().filter((layer) => !layer.guide);
+    return layers.length ? boxQuad(selectionBounds(layers)) : null;
+  }
+  private static readonly FREE_HANDLES: Record<string, [number, number]> = { tl: [0, 0], t: [0.5, 0], tr: [1, 0], r: [1, 0.5], br: [1, 1], b: [0.5, 1], bl: [0, 1], l: [0, 0.5] };
+  /** The handle of the Free Transform box under a point, if there is one. */
+  freeTransformHandleAt(point: Point): string | null {
+    const layers = this.selectedLayers().filter((layer) => !layer.guide);
+    if (!layers.length) return null;
+    const box = selectionBounds(layers), reach = 10 / this.zoom();
+    return Object.entries(EditorService.FREE_HANDLES).find(([, [u, v]]) => Math.hypot(point.x - (box.x + box.width * u), point.y - (box.y + box.height * v)) <= reach)?.[0] ?? null;
+  }
+  private startFreeTransform(point: Point): boolean {
+    const layers = this.selectedLayers().filter((layer) => !layer.guide);
+    if (!layers.length) return false;
+    if (layers.some((layer) => this.isEffectivelyLocked(layer))) { this.status.set("Unlock the objects to transform them."); return true; }
+    const box = selectionBounds(layers), reach = 10 / this.zoom();
+    const handle = Object.entries(EditorService.FREE_HANDLES).find(([, [u, v]]) => Math.hypot(point.x - (box.x + box.width * u), point.y - (box.y + box.height * v)) <= reach)?.[0]
+      ?? (point.x >= box.x && point.x <= box.x + box.width && point.y >= box.y && point.y <= box.y + box.height ? "move" : "rotate");
+    this.freeGesture = { before: this.document(), ids: new Set(layers.map((layer) => layer.id)), box, start: point, handle, quad: boxQuad(box), changed: false };
+    this.freeQuad.set(this.freeGesture.quad);
+    return true;
+  }
+  private moveFreeTransform(point: Point, m: { shift?: boolean; alt?: boolean; ctrl?: boolean }) {
+    const g = this.freeGesture!;
+    const { box, start, handle } = g;
+    const centre = { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+    const corners = ["tl", "tr", "br", "bl"];
+    let affine: Affine | null = null, quad: Quad | null = null;
+    if (handle === "move") {
+      const end = m.shift ? snapDirection(start, point, 45) : point;
+      affine = { a: 1, b: 0, c: 0, d: 1, e: end.x - start.x, f: end.y - start.y };
+    } else if (handle === "rotate") {
+      let angle = Math.atan2(point.y - centre.y, point.x - centre.x) - Math.atan2(start.y - centre.y, start.x - centre.x);
+      if (m.shift) angle = Math.round(angle / (Math.PI / 4)) * (Math.PI / 4);
+      const cos = Math.cos(angle), sin = Math.sin(angle);
+      affine = about([cos, sin, -sin, cos], centre);
+    } else if (corners.includes(handle) && (m.ctrl || this.freeTransformMode() !== "transform")) {
+      const index = corners.indexOf(handle), q = boxQuad(box);
+      const dx = point.x - q[index].x, dy = point.y - q[index].y;
+      if ((m.ctrl && m.shift && m.alt) || this.freeTransformMode() === "perspective") {
+        // Perspective: the corner and its neighbour along the side it is dragged along move apart.
+        const along = Math.abs(dx) >= Math.abs(dy);
+        const neighbour = along ? [1, 0, 3, 2][index] : [3, 2, 1, 0][index];
+        q[index] = along ? { x: q[index].x + dx, y: q[index].y } : { x: q[index].x, y: q[index].y + dy };
+        q[neighbour] = along ? { x: q[neighbour].x - dx, y: q[neighbour].y } : { x: q[neighbour].x, y: q[neighbour].y - dy };
+      } else q[index] = { ...point };
+      quad = q;
+    } else {
+      const [u, v] = EditorService.FREE_HANDLES[handle];
+      const grip = { x: box.x + box.width * u, y: box.y + box.height * v };
+      const anchor = m.alt && !m.ctrl ? centre : { x: box.x + box.width * (1 - u), y: box.y + box.height * (1 - v) };
+      const side = handle.length === 1;
+      if (side && m.ctrl && m.alt) {
+        // Shear along the side: the handle's side slides, the opposite one stays.
+        const horizontal = handle === "t" || handle === "b";
+        const across = horizontal ? grip.y - anchor.y : grip.x - anchor.x;
+        const k = ((horizontal ? point.x - start.x : point.y - start.y)) / (across || 1);
+        const stretch = m.shift ? 1 : ((horizontal ? point.y - anchor.y : point.x - anchor.x)) / (across || 1);
+        affine = about(horizontal ? [1, 0, k, stretch] : [stretch, k, 0, 1], anchor);
+      } else {
+        const guard = (n: number) => (Math.abs(n) < 0.01 ? (n < 0 ? -0.01 : 0.01) : n);
+        let sx = u === 0.5 ? 1 : (point.x - anchor.x) / ((grip.x - anchor.x) || 1);
+        let sy = v === 0.5 ? 1 : (point.y - anchor.y) / ((grip.y - anchor.y) || 1);
+        if (m.shift && !side) { const s = Math.abs(sx) > Math.abs(sy) ? sx : sy; sx = Math.sign(sx || 1) * Math.abs(s); sy = Math.sign(sy || 1) * Math.abs(s); }
+        affine = about(scaleLinear(guard(sx), guard(sy)), anchor);
+      }
+    }
+    const layers = g.before.layers.filter((layer) => g.ids.has(layer.id));
+    let mapped: Layer[];
+    if (affine) {
+      const a = affine;
+      mapped = affineLayers(layers, a, { scaleStrokes: this.scaleStrokes() });
+      g.quad = boxQuad(box).map((p) => applyAffine(a, p)) as Quad;
+    } else {
+      mapped = mapLayers(layers, quadMap(box, quad!), 8);
+      g.quad = quad!;
+    }
+    const byId = new Map(mapped.map((layer) => [layer.id, layer]));
+    const next = { ...g.before, layers: g.before.layers.map((layer) => byId.get(layer.id) ?? layer) };
+    try { parseDocument(JSON.stringify(next)); } catch { return; }
+    g.changed = true;
+    this.freeQuad.set(g.quad);
+    this.document.set(next);
+  }
+  private endFreeTransform() {
+    const g = this.freeGesture!;
+    this.freeGesture = undefined;
+    this.freeQuad.set(null);
+    if (!g.changed) return;
+    const skipped = g.before.layers.filter((layer) => g.ids.has(layer.id) && !distortable(layer) && layer === this.document().layers.find((l) => l.id === layer.id));
+    this.commitStep(g.before);
+    this.changed();
+    if (skipped.length) this.status.set(`Left ${skipped.length} object${skipped.length > 1 ? "s" : ""} a distortion cannot reshape: text, pictures, symbols, dimensions and floor-plan objects.`);
+  }
+  /** The options of each liquify tool, from its dialog, kept between sessions. */
+  readonly liquifyOptions = signal<Record<LiquifyTool, LiquifyOptions>>((() => {
+    const options = structuredClone(LIQUIFY_DEFAULTS);
+    try {
+      const saved = JSON.parse(localStorage.getItem("xds-liquify-settings") ?? "{}");
+      for (const tool of LIQUIFY_TOOLS) if (validLiquifyOptions(saved[tool])) options[tool] = saved[tool];
+    } catch { /* The defaults stand. */ }
+    return options;
+  })());
+  setLiquifyOptions(tool: LiquifyTool, options: LiquifyOptions): boolean {
+    if (!LIQUIFY_TOOLS.includes(tool) || !validLiquifyOptions(options)) return false;
+    const next = { ...this.liquifyOptions(), [tool]: { ...options } };
+    this.liquifyOptions.set(next);
+    try { localStorage.setItem("xds-liquify-settings", JSON.stringify(next)); } catch { /* Kept for this session. */ }
+    return true;
+  }
+  isLiquifyTool(tool: string): tool is LiquifyTool { return (LIQUIFY_TOOLS as string[]).includes(tool); }
+  /**
+   * A stroke of a liquify tool. With a selection it reshapes the selected vector objects;
+   * with none, every unlocked vector object under the brush. Alt-drag sizes the brush
+   * instead, Shift+Alt as a circle, as in Illustrator.
+   */
+  private liquifyGesture?: { before: StudioDocument; tool: LiquifyTool; ids: Set<string>; curves: Map<string, CurvePath[]>; last: Point; resize?: { start: Point; circle: boolean }; changed: boolean };
+  private startLiquify(tool: LiquifyTool, point: Point, modifiers: { shift?: boolean; alt?: boolean }) {
+    if (modifiers.alt) { this.liquifyGesture = { before: this.document(), tool, ids: new Set(), curves: new Map(), last: point, resize: { start: point, circle: !!modifiers.shift }, changed: false }; return; }
+    const selected = this.selectedLayers().filter((layer) => !layer.guide);
+    const pool = selected.length ? selected : this.document().layers.filter((layer) => layer.visible && !layer.guide);
+    const targets = pool.filter((layer) => distortable(layer) && !this.isEffectivelyLocked(layer));
+    if (!targets.length) { this.status.set("Liquify tools reshape unlocked paths and shapes; text, pictures and symbols are left alone."); return; }
+    const curves = new Map(targets.map((layer) => [layer.id, worldCurves(layer) ?? []]));
+    this.liquifyGesture = { before: this.document(), tool, ids: new Set(targets.map((layer) => layer.id)), curves, last: point, changed: false };
+    this.liquifyAt(point, { x: 0, y: 0 });
+  }
+  /** One step of the stroke at a point; Twirl, Pucker, Bloat and the detail tools also act while the pointer rests. */
+  private liquifyAt(point: Point, delta: Point) {
+    const g = this.liquifyGesture!;
+    const options = this.liquifyOptions()[g.tool];
+    let touched = false;
+    for (const [id, paths] of g.curves) {
+      const next = paths.map((path) => liquifyStep(refine(path, point, options), g.tool, point, delta, options, g.curves.size));
+      if (JSON.stringify(next) !== JSON.stringify(paths)) { g.curves.set(id, next); touched = true; }
+    }
+    if (!touched) return;
+    g.changed = true;
+    this.writeLiquify(false);
+  }
+  private writeLiquify(simplify: boolean) {
+    const g = this.liquifyGesture!;
+    const options = this.liquifyOptions()[g.tool];
+    const layers = this.document().layers.map((layer) => {
+      const paths = g.curves.get(layer.id);
+      if (!paths) return layer;
+      const precision = Math.max(0, Math.min(99.8, 100 - options.simplify / 2));
+      const shaped = simplify && ["warp", "twirl", "pucker", "bloat"].includes(g.tool) ? paths.map((path) => path.nodes.length > 3 ? simplifyPath(path, { precision, angleThreshold: 0, straightLines: false }) : path) : paths;
+      const flat: Layer = { ...(g.before.layers.find((l) => l.id === layer.id) ?? layer), kind: "path", x: 0, y: 0, width: 1, height: 1, rotation: 0, skewX: 0, flipX: false, flipY: false, points: [] };
+      return fitCurves(flat, shaped);
+    });
+    this.document.set({ ...this.document(), layers });
+  }
+  /** Called while the button is held still, so the tools that act in place keep acting. */
+  liquifyTick() {
+    const g = this.liquifyGesture;
+    if (!g || g.resize || g.tool === "warp") return;
+    this.liquifyAt(g.last, { x: 0, y: 0 });
+  }
+  private moveLiquify(point: Point) {
+    const g = this.liquifyGesture!;
+    if (g.resize) {
+      const options = this.liquifyOptions()[g.tool];
+      let width = Math.max(1, Math.min(1000, Math.abs(point.x - g.resize.start.x) * 2)), height = Math.max(1, Math.min(1000, Math.abs(point.y - g.resize.start.y) * 2));
+      if (g.resize.circle) width = height = Math.max(width, height);
+      this.setLiquifyOptions(g.tool, { ...options, width, height });
+      return;
+    }
+    const delta = { x: point.x - g.last.x, y: point.y - g.last.y };
+    g.last = point;
+    this.liquifyAt(point, delta);
+  }
+  private endLiquify() {
+    const g = this.liquifyGesture!;
+    if (!g.resize && g.changed) {
+      this.writeLiquify(true);
+      try { parseDocument(JSON.stringify(this.document())); } catch { this.document.set(g.before); this.liquifyGesture = undefined; this.status.set("The distortion cannot be kept here."); return; }
+      this.commitStep(g.before);
+      this.changed();
+    }
+    this.liquifyGesture = undefined;
+  }
+  // ---- Envelopes: Object > Envelope Distort -------------------------------------------------
+  /** The envelope selected alone, if any, or the one whose contents are being edited. */
+  selectedEnvelope(): Layer | null {
+    const layers = this.selectedLayers();
+    if (layers.length === 1 && layers[0].envelope) return layers[0];
+    const group = layers[0]?.groupPath?.[0];
+    return (group && this.document().layers.find((l) => l.envelope?.editing === "contents" && l.envelope.group === group)) || null;
+  }
+  /**
+   * The next document with the selection put inside a new envelope, or the reason it cannot
+   * be. Envelopes hold paths and shapes; text must be outlined first, as its letters come
+   * from the fonts the application reads.
+   */
+  private buildEnvelope(base: StudioDocument, kind: "warp" | "mesh" | "object", options: { warp?: WarpSettings; rows?: number; columns?: number }): { next: StudioDocument; id: string } | string {
+    const ids = new Set(this.selectedIds().length ? this.selectedIds() : this.selectedId() ? [this.selectedId()!] : []);
+    const selected = base.layers.filter((layer) => ids.has(layer.id) && !layer.guide);
+    if (!selected.length) return "Select the objects to put in an envelope.";
+    if (selected.some((layer) => this.isEffectivelyLocked(layer))) return "Unlock the objects to put them in an envelope.";
+    if (selected.some((layer) => layer.kind === "text")) return "Create outlines of the text first (Ctrl+Shift+O), then make the envelope.";
+    if (selected.some((layer) => !distortable(layer) || layer.envelope)) return "Envelopes hold paths and shapes; pictures, symbols, dimensions, floor-plan objects and envelopes are left out.";
+    let contents = selected, mesh: EnvelopeMesh | null = null;
+    const top = selected[selected.length - 1];
+    if (kind === "object") {
+      if (selected.length < 2) return "Select the objects and, on top of them, the shape of the envelope.";
+      contents = selected.slice(0, -1);
+      const outline = worldCurves(top)?.find((path) => path.nodes.length > 1);
+      mesh = outline ? objectMesh(outline) : null;
+      if (!mesh) return "The top object has no outline an envelope can take.";
+    }
+    const source = contentBox(contents);
+    if (!source) return "The selection has nothing to put in an envelope.";
+    if (kind === "warp") mesh = warpMesh(source, options.warp ?? DEFAULT_WARP);
+    if (kind === "mesh") mesh = gridMesh(source, Math.round(options.rows ?? 4), Math.round(options.columns ?? 4));
+    if (!mesh || mesh.rows < 1 || mesh.columns < 1 || mesh.rows > 50 || mesh.columns > 50) return "Choose 1 to 50 rows and columns.";
+    const bounds = meshBounds(mesh);
+    const id = crypto.randomUUID();
+    const plain = contents.map(({ groupPath: _g, regroupPath: _r, ...layer }) => structuredClone(layer) as Layer);
+    const envelope: Envelope = {
+      contents: plain, source, mesh: mapMesh(mesh, (p) => ({ x: p.x - bounds.x, y: p.y - bounds.y })),
+      origin: kind === "warp" ? "warp" : kind === "mesh" ? "grid" : "object", ...(kind === "warp" ? { warp: { ...(options.warp ?? DEFAULT_WARP) } } : {}),
+      fidelity: 50, editing: "envelope", group: crypto.randomUUID(),
+    };
+    const shared = contents.every((layer) => layer.groupPath?.[0] && layer.groupPath[0] === contents[0].groupPath?.[0]) ? contents[0].groupPath : undefined;
+    const holder: Layer = {
+      ...newLayer("path", id, { x: bounds.x, y: bounds.y }, "none", "none", 0), name: "Envelope", width: bounds.width, height: bounds.height, points: [], envelope,
+      ...(shared ? { groupPath: [...shared] } : {}),
+    };
+    const at = base.layers.findIndex((layer) => layer.id === top.id);
+    const removed = new Set(selected.map((layer) => layer.id));
+    const layers = base.layers.flatMap((layer, index) => (index === at ? [holder] : removed.has(layer.id) ? [] : [layer]));
+    const next = { ...base, layers };
+    try { parseDocument(JSON.stringify(next)); } catch { return "The envelope cannot be made from this selection."; }
+    return { next, id };
+  }
+  private envelopePreviewBase?: StudioDocument;
+  /** Make With Warp, Make With Mesh or Make With Top Object; a preview is shown without a step until confirmed. */
+  makeEnvelope(kind: "warp" | "mesh" | "object", options: { warp?: WarpSettings; rows?: number; columns?: number } = {}, preview = false): boolean {
+    if (options.warp && !validWarp(options.warp)) return false;
+    const base = this.envelopePreviewBase ?? this.document();
+    const selection = { ids: [...this.selectedIds()], id: this.selectedId() };
+    const built = this.buildEnvelope(base, kind, options);
+    if (typeof built === "string") { this.status.set(built); return false; }
+    if (preview) {
+      this.envelopePreviewBase = base;
+      this.document.set(built.next);
+      // The preview keeps the selection it was made from, so the next preview starts there.
+      this.selectedIds.set(selection.ids);
+      this.selectedId.set(selection.id);
+      return true;
+    }
+    this.envelopePreviewBase = undefined;
+    this.commitStep(base);
+    this.document.set(built.next);
+    this.selectedIds.set([built.id]);
+    this.selectedId.set(built.id);
+    this.status.set("Made an envelope.");
+    this.changed();
+    return true;
+  }
+  /** Cancels a warp preview, leaving the document as it was. */
+  cancelEnvelopePreview() {
+    if (this.envelopePreviewBase) { this.document.set(this.envelopePreviewBase); this.envelopePreviewBase = undefined; }
+  }
+  private replaceEnvelope(id: string, change: (layer: Layer) => Layer | Layer[], status: string): boolean {
+    const before = this.document();
+    const layer = before.layers.find((l) => l.id === id);
+    if (!layer?.envelope || this.isEffectivelyLocked(layer)) return false;
+    const result = change(layer);
+    const replacement = Array.isArray(result) ? result : [result];
+    const next = { ...before, layers: before.layers.flatMap((l) => (l.id === id ? replacement : [l])) };
+    try { parseDocument(JSON.stringify(next)); } catch { this.status.set("The envelope cannot be changed that way."); return false; }
+    this.commitStep(before);
+    this.document.set(next);
+    const ids = replacement.map((l) => l.id);
+    this.selectedIds.set(Array.isArray(result) ? ids : [id]);
+    this.selectedId.set(Array.isArray(result) ? ids[ids.length - 1] ?? null : id);
+    this.meshNode.set(null);
+    this.status.set(status);
+    this.changed();
+    return true;
+  }
+  /** Object > Envelope Distort > Release: the objects as they were, and the envelope's shape as a path above them. */
+  releaseEnvelope(): boolean {
+    const layer = this.selectedEnvelope();
+    if (!layer || layer.envelope!.editing !== "envelope") return false;
+    return this.replaceEnvelope(layer.id, (l) => {
+      const outline = meshOutline(mapMesh(l.envelope!.mesh, (p) => worldPoint(l, p)));
+      const shape = fitCurves({ ...newLayer("path", crypto.randomUUID(), { x: 0, y: 0 }, "none", "#000000", 1), name: "Envelope shape", width: 1, height: 1 }, [outline]);
+      const group = l.groupPath ? { groupPath: [...l.groupPath] } : {};
+      return [...l.envelope!.contents.map((content) => ({ ...structuredClone(content), ...group })), { ...shape, ...group }];
+    }, "Released the envelope.");
+  }
+  /** Object > Envelope Distort > Expand: the distorted paths, and no envelope. */
+  expandEnvelope(): boolean {
+    const layer = this.selectedEnvelope();
+    if (!layer || layer.envelope!.editing !== "envelope") return false;
+    return this.replaceEnvelope(layer.id, (l) => envelopeArtwork(l).map((art, i) => ({ ...art, id: crypto.randomUUID(), name: l.envelope!.contents[i]?.name ?? art.name, ...(l.groupPath ? { groupPath: [...l.groupPath] } : {}) })), "Expanded the envelope.");
+  }
+  /**
+   * Edit Contents and Edit Envelope (Shift+Ctrl+V): the objects inside come out, undistorted
+   * and editable with every tool, under the envelope's group, while the envelope keeps
+   * drawing them through its mesh; going back takes them in again, recentred.
+   */
+  toggleEnvelopeEditing(): boolean {
+    const layer = this.selectedEnvelope();
+    if (!layer || this.isEffectivelyLocked(layer)) return false;
+    const envelope = layer.envelope!, before = this.document();
+    let next: StudioDocument, selection: string[];
+    if (envelope.editing === "envelope") {
+      const members = envelope.contents.map((content) => ({ ...structuredClone(content), groupPath: [envelope.group, ...(layer.groupPath ?? [])] }));
+      const holder = { ...layer, envelope: { ...envelope, contents: [], editing: "contents" as const } };
+      next = { ...before, layers: before.layers.flatMap((l) => (l.id === layer.id ? [holder, ...members] : [l])) };
+      selection = members.map((m) => m.id);
+      this.status.set("Editing the contents of the envelope.");
+    } else {
+      const members = before.layers.filter((l) => l.groupPath?.[0] === envelope.group && !l.envelope);
+      const contents = members.map(({ groupPath: _g, regroupPath: _r, ...content }) => content as Layer);
+      const source = contentBox(members) ?? envelope.source;
+      const holder = { ...layer, envelope: { ...envelope, contents, source, editing: "envelope" as const } };
+      const out = new Set(members.map((m) => m.id));
+      next = { ...before, layers: before.layers.filter((l) => !out.has(l.id)).map((l) => (l.id === layer.id ? holder : l)) };
+      selection = [layer.id];
+      this.status.set("Editing the envelope.");
+    }
+    try { parseDocument(JSON.stringify(next)); } catch { this.status.set("The envelope cannot be edited that way."); return false; }
+    this.commitStep(before);
+    this.document.set(next);
+    this.selectedIds.set(selection);
+    this.selectedId.set(selection[0] ?? null);
+    this.meshNode.set(null);
+    this.changed();
+    return true;
+  }
+  /** Envelope Options: the fidelity with which the contents follow the mesh. */
+  setEnvelopeFidelity(fidelity: number): boolean {
+    const layer = this.selectedEnvelope();
+    if (!layer || !Number.isFinite(fidelity) || fidelity < 0 || fidelity > 100) return false;
+    return this.replaceEnvelope(layer.id, (l) => ({ ...l, envelope: { ...l.envelope!, fidelity } }), "Set the envelope options.");
+  }
+  /** Reset With Warp: a new mesh from a warp style over the contents. */
+  resetEnvelopeWithWarp(warp: WarpSettings): boolean {
+    const layer = this.selectedEnvelope();
+    if (!layer || !validWarp(warp) || layer.envelope!.editing !== "envelope") return false;
+    return this.replaceEnvelope(layer.id, (l) => {
+      const box = { x: 0, y: 0, width: l.width, height: l.height };
+      return fitEnvelope({ ...l, envelope: { ...l.envelope!, mesh: warpMesh(box, warp), origin: "warp", warp: { ...warp } } });
+    }, "Reset the envelope with a warp.");
+  }
+  /** Reset With Mesh: a grid of rows and columns, keeping the envelope's shape when asked. */
+  resetEnvelopeWithMesh(rows: number, columns: number, maintainShape: boolean): boolean {
+    const layer = this.selectedEnvelope();
+    if (!layer || ![rows, columns].every((n) => Number.isInteger(n) && n >= 1 && n <= 50) || layer.envelope!.editing !== "envelope") return false;
+    return this.replaceEnvelope(layer.id, (l) => {
+      const mesh = maintainShape
+        ? resampleMesh(l.envelope!.mesh, Array.from({ length: columns + 1 }, (_, j) => j / columns), Array.from({ length: rows + 1 }, (_, i) => i / rows))
+        : gridMesh({ x: 0, y: 0, width: l.width, height: l.height }, rows, columns);
+      const { warp: _w, ...rest } = l.envelope!;
+      return fitEnvelope({ ...l, envelope: { ...rest, mesh, origin: "grid" } });
+    }, "Reset the envelope with a mesh.");
+  }
+  /** The mesh node chosen with the Direct Selection or Mesh tool, which Delete removes with its lines. */
+  readonly meshNode = signal<{ id: string; index: number } | null>(null);
+  private meshGesture?: { before: StudioDocument; id: string; index: number; part: "point" | "left" | "right" | "up" | "down"; moved: boolean };
+  /** A press with the Direct Selection or Mesh tool on a node or a handle of the selected envelope's mesh. */
+  private startMesh(point: Point, tool: string): boolean {
+    const layer = this.selectedEnvelope();
+    if (!layer || layer.envelope!.editing !== "envelope" || this.isEffectivelyLocked(layer)) return false;
+    const mesh = layer.envelope!.mesh, reach = 8 / this.zoom();
+    const chosen = this.meshNode()?.id === layer.id ? this.meshNode()!.index : -1;
+    const near = (p: Point) => Math.hypot(worldPoint(layer, p).x - point.x, worldPoint(layer, p).y - point.y) <= reach;
+    // The handles of the chosen node first, then any node.
+    if (chosen >= 0) for (const part of ["left", "right", "up", "down"] as const) {
+      const n = mesh.nodes[chosen];
+      if ((n[part].x !== n.point.x || n[part].y !== n.point.y) && near(n[part])) { this.meshGesture = { before: this.document(), id: layer.id, index: chosen, part, moved: false }; return true; }
+    }
+    const index = mesh.nodes.findIndex((n) => near(n.point));
+    if (index >= 0) {
+      this.meshNode.set({ id: layer.id, index });
+      this.meshGesture = { before: this.document(), id: layer.id, index, part: "point", moved: false };
+      return true;
+    }
+    if (tool === "mesh") return this.addMeshLines(layer, point);
+    return false;
+  }
+  private moveMesh(point: Point) {
+    const g = this.meshGesture!;
+    const layer = g.before.layers.find((l) => l.id === g.id)!;
+    const local = localPoint(layer, point);
+    const nodes = layer.envelope!.mesh.nodes.map((n, i) => {
+      if (i !== g.index) return n;
+      if (g.part !== "point") return { ...n, [g.part]: local };
+      // An anchor carries its handles with it.
+      const dx = local.x - n.point.x, dy = local.y - n.point.y, move = (p: Point) => ({ x: p.x + dx, y: p.y + dy });
+      return { point: local, left: move(n.left), right: move(n.right), up: move(n.up), down: move(n.down) };
+    });
+    const moved = { ...layer, envelope: { ...layer.envelope!, mesh: { ...layer.envelope!.mesh, nodes } } };
+    g.moved = true;
+    this.document.set({ ...g.before, layers: g.before.layers.map((l) => (l.id === g.id ? moved : l)) });
+  }
+  private endMesh() {
+    const g = this.meshGesture!;
+    this.meshGesture = undefined;
+    if (!g.moved) return;
+    // A warp whose mesh was moved by hand is no longer that style: it becomes a grid.
+    const plain = (l: Layer): Layer => { const { warp: _w, ...rest } = l.envelope!; return { ...l, envelope: { ...rest, origin: l.envelope!.origin === "warp" ? "grid" : l.envelope!.origin } }; };
+    const next = { ...this.document(), layers: this.document().layers.map((l) => (l.id === g.id ? fitEnvelope(plain(l)) : l)) };
+    try { parseDocument(JSON.stringify(next)); } catch { this.document.set(g.before); return; }
+    this.document.set(next);
+    this.commitStep(g.before);
+    this.changed();
+  }
+  /** Where on the grid a point of the page falls, as fractions u and v, by search and refinement. */
+  private meshParameters(layer: Layer, point: Point): { u: number; v: number } | null {
+    const mesh = layer.envelope!.mesh, local = localPoint(layer, point);
+    let best = { u: 0.5, v: 0.5, d: Infinity };
+    for (let i = 0; i <= 40; i++) for (let j = 0; j <= 40; j++) {
+      const p = meshPoint(mesh, j / 40, i / 40), d = Math.hypot(p.x - local.x, p.y - local.y);
+      if (d < best.d) best = { u: j / 40, v: i / 40, d };
+    }
+    for (let step = 1 / 80; step > 1e-5; step /= 2)
+      for (const [du, dv] of [[step, 0], [-step, 0], [0, step], [0, -step]]) {
+        const u = Math.max(0, Math.min(1, best.u + du)), v = Math.max(0, Math.min(1, best.v + dv)), p = meshPoint(mesh, u, v);
+        const d = Math.hypot(p.x - local.x, p.y - local.y);
+        if (d < best.d) best = { u, v, d };
+      }
+    return best.d <= 4 / this.zoom() ? best : null;
+  }
+  /** The Mesh tool: a click inside the mesh adds a row and a column through that point. */
+  private addMeshLines(layer: Layer, point: Point): boolean {
+    const at = this.meshParameters(layer, point);
+    if (!at) return false;
+    const { us, vs } = meshLines(layer.envelope!.mesh);
+    const fresh = (lines: number[], x: number) => (lines.some((l) => Math.abs(l - x) < 1e-3) ? lines : [...lines, x]);
+    const nextUs = fresh(us, at.u), nextVs = fresh(vs, at.v);
+    if (nextUs.length > 51 || nextVs.length > 51) { this.status.set("A mesh holds up to 50 rows and columns."); return true; }
+    const mesh = resampleMesh(layer.envelope!.mesh, nextUs, nextVs);
+    const index = mesh.us.findIndex((u) => Math.abs(u - at.u) < 1e-6) + mesh.vs.findIndex((v) => Math.abs(v - at.v) < 1e-6) * (mesh.columns + 1);
+    // An edited mesh is no longer a warp style: it becomes a grid.
+    this.replaceEnvelope(layer.id, (l) => { const { warp: _w, ...rest } = l.envelope!; return { ...l, envelope: { ...rest, mesh, origin: "grid" } }; }, "Added a row and a column to the mesh.");
+    this.meshNode.set({ id: layer.id, index });
+    return true;
+  }
+  /** Delete on a chosen mesh node removes the row and the column that cross there. */
+  private deleteMeshLines(): boolean {
+    const chosen = this.meshNode();
+    const layer = chosen && this.document().layers.find((l) => l.id === chosen.id);
+    if (!chosen || !layer?.envelope) return false;
+    const mesh = layer.envelope.mesh, j = chosen.index % (mesh.columns + 1), i = Math.floor(chosen.index / (mesh.columns + 1));
+    const us = mesh.us.filter((_, k) => k !== j || k === 0 || k === mesh.columns), vs = mesh.vs.filter((_, k) => k !== i || k === 0 || k === mesh.rows);
+    if (us.length === mesh.us.length && vs.length === mesh.vs.length) { this.status.set("The border of the mesh stays; choose a point inside it."); return true; }
+    const next = resampleMesh(mesh, us, vs);
+    this.replaceEnvelope(layer.id, (l) => { const { warp: _w, ...rest } = l.envelope!; return fitEnvelope({ ...l, envelope: { ...rest, mesh: next, origin: "grid" } }); }, "Removed a row and a column from the mesh.");
+    return true;
+  }
+  private dragLinear(g: NonNullable<EditorService["gesture"]>, linear: Linear, point: Point) {
+    const ids = new Set(g.ids ?? [g.id]);
+    const layers = g.before.layers.filter((layer) => ids.has(layer.id) && !layer.guide);
+    const mapped = new Map(affineLayers(layers, about(linear, this.pivot()), { scaleStrokes: this.scaleStrokes() }).map((layer) => [layer.id, layer]));
+    const next = { ...g.before, layers: g.before.layers.map((layer) => mapped.get(layer.id) ?? layer) };
+    try { parseDocument(JSON.stringify(next)); } catch { return; }
+    g.linear = linear;
+    g.last = point;
+    this.document.set(next);
   }
   /**
    * Repeats the last transformation on the current selection, the copy it left behind
@@ -1854,14 +2490,16 @@ export class EditorService {
     const centre = last.pivot;
     const step = { dx: last.dx, dy: last.dy, rotation: last.rotation, scale: last.scale };
     const ids = new Set(layers.map((layer) => layer.id));
+    // A scale or shear is repeated as the same map about the same point.
+    const repeat = (layer: Layer, id: string) => last.matrix ? { ...affineLayers([layer], about(last.matrix, centre), { scaleStrokes: this.scaleStrokes() })[0], id } : copyLayer(layer, step, centre, id);
     let next: StudioDocument;
     let selection: string[];
     if (last.duplicate) {
-      const copies = layers.map((layer) => copyLayer(layer, step, centre, crypto.randomUUID()));
+      const copies = layers.map((layer) => repeat(layer, crypto.randomUUID()));
       next = { ...document, layers: [...document.layers, ...copies] };
       selection = copies.map((layer) => layer.id);
     } else {
-      next = { ...document, layers: document.layers.map((layer) => ids.has(layer.id) ? copyLayer(layer, step, centre, layer.id) : layer) };
+      next = { ...document, layers: document.layers.map((layer) => ids.has(layer.id) ? repeat(layer, layer.id) : layer) };
       selection = [...ids];
     }
     try { parseDocument(JSON.stringify(next)); } catch { this.status.set("The transformation cannot be repeated here."); return false; }
@@ -2121,6 +2759,10 @@ export class EditorService {
     if (areaTools[tool]) { this.startAreaSelection(point, areaTools[tool]!, !!modifiers.shift); return; }
     if (tool === "eyedropper") { this.sampleStyle(point); return; }
     if (tool === "gradient") { this.startGradient(point); return; }
+    if (tool === "freeTransform") { this.startFreeTransform(point); return; }
+    if (this.isLiquifyTool(tool)) { this.startLiquify(tool, point, modifiers); return; }
+    if ((tool === "direct" || tool === "mesh") && this.startMesh(point, tool)) return;
+    if (tool === "mesh") { this.status.set("Click inside a selected envelope to add a row and a column to its mesh."); return; }
     if (tool === "paintBucket") { this.applyStyleAt(point); return; }
     if (["rectangle", "ellipse", "path", "paintbrush", "pen", "line", "rounded", "polygon", "star", "arc", "spiral", "grid", "polar", "flare", "text"].includes(tool)) point = this.snap(point);
     if (tool === "hand" || (tool === "brush" && ["none", "transparent"].includes(this.fill()))) return;
@@ -2138,7 +2780,7 @@ export class EditorService {
       this.reflect(modifiers.alt ? "vertical" : "horizontal");
       return;
     }
-    if (tool === "scale") {
+    if (tool === "scale" || tool === "shear") {
       const active = this.selectionLayer();
       if (active && !this.selectedLayers().some((layer) => this.isEffectivelyLocked(layer)))
         this.gesture = {
@@ -2148,7 +2790,7 @@ export class EditorService {
           id: active.id,
           points: [],
           original: structuredClone(active),
-          mode: "scale",
+          mode: tool,
           ids: this.selectedLayers().filter((l) => !l.guide).map((l) => l.id),
         };
       return;
@@ -2407,6 +3049,9 @@ export class EditorService {
     if(this.proceduralGesture){const g=this.proceduralGesture;const end=modifiers.shift?snapDirection(g.start,point,this.snapAngle()):(g.type==='wall'?this.wallTarget(g.start,point,g.id):this.snap(point));try{const layer=this.proceduralLayer(g.type,g.start,end,g.id);const next=syncProcedurals({...g.before,layers:[...g.before.layers,layer]});parseDocument(JSON.stringify(next));this.document.set(next);this.selectedId.set(layer.id);this.selectedIds.set([layer.id]);}catch{/* Keep the last valid preview. */}return;}
     if(this.dimensionLabelGesture){const layer=this.document().layers.find(l=>l.id===this.dimensionLabelGesture!.id)!;this.setLayer(layer.id,{dimension:{...layer.dimension!,labelPosition:localPoint(layer,point)}});return;}
     if (this.gradientGesture) { this.moveGradient(point, !!modifiers.shift); return; }
+    if (this.freeGesture) { this.moveFreeTransform(point, modifiers); return; }
+    if (this.liquifyGesture) { this.moveLiquify(point); return; }
+    if (this.meshGesture) { this.moveMesh(point); return; }
     const draft=this.dimensionDraft();if(draft){const count=draft.kind==="chain"?Infinity:(draft.kind==="angular"?3:2);const placing=draft.ready===true||draft.points.length>=count;this.dimensionDraft.set({...draft,cursor:placing?this.dimensionOffsetPoint(draft.points,point):this.dimensionPoint(point,true)});if(placing)this.dimensionSnapTarget.set(null);return;}
     if(!this.gesture&&["dimensionSmart","dimensionLinear","dimensionAngular","dimensionChain","dimensionRadius","dimensionDiameter"].includes(this.tool())){this.hoverDimension(point);return;}
     if(!this.gesture&&!this.proceduralGesture&&this.tool()==='wall'){this.hoverWall(modifiers.shift&&this.wallChain()?snapDirection(this.wallChain()!,point,this.snapAngle()):point);return;}
@@ -2414,7 +3059,7 @@ export class EditorService {
     const g = this.gesture;
     if (!g) { this.hoverPath(point, modifiers); return; }
     // Alt held during a transform leaves the original behind, which the cursor announces.
-    if (["move", "rotate", "scale"].includes(g.mode)) this.duplicatingDrag.set(!!modifiers.alt);
+    if (["move", "rotate", "scale", "shear"].includes(g.mode)) this.duplicatingDrag.set(!!modifiers.alt);
     if (["rectangle", "ellipse", "line", "rounded", "polygon", "star", "arc", "spiral", "grid", "polar", "flare"].includes(g.mode) || g.mode.startsWith("resize:")) point = this.snap(point);
     if (g.mode === "rotate")
       this.transformSelection(g, this.aroundPivot(g.original, {
@@ -2427,19 +3072,9 @@ export class EditorService {
           this.snapAngle(),
         ),
       }));
-    else if (g.mode === "scale") {
-      const factor = Math.max(
-        0.05,
-        Math.min(10, 1 + (point.x - g.start.x + point.y - g.start.y) / 200),
-      );
-      this.transformSelection(g, this.aroundPivot(g.original, {
-        ...g.original,
-        width: g.original.width * factor,
-        height: g.original.height * factor,
-        x: g.original.x + (g.original.width * (1 - factor)) / 2,
-        y: g.original.y + (g.original.height * (1 - factor)) / 2,
-      }));
-    } else if (g.mode === "pen") this.dragPenAnchor(point, modifiers);
+    else if (g.mode === "scale") this.dragScale(g, point, !!modifiers.shift);
+    else if (g.mode === "shear") this.dragShear(g, point, !!modifiers.shift);
+    else if (g.mode === "pen") this.dragPenAnchor(point, modifiers);
     else if (g.mode === "penHandle") this.dragPenHandle(point, modifiers);
     else if (g.mode === "penClose") this.dragPenClose(point, modifiers);
     else if (g.mode.startsWith("convert:")) this.dragConvert(point, modifiers);
@@ -2563,7 +3198,7 @@ export class EditorService {
    * may hold Alt without moving the pointer again before letting go.
    */
   end(modifiers?: { alt?: boolean }) {
-    if (modifiers && this.gesture && ["move", "rotate", "scale"].includes(this.gesture.mode)) {
+    if (modifiers && this.gesture && ["move", "rotate", "scale", "shear"].includes(this.gesture.mode)) {
       this.duplicatingDrag.set(!!modifiers.alt);
     }
     if (this.pageGesture) { this.endPageGesture(); return; }
@@ -2578,6 +3213,9 @@ export class EditorService {
     if(this.proceduralGesture){const g=this.proceduralGesture;this.proceduralGesture=undefined;const drawn=this.document().layers.find(l=>l.id===g.id);if(drawn){this.commitStep(g.before);this.changed();if(g.type==='wall'&&drawn.procedural?.type==='wall')this.wallChain.set(worldPoint(drawn,drawn.procedural.end));}return;}
     if(this.dimensionLabelGesture){this.commitStep(this.dimensionLabelGesture.before);this.dimensionLabelGesture=undefined;this.changed();return;}
     if (this.gradientGesture) { this.endGradient(); return; }
+    if (this.freeGesture) { this.endFreeTransform(); return; }
+    if (this.liquifyGesture) { this.endLiquify(); return; }
+    if (this.meshGesture) { this.endMesh(); return; }
     if (this.areaGesture) {
       if (!this.areaGesture.moved && !this.areaGesture.shift) { this.selectedId.set(null); this.selectedIds.set([]); this.activeNodes.set([]); }
       this.areaGesture = undefined; this.areaSelection.set(null); return;
@@ -2629,8 +3267,16 @@ export class EditorService {
       this.setLayer(g.id, {
         source: this.painting.canvas.toDataURL("image/png"),
       });
+    if ((g.mode === "scale" || g.mode === "shear") && !g.linear) {
+      // A click with the Scale or Shear tool sets the reference point, as in Illustrator.
+      this.document.set(g.before);
+      this.setPivot(this.pivotPoint(g.start));
+      this.gesture = undefined;
+      this.duplicatingDrag.set(false);
+      return;
+    }
     const pivotAtStart = this.movePivot ? { key: this.selectionKey(), point: this.movePivot } : this.pivotOverride();
-    if (["move", "rotate", "scale"].includes(g.mode)) this.finishTransformDrag(g, pivotAtStart);
+    if (["move", "rotate", "scale", "shear"].includes(g.mode)) this.finishTransformDrag(g, pivotAtStart);
     else this.commitStep(g.before, pivotAtStart);
     this.gesture = undefined;
     this.movePivot = undefined;
@@ -2654,7 +3300,9 @@ export class EditorService {
     const source = before.find((layer) => layer.id === g.id) ?? before[0];
     const result = after.find((layer) => layer.id === g.id) ?? after[0];
     const duplicate = this.duplicatingDrag();
-    if (source && result) {
+    const linear = (g as { linear?: Linear }).linear;
+    if (linear) this.recordTransform({ matrix: linear, duplicate, pivot: pivotAtStart && pivotAtStart.key === this.selectionKey() ? pivotAtStart.point : this.pivot() });
+    else if (source && result) {
       this.recordTransform({
         dx: (result.x + result.width / 2) - (source.x + source.width / 2),
         dy: (result.y + result.height / 2) - (source.y + source.height / 2),
@@ -2687,6 +3335,9 @@ export class EditorService {
     this.dimensionDraft.set(null);this.dimensionSnapTarget.set(null);
     if(this.dimensionLabelGesture)this.document.set(this.dimensionLabelGesture.before);this.dimensionLabelGesture=undefined;
     if (this.gradientGesture) { this.document.set(this.gradientGesture.before); this.gradientGesture = undefined; }
+    if (this.freeGesture) { this.document.set(this.freeGesture.before); this.freeGesture = undefined; this.freeQuad.set(null); }
+    if (this.liquifyGesture) { this.document.set(this.liquifyGesture.before); this.liquifyGesture = undefined; }
+    if (this.meshGesture) { this.document.set(this.meshGesture.before); this.meshGesture = undefined; }
     this.cancelGuideDrag();
     if (this.areaGesture) {
       this.selectedIds.set(this.areaGesture.ids); this.selectedId.set(this.areaGesture.primary); this.activeNodes.set(this.areaGesture.nodes);

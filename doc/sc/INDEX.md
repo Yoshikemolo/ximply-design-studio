@@ -112,3 +112,8 @@
 | [SC-0106 — The vector Paintbrush and brushed paths](SC-0106.md) |
 | [SC-0107 — Gradient and pattern fills, patterns and swatches](SC-0107.md) |
 | [SC-0108 — The studio on a phone](SC-0108.md) |
+| [SC-0109 — Scale and Shear tools and dialogs](SC-0109.md) |
+| [SC-0110 — The Free Transform tool](SC-0110.md) |
+| [SC-0111 — The liquify tools](SC-0111.md) |
+| [SC-0112 — Envelopes](SC-0112.md) |
+| [SC-0113 — Zooming as Illustrator does](SC-0113.md) |
