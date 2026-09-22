@@ -26,7 +26,9 @@
           ><button (click)="projectFile.click()">
             {{ t("Open project") }}<kbd>{{ shortcut("open") }}</kbd></button
           ><button (click)="editor.save()">
-            {{ t("Save project") }} <kbd>{{ shortcut("save") }}</kbd>
+            {{ t("Save project") }} <kbd>{{ shortcut("save") }}</kbd></button
+          ><button (click)="saveAs()">
+            {{ t("Save as") }}…<kbd>{{ shortcut("saveAs") }}</kbd>
           </button>
           <hr />
           <button (click)="imageFile.click()">
@@ -1914,6 +1916,13 @@
   </form></div>
 }
 
+@if (saveAsDialog()) {
+  <div class="modal-backdrop"><form class="server-dialog affine-dialog save-as-dialog" role="dialog" aria-modal="true" [attr.aria-label]="t('Save as')" (submit)="$event.preventDefault(); confirmSaveAs()" (keydown.escape)="saveAsDialog.set(false); $event.stopPropagation()">
+    <h2>{{ t('Save as') }}</h2>
+    <label>{{ t('File name') }}<input type="text" name="fileName" maxlength="150" [(ngModel)]="saveAsName" required />.xds</label>
+    <div class="dialog-actions"><button type="button" (click)="saveAsDialog.set(false)">{{ t('Cancel') }}</button><button type="submit">{{ t('Save') }}</button></div>
+  </form></div>
+}
 @if (gradientMeshDialog()) {
   <div class="modal-backdrop"><form class="server-dialog affine-dialog" role="dialog" aria-modal="true" [attr.aria-label]="t('Create gradient mesh')" (submit)="$event.preventDefault(); applyGradientMeshDialog()" (keydown.escape)="gradientMeshDialog.set(false); $event.stopPropagation()">
     <h2>{{ t('Create gradient mesh') }}</h2>

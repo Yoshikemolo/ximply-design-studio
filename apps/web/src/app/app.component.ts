@@ -737,6 +737,19 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     { id: "distort", label: "Free distort", icon: "free-distort", hint: "A corner moves alone." },
     { id: "perspective", label: "Perspective distort", icon: "perspective-distort", hint: "A corner moves with its neighbour, the other way." },
   ] as const;
+  /** Save As: the browser's own dialog where it has one, otherwise a name asked for here. */
+  readonly saveAsDialog = signal(false);
+  saveAsName = "";
+  saveAs() {
+    this.dismissMenus();
+    if (this.editor.canPickSaveFile()) { void this.editor.saveAs(); return; }
+    this.saveAsName = this.editor.document().name;
+    this.saveAsDialog.set(true);
+    setTimeout(() => window.document.querySelector<HTMLInputElement>(".save-as-dialog input")?.select());
+  }
+  async confirmSaveAs() {
+    if (await this.editor.saveAs(this.saveAsName)) this.saveAsDialog.set(false);
+  }
   /** Object > Envelope Distort, in the order Illustrator gives it. */
   readonly meshMenuCommands = ["createGradientMesh"] as const;
   readonly envelopeMenuCommands = ["envelopeWarp", "envelopeMesh", "envelopeTop", "envelopeRelease", "envelopeOptions", "envelopeExpand", "envelopeEdit", "envelopeResetWarp", "envelopeResetMesh"] as const;
@@ -1963,6 +1976,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
       undo: () => this.editor.undo(),
       redo: () => this.editor.redo(),
       save: () => this.editor.save(),
+      saveAs: () => this.saveAs(),
       open: () => this.projectFile?.nativeElement.click(),
       new: () => this.newDocument(),
       duplicate: () => this.editor.duplicate(),

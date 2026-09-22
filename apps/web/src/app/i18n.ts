@@ -1,6 +1,11 @@
 const ES: Record<string, string> = {
   "All Rights Reserved.": "Todos los derechos reservados.",
   "Outline stroke": "Contornear trazo",
+  "Save as": "Guardar como",
+  "File name": "Nombre del archivo",
+  "Save": "Guardar",
+  "Save As was cancelled.": "Se ha cancelado Guardar como.",
+  "Give the project a name to save it as.": "Da un nombre al proyecto para guardarlo.",
   "Create gradient mesh": "Crear malla de degradado",
   "Flat": "Plano",
   "To center": "Hacia el centro",

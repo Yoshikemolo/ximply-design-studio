@@ -174,7 +174,8 @@
         "apps/web/tests/shell-template.test.ts",
         "apps/web/tests/page-setup.test.ts",
         "apps/web/tests/page-editing.test.ts",
-        "apps/web/tests/background-paint.test.ts"
+        "apps/web/tests/background-paint.test.ts",
+        "apps/web/tests/save-as.test.ts"
       ],
       "evidence": [
         "doc/implementation/PLAN-0002-0001.md",

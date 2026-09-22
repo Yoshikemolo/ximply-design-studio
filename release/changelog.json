@@ -40,6 +40,10 @@
         },
         {
           "type": "Improvement",
+          "description": "Save a project under another name with File > Save As (Shift+Ctrl+S). Where the browser lets a page write to a file, its own dialog chooses the name and folder, the document takes that name, and later saves with Ctrl+S write to the same file instead of downloading a new one; elsewhere the name is asked for and the project is downloaded under it. The page writes only to the file chosen in that dialog."
+        },
+        {
+          "type": "Improvement",
           "description": "Show or hide the context bar from View > Layout, like the other blocks of the workspace; the canvas takes the height it leaves, and the choice is remembered."
         },
         {

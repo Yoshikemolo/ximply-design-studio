@@ -104,6 +104,7 @@ export const COMMANDS: Command[] = [
   { id: "undo", label: "Undo", keys: ["Mod+Z"] },
   { id: "redo", label: "Redo", keys: ["Mod+Shift+Z"] },
   { id: "save", label: "Save project", keys: ["Mod+S"] },
+  { id: "saveAs", label: "Save as", keys: ["Mod+Shift+S"] },
   { id: "open", label: "Open project", keys: ["Mod+O"] },
   { id: "new", label: "New document", keys: ["Mod+Alt+N"] },
   { id: "duplicate", label: "Duplicate", keys: ["Mod+Alt+D"] },

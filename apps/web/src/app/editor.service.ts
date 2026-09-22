@@ -5853,13 +5853,66 @@ export class EditorService {
     link.click();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
-  save() {
-    this.download(
-      new Blob([JSON.stringify(this.document())], { type: "application/json" }),
-      this.document().name + ".xds",
-    );
+  /** The file each open document was saved as, where the browser can write to it again. */
+  private readonly savedFiles = new Map<string, { createWritable(): Promise<{ write(data: Blob): Promise<void>; close(): Promise<void> }>; name: string }>();
+  /** Whether this browser lets Save As choose a file that later saves write to. */
+  canPickSaveFile(): boolean {
+    return typeof (window as unknown as { showSaveFilePicker?: unknown }).showSaveFilePicker === "function";
+  }
+  private projectBlob() { return new Blob([JSON.stringify(this.document())], { type: "application/json" }); }
+  /**
+   * File > Save: to the file the document was saved as, when there is one, or as a download
+   * named after the document.
+   */
+  async save(): Promise<boolean> {
+    const file = this.savedFiles.get(this.activeTabId());
+    if (file) {
+      try {
+        const writable = await file.createWritable();
+        await writable.write(this.projectBlob());
+        await writable.close();
+        this.markSaved();
+        this.status.set(`Saved ${file.name}.`);
+        return true;
+      } catch {
+        // The file may have been moved or its permission withdrawn: download instead.
+        this.savedFiles.delete(this.activeTabId());
+      }
+    }
+    this.download(this.projectBlob(), this.document().name + ".xds");
     this.markSaved();
     this.status.set("Project file saved");
+    return true;
+  }
+  /**
+   * File > Save As (Shift+Ctrl+S): the document under another name, which it takes. Where the
+   * browser allows it the file is chosen in its own dialog and later saves write to it;
+   * elsewhere the name given is downloaded.
+   */
+  async saveAs(name?: string): Promise<boolean> {
+    const clean = (value: string) => value.replace(/\.xds$/i, "").replace(/[\\/:*?"<>|]/g, "").trim().slice(0, 150);
+    if (name === undefined && this.canPickSaveFile()) {
+      const picker = (window as unknown as { showSaveFilePicker(options: unknown): Promise<{ name: string; createWritable(): Promise<{ write(data: Blob): Promise<void>; close(): Promise<void> }> }> }).showSaveFilePicker;
+      let handle;
+      try {
+        handle = await picker({ suggestedName: this.document().name + ".xds", types: [{ description: "Ximply Design Studio project", accept: { "application/json": [".xds"] } }] });
+      } catch {
+        this.status.set("Save As was cancelled.");
+        return false;
+      }
+      const chosen = clean(handle.name) || this.document().name;
+      this.document.update((d) => ({ ...d, name: chosen }));
+      this.savedFiles.set(this.activeTabId(), handle);
+      return this.save();
+    }
+    const chosen = clean(name ?? "");
+    if (!chosen) { this.status.set("Give the project a name to save it as."); return false; }
+    this.document.update((d) => ({ ...d, name: chosen }));
+    this.savedFiles.delete(this.activeTabId());
+    this.download(this.projectBlob(), chosen + ".xds");
+    this.markSaved();
+    this.status.set(`Saved as ${chosen}.xds.`);
+    return true;
   }
   exportSvg() {
     this.download(
