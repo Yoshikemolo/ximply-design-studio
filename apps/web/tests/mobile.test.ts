@@ -177,3 +177,14 @@ describe('the phone layout', () => {
     expect(phoneStyles).toContain('.studio-shell > footer');
   });
 });
+
+describe('the menu on a phone', () => {
+  it('lies above the backdrop of the drawers, so its options take the taps', () => {
+    const styles = readFileSync('packages/design-system/styles/studio.scss', 'utf8');
+    const phoneStyles = styles.slice(styles.lastIndexOf('@media (max-width: 720px)'));
+    const header = Number(/\.menubar \{[^}]*z-index: (\d+)/.exec(phoneStyles)![1]);
+    const backdrop = Number(/\.drawer-backdrop \{[^}]*z-index: (\d+)/.exec(phoneStyles)![1]);
+    // The menu is inside the header, whose stacking decides whether a tap reaches it.
+    expect(header).toBeGreaterThan(backdrop);
+  });
+});
