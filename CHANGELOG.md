@@ -5,6 +5,7 @@ Application data and bundled Markdown are generated; do not edit them.
 
 [Unreleased](doc/changelog/Unreleased.md)
 
+- [0.9.2 — The web manifest is named manifest.json, so the preview host serves it as JSON](doc/changelog/0.9.2.md)
 - [0.9.1 — The Ximplicity icon as favicon and as the icon of the studio on a phone's home screen](doc/changelog/0.9.1.md)
 - [0.9.0 — Gradient meshes, a sharp magnified view with Pixel Preview, wide screen drawers, Save As and cropped paint layers](doc/changelog/0.9.0.md)
 - [0.8.0 — Shear, the Scale and Transform Each dialogs, the Free Transform tool, the liquify tools and envelopes, as Illustrator has them](doc/changelog/0.8.0.md)
