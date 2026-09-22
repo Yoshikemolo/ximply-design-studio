@@ -2,6 +2,7 @@ import { Procedural, materializeProcedural, projectionCurves, projectionDash, sy
 import { Dimension, dimensionGeometry, dimensionLabelLayout, validDimension } from "./dimensions";
 import { LineEnds, lineEndGeometry, pathLineEnds, validLineEnds } from "./line-endings";
 import { BrushStroke, brushOutline, brushOutlineSvg, validBrushStroke } from "./brush-stroke";
+import { FillPaint, MAX_PATTERNS, MAX_PATTERN_LAYERS, MAX_SWATCHES, PatternDefinition, Swatch, gradientGeometry, renderedStops, validFillPaint, validSwatch } from "./paint";
 import { ObjectBlend, syncBlends, validateBlends } from "./object-blend";
 import { FONT_FAMILIES, layoutText, TextLayoutOptions, TextTypography, TextMeasurement } from "./text-layout";
 import {
@@ -59,6 +60,8 @@ export interface Layer {
   lineEnds?: LineEnds;
   /** A brush painted along the path instead of a plain stroke, as the Paintbrush draws. */
   brushStroke?: BrushStroke;
+  /** A gradient or a pattern painted inside the shape instead of the flat fill. */
+  fillPaint?: FillPaint;
   dimension?: Dimension;
   procedural?: Procedural;
   points: Point[];
@@ -83,6 +86,10 @@ export interface StudioDocument {
   version: 1 | 2;
   symbols?: SymbolDefinition[];
   blends?: ObjectBlend[];
+  /** Pattern tiles the fills of the document may repeat. */
+  patterns?: PatternDefinition[];
+  /** The swatches of the document, as its Swatches panel lists them. */
+  swatches?: Swatch[];
   name: string;
   width: number;
   height: number;
@@ -436,10 +443,43 @@ export function parseDocument(text: string): StudioDocument {
       throw new Error("Invalid symbol definition.");
     symbolIds.add(symbol.id);
   }
+  const patterns = value["patterns"];
+  if (patterns !== undefined && (value["version"] !== 2 || !Array.isArray(patterns) || patterns.length > MAX_PATTERNS))
+    throw new Error("Invalid pattern library.");
+  const patternIds = new Set<string>();
+  const patternLayers: unknown[] = [];
+  for (const pattern of (patterns ?? []) as Record<string, unknown>[]) {
+    if (
+      !record(pattern) || Object.keys(pattern).length !== 5 ||
+      typeof pattern["id"] !== "string" || pattern["id"].length < 1 || pattern["id"].length > 100 || patternIds.has(pattern["id"]) ||
+      typeof pattern["name"] !== "string" || pattern["name"].length > 150 ||
+      !finite(pattern["width"], 1, 2048) || !finite(pattern["height"], 1, 2048) ||
+      !Array.isArray(pattern["layers"]) || pattern["layers"].length < 1 || pattern["layers"].length > MAX_PATTERN_LAYERS
+    )
+      throw new Error("Invalid pattern definition.");
+    for (const layer of pattern["layers"] as Record<string, unknown>[]) {
+      // A tile is vector artwork only: no pictures, text, symbols, guides or patterns inside patterns.
+      if (!record(layer) || !["rectangle", "ellipse", "path"].includes(String(layer["kind"])) || layer["fillPaint"] !== undefined ||
+        layer["symbolId"] !== undefined || layer["guide"] !== undefined || layer["dimension"] !== undefined || layer["procedural"] !== undefined)
+        throw new Error("Invalid pattern definition.");
+      patternLayers.push(layer);
+    }
+    patternIds.add(pattern["id"]);
+  }
+  const swatches = value["swatches"];
+  if (swatches !== undefined) {
+    if (value["version"] !== 2 || !Array.isArray(swatches) || swatches.length > MAX_SWATCHES) throw new Error("Invalid swatch library.");
+    const swatchIds = new Set<string>();
+    for (const swatch of swatches) {
+      if (!validSwatch(swatch, patternIds) || swatchIds.has(swatch.id)) throw new Error("Invalid swatch.");
+      swatchIds.add(swatch.id);
+    }
+  }
   const ids = new Set<string>();
   for (const layer of [
     ...value["layers"],
     ...definitions.map((s) => s.layer),
+    ...patternLayers,
   ]) {
     if (
       !record(layer) ||
@@ -515,6 +555,8 @@ export function parseDocument(text: string): StudioDocument {
       throw new Error("Invalid guide layer.");
     if (layer["procedural"] !== undefined && (value["version"] !== 2 || layer["kind"] !== "path" || layer["dimension"] !== undefined || layer["guide"] !== undefined || layer["symbolId"] !== undefined || !validProcedural(layer["procedural"]))) throw new Error("Invalid procedural layer.");
     if (layer["lineEnds"] !== undefined && (value["version"] !== 2 || !validLineEnds(layer["lineEnds"]))) throw new Error("Invalid line endings.");
+    if (layer["fillPaint"] !== undefined && (value["version"] !== 2 || !["rectangle", "ellipse", "path", "text"].includes(String(layer["kind"])) || !validFillPaint(layer["fillPaint"], patternIds)))
+      throw new Error("Invalid fill paint.");
     if (layer["brushStroke"] !== undefined && (value["version"] !== 2 || layer["kind"] !== "path" || layer["dimension"] !== undefined || layer["procedural"] !== undefined || !validBrushStroke(layer["brushStroke"]))) throw new Error("Invalid brush stroke.");
     if (layer["dimension"] !== undefined && (value["version"] !== 2 || layer["kind"] !== "path" || layer["guide"] !== undefined || layer["symbolId"] !== undefined || !validDimension(layer["dimension"]))) throw new Error("Invalid dimension.");
     const strokeStyle = layer["strokeStyle"];
@@ -666,7 +708,7 @@ function svgStroke(layer: Layer, width = layer.strokeWidth) {
   const dash = style.dash?.length ? ` stroke-dasharray="${style.dash.join(" ")}"` : "";
   return `${svgPaint("stroke", layer.stroke)} stroke-width="${width}" stroke-linecap="${style.cap}" stroke-linejoin="${style.join}" stroke-miterlimit="10"${dash}`;
 }
-function svgAlignedStroke(layer: Layer, shape: (style: string) => string, index: number): string {
+function svgAlignedStroke(layer: Layer, shape: (style: string) => string, index: number | string): string {
   if (layer.stroke === "none" || layer.strokeWidth <= 0) return "";
   const alignment = layer.strokeStyle?.alignment ?? "center";
   if (alignment === "center") return shape(`fill="none" ${svgStroke(layer)}`);
@@ -677,12 +719,51 @@ function svgAlignedStroke(layer: Layer, shape: (style: string) => string, index:
   const bounds = strokeBounds(layer);
   return `<defs><mask id="${id}" maskUnits="userSpaceOnUse" x="${bounds.x}" y="${bounds.y}" width="${bounds.width}" height="${bounds.height}" style="mask-type:luminance"><rect x="${bounds.x}" y="${bounds.y}" width="${bounds.width}" height="${bounds.height}" fill="#ffffff"/>${shape('fill="#000000" fill-rule="evenodd" stroke="none"')}</mask></defs><g mask="url(#${id})">${stroke}</g>`;
 }
+/**
+ * The fill of an object in SVG, with the gradient or pattern it holds written as a
+ * definition next to it. A gradient is laid out in the object's own coordinates, so it
+ * turns with the object; a pattern tile is laid out from the document origin.
+ */
+function svgFill(l: Layer, index: number | string, patterns: Map<string, PatternDefinition>, measure?: TextMeasurement): { fill: string; defs: string } {
+  const paint = l.fillPaint;
+  if (!paint || l.fill === "none") return { fill: svgPaint("fill", l.fill), defs: "" };
+  const id = `paint-${index}`;
+  if (paint.kind === "gradient") {
+    const g = gradientGeometry(paint, l.width, l.height);
+    const stops = renderedStops(paint).map((stop) => {
+      const opaque = /^#[0-9a-f]{8}$/i.test(stop.color);
+      return `<stop offset="${stop.offset}" stop-color="${stop.color.slice(0, 7)}"${opaque ? ` stop-opacity="${Number.parseInt(stop.color.slice(7), 16) / 255}"` : ""}/>`;
+    }).join("");
+    const shape = paint.type === "radial"
+      ? `<radialGradient id="${id}" gradientUnits="userSpaceOnUse" cx="${g.start.x}" cy="${g.start.y}" r="${g.radius}">`
+      : `<linearGradient id="${id}" gradientUnits="userSpaceOnUse" x1="${g.start.x}" y1="${g.start.y}" x2="${g.end.x}" y2="${g.end.y}">`;
+    return { fill: `fill="url(#${id})"`, defs: `<defs>${shape}${stops}</${paint.type === "radial" ? "radialGradient" : "linearGradient"}></defs>` };
+  }
+  const pattern = patterns.get(paint.patternId);
+  if (!pattern) return { fill: svgPaint("fill", l.fill), defs: "" };
+  // The tile is placed in document space: the inverse of the object's transform.
+  const o = localPoint(l, { x: 0, y: 0 }), ex = localPoint(l, { x: 1, y: 0 }), ey = localPoint(l, { x: 0, y: 1 });
+  const matrix = [ex.x - o.x, ex.y - o.y, ey.x - o.x, ey.y - o.y, o.x, o.y].map((n) => Math.round(n * 1e9) / 1e9 + 0).join(" ");
+  const tile = pattern.layers.filter((layer) => layer.visible).map((layer, i) => svgLayer(layer, `${index}-${i}`, patterns, measure)).join("");
+  return {
+    fill: `fill="url(#${id})"`,
+    defs: `<defs><pattern id="${id}" patternUnits="userSpaceOnUse" width="${pattern.width}" height="${pattern.height}" patternTransform="matrix(${matrix})">${tile}</pattern></defs>`,
+  };
+}
+
 export function svgExport(doc: StudioDocument, measure?: TextMeasurement): string {
+  const patterns = new Map((doc.patterns ?? []).map((pattern) => [pattern.id, pattern]));
   const shapes = materializeProcedural(doc).layers
     .filter((l) => l.visible && !l.guide)
-    .map((l, layerIndex) => {
+    .map((l, layerIndex) => svgLayer(l, layerIndex, patterns, measure))
+    .join("\n");
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${doc.width}" height="${doc.height}" viewBox="0 0 ${doc.width} ${doc.height}"><rect width="100%" height="100%" fill="${doc.background}"/>${shapes}</svg>`;
+}
+
+function svgLayer(l: Layer, layerIndex: number | string, patterns: Map<string, PatternDefinition>, measure?: TextMeasurement): string {
       if (l.dimension) return dimensionSvg(l, measure, layerIndex);
-      const style = `${svgPaint("fill", l.kind === "path" && !l.curves?.some((p) => p.closed) ? "none" : l.fill)} ${svgStroke(l)}`;
+      const paint = svgFill(l, layerIndex, patterns, measure);
+      const style = `${l.kind === "path" && !l.curves?.some((p) => p.closed) ? svgPaint("fill", "none") : paint.fill} ${svgStroke(l)}`;
       let content = "";
       if (l.kind === "rectangle")
         content = `<rect width="${l.width}" height="${l.height}" ${style}/>`;
@@ -692,7 +773,7 @@ export function svgExport(doc: StudioDocument, measure?: TextMeasurement): strin
         const shape = (attributes: string) => l.kind === "rectangle"
           ? `<rect width="${l.width}" height="${l.height}" ${attributes}/>`
           : `<ellipse cx="${l.width / 2}" cy="${l.height / 2}" rx="${l.width / 2}" ry="${l.height / 2}" ${attributes}/>`;
-        content = shape(`${svgPaint("fill", l.fill)} stroke="none"`) + svgAlignedStroke(l, shape, layerIndex);
+        content = shape(`${paint.fill} stroke="none"`) + svgAlignedStroke(l, shape, layerIndex);
       }
       if (l.curves) {
         const projection = projectionCurves(l), drawnCurves = l.curves.filter((_, index) => !projection[index]);
@@ -705,12 +786,12 @@ export function svgExport(doc: StudioDocument, measure?: TextMeasurement): strin
           ? `<path d="${brushOutlineSvg(drawnCurves.flatMap((path) => brushOutline(path, l.brushStroke!, l.strokeWidth)))}" ${svgPaint("fill", l.stroke)} fill-rule="nonzero" stroke="none"/>`
           : null;
         content = brushed !== null
-          ? (drawnCurves.length ? `<path d="${curveSvg(drawnCurves)}" ${svgPaint("fill", l.fill)} fill-rule="evenodd" stroke="none"/>` : "") + brushed
+          ? (drawnCurves.length ? `<path d="${curveSvg(drawnCurves)}" ${paint.fill} fill-rule="evenodd" stroke="none"/>` : "") + brushed
           :
           // A fill paints every contour, open ones included, which is what filling means;
           // the stroke below keeps the ends of an open contour apart.
           (drawnCurves.length
-            ? `<path d="${curveSvg(drawnCurves)}" ${svgPaint("fill", l.fill)} fill-rule="evenodd" stroke="none"/>`
+            ? `<path d="${curveSvg(drawnCurves)}" ${paint.fill} fill-rule="evenodd" stroke="none"/>`
             : "") +
           (l.strokeStyle?.alignment && l.strokeStyle.alignment !== "center"
             ? (closed.length ? svgAlignedStroke(l, (attributes) => `<path d="${curveSvg(closed)}" ${attributes}/>`, layerIndex) : "") +
@@ -742,10 +823,7 @@ export function svgExport(doc: StudioDocument, measure?: TextMeasurement): strin
         content = `<image width="${l.width}" height="${l.height}" href="${escapeXml(l.source)}" style="filter:brightness(${l.adjustments.brightness}%) contrast(${l.adjustments.contrast}%) saturate(${l.adjustments.saturation}%) blur(${l.adjustments.blur}px)"/>`;
       if (!l.brushStroke) content += pathLineEnds(l).map(end => endingSvg(end.point, end.direction, end.style, l.stroke, l.strokeWidth)).join("");
       const blend = l.blend === "source-over" ? "normal" : l.blend;
-      return `<g transform="translate(${l.x} ${l.y}) rotate(${l.rotation} ${l.width / 2} ${l.height / 2})${l.skewX ? ` translate(${l.width / 2} ${l.height / 2}) skewX(${l.skewX}) translate(${-l.width / 2} ${-l.height / 2})` : ""}${l.flipX || l.flipY ? ` translate(${l.flipX ? l.width : 0} ${l.flipY ? l.height : 0}) scale(${l.flipX ? -1 : 1} ${l.flipY ? -1 : 1})` : ""}" opacity="${l.opacity}" style="mix-blend-mode:${blend}">${content}</g>`;
-    })
-    .join("\n");
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="${doc.width}" height="${doc.height}" viewBox="0 0 ${doc.width} ${doc.height}"><rect width="100%" height="100%" fill="${doc.background}"/>${shapes}</svg>`;
+      return `<g transform="translate(${l.x} ${l.y}) rotate(${l.rotation} ${l.width / 2} ${l.height / 2})${l.skewX ? ` translate(${l.width / 2} ${l.height / 2}) skewX(${l.skewX}) translate(${-l.width / 2} ${-l.height / 2})` : ""}${l.flipX || l.flipY ? ` translate(${l.flipX ? l.width : 0} ${l.flipY ? l.height : 0}) scale(${l.flipX ? -1 : 1} ${l.flipY ? -1 : 1})` : ""}" opacity="${l.opacity}" style="mix-blend-mode:${blend}">${paint.defs}${content}</g>`;
 }
 
 function endingSvg(point: Point, direction: Point, style: import("./line-endings").LineEnd, paint: string, width: number, spread?: number): string {
@@ -755,7 +833,7 @@ function endingSvg(point: Point, direction: Point, style: import("./line-endings
   if (g.circle) return `<circle cx="${g.circle.center.x}" cy="${g.circle.center.y}" r="${g.circle.radius}" ${svgPaint("fill", paint)}/>`;
   return (g.segments ?? [g.points]).filter(p => p.length).map(points => `<${g.closed ? "polygon" : "polyline"} points="${points.map(p => `${p.x},${p.y}`).join(" ")}" ${svgPaint("fill", g.closed ? paint : "none")} ${stroke}/>`).join("");
 }
-function dimensionSvg(layer: Layer, measure: TextMeasurement | undefined, index: number): string {
+function dimensionSvg(layer: Layer, measure: TextMeasurement | undefined, index: number | string): string {
   const d = dimensionGeometry(layer, measure), meta = layer.dimension!;
   let content = d.lines.map(line => `<path d="M${line.a.x} ${line.a.y} L${line.b.x} ${line.b.y}" fill="none" ${svgPaint("stroke", line.extension ? meta.extension.stroke : layer.stroke)} stroke-width="${line.extension ? meta.extension.strokeWidth : layer.strokeWidth}"/>`).join("");
   if (d.arc) { const a = d.arc, start = {x:a.center.x + a.radius*Math.cos(a.startAngle),y:a.center.y+a.radius*Math.sin(a.startAngle)}, end = {x:a.center.x+a.radius*Math.cos(a.endAngle),y:a.center.y+a.radius*Math.sin(a.endAngle)};

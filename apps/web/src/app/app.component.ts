@@ -2167,6 +2167,19 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     if (!this.editor.dirty()) { clear(); return; }
     this.confirmation.set({ title: "Unsaved changes", message: "The current document has unsaved changes. Clearing it removes all of its content.", action: "Clear anyway", run: clear });
   }
+  /**
+   * On a phone the document tabs become a list in the header: choosing a document shows
+   * it, and the last two entries make a new document or close the one shown.
+   */
+  chooseDocument(event: Event) {
+    const select = event.target as HTMLSelectElement;
+    const active = () => this.editor.tabs().find((tab) => tab.active)?.id ?? "";
+    if (select.value === "new") this.newDocument();
+    else if (select.value === "close") { if (active()) this.closeDocument(active()); }
+    else this.switchDocument(select.value);
+    // After an action the list shows the document on screen again.
+    select.value = active();
+  }
   switchDocument(id: string) {
     this.commitText();
     this.editor.switchDocument(id);

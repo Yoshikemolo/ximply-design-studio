@@ -1036,8 +1036,12 @@ canvas {
   margin: 8px 0;
   font-size: 11px;
 }
-.document-row select {
+.document-row select,
+.document-row input {
   max-width: 150px;
+}
+.mobile-documents {
+  display: none;
 }
 .segmented {
   display: inline-flex;
@@ -2184,6 +2188,24 @@ textarea,
   }
   .header-workspace {
     display: none;
+  }
+  /* The document tabs become a list in the header, giving the canvas their height. */
+  .document-tabs {
+    display: none;
+  }
+  .mobile-documents {
+    display: block;
+    flex: 1 1 auto;
+    min-width: 0;
+    max-width: 50vw;
+    height: 32px;
+    padding: 0 8px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background-color: var(--panel);
+    color: var(--text);
+    font-size: 12px;
+    text-overflow: ellipsis;
   }
   .menu-toggle {
     display: inline-flex;

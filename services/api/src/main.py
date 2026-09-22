@@ -114,6 +114,81 @@ class LineEnds(BaseModel):
     linked: Annotated[bool, Field(strict=True)]
 
 
+HexColor = Annotated[str, Field(pattern=r'^#[0-9a-fA-F]{6}([0-9a-fA-F]{2})?$')]
+
+
+class GradientStop(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    color: HexColor
+    location: Annotated[Number, Field(ge=0, le=100)]
+    midpoint: Annotated[Number, Field(ge=13, le=87)]
+
+
+class FractionPoint(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    x: Annotated[Number, Field(ge=-100, le=100)]
+    y: Annotated[Number, Field(ge=-100, le=100)]
+
+
+class GradientVector(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    start: FractionPoint
+    end: FractionPoint
+
+
+class GradientPaint(BaseModel):
+    """A linear or radial gradient painted inside a shape, mirrored from the editor."""
+    model_config = ConfigDict(extra='forbid')
+    kind: Literal['gradient']
+    type: Literal['linear', 'radial']
+    angle: Annotated[Number, Field(ge=-180, le=180)]
+    stops: Annotated[list[GradientStop], Field(min_length=2, max_length=32)]
+    vector: GradientVector | None = None
+
+    @model_validator(mode='after')
+    def ordered_stops(self):
+        locations = [stop.location for stop in self.stops]
+        if locations != sorted(locations):
+            raise ValueError('Gradient stops must be in order')
+        return self
+
+
+class PatternPaint(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    kind: Literal['pattern']
+    patternId: Annotated[str, Field(min_length=1, max_length=100)]
+
+
+FillPaint = Annotated[GradientPaint | PatternPaint, Field(discriminator='kind')]
+
+
+class ColorSwatch(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    id: Annotated[str, Field(min_length=1, max_length=100)]
+    name: Annotated[str, Field(max_length=150)]
+    kind: Literal['color']
+    color: HexColor
+
+
+class GradientSwatch(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    id: Annotated[str, Field(min_length=1, max_length=100)]
+    name: Annotated[str, Field(max_length=150)]
+    kind: Literal['gradient']
+    gradient: GradientPaint
+
+
+class PatternSwatch(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    id: Annotated[str, Field(min_length=1, max_length=100)]
+    name: Annotated[str, Field(max_length=150)]
+    kind: Literal['pattern']
+    patternId: Annotated[str, Field(min_length=1, max_length=100)]
+
+
+Swatch = Annotated[ColorSwatch | GradientSwatch | PatternSwatch, Field(discriminator='kind')]
+
+
 class BrushStroke(BaseModel):
     """A calligraphic brush painted along a vector path, mirrored from the editor."""
     model_config = ConfigDict(extra='forbid')
@@ -290,6 +365,7 @@ class Layer(Point):
     strokeStyle: StrokeStyle | None = None
     lineEnds: LineEnds | None = None
     brushStroke: BrushStroke | None = None
+    fillPaint: FillPaint | None = None
     dimension: Dimension | None = None
     procedural: Procedural | None = None
     regroupPath: Annotated[list[Annotated[str, Field(min_length=1, max_length=100)]], Field(max_length=16)] | None = None
@@ -307,7 +383,7 @@ class Layer(Point):
     @model_validator(mode='before')
     @classmethod
     def non_nullable_extensions(cls, value):
-        if isinstance(value, dict) and any(key in value and value[key] is None for key in ('curves', 'symbolId', 'traceSourceId', 'groupPath', 'flipX', 'flipY', 'skewX', 'guide', 'textLayout', 'typography', 'strokeStyle', 'lineEnds', 'brushStroke', 'dimension', 'regroupPath', 'procedural')):
+        if isinstance(value, dict) and any(key in value and value[key] is None for key in ('curves', 'symbolId', 'traceSourceId', 'groupPath', 'flipX', 'flipY', 'skewX', 'guide', 'textLayout', 'typography', 'strokeStyle', 'lineEnds', 'brushStroke', 'fillPaint', 'dimension', 'regroupPath', 'procedural')):
             raise ValueError('Drawing extensions cannot be null')
         return value
 
@@ -329,6 +405,8 @@ class Layer(Point):
             raise ValueError('Guides must be ungrouped paths without symbol references')
         if self.brushStroke is not None and (self.kind != 'path' or self.dimension is not None or self.procedural is not None):
             raise ValueError('A brush stroke belongs to a plain path')
+        if self.fillPaint is not None and self.kind not in ('rectangle', 'ellipse', 'path', 'text'):
+            raise ValueError('Only shapes and text take a gradient or a pattern')
         return self
 
     @field_validator('source')
@@ -361,6 +439,23 @@ class ObjectBlend(BaseModel):
     easing: Literal['linear', 'ease-in', 'ease-out', 'ease-in-out']
 
 
+class PatternDefinition(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    id: Annotated[str, Field(min_length=1, max_length=100)]
+    name: Annotated[str, Field(max_length=150)]
+    width: Annotated[Number, Field(ge=1, le=2048)]
+    height: Annotated[Number, Field(ge=1, le=2048)]
+    layers: Annotated[list[Layer], Field(min_length=1, max_length=200)]
+
+    @model_validator(mode='after')
+    def vector_tile(self):
+        # A tile is vector artwork only: no pictures, text, symbols, guides or patterns inside patterns.
+        if any(layer.kind not in ('rectangle', 'ellipse', 'path') or layer.fillPaint is not None or layer.symbolId is not None
+               or layer.guide is not None or layer.dimension is not None or layer.procedural is not None for layer in self.layers):
+            raise ValueError('Invalid pattern tile')
+        return self
+
+
 class Document(BaseModel):
     model_config = ConfigDict(extra='forbid')
     format: Literal['ximply-document']
@@ -372,11 +467,31 @@ class Document(BaseModel):
     layers: Annotated[list[Layer], Field(max_length=1000)]
     blends: Annotated[list[ObjectBlend], Field(max_length=150)] | None = None
     symbols: Annotated[list[SymbolDefinition], Field(max_length=100)] | None = None
+    patterns: Annotated[list[PatternDefinition], Field(max_length=50)] | None = None
+    swatches: Annotated[list[Swatch], Field(max_length=500)] | None = None
+
+    @model_validator(mode='after')
+    def paint_contract(self):
+        patterns = self.patterns or []
+        pattern_ids = {pattern.id for pattern in patterns}
+        if len(pattern_ids) != len(patterns):
+            raise ValueError('Pattern identities must be unique')
+        swatches = self.swatches or []
+        if len({swatch.id for swatch in swatches}) != len(swatches):
+            raise ValueError('Swatch identities must be unique')
+        referenced = [layer.fillPaint.patternId for layer in self.layers if isinstance(layer.fillPaint, PatternPaint)]
+        referenced += [swatch.patternId for swatch in swatches if isinstance(swatch, PatternSwatch)]
+        if any(pattern_id not in pattern_ids for pattern_id in referenced):
+            raise ValueError('Unknown pattern reference')
+        if self.version == 1 and (patterns or swatches or 'patterns' in self.model_fields_set or 'swatches' in self.model_fields_set
+                                  or any(layer.fillPaint is not None for layer in self.layers)):
+            raise ValueError('Gradients, patterns and swatches require native format 2')
+        return self
 
     @model_validator(mode='before')
     @classmethod
     def non_nullable_symbols(cls, value):
-        if isinstance(value, dict) and any(key in value and value[key] is None for key in ('symbols', 'blends')):
+        if isinstance(value, dict) and any(key in value and value[key] is None for key in ('symbols', 'blends', 'patterns', 'swatches')):
             raise ValueError('Document extensions cannot be null')
         return value
 

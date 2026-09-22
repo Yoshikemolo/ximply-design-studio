@@ -131,6 +131,41 @@ describe('two fingers on the canvas', () => {
   });
 });
 
+describe('the document list in the header', () => {
+  const choose = (app: AppComponent, value: string) => {
+    const select = document.createElement('select');
+    for (const v of [value, 'keep']) { const option = document.createElement('option'); option.value = v; select.appendChild(option); }
+    select.value = value;
+    app.chooseDocument({ target: select } as unknown as Event);
+    return select;
+  };
+
+  it('shows, creates and closes documents in place of the tabs', () => {
+    const { app, editor } = phone();
+    Object.assign(app, { commitText: () => undefined, fit: () => undefined, confirmation: signal(null) });
+    const first = editor.tabs()[0].id;
+    choose(app, 'new');
+    expect(editor.tabs()).toHaveLength(2);
+    const second = editor.tabs().find((tab) => tab.active)!.id;
+    expect(second).not.toBe(first);
+    choose(app, first);
+    expect(editor.tabs().find((tab) => tab.active)!.id).toBe(first);
+    choose(app, 'close');
+    expect(editor.tabs().map((tab) => tab.id)).toEqual([second]);
+  });
+
+  it('sits in the header between the brand and the language, with the tab strip hidden on phones', () => {
+    const html = readFileSync('apps/web/src/app/app.component.html', 'utf8');
+    const header = html.slice(html.indexOf('<header class="menubar">'), html.indexOf('</header>'));
+    expect(header.indexOf('class="brand"')).toBeLessThan(header.indexOf('mobile-documents'));
+    expect(header.indexOf('mobile-documents')).toBeLessThan(header.indexOf('class="language"'));
+    const styles = readFileSync('packages/design-system/styles/studio.scss', 'utf8');
+    const phoneStyles = styles.slice(styles.lastIndexOf('@media (max-width: 720px)'));
+    expect(phoneStyles).toMatch(/\.document-tabs \{\s*display: none;/);
+    expect(phoneStyles).toMatch(/\.mobile-documents \{\s*display: block;/);
+  });
+});
+
 describe('the phone layout', () => {
   it('keeps the page at the size of the screen and the canvas touches for itself', () => {
     const index = readFileSync('apps/web/src/index.html', 'utf8');

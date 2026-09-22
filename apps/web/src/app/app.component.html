@@ -6,6 +6,16 @@
         >ximply<span class="brand-sub">design studio</span></span
       ></a
     >
+    @if (mobile()) {
+      <select class="mobile-documents" [attr.aria-label]="t('Documents')" [title]="t('Documents')" (change)="chooseDocument($event)">
+        @for (tab of editor.tabs(); track tab.id) {
+          <option [value]="tab.id" [selected]="tab.active">{{ tab.name }}{{ tab.dirty ? " •" : "" }}</option>
+        }
+        <option disabled>──────────</option>
+        <option value="new">+ {{ t("New document") }}</option>
+        <option value="close">× {{ t("Close document") }}</option>
+      </select>
+    }
     <nav class="menus" aria-label="Main menu" [class.open]="mobileMenu()">
       <details>
         <summary>{{ t("File") }}</summary>
@@ -1041,6 +1051,7 @@
                 <div class="selected-kind">
                   <img class="kind-icon" src="/assets/icons/document.svg" alt="" />{{ activeTabName() }}<span class="header-spacer"></span><small>{{ t("Document") }}</small>
                 </div>
+                <label class="document-row">{{ t("Document name") }}<input [value]="activeTabName()" (change)="editor.rename(text($event))" /></label>
                 <div class="section-label">{{ t("Page") }} · {{ preferences.distanceUnit() }}</div>
                 <div class="property-grid">
                   <label [title]="t('Width')">W<input type="number" min="0" step="any" [value]="displayDistance(page.width)" (change)="setDocumentSize('width', $event)" [attr.aria-label]="t('Width')" /></label>
