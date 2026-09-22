@@ -2419,3 +2419,6 @@ textarea,
 .reference-locator { display: grid; grid-template-columns: repeat(3, 14px); gap: 6px; padding: 6px; border: 1px solid var(--border); border-radius: 4px;
   button { width: 14px; height: 14px; min-height: 0; padding: 0; border: 1px solid var(--muted); border-radius: 2px; background: var(--panel); }
   button.active { background: var(--accent); border-color: var(--accent); } }
+
+/* The brush of the liquify tools, drawn at the cursor. */
+.liquify-brush { position: fixed; z-index: 60; pointer-events: none; border: 1px solid #0d59f2; border-radius: 50%; box-shadow: 0 0 0 1px #ffffffaa; }

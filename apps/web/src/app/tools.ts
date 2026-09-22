@@ -1,6 +1,13 @@
 /** Trusted built-in descriptors; shortcut assignments belong to the command registry. */
 export type ToolId =
   | "freeTransform"
+  | "warp"
+  | "twirl"
+  | "pucker"
+  | "bloat"
+  | "scallop"
+  | "crystallize"
+  | "wrinkle"
   | "gradient"
   | "shear"
   | "groupSelect"
@@ -167,6 +174,9 @@ export const TOOLS: ToolPlugin[] = [
   { id: "reshape", label: "Reshape", icon: "reshape", group: "Paths" },
   { id: "shear", label: "Shear", icon: "shear", group: "Paths" },
   { id: "freeTransform", label: "Free transform", icon: "free-transform", group: "Paths" },
+  ...(["warp", "twirl", "pucker", "bloat", "scallop", "crystallize", "wrinkle"] as ToolId[]).map((id) => ({
+    id, label: id[0].toUpperCase() + id.slice(1), icon: "liquify-" + id, group: "Paths" as const,
+  })),
   { id: "eraser", label: "Eraser", icon: "eraser", group: "Paint" },
   ...(
     [
@@ -238,6 +248,7 @@ export const TOOL_FAMILIES: ToolFamily[] = [
   { id: "mirror", label: "Reflect", tools: ["mirror"] },
   { id: "scale", label: "Scale tools", tools: ["scale", "shear", "reshape"] },
   { id: "freeTransform", label: "Free transform", tools: ["freeTransform"] },
+  { id: "liquify", label: "Liquify tools", tools: ["warp", "twirl", "pucker", "bloat", "scallop", "crystallize", "wrinkle"] },
   {
     id: "symbols",
     label: "Symbol tools",

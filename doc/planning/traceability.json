@@ -295,7 +295,8 @@
         "apps/web/src/app/tools.ts",
         "packages/domain/src/paint.ts",
         "packages/domain/src/affine.ts",
-        "packages/domain/src/distort.ts"
+        "packages/domain/src/distort.ts",
+        "packages/domain/src/liquify.ts"
       ],
       "tests": [
         "packages/domain/tests/document.test.ts",
@@ -347,7 +348,9 @@
         "packages/domain/tests/affine-map.test.ts",
         "apps/web/tests/scale-shear.test.ts",
         "packages/domain/tests/distort.test.ts",
-        "apps/web/tests/free-transform.test.ts"
+        "apps/web/tests/free-transform.test.ts",
+        "packages/domain/tests/liquify.test.ts",
+        "apps/web/tests/liquify-tools.test.ts"
       ],
       "evidence": [
         "doc/implementation/PLAN-0002-0001.md",

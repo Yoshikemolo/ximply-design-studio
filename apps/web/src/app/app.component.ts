@@ -47,6 +47,7 @@ import { SmartTableComponent } from "./smart-table.component";
 import { TOOLS, ToolId, TOOL_FAMILIES, ToolFamily } from "./tools";
 import { translate } from "./i18n";
 import { BLENDS, Layer, StrokeStyle, blankDocument, defaultStrokeStyle, svgExport } from "../../../../packages/domain/src/document";
+import { LIQUIFY_DEFAULTS, LiquifyOptions, LiquifyTool } from "../../../../packages/domain/src/liquify";
 import { COLOR_MODES, ColorMode, GradientPaint, PatternDefinition, PRESET_PATTERNS, PresetPattern, Swatch, cmykToRgb, gradientColorAt, grayToRgb, presetPattern, renderedStops, rgbToCmyk, rgbToGray, validGradient } from "../../../../packages/domain/src/paint";
 import { createSampleDocument } from "../../../../packages/domain/src/sample";
 interface Release {
@@ -729,6 +730,30 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     if (applied) this.affineDialog.set(null);
     else this.notify(new Error("The transformation cannot be applied to this selection."));
   }
+  /** The options dialog of a liquify tool, opened by double-clicking it, and its values. */
+  readonly liquifyDialog = signal<LiquifyTool | null>(null);
+  liquifyDraft: LiquifyOptions = { ...LIQUIFY_DEFAULTS.warp };
+  openLiquifyOptions(tool: LiquifyTool) {
+    this.flyout.set(null);
+    this.liquifyDraft = { ...this.editor.liquifyOptions()[tool] };
+    this.liquifyDialog.set(tool);
+  }
+  applyLiquifyOptions() {
+    const tool = this.liquifyDialog();
+    if (tool && this.editor.setLiquifyOptions(tool, { ...this.liquifyDraft })) this.liquifyDialog.set(null);
+    else this.notify(new Error("Keep every option inside its range."));
+  }
+  resetLiquifyOptions() { const tool = this.liquifyDialog(); if (tool) this.liquifyDraft = { ...LIQUIFY_DEFAULTS[tool] }; }
+  /** The brush of the liquify tool in use, in screen pixels, drawn at the cursor. */
+  liquifyBrush(): { width: number; height: number; angle: number } | null {
+    const tool = this.activeTool();
+    if (!this.editor.isLiquifyTool(tool)) return null;
+    const o = this.editor.liquifyOptions()[tool], zoom = this.editor.zoom();
+    return { width: o.width * zoom, height: o.height * zoom, angle: o.angle };
+  }
+  /** While the button is held, Twirl, Pucker, Bloat and the detail tools keep acting in place. */
+  private liquifyTimer?: ReturnType<typeof setInterval>;
+  private stopLiquifyTimer() { if (this.liquifyTimer) { clearInterval(this.liquifyTimer); this.liquifyTimer = undefined; } }
   /** An Alt-click with the Scale or Shear tool sets the reference point and opens its dialog. */
   private altClick?: { tool: "scale" | "shear"; x: number; y: number };
   transformX = 0; transformY = 0; numericAngle = 0; transformCenterX = 0; transformCenterY = 0;
@@ -1414,6 +1439,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   }
   openToolOptions(id: ToolId) {
     if (id === "scale" || id === "shear") { this.openAffineDialog(id); return; }
+    if (this.editor.isLiquifyTool(id)) { this.openLiquifyOptions(id); return; }
     if (id === "eraser") {
       this.flyout.set(null);
       this.brushDraft.set({ kind: "calligraphic", ...this.editor.eraserShape() });
@@ -1567,6 +1593,8 @@ export class AppComponent implements AfterViewInit, OnDestroy {
       };
     } else {
       this.altClick = event.altKey && (tool === "scale" || tool === "shear") ? { tool, x: event.clientX, y: event.clientY } : undefined;
+      this.stopLiquifyTimer();
+      if (this.editor.isLiquifyTool(tool) && !event.altKey) this.liquifyTimer = setInterval(() => this.editor.liquifyTick(), 60);
       this.editor.start(
         this.point(event),
         {
@@ -1605,6 +1633,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     this.pointerActive = false;
     if (this.zoomDrag) { this.endZoomArea(); return; }
     this.pan = undefined;
+    this.stopLiquifyTimer();
     this.editor.end(event ? { alt: event.altKey } : undefined);
     const click = this.altClick;
     this.altClick = undefined;
@@ -1619,6 +1648,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     if (this.zoomDrag) { this.zoomDrag = undefined; this.zoomArea.set(null); return; }
     if (this.guideDrag) this.cancelGuide();
     this.pan = undefined;
+    this.stopLiquifyTimer();
     this.editor.cancel();
   }
   private renderDocument() {

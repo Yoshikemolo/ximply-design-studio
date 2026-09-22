@@ -1378,6 +1378,9 @@
   (change)="symbolsInput($event)"
 />
 @if (cursorPoint(); as cursor) {
+  @if (liquifyBrush(); as brush) {
+    <div class="liquify-brush" aria-hidden="true" [style.left.px]="cursor.x" [style.top.px]="cursor.y" [style.width.px]="brush.width" [style.height.px]="brush.height" [style.transform]="'translate(-50%, -50%) rotate(' + -brush.angle + 'deg)'"></div>
+  }
   @if (
     preferences.cursorIcon() &&
     !settings() &&
@@ -1892,6 +1895,33 @@
   </form></div>
 }
 
+@if (liquifyDialog(); as tool) {
+  <div class="modal-backdrop"><form class="server-dialog affine-dialog liquify-dialog" role="dialog" aria-modal="true" [attr.aria-label]="t(tool[0].toUpperCase() + tool.slice(1) + ' tool options')" (submit)="$event.preventDefault(); applyLiquifyOptions()" (keydown.escape)="liquifyDialog.set(null); $event.stopPropagation()">
+    <h2>{{ t(tool[0].toUpperCase() + tool.slice(1) + ' tool options') }}</h2>
+    <div class="section-label">{{ t('Global brush dimensions') }}</div>
+    <div class="property-grid">
+      <label>{{ t('Width') }}<input type="number" min="1" max="1000" step="any" name="width" [(ngModel)]="liquifyDraft.width" /></label>
+      <label>{{ t('Height') }}<input type="number" min="1" max="1000" step="any" name="height" [(ngModel)]="liquifyDraft.height" /></label>
+      <label>{{ t('Angle') }} (°)<input type="number" min="-360" max="360" step="any" name="angle" [(ngModel)]="liquifyDraft.angle" /></label>
+      <label>{{ t('Intensity') }} (%)<input type="number" min="1" max="100" step="1" name="intensity" [(ngModel)]="liquifyDraft.intensity" /></label>
+    </div>
+    <div class="section-label">{{ t(tool[0].toUpperCase() + tool.slice(1) + ' options') }}</div>
+    @if (tool === 'twirl') {<label>{{ t('Twirl rate') }} (°)<input type="number" min="-180" max="180" step="any" name="twirlRate" [(ngModel)]="liquifyDraft.twirlRate" /></label>}
+    @if (tool === 'scallop' || tool === 'crystallize' || tool === 'wrinkle') {<label>{{ t('Complexity') }}<input type="number" min="0" max="15" step="1" name="complexity" [(ngModel)]="liquifyDraft.complexity" /></label>}
+    @if (tool === 'wrinkle') {
+      <div class="property-grid"><label>{{ t('Horizontal') }} (%)<input type="number" min="0" max="100" step="any" name="horizontal" [(ngModel)]="liquifyDraft.horizontal" /></label><label>{{ t('Vertical') }} (%)<input type="number" min="0" max="100" step="any" name="vertical" [(ngModel)]="liquifyDraft.vertical" /></label></div>
+    }
+    <label>{{ t('Detail') }}<input type="number" min="1" max="10" step="1" name="detail" [(ngModel)]="liquifyDraft.detail" /></label>
+    @if (tool === 'warp' || tool === 'twirl' || tool === 'pucker' || tool === 'bloat') {<label>{{ t('Simplify') }}<input type="number" min="0.2" max="100" step="any" name="simplify" [(ngModel)]="liquifyDraft.simplify" /></label>}
+    @if (tool === 'scallop' || tool === 'crystallize' || tool === 'wrinkle') {
+      <label class="radio-row"><input type="checkbox" name="affectAnchors" [(ngModel)]="liquifyDraft.affectAnchors" />{{ t('Brush affects anchor points') }}</label>
+      <label class="radio-row"><input type="checkbox" name="affectIn" [(ngModel)]="liquifyDraft.affectIn" />{{ t('Brush affects in tangent handles') }}</label>
+      <label class="radio-row"><input type="checkbox" name="affectOut" [(ngModel)]="liquifyDraft.affectOut" />{{ t('Brush affects out tangent handles') }}</label>
+    }
+    <p class="panel-tip">{{ t('Alt-drag with the tool to size the brush; add Shift for a circle.') }}</p>
+    <div class="dialog-actions"><button type="button" (click)="resetLiquifyOptions()">{{ t('Reset') }}</button><button type="button" (click)="liquifyDialog.set(null)">{{ t('Cancel') }}</button><button type="submit">{{ t('OK') }}</button></div>
+  </form></div>
+}
 @if (affineDialog(); as kind) {
   <div class="modal-backdrop"><form class="server-dialog affine-dialog" role="dialog" aria-modal="true" [attr.aria-label]="t(kind === 'scale' ? 'Scale' : kind === 'shear' ? 'Shear' : 'Transform each')" (submit)="$event.preventDefault(); applyAffineDialog(false)" (keydown.escape)="affineDialog.set(null); $event.stopPropagation()">
     <h2>{{ t(kind === 'scale' ? 'Scale' : kind === 'shear' ? 'Shear' : 'Transform each') }}</h2>

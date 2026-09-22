@@ -12,7 +12,8 @@ import { blendCompatible, blendProgress, interpolateBlendLayer, syncBlends, Obje
 import { defaultTypography, defaultTextLayout, FONT_FAMILIES, layoutText, TextLayoutOptions, TextTypography } from "../../../../packages/domain/src/text-layout";
 import { snapPoint, SnapConfig, rulerSnapSteps } from "../../../../packages/domain/src/measurements";
 import { Affine, Linear, about, affineLayers, applyAffine, scaleLinear, shearLinear, transformLayers } from "../../../../packages/domain/src/affine";
-import { Quad, boxQuad, distortable, mapLayers, quadMap } from "../../../../packages/domain/src/distort";
+import { Quad, boxQuad, distortable, mapLayers, quadMap, worldCurves } from "../../../../packages/domain/src/distort";
+import { LIQUIFY_DEFAULTS, LIQUIFY_TOOLS, LiquifyOptions, LiquifyTool, liquifyStep, refine, validLiquifyOptions } from "../../../../packages/domain/src/liquify";
 import {
   alignLayers,
   booleanLayers,
@@ -2088,6 +2089,94 @@ export class EditorService {
     this.changed();
     if (skipped.length) this.status.set(`Left ${skipped.length} object${skipped.length > 1 ? "s" : ""} a distortion cannot reshape: text, pictures, symbols, dimensions and floor-plan objects.`);
   }
+  /** The options of each liquify tool, from its dialog, kept between sessions. */
+  readonly liquifyOptions = signal<Record<LiquifyTool, LiquifyOptions>>((() => {
+    const options = structuredClone(LIQUIFY_DEFAULTS);
+    try {
+      const saved = JSON.parse(localStorage.getItem("xds-liquify-settings") ?? "{}");
+      for (const tool of LIQUIFY_TOOLS) if (validLiquifyOptions(saved[tool])) options[tool] = saved[tool];
+    } catch { /* The defaults stand. */ }
+    return options;
+  })());
+  setLiquifyOptions(tool: LiquifyTool, options: LiquifyOptions): boolean {
+    if (!LIQUIFY_TOOLS.includes(tool) || !validLiquifyOptions(options)) return false;
+    const next = { ...this.liquifyOptions(), [tool]: { ...options } };
+    this.liquifyOptions.set(next);
+    try { localStorage.setItem("xds-liquify-settings", JSON.stringify(next)); } catch { /* Kept for this session. */ }
+    return true;
+  }
+  isLiquifyTool(tool: string): tool is LiquifyTool { return (LIQUIFY_TOOLS as string[]).includes(tool); }
+  /**
+   * A stroke of a liquify tool. With a selection it reshapes the selected vector objects;
+   * with none, every unlocked vector object under the brush. Alt-drag sizes the brush
+   * instead, Shift+Alt as a circle, as in Illustrator.
+   */
+  private liquifyGesture?: { before: StudioDocument; tool: LiquifyTool; ids: Set<string>; curves: Map<string, CurvePath[]>; last: Point; resize?: { start: Point; circle: boolean }; changed: boolean };
+  private startLiquify(tool: LiquifyTool, point: Point, modifiers: { shift?: boolean; alt?: boolean }) {
+    if (modifiers.alt) { this.liquifyGesture = { before: this.document(), tool, ids: new Set(), curves: new Map(), last: point, resize: { start: point, circle: !!modifiers.shift }, changed: false }; return; }
+    const selected = this.selectedLayers().filter((layer) => !layer.guide);
+    const pool = selected.length ? selected : this.document().layers.filter((layer) => layer.visible && !layer.guide);
+    const targets = pool.filter((layer) => distortable(layer) && !this.isEffectivelyLocked(layer));
+    if (!targets.length) { this.status.set("Liquify tools reshape unlocked paths and shapes; text, pictures and symbols are left alone."); return; }
+    const curves = new Map(targets.map((layer) => [layer.id, worldCurves(layer) ?? []]));
+    this.liquifyGesture = { before: this.document(), tool, ids: new Set(targets.map((layer) => layer.id)), curves, last: point, changed: false };
+    this.liquifyAt(point, { x: 0, y: 0 });
+  }
+  /** One step of the stroke at a point; Twirl, Pucker, Bloat and the detail tools also act while the pointer rests. */
+  private liquifyAt(point: Point, delta: Point) {
+    const g = this.liquifyGesture!;
+    const options = this.liquifyOptions()[g.tool];
+    let touched = false;
+    for (const [id, paths] of g.curves) {
+      const next = paths.map((path) => liquifyStep(refine(path, point, options), g.tool, point, delta, options, g.curves.size));
+      if (JSON.stringify(next) !== JSON.stringify(paths)) { g.curves.set(id, next); touched = true; }
+    }
+    if (!touched) return;
+    g.changed = true;
+    this.writeLiquify(false);
+  }
+  private writeLiquify(simplify: boolean) {
+    const g = this.liquifyGesture!;
+    const options = this.liquifyOptions()[g.tool];
+    const layers = this.document().layers.map((layer) => {
+      const paths = g.curves.get(layer.id);
+      if (!paths) return layer;
+      const precision = Math.max(0, Math.min(99.8, 100 - options.simplify / 2));
+      const shaped = simplify && ["warp", "twirl", "pucker", "bloat"].includes(g.tool) ? paths.map((path) => path.nodes.length > 3 ? simplifyPath(path, { precision, angleThreshold: 0, straightLines: false }) : path) : paths;
+      const flat: Layer = { ...(g.before.layers.find((l) => l.id === layer.id) ?? layer), kind: "path", x: 0, y: 0, width: 1, height: 1, rotation: 0, skewX: 0, flipX: false, flipY: false, points: [] };
+      return fitCurves(flat, shaped);
+    });
+    this.document.set({ ...this.document(), layers });
+  }
+  /** Called while the button is held still, so the tools that act in place keep acting. */
+  liquifyTick() {
+    const g = this.liquifyGesture;
+    if (!g || g.resize || g.tool === "warp") return;
+    this.liquifyAt(g.last, { x: 0, y: 0 });
+  }
+  private moveLiquify(point: Point) {
+    const g = this.liquifyGesture!;
+    if (g.resize) {
+      const options = this.liquifyOptions()[g.tool];
+      let width = Math.max(1, Math.min(1000, Math.abs(point.x - g.resize.start.x) * 2)), height = Math.max(1, Math.min(1000, Math.abs(point.y - g.resize.start.y) * 2));
+      if (g.resize.circle) width = height = Math.max(width, height);
+      this.setLiquifyOptions(g.tool, { ...options, width, height });
+      return;
+    }
+    const delta = { x: point.x - g.last.x, y: point.y - g.last.y };
+    g.last = point;
+    this.liquifyAt(point, delta);
+  }
+  private endLiquify() {
+    const g = this.liquifyGesture!;
+    if (!g.resize && g.changed) {
+      this.writeLiquify(true);
+      try { parseDocument(JSON.stringify(this.document())); } catch { this.document.set(g.before); this.liquifyGesture = undefined; this.status.set("The distortion cannot be kept here."); return; }
+      this.commitStep(g.before);
+      this.changed();
+    }
+    this.liquifyGesture = undefined;
+  }
   private dragLinear(g: NonNullable<EditorService["gesture"]>, linear: Linear, point: Point) {
     const ids = new Set(g.ids ?? [g.id]);
     const layers = g.before.layers.filter((layer) => ids.has(layer.id) && !layer.guide);
@@ -2382,6 +2471,7 @@ export class EditorService {
     if (tool === "eyedropper") { this.sampleStyle(point); return; }
     if (tool === "gradient") { this.startGradient(point); return; }
     if (tool === "freeTransform") { this.startFreeTransform(point); return; }
+    if (this.isLiquifyTool(tool)) { this.startLiquify(tool, point, modifiers); return; }
     if (tool === "paintBucket") { this.applyStyleAt(point); return; }
     if (["rectangle", "ellipse", "path", "paintbrush", "pen", "line", "rounded", "polygon", "star", "arc", "spiral", "grid", "polar", "flare", "text"].includes(tool)) point = this.snap(point);
     if (tool === "hand" || (tool === "brush" && ["none", "transparent"].includes(this.fill()))) return;
@@ -2669,6 +2759,7 @@ export class EditorService {
     if(this.dimensionLabelGesture){const layer=this.document().layers.find(l=>l.id===this.dimensionLabelGesture!.id)!;this.setLayer(layer.id,{dimension:{...layer.dimension!,labelPosition:localPoint(layer,point)}});return;}
     if (this.gradientGesture) { this.moveGradient(point, !!modifiers.shift); return; }
     if (this.freeGesture) { this.moveFreeTransform(point, modifiers); return; }
+    if (this.liquifyGesture) { this.moveLiquify(point); return; }
     const draft=this.dimensionDraft();if(draft){const count=draft.kind==="chain"?Infinity:(draft.kind==="angular"?3:2);const placing=draft.ready===true||draft.points.length>=count;this.dimensionDraft.set({...draft,cursor:placing?this.dimensionOffsetPoint(draft.points,point):this.dimensionPoint(point,true)});if(placing)this.dimensionSnapTarget.set(null);return;}
     if(!this.gesture&&["dimensionSmart","dimensionLinear","dimensionAngular","dimensionChain","dimensionRadius","dimensionDiameter"].includes(this.tool())){this.hoverDimension(point);return;}
     if(!this.gesture&&!this.proceduralGesture&&this.tool()==='wall'){this.hoverWall(modifiers.shift&&this.wallChain()?snapDirection(this.wallChain()!,point,this.snapAngle()):point);return;}
@@ -2831,6 +2922,7 @@ export class EditorService {
     if(this.dimensionLabelGesture){this.commitStep(this.dimensionLabelGesture.before);this.dimensionLabelGesture=undefined;this.changed();return;}
     if (this.gradientGesture) { this.endGradient(); return; }
     if (this.freeGesture) { this.endFreeTransform(); return; }
+    if (this.liquifyGesture) { this.endLiquify(); return; }
     if (this.areaGesture) {
       if (!this.areaGesture.moved && !this.areaGesture.shift) { this.selectedId.set(null); this.selectedIds.set([]); this.activeNodes.set([]); }
       this.areaGesture = undefined; this.areaSelection.set(null); return;
@@ -2951,6 +3043,7 @@ export class EditorService {
     if(this.dimensionLabelGesture)this.document.set(this.dimensionLabelGesture.before);this.dimensionLabelGesture=undefined;
     if (this.gradientGesture) { this.document.set(this.gradientGesture.before); this.gradientGesture = undefined; }
     if (this.freeGesture) { this.document.set(this.freeGesture.before); this.freeGesture = undefined; this.freeQuad.set(null); }
+    if (this.liquifyGesture) { this.document.set(this.liquifyGesture.before); this.liquifyGesture = undefined; }
     this.cancelGuideDrag();
     if (this.areaGesture) {
       this.selectedIds.set(this.areaGesture.ids); this.selectedId.set(this.areaGesture.primary); this.activeNodes.set(this.areaGesture.nodes);
