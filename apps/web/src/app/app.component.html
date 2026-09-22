@@ -89,6 +89,10 @@
           ><button [disabled]="!commandEnabled('outlineText')" (click)="runCommand('outlineText')">
             {{ t("Create outlines") }}<kbd>{{ shortcut("outlineText") }}</kbd>
           </button>
+          <div class="menu-section-label">{{ t("Transform") }}</div>
+          @for (id of transformMenuCommands; track id) {
+            <button [disabled]="!commandEnabled(id)" (click)="runCommand(id)">{{ t(commandLabel(id)) }}<kbd>{{ shortcut(id) }}</kbd></button>
+          }
           <div class="menu-section-label">{{ t("Lock") }}</div>
           @for (id of lockMenuCommands; track id) {
             <button [disabled]="!commandEnabled(id)" (click)="runCommand(id)">{{ t(commandLabel(id)) }}<kbd>{{ shortcut(id) }}</kbd></button>
@@ -1888,6 +1892,42 @@
   </form></div>
 }
 
+@if (affineDialog(); as kind) {
+  <div class="modal-backdrop"><form class="server-dialog affine-dialog" role="dialog" aria-modal="true" [attr.aria-label]="t(kind === 'scale' ? 'Scale' : kind === 'shear' ? 'Shear' : 'Transform each')" (submit)="$event.preventDefault(); applyAffineDialog(false)" (keydown.escape)="affineDialog.set(null); $event.stopPropagation()">
+    <h2>{{ t(kind === 'scale' ? 'Scale' : kind === 'shear' ? 'Shear' : 'Transform each') }}</h2>
+    @if (kind === 'scale') {
+      <label class="radio-row"><input type="radio" name="uniform" [checked]="affineDraft.uniform" (change)="affineDraft.uniform = true" />{{ t('Uniform') }}</label>
+      <label>{{ t('Scale') }} (%)<input type="number" step="any" name="scale" [(ngModel)]="affineDraft.scale" [disabled]="!affineDraft.uniform" /></label>
+      <label class="radio-row"><input type="radio" name="uniform" [checked]="!affineDraft.uniform" (change)="affineDraft.uniform = false" />{{ t('Non-Uniform') }}</label>
+      <div class="property-grid"><label>{{ t('Horizontal') }} (%)<input type="number" step="any" name="horizontal" [(ngModel)]="affineDraft.horizontal" [disabled]="affineDraft.uniform" /></label><label>{{ t('Vertical') }} (%)<input type="number" step="any" name="vertical" [(ngModel)]="affineDraft.vertical" [disabled]="affineDraft.uniform" /></label></div>
+      <label class="radio-row"><input type="checkbox" name="strokes" [(ngModel)]="affineDraft.scaleStrokes" />{{ t('Scale strokes & effects') }}</label>
+    } @else if (kind === 'shear') {
+      <label>{{ t('Shear angle') }} (°)<input type="number" step="any" min="-359" max="359" name="angle" [(ngModel)]="affineDraft.angle" /></label>
+      <fieldset class="axis-choice"><legend>{{ t('Axis') }}</legend>
+        <label class="radio-row"><input type="radio" name="axis" [checked]="affineDraft.axis === 'horizontal'" (change)="affineDraft.axis = 'horizontal'" />{{ t('Horizontal') }}</label>
+        <label class="radio-row"><input type="radio" name="axis" [checked]="affineDraft.axis === 'vertical'" (change)="affineDraft.axis = 'vertical'" />{{ t('Vertical') }}</label>
+        <label class="radio-row"><input type="radio" name="axis" [checked]="affineDraft.axis === 'angle'" (change)="affineDraft.axis = 'angle'" />{{ t('Angle') }}<input type="number" step="any" min="-359" max="359" name="axisAngle" [(ngModel)]="affineDraft.axisAngle" [disabled]="affineDraft.axis !== 'angle'" [attr.aria-label]="t('Axis angle')" />°</label>
+      </fieldset>
+    } @else {
+      <div class="section-label">{{ t('Scale') }}</div>
+      <div class="property-grid"><label>{{ t('Horizontal') }} (%)<input type="number" step="any" name="eachH" [(ngModel)]="affineDraft.horizontal" /></label><label>{{ t('Vertical') }} (%)<input type="number" step="any" name="eachV" [(ngModel)]="affineDraft.vertical" /></label></div>
+      <div class="section-label">{{ t('Move') }}</div>
+      <div class="property-grid"><label>{{ t('Horizontal') }} ({{ preferences.distanceUnit() }})<input type="number" step="any" name="moveX" [(ngModel)]="affineDraft.moveX" /></label><label>{{ t('Vertical') }} ({{ preferences.distanceUnit() }})<input type="number" step="any" name="moveY" [(ngModel)]="affineDraft.moveY" /></label></div>
+      <label>{{ t('Rotate') }} (°)<input type="number" step="any" name="rotation" [(ngModel)]="affineDraft.rotation" /></label>
+      <div class="each-options">
+        <div>
+          <label class="radio-row"><input type="checkbox" name="eachStrokes" [(ngModel)]="affineDraft.scaleStrokes" />{{ t('Scale strokes & effects') }}</label>
+          <label class="radio-row"><input type="checkbox" name="reflectX" [(ngModel)]="affineDraft.reflectX" />{{ t('Reflect X') }}</label>
+          <label class="radio-row"><input type="checkbox" name="reflectY" [(ngModel)]="affineDraft.reflectY" />{{ t('Reflect Y') }}</label>
+        </div>
+        <div class="reference-locator" role="radiogroup" [attr.aria-label]="t('Reference point')">
+          @for (point of referencePoints; track point) {<button type="button" role="radio" [class.active]="affineDraft.reference === point" [attr.aria-checked]="affineDraft.reference === point" [attr.aria-label]="t('Reference point') + ': ' + point" (click)="affineDraft.reference = point"></button>}
+        </div>
+      </div>
+    }
+    <div class="dialog-actions"><button type="button" (click)="affineDialog.set(null)">{{ t('Cancel') }}</button><button type="button" (click)="applyAffineDialog(true)">{{ t('Copy') }}</button><button type="submit">{{ t('OK') }}</button></div>
+  </form></div>
+}
 @if (transformDialog(); as mode) {
   <div class="modal-backdrop"><form class="server-dialog transform-dialog" role="dialog" aria-modal="true" [attr.aria-label]="t(mode === 'displacement' ? 'Enter displacement' : 'Enter rotation')" (submit)="$event.preventDefault(); applyNumericTransform()" (keydown.escape)="transformDialog.set(null); $event.stopPropagation()">
     <h2>{{ t(mode === 'displacement' ? 'Enter displacement' : 'Enter rotation') }}</h2>

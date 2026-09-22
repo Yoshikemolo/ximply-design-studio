@@ -1,6 +1,7 @@
 /** Trusted built-in descriptors; shortcut assignments belong to the command registry. */
 export type ToolId =
   | "gradient"
+  | "shear"
   | "groupSelect"
   | "paintbrush"
   | "reshape"
@@ -163,6 +164,7 @@ export const TOOLS: ToolPlugin[] = [
   { id: "gradient", label: "Gradient", icon: "gradient", group: "Paint" },
   { id: "brush", label: "Raster brush", icon: "brush", group: "Paint" },
   { id: "reshape", label: "Reshape", icon: "reshape", group: "Paths" },
+  { id: "shear", label: "Shear", icon: "shear", group: "Paths" },
   { id: "eraser", label: "Eraser", icon: "eraser", group: "Paint" },
   ...(
     [
@@ -232,7 +234,7 @@ export const TOOL_FAMILIES: ToolFamily[] = [
   { id: "style", label: "Style tools", tools: ["eyedropper", "paintBucket"] },
   { id: "rotate", label: "Rotate", tools: ["rotate"] },
   { id: "mirror", label: "Reflect", tools: ["mirror"] },
-  { id: "scale", label: "Scale tools", tools: ["scale", "reshape"] },
+  { id: "scale", label: "Scale tools", tools: ["scale", "shear", "reshape"] },
   {
     id: "symbols",
     label: "Symbol tools",

@@ -328,6 +328,8 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   readonly pathMenuCommands = ["joinPaths", "averageAnchors", "simplifyPath", "outlineStroke", "selectStray"] as const;
   /** Object > Lock and Object > Hide, with their companions, in the order Illustrator gives them. */
   readonly lockMenuCommands = ["lockSelection", "lockAbove", "lockOthers", "unlockAll"] as const;
+  /** Object > Transform, in the order Illustrator gives it. */
+  readonly transformMenuCommands = ["transformAgain", "displacement", "rotation", "scaleDialog", "shearDialog", "transformEach"] as const;
   readonly hideMenuCommands = ["hideSelection", "hideAbove", "hideOthers", "showAll"] as const;
   readonly pathPanelCommands = ["convertCorner", "convertSmooth", "removeAnchors", "joinPaths", "cutAtAnchors", "averageAnchors", "simplifyPath"] as const;
   readonly averageAxes = [
@@ -701,6 +703,34 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     if (applied) { this.pageDialog.set(null); this.fit(); }
   }
   readonly transformDialog = signal<"displacement" | "rotation" | null>(null);
+  /** The Scale, Shear and Transform Each dialogs of Object > Transform, and their values. */
+  readonly affineDialog = signal<"scale" | "shear" | "each" | null>(null);
+  readonly referencePoints = ["top-left", "top", "top-right", "left", "center", "right", "bottom-left", "bottom", "bottom-right"] as const;
+  affineDraft = { uniform: true, scale: 100, horizontal: 100, vertical: 100, scaleStrokes: false, angle: 0, axis: "horizontal" as "horizontal" | "vertical" | "angle", axisAngle: 0,
+    moveX: 0, moveY: 0, rotation: 0, reflectX: false, reflectY: false, reference: "center" };
+  openAffineDialog(kind: "scale" | "shear" | "each") {
+    if (!this.editor.selectedLayers().some((layer) => !layer.guide)) { this.editor.status.set("Select the objects to transform."); return; }
+    this.flyout.set(null);
+    this.affineDraft = { ...this.affineDraft, scaleStrokes: this.editor.scaleStrokes(), moveX: 0, moveY: 0 };
+    this.affineDialog.set(kind);
+    setTimeout(() => window.document.querySelector<HTMLInputElement>(".affine-dialog input[type=number]")?.focus());
+  }
+  /** OK or Copy in the Scale, Shear or Transform Each dialog. */
+  applyAffineDialog(copy: boolean) {
+    const d = this.affineDraft, kind = this.affineDialog();
+    this.editor.setScaleStrokes(d.scaleStrokes);
+    const unit = this.preferences.distanceUnit();
+    const applied = kind === "scale"
+      ? this.editor.scaleSelection(d.uniform ? d.scale : d.horizontal, d.uniform ? d.scale : d.vertical, { copy, scaleStrokes: d.scaleStrokes })
+      : kind === "shear"
+        ? this.editor.shearSelection(d.angle, d.axis === "horizontal" ? 0 : d.axis === "vertical" ? 90 : d.axisAngle, { copy })
+        : this.editor.transformEach({ scaleX: d.horizontal, scaleY: d.vertical, moveX: toPixels(d.moveX, unit), moveY: toPixels(d.moveY, unit), rotation: d.rotation,
+            reflectX: d.reflectX, reflectY: d.reflectY, reference: d.reference, copy, scaleStrokes: d.scaleStrokes });
+    if (applied) this.affineDialog.set(null);
+    else this.notify(new Error("The transformation cannot be applied to this selection."));
+  }
+  /** An Alt-click with the Scale or Shear tool sets the reference point and opens its dialog. */
+  private altClick?: { tool: "scale" | "shear"; x: number; y: number };
   transformX = 0; transformY = 0; numericAngle = 0; transformCenterX = 0; transformCenterY = 0;
   openTransformDialog(kind: "displacement" | "rotation") {
     if (!this.editor.selectedLayers().length) return;
@@ -1382,6 +1412,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     this.preferences.updatePathSettings({ eraser: this.editor.eraserShape() });
   }
   openToolOptions(id: ToolId) {
+    if (id === "scale" || id === "shear") { this.openAffineDialog(id); return; }
     if (id === "eraser") {
       this.flyout.set(null);
       this.brushDraft.set({ kind: "calligraphic", ...this.editor.eraserShape() });
@@ -1534,6 +1565,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
         top: view.scrollTop,
       };
     } else {
+      this.altClick = event.altKey && (tool === "scale" || tool === "shear") ? { tool, x: event.clientX, y: event.clientY } : undefined;
       this.editor.start(
         this.point(event),
         {
@@ -1573,6 +1605,9 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     if (this.zoomDrag) { this.endZoomArea(); return; }
     this.pan = undefined;
     this.editor.end(event ? { alt: event.altKey } : undefined);
+    const click = this.altClick;
+    this.altClick = undefined;
+    if (click && event && Math.hypot(event.clientX - click.x, event.clientY - click.y) < 3) this.openAffineDialog(click.tool);
   }
   /** Browsers release capture after every pointerup; only an interrupted press cancels the gesture. */
   pointerLost() {
@@ -1791,6 +1826,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     if (["averageAnchors", "convertCorner", "convertSmooth", "removeAnchors", "cutAtAnchors"].includes(id))
       return this.editor.selectedLayers().some((layer) => this.editor.anchorKeysOf(layer.id).length > 0);
     if (id === "transformAgain") return this.editor.selectedLayers().length > 0 && !!this.editor.lastTransform();
+    if (["scaleDialog", "shearDialog", "transformEach"].includes(id)) return this.editor.selectedLayers().some((layer) => !layer.guide && !layer.locked);
     if (["paste", "pasteInFront", "pasteInBack"].includes(id)) return this.editor.canPaste();
     return true;
   }
@@ -1826,6 +1862,9 @@ export class AppComponent implements AfterViewInit, OnDestroy {
       duplicate: () => this.editor.duplicate(),
       duplicateSeries: () => this.openArrayDialog(),
       transformAgain: () => this.editor.transformAgain(),
+      scaleDialog: () => this.openAffineDialog("scale"),
+      shearDialog: () => this.openAffineDialog("shear"),
+      transformEach: () => this.openAffineDialog("each"),
       copy: () => this.editor.copySelection(),
       cut: () => this.editor.cutSelection(),
       paste: () => this.editor.paste(),

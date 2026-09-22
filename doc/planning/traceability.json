@@ -246,7 +246,8 @@
         "ADR-0029",
         "ADR-0031",
         "ADR-0032",
-        "ADR-0033"
+        "ADR-0033",
+        "ADR-0034"
       ],
       "scenarios": [
         "SC-0022",
@@ -262,7 +263,11 @@
         "SC-0104",
         "SC-0105",
         "SC-0106",
-        "SC-0107"
+        "SC-0107",
+        "SC-0109",
+        "SC-0110",
+        "SC-0111",
+        "SC-0112"
       ],
       "implementation": [
         "apps/web/src/app/editor.service.ts",
@@ -288,7 +293,8 @@
         "packages/domain/src/brush-stroke.ts",
         "packages/renderer/src/canvas-renderer.ts",
         "apps/web/src/app/tools.ts",
-        "packages/domain/src/paint.ts"
+        "packages/domain/src/paint.ts",
+        "packages/domain/src/affine.ts"
       ],
       "tests": [
         "packages/domain/tests/document.test.ts",
@@ -336,7 +342,9 @@
         "apps/web/tests/paint-ui.test.ts",
         "packages/domain/tests/hit-test.test.ts",
         "packages/domain/tests/pdf-paint.test.ts",
-        "packages/domain/tests/blend-paint.test.ts"
+        "packages/domain/tests/blend-paint.test.ts",
+        "packages/domain/tests/affine-map.test.ts",
+        "apps/web/tests/scale-shear.test.ts"
       ],
       "evidence": [
         "doc/implementation/PLAN-0002-0001.md",

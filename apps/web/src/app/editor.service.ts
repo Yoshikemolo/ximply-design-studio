@@ -11,7 +11,7 @@ import { AreaSelectionKind, SelectionArea, layerInsideArea, layerIntersectsArea,
 import { blendCompatible, blendProgress, interpolateBlendLayer, syncBlends, ObjectBlend, BlendEasing } from "../../../../packages/domain/src/object-blend";
 import { defaultTypography, defaultTextLayout, FONT_FAMILIES, layoutText, TextLayoutOptions, TextTypography } from "../../../../packages/domain/src/text-layout";
 import { snapPoint, SnapConfig, rulerSnapSteps } from "../../../../packages/domain/src/measurements";
-import { transformLayers } from "../../../../packages/domain/src/affine";
+import { Linear, about, affineLayers, applyAffine, scaleLinear, shearLinear, transformLayers } from "../../../../packages/domain/src/affine";
 import {
   alignLayers,
   booleanLayers,
@@ -1202,6 +1202,10 @@ export class EditorService {
     mode: string;
     ids?: string[];
     deselectNodeOnClick?: string;
+    /** The linear map a Scale or Shear drag applies about the pivot, once it has moved. */
+    linear?: Linear;
+    /** The axis a Shear drag took from the way it started. */
+    axis?: "horizontal" | "vertical";
   };
   // Open documents. The active one lives in `document`, `history` and the selection signals;
   // inactive tabs keep their own snapshot so switching never mixes undo history or selection.
@@ -1364,7 +1368,7 @@ export class EditorService {
    */
   private duplicationGhosts(): Layer[] {
     const g = this.gesture;
-    if (!this.duplicatingDrag() || !g || !["move", "rotate", "scale"].includes(g.mode)) return [];
+    if (!this.duplicatingDrag() || !g || !["move", "rotate", "scale", "shear"].includes(g.mode)) return [];
     const ids = new Set(g.ids?.length ? g.ids : [g.id]);
     return g.before.layers
       .filter((layer) => ids.has(layer.id) && layer.visible && !layer.guide)
@@ -1826,19 +1830,172 @@ export class EditorService {
    * The last transformation of the selection, kept so it can be repeated: how far it moved,
    * how much it turned and grew, and whether it left a copy behind.
    */
-  readonly lastTransform = signal<{ dx: number; dy: number; rotation: number; scale: number; duplicate: boolean; pivot: Point } | null>(null);
+  readonly lastTransform = signal<{ dx: number; dy: number; rotation: number; scale: number; duplicate: boolean; pivot: Point; matrix?: Linear } | null>(null);
   /** True while a drag will duplicate on release, which the cursor shows. */
   readonly duplicatingDrag = signal(false);
   /** Keeps the cursor honest while Alt is pressed or released without moving the pointer. */
   setDuplicatingDrag(alt: boolean) {
-    if (this.gesture && ["move", "rotate", "scale"].includes(this.gesture.mode)) this.duplicatingDrag.set(alt);
+    if (this.gesture && ["move", "rotate", "scale", "shear"].includes(this.gesture.mode)) this.duplicatingDrag.set(alt);
   }
-  private recordTransform(step: { dx?: number; dy?: number; rotation?: number; scale?: number; duplicate?: boolean; pivot?: Point }) {
+  private recordTransform(step: { dx?: number; dy?: number; rotation?: number; scale?: number; duplicate?: boolean; pivot?: Point; matrix?: Linear }) {
     // The pivot belongs to the transformation: a repeat turns and scales around the same point.
     const pivot = step.pivot ?? this.pivot();
-    const value = { dx: step.dx ?? 0, dy: step.dy ?? 0, rotation: step.rotation ?? 0, scale: step.scale ?? 1, duplicate: !!step.duplicate, pivot: { ...pivot } };
-    if (!value.dx && !value.dy && !value.rotation && value.scale === 1 && !value.duplicate) return;
+    const value = { dx: step.dx ?? 0, dy: step.dy ?? 0, rotation: step.rotation ?? 0, scale: step.scale ?? 1, duplicate: !!step.duplicate, pivot: { ...pivot }, ...(step.matrix ? { matrix: step.matrix } : {}) };
+    if (!value.dx && !value.dy && !value.rotation && value.scale === 1 && !value.duplicate && !step.matrix) return;
     this.lastTransform.set(value);
+  }
+  /** Scale Strokes & Effects: whether scaling also scales the weight of strokes; off by default. */
+  readonly scaleStrokes = signal<boolean>((() => { try { return JSON.parse(localStorage.getItem("xds-transform-settings") ?? "{}").scaleStrokes === true; } catch { return false; } })());
+  setScaleStrokes(value: boolean) {
+    this.scaleStrokes.set(value);
+    try { localStorage.setItem("xds-transform-settings", JSON.stringify({ scaleStrokes: value })); } catch { /* The choice stays for this session. */ }
+  }
+  /**
+   * Applies a linear map about a point, the pivot unless another is given, to the selected
+   * objects or to a copy of them, as one step. Chosen anchors of a single path move alone.
+   */
+  affineSelection(linear: Linear, options: { center?: Point; copy?: boolean; scaleStrokes?: boolean } = {}): boolean {
+    if (!linear.every(Number.isFinite) || Math.abs(linear[0] * linear[3] - linear[1] * linear[2]) < 1e-9) return false;
+    const layers = this.selectedLayers().filter((layer) => !layer.guide);
+    if (!layers.length || layers.some((layer) => this.isEffectivelyLocked(layer))) return false;
+    const center = options.center ?? this.pivot();
+    const m = about(linear, center);
+    this.recordTransform({ matrix: linear, duplicate: !!options.copy, pivot: center });
+    if (!options.copy && this.tool() === "direct" && this.activeNodes().length && layers.length === 1 && layers[0].curves)
+      return this.numericTransform((p) => applyAffine(m, p));
+    const before = this.document();
+    const mapped = affineLayers(layers, m, { scaleStrokes: options.scaleStrokes ?? this.scaleStrokes() });
+    const ids = new Set(layers.map((layer) => layer.id));
+    let next: StudioDocument;
+    let selection = [...ids];
+    if (options.copy) {
+      if (before.layers.length + mapped.length > MAX_LAYERS) { this.status.set("The document cannot hold more layers."); return false; }
+      const copies = mapped.map((layer) => ({ ...layer, id: crypto.randomUUID(), regroupPath: undefined }));
+      next = { ...before, layers: [...before.layers, ...copies] };
+      selection = copies.map((layer) => layer.id);
+    } else {
+      const byId = new Map(mapped.map((layer) => [layer.id, layer]));
+      next = { ...before, layers: before.layers.map((layer) => byId.get(layer.id) ?? layer) };
+      next = { ...next, layers: next.layers.map((layer) => ids.has(layer.id) ? this.detachUnselectedHost(layer, ids) : layer) };
+    }
+    try { next = syncProcedurals(next); parseDocument(JSON.stringify(next)); } catch { this.status.set("The transformation cannot be applied here."); return false; }
+    this.commitStep(before);
+    if (!options.copy) this.expandGeneratedForIds(ids);
+    this.document.set({ ...next, blends: this.document().blends });
+    this.selectedIds.set(selection);
+    this.selectedId.set(selection[0] ?? null);
+    this.carryPivot(center);
+    this.changed();
+    return true;
+  }
+  /** Object > Transform > Scale: horizontal and vertical percentages, negative ones reflecting. */
+  scaleSelection(horizontal: number, vertical: number, options: { center?: Point; copy?: boolean; scaleStrokes?: boolean } = {}): boolean {
+    if (![horizontal, vertical].every((n) => Number.isFinite(n) && n !== 0 && Math.abs(n) <= 100000)) return false;
+    return this.affineSelection(scaleLinear(horizontal / 100, vertical / 100), options);
+  }
+  /** Object > Transform > Shear: an angle from -359 to 359 along a horizontal, vertical or angled axis. */
+  shearSelection(angle: number, axis: number, options: { center?: Point; copy?: boolean } = {}): boolean {
+    if (!Number.isFinite(angle) || !Number.isFinite(axis) || Math.abs(angle) > 359 || Math.abs(axis) > 359) return false;
+    // A slant of a right angle or more has no finite shear; Illustrator folds it back the same way.
+    const slant = ((angle % 180) + 270) % 180 - 90;
+    if (Math.abs(Math.abs(slant) - 90) < 1e-6) return false;
+    return this.affineSelection(shearLinear(slant, axis), options);
+  }
+  /**
+   * Object > Transform > Transform Each: every selected object is scaled, moved, rotated and
+   * reflected about its own reference point, one of the nine of its box, as one step.
+   */
+  transformEach(options: { scaleX: number; scaleY: number; moveX: number; moveY: number; rotation: number; reflectX?: boolean; reflectY?: boolean; reference?: string; copy?: boolean; scaleStrokes?: boolean }): boolean {
+    const values = [options.scaleX, options.scaleY, options.moveX, options.moveY, options.rotation];
+    if (!values.every(Number.isFinite) || options.scaleX === 0 || options.scaleY === 0) return false;
+    const layers = this.selectedLayers().filter((layer) => !layer.guide);
+    if (!layers.length || layers.some((layer) => this.isEffectivelyLocked(layer))) return false;
+    const r = (options.rotation * Math.PI) / 180, cos = Math.cos(r), sin = Math.sin(r);
+    const sx = (options.scaleX / 100) * (options.reflectY ? -1 : 1), sy = (options.scaleY / 100) * (options.reflectX ? -1 : 1);
+    // Rotation after scale, with y down: a positive angle turns counterclockwise on screen, as in Illustrator.
+    const linear: Linear = [cos * sx, -sin * sx, sin * sy, cos * sy];
+    const reference = options.reference ?? "center";
+    const before = this.document();
+    const mapped = layers.map((layer) => {
+      const box = selectionBounds([layer]);
+      const fx = reference.includes("left") ? 0 : reference.includes("right") ? 1 : 0.5;
+      const fy = reference.includes("top") ? 0 : reference.includes("bottom") ? 1 : 0.5;
+      const m = about(linear, { x: box.x + box.width * fx, y: box.y + box.height * fy });
+      return affineLayers([layer], { ...m, e: m.e + options.moveX, f: m.f + options.moveY }, { scaleStrokes: options.scaleStrokes ?? this.scaleStrokes() })[0];
+    });
+    const ids = new Set(layers.map((layer) => layer.id));
+    let next: StudioDocument;
+    let selection = [...ids];
+    if (options.copy) {
+      if (before.layers.length + mapped.length > MAX_LAYERS) { this.status.set("The document cannot hold more layers."); return false; }
+      const copies = mapped.map((layer) => ({ ...layer, id: crypto.randomUUID(), regroupPath: undefined }));
+      next = { ...before, layers: [...before.layers, ...copies] };
+      selection = copies.map((layer) => layer.id);
+    } else {
+      const byId = new Map(mapped.map((layer) => [layer.id, layer]));
+      next = { ...before, layers: before.layers.map((layer) => byId.get(layer.id) ?? layer) };
+    }
+    try { next = syncProcedurals(next); parseDocument(JSON.stringify(next)); } catch { this.status.set("The transformation cannot be applied here."); return false; }
+    this.commitStep(before);
+    this.document.set({ ...next, blends: this.document().blends });
+    this.selectedIds.set(selection);
+    this.selectedId.set(selection[0] ?? null);
+    this.changed();
+    return true;
+  }
+  /**
+   * The Scale tool: the point pressed follows the pointer, scaling about the pivot on each
+   * axis. Shift keeps the proportions on a diagonal drag and scales one axis on a drag
+   * that runs along it.
+   */
+  private dragScale(g: NonNullable<EditorService["gesture"]>, point: Point, shift: boolean) {
+    const pivot = this.pivot();
+    const from = { x: g.start.x - pivot.x, y: g.start.y - pivot.y }, to = { x: point.x - pivot.x, y: point.y - pivot.y };
+    const guard = (n: number) => (Math.abs(n) < 0.01 ? (n < 0 ? -0.01 : 0.01) : n);
+    let sx = Math.abs(from.x) > 1 ? to.x / from.x : 1, sy = Math.abs(from.y) > 1 ? to.y / from.y : 1;
+    if (shift) {
+      const run = { x: Math.abs(point.x - g.start.x), y: Math.abs(point.y - g.start.y) }, slope = Math.tan(Math.PI / 8);
+      if (run.y <= run.x * slope) sy = 1;
+      else if (run.x <= run.y * slope) sx = 1;
+      else sx = sy = Math.hypot(to.x, to.y) / Math.max(1, Math.hypot(from.x, from.y));
+    }
+    this.dragLinear(g, scaleLinear(guard(sx), guard(sy)), point);
+  }
+  /**
+   * The Shear tool: a drag that starts up or down shears along the vertical axis and one
+   * that starts sideways along the horizontal axis, the point pressed following the
+   * pointer; Shift keeps the original width or height.
+   */
+  private dragShear(g: NonNullable<EditorService["gesture"]>, point: Point, shift: boolean) {
+    const pivot = this.pivot();
+    if (!g.axis) {
+      if (Math.hypot(point.x - g.start.x, point.y - g.start.y) < 3 / this.zoom()) return;
+      g.axis = Math.abs(point.y - g.start.y) > Math.abs(point.x - g.start.x) ? "vertical" : "horizontal";
+    }
+    const from = { x: g.start.x - pivot.x, y: g.start.y - pivot.y };
+    let linear: Linear;
+    if (g.axis === "vertical") {
+      // y moves in proportion to the distance from the pivot across; x may stretch unless Shift holds it.
+      const across = Math.abs(from.x) > 1 ? from.x : 1;
+      const k = (point.y - g.start.y) / across, sx = shift || Math.abs(from.x) <= 1 ? 1 : (point.x - pivot.x) / from.x;
+      linear = [sx, k, 0, 1];
+    } else {
+      const across = Math.abs(from.y) > 1 ? from.y : 1;
+      const k = (point.x - g.start.x) / across, sy = shift || Math.abs(from.y) <= 1 ? 1 : (point.y - pivot.y) / from.y;
+      linear = [1, 0, k, sy];
+    }
+    if (Math.abs(linear[0] * linear[3] - linear[1] * linear[2]) < 1e-4) return;
+    this.dragLinear(g, linear, point);
+  }
+  private dragLinear(g: NonNullable<EditorService["gesture"]>, linear: Linear, point: Point) {
+    const ids = new Set(g.ids ?? [g.id]);
+    const layers = g.before.layers.filter((layer) => ids.has(layer.id) && !layer.guide);
+    const mapped = new Map(affineLayers(layers, about(linear, this.pivot()), { scaleStrokes: this.scaleStrokes() }).map((layer) => [layer.id, layer]));
+    const next = { ...g.before, layers: g.before.layers.map((layer) => mapped.get(layer.id) ?? layer) };
+    try { parseDocument(JSON.stringify(next)); } catch { return; }
+    g.linear = linear;
+    g.last = point;
+    this.document.set(next);
   }
   /**
    * Repeats the last transformation on the current selection, the copy it left behind
@@ -1854,14 +2011,16 @@ export class EditorService {
     const centre = last.pivot;
     const step = { dx: last.dx, dy: last.dy, rotation: last.rotation, scale: last.scale };
     const ids = new Set(layers.map((layer) => layer.id));
+    // A scale or shear is repeated as the same map about the same point.
+    const repeat = (layer: Layer, id: string) => last.matrix ? { ...affineLayers([layer], about(last.matrix, centre), { scaleStrokes: this.scaleStrokes() })[0], id } : copyLayer(layer, step, centre, id);
     let next: StudioDocument;
     let selection: string[];
     if (last.duplicate) {
-      const copies = layers.map((layer) => copyLayer(layer, step, centre, crypto.randomUUID()));
+      const copies = layers.map((layer) => repeat(layer, crypto.randomUUID()));
       next = { ...document, layers: [...document.layers, ...copies] };
       selection = copies.map((layer) => layer.id);
     } else {
-      next = { ...document, layers: document.layers.map((layer) => ids.has(layer.id) ? copyLayer(layer, step, centre, layer.id) : layer) };
+      next = { ...document, layers: document.layers.map((layer) => ids.has(layer.id) ? repeat(layer, layer.id) : layer) };
       selection = [...ids];
     }
     try { parseDocument(JSON.stringify(next)); } catch { this.status.set("The transformation cannot be repeated here."); return false; }
@@ -2138,7 +2297,7 @@ export class EditorService {
       this.reflect(modifiers.alt ? "vertical" : "horizontal");
       return;
     }
-    if (tool === "scale") {
+    if (tool === "scale" || tool === "shear") {
       const active = this.selectionLayer();
       if (active && !this.selectedLayers().some((layer) => this.isEffectivelyLocked(layer)))
         this.gesture = {
@@ -2148,7 +2307,7 @@ export class EditorService {
           id: active.id,
           points: [],
           original: structuredClone(active),
-          mode: "scale",
+          mode: tool,
           ids: this.selectedLayers().filter((l) => !l.guide).map((l) => l.id),
         };
       return;
@@ -2414,7 +2573,7 @@ export class EditorService {
     const g = this.gesture;
     if (!g) { this.hoverPath(point, modifiers); return; }
     // Alt held during a transform leaves the original behind, which the cursor announces.
-    if (["move", "rotate", "scale"].includes(g.mode)) this.duplicatingDrag.set(!!modifiers.alt);
+    if (["move", "rotate", "scale", "shear"].includes(g.mode)) this.duplicatingDrag.set(!!modifiers.alt);
     if (["rectangle", "ellipse", "line", "rounded", "polygon", "star", "arc", "spiral", "grid", "polar", "flare"].includes(g.mode) || g.mode.startsWith("resize:")) point = this.snap(point);
     if (g.mode === "rotate")
       this.transformSelection(g, this.aroundPivot(g.original, {
@@ -2427,19 +2586,9 @@ export class EditorService {
           this.snapAngle(),
         ),
       }));
-    else if (g.mode === "scale") {
-      const factor = Math.max(
-        0.05,
-        Math.min(10, 1 + (point.x - g.start.x + point.y - g.start.y) / 200),
-      );
-      this.transformSelection(g, this.aroundPivot(g.original, {
-        ...g.original,
-        width: g.original.width * factor,
-        height: g.original.height * factor,
-        x: g.original.x + (g.original.width * (1 - factor)) / 2,
-        y: g.original.y + (g.original.height * (1 - factor)) / 2,
-      }));
-    } else if (g.mode === "pen") this.dragPenAnchor(point, modifiers);
+    else if (g.mode === "scale") this.dragScale(g, point, !!modifiers.shift);
+    else if (g.mode === "shear") this.dragShear(g, point, !!modifiers.shift);
+    else if (g.mode === "pen") this.dragPenAnchor(point, modifiers);
     else if (g.mode === "penHandle") this.dragPenHandle(point, modifiers);
     else if (g.mode === "penClose") this.dragPenClose(point, modifiers);
     else if (g.mode.startsWith("convert:")) this.dragConvert(point, modifiers);
@@ -2563,7 +2712,7 @@ export class EditorService {
    * may hold Alt without moving the pointer again before letting go.
    */
   end(modifiers?: { alt?: boolean }) {
-    if (modifiers && this.gesture && ["move", "rotate", "scale"].includes(this.gesture.mode)) {
+    if (modifiers && this.gesture && ["move", "rotate", "scale", "shear"].includes(this.gesture.mode)) {
       this.duplicatingDrag.set(!!modifiers.alt);
     }
     if (this.pageGesture) { this.endPageGesture(); return; }
@@ -2629,8 +2778,16 @@ export class EditorService {
       this.setLayer(g.id, {
         source: this.painting.canvas.toDataURL("image/png"),
       });
+    if ((g.mode === "scale" || g.mode === "shear") && !g.linear) {
+      // A click with the Scale or Shear tool sets the reference point, as in Illustrator.
+      this.document.set(g.before);
+      this.setPivot(this.pivotPoint(g.start));
+      this.gesture = undefined;
+      this.duplicatingDrag.set(false);
+      return;
+    }
     const pivotAtStart = this.movePivot ? { key: this.selectionKey(), point: this.movePivot } : this.pivotOverride();
-    if (["move", "rotate", "scale"].includes(g.mode)) this.finishTransformDrag(g, pivotAtStart);
+    if (["move", "rotate", "scale", "shear"].includes(g.mode)) this.finishTransformDrag(g, pivotAtStart);
     else this.commitStep(g.before, pivotAtStart);
     this.gesture = undefined;
     this.movePivot = undefined;
@@ -2654,7 +2811,9 @@ export class EditorService {
     const source = before.find((layer) => layer.id === g.id) ?? before[0];
     const result = after.find((layer) => layer.id === g.id) ?? after[0];
     const duplicate = this.duplicatingDrag();
-    if (source && result) {
+    const linear = (g as { linear?: Linear }).linear;
+    if (linear) this.recordTransform({ matrix: linear, duplicate, pivot: pivotAtStart && pivotAtStart.key === this.selectionKey() ? pivotAtStart.point : this.pivot() });
+    else if (source && result) {
       this.recordTransform({
         dx: (result.x + result.width / 2) - (source.x + source.width / 2),
         dy: (result.y + result.height / 2) - (source.y + source.height / 2),
