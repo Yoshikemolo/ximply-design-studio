@@ -1,11 +1,26 @@
 {
-  "currentVersion": "0.9.1",
+  "currentVersion": "0.9.2",
   "licence": {
     "file": "LICENSE",
     "name": "Ximply Design Studio \u2014 Limited Use Licence",
     "sha256": "b6f77aae5f066cc5f5e8aa54699d8dcc84a96387007299d30cb78a4f3f7fd6ae"
   },
   "entries": [
+    {
+      "version": "0.9.2",
+      "date": "2026-09-22",
+      "summary": "The web manifest is named manifest.json, so the preview host serves it as JSON",
+      "breakingChanges": [],
+      "changes": [
+        {
+          "type": "Fix",
+          "description": "Serve the web manifest, which lets a phone add the studio to its home screen, as JSON. The preview host returned it as `application/octet-stream`, since nginx knows no media type for the `.webmanifest` extension; the file is now `manifest.json`, which the host serves as `application/json`, a type the manifest specification accepts."
+        }
+      ],
+      "capabilityStatus": "local-preview",
+      "markdown": "0.9.2.md",
+      "source": "doc/changelog/0.9.2.md"
+    },
     {
       "version": "0.9.1",
       "date": "2026-09-22",
