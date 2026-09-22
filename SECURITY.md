@@ -1,6 +1,6 @@
 # Security
 
-Status: design-stage project; no supported production release exists.
+Status: local preview of a single-user editor; no supported production release exists.
 
 Do not put exploitable details, secrets, private documents or access tokens in public
 issues. Use GitHub private vulnerability reporting if enabled; otherwise contact the

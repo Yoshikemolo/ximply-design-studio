@@ -96,19 +96,29 @@
         "SC-0010",
         "SC-0011",
         "SC-0012",
-        "SC-0108"
+        "SC-0108",
+        "SC-0113",
+        "SC-0115"
       ],
       "implementation": [
         "apps/web/src/app/editor.service.ts",
         "packages/domain/src/document.ts",
         "packages/domain/src/touch.ts",
-        "apps/web/src/app/app.component.ts"
+        "apps/web/src/app/app.component.ts",
+        "packages/domain/src/zoom.ts",
+        "packages/renderer/src/canvas-renderer.ts"
       ],
       "tests": [
         "packages/domain/tests/document.test.ts",
         "apps/web/tests/editor.test.ts",
         "apps/web/tests/mobile.test.ts",
-        "packages/domain/tests/touch.test.ts"
+        "apps/web/tests/desktop-drawers.test.ts",
+        "packages/domain/tests/touch.test.ts",
+        "packages/domain/tests/zoom.test.ts",
+        "apps/web/tests/zoom-tool.test.ts",
+        "packages/domain/tests/detail-region.test.ts",
+        "packages/renderer/tests/detail-view.test.ts",
+        "apps/web/tests/sharp-view.test.ts"
       ],
       "evidence": [
         "doc/implementation/PLAN-0002-0001.md"
@@ -170,7 +180,8 @@
         "apps/web/tests/shell-template.test.ts",
         "apps/web/tests/page-setup.test.ts",
         "apps/web/tests/page-editing.test.ts",
-        "apps/web/tests/background-paint.test.ts"
+        "apps/web/tests/background-paint.test.ts",
+        "apps/web/tests/save-as.test.ts"
       ],
       "evidence": [
         "doc/implementation/PLAN-0002-0001.md",
@@ -246,7 +257,10 @@
         "ADR-0029",
         "ADR-0031",
         "ADR-0032",
-        "ADR-0033"
+        "ADR-0033",
+        "ADR-0034",
+        "ADR-0035",
+        "ADR-0036"
       ],
       "scenarios": [
         "SC-0022",
@@ -262,7 +276,14 @@
         "SC-0104",
         "SC-0105",
         "SC-0106",
-        "SC-0107"
+        "SC-0107",
+        "SC-0109",
+        "SC-0110",
+        "SC-0111",
+        "SC-0112",
+        "SC-0114",
+        "SC-0116",
+        "SC-0117"
       ],
       "implementation": [
         "apps/web/src/app/editor.service.ts",
@@ -288,7 +309,13 @@
         "packages/domain/src/brush-stroke.ts",
         "packages/renderer/src/canvas-renderer.ts",
         "apps/web/src/app/tools.ts",
-        "packages/domain/src/paint.ts"
+        "packages/domain/src/paint.ts",
+        "packages/domain/src/affine.ts",
+        "packages/domain/src/distort.ts",
+        "packages/domain/src/liquify.ts",
+        "packages/domain/src/envelope.ts",
+        "packages/domain/src/gradient-mesh.ts",
+        "apps/web/src/app/paint-buffer.ts"
       ],
       "tests": [
         "packages/domain/tests/document.test.ts",
@@ -336,7 +363,19 @@
         "apps/web/tests/paint-ui.test.ts",
         "packages/domain/tests/hit-test.test.ts",
         "packages/domain/tests/pdf-paint.test.ts",
-        "packages/domain/tests/blend-paint.test.ts"
+        "packages/domain/tests/blend-paint.test.ts",
+        "packages/domain/tests/affine-map.test.ts",
+        "apps/web/tests/scale-shear.test.ts",
+        "packages/domain/tests/distort.test.ts",
+        "apps/web/tests/free-transform.test.ts",
+        "packages/domain/tests/liquify.test.ts",
+        "apps/web/tests/liquify-tools.test.ts",
+        "packages/domain/tests/envelope.test.ts",
+        "apps/web/tests/envelope-editor.test.ts",
+        "packages/domain/tests/gradient-mesh.test.ts",
+        "apps/web/tests/gradient-mesh-editor.test.ts",
+        "packages/renderer/tests/gradient-mesh.test.ts",
+        "apps/web/tests/paint-bounds.test.ts"
       ],
       "evidence": [
         "doc/implementation/PLAN-0002-0001.md",

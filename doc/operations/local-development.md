@@ -14,18 +14,21 @@ source: ["Project owner requirements and design foundation; methodology applicat
 ## Bootstrap that runs now
 
 Python 3.11+ runs the governance harness without third-party dependencies. Clone the
-review branch to begin:
+integration branch to begin:
 
 ```bash
-git clone --branch feat/initial-design https://github.com/Yoshikemolo/ximply-design-studio.git
+git clone --branch dev https://github.com/Yoshikemolo/ximply-design-studio.git
 cd ximply-design-studio
 python3 harness/check_docs.py
 python3 -m unittest discover -s tests -v
 ```
 
-There is no `npm start` or production FastAPI server yet. Product services and their
-build/test pipelines are the first implementation iteration, not hidden completed work.
-The architecture package is useful locally as the versioned source of design truth.
+The single-user editor preview runs with `npm start` (Angular on port 4200) or in
+containers through `compose.local.yaml` and `scripts/local.py`, with an optional local
+FastAPI artifact store; [quick-install.md](../../quick-install.md) gives the exact
+commands. The production services below, TypeORM persistence, SignalR, Keycloak and
+workers, are not implemented. The architecture package remains the versioned source of
+design truth for them.
 
 ## Toolchain resolution — SPIKE-0001
 

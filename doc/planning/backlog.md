@@ -11,7 +11,8 @@ source: ["Project owner requirements and design foundation; methodology applicat
 
 # Feature backlog
 
-All capabilities are Planned.
+Each capability's status lives in its FEAT record. Several are implementing in the local
+preview; none is verified, and the rest are planned.
 
 | Feature | Outcome | Iteration |
 | --- | --- | --- |

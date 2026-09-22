@@ -172,11 +172,9 @@ export function rotationFromDrag(
   end: Point,
   snap = false,
   increment = 45,
+  /** The point the rotation turns about, as the angle is measured there; the centre by default. */
+  center: Point = { x: layer.x + layer.width / 2, y: layer.y + layer.height / 2 },
 ): number {
-  const center = {
-    x: layer.x + layer.width / 2,
-    y: layer.y + layer.height / 2,
-  };
   const delta =
     Math.atan2(end.y - center.y, end.x - center.x) -
     Math.atan2(start.y - center.y, start.x - center.x);

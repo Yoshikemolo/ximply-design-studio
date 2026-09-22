@@ -15,6 +15,12 @@ Status: Proposed. Constraints: Angular + TypeScript, FastAPI + Python, PostgreSQ
 TypeORM, Redis, SignalR, Keycloak. The mixed runtime topology is intentional and
 must be human-reviewed in ADR-0002 and ADR-0003 before production implementation.
 
+What runs today is narrower: the local preview is the Angular SPA in `apps/web`, over
+the framework-free `packages/domain` and the canvas `packages/renderer`, with an optional
+FastAPI service in `services/api` that stores native files for one local user behind a
+bearer token. The persistence, realtime and worker services, Keycloak, PostgreSQL,
+Redis and the Electron host below are not implemented.
+
 ```mermaid
 flowchart TD
     Web["Angular SPA / Electron windows"] --> API["FastAPI application API"]

@@ -26,7 +26,9 @@
           ><button (click)="projectFile.click()">
             {{ t("Open project") }}<kbd>{{ shortcut("open") }}</kbd></button
           ><button (click)="editor.save()">
-            {{ t("Save project") }} <kbd>{{ shortcut("save") }}</kbd>
+            {{ t("Save project") }} <kbd>{{ shortcut("save") }}</kbd></button
+          ><button (click)="saveAs()">
+            {{ t("Save as") }}…<kbd>{{ shortcut("saveAs") }}</kbd>
           </button>
           <hr />
           <button (click)="imageFile.click()">
@@ -68,15 +70,17 @@
         <div class="menu-popover">
           <button (click)="fit()">
             {{ t("Fit") }}<kbd>{{ shortcut("fit") }}</kbd></button
-          ><button (click)="panels.set(!panels())">
+          ><button (click)="closeDrawers(); panels.set(!panels())">
             {{ t(panels() ? "Hide panels" : "Show panels") }}</button
           ><button (click)="editor.toggleOutlineView()">
             {{ editor.outlineView() ? "✓" : "○" }} {{ t("Outline view") }}<kbd>{{ shortcut("toggleOutline") }}</kbd></button
+          ><button (click)="editor.togglePixelPreview()">
+            {{ editor.pixelPreview() ? "✓" : "○" }} {{ t("Pixel Preview") }}<kbd>{{ shortcut("togglePixelPreview") }}</kbd></button
           ><button (click)="spatialPreview()">{{ t("Spatial preview") }}</button
           >
           <div class="layout-menu"><strong>{{ t("Layout") }}</strong>
             @for (block of contextBlocks; track block.id) {
-              <button (click)="preferences.toggleLayoutBlock(block.id)" [attr.aria-pressed]="preferences.layoutBlocks()[block.id]">{{ preferences.layoutBlocks()[block.id] ? "✓" : "○" }} {{ t(block.label) }}</button>
+              <button (click)="closeDrawers(); preferences.toggleLayoutBlock(block.id)" [attr.aria-pressed]="preferences.layoutBlocks()[block.id]">{{ preferences.layoutBlocks()[block.id] ? "✓" : "○" }} {{ t(block.label) }}</button>
             }
           </div>
         </div>
@@ -89,6 +93,17 @@
           ><button [disabled]="!commandEnabled('outlineText')" (click)="runCommand('outlineText')">
             {{ t("Create outlines") }}<kbd>{{ shortcut("outlineText") }}</kbd>
           </button>
+          <div class="menu-section-label">{{ t("Transform") }}</div>
+          @for (id of transformMenuCommands; track id) {
+            <button [disabled]="!commandEnabled(id)" (click)="runCommand(id)">{{ t(commandLabel(id)) }}<kbd>{{ shortcut(id) }}</kbd></button>
+          }
+          @for (id of meshMenuCommands; track id) {
+            <button [disabled]="!commandEnabled(id)" (click)="runCommand(id)">{{ t(commandLabel(id)) }}<kbd>{{ shortcut(id) }}</kbd></button>
+          }
+          <div class="menu-section-label">{{ t("Envelope distort") }}</div>
+          @for (id of envelopeMenuCommands; track id) {
+            <button [disabled]="!commandEnabled(id)" (click)="runCommand(id)">{{ t(id === 'envelopeEdit' ? envelopeEditLabel() : commandLabel(id)) }}<kbd>{{ shortcut(id) }}</kbd></button>
+          }
           <div class="menu-section-label">{{ t("Lock") }}</div>
           @for (id of lockMenuCommands; track id) {
             <button [disabled]="!commandEnabled(id)" (click)="runCommand(id)">{{ t(commandLabel(id)) }}<kbd>{{ shortcut(id) }}</kbd></button>
@@ -165,83 +180,96 @@
       <img src="/assets/icons/export.svg" alt="" />
     </button>
   </header>
-  <div class="contextbar">
-    @if (preferences.layoutBlocks().appearance) {
-      <section class="context-block" [attr.aria-label]="t('Appearance')">
-        <span>{{ t("Appearance") }}</span>
-        @for (target of (editor.tool() === 'brush' ? fillOnly : paintTargets); track target) {
-          <button class="paint-trigger compact-paint" [class.no-paint]="paintColor(target) === 'none'" [style.--paint]="paintColor(target)" (click)="openPaint(target, $event)" [title]="t(target === 'fill' ? 'Fill' : 'Stroke')" [attr.aria-label]="t(target === 'fill' ? 'Fill' : 'Stroke')"><span [class.stroke-preview]="target === 'stroke'"></span></button>
-        }
-        <label>{{ t("Size") }} <input type="number" min="0" step="any" [value]="displayDistance(editor.size())" (change)="setToolSize($event)" /> {{ preferences.distanceUnit() }}</label>
-      </section>
-    }
-    @if (['eyedropper', 'paintBucket'].includes(editor.tool())) {
-      <section class="context-block style-scope" role="group" [attr.aria-label]="t('Style transfer scope')">
-        <span>{{ t('Style transfer scope') }}</span>
-        @for (scope of styleScopes; track scope.id) {<button [class.active]="editor.styleScope() === scope.id" [attr.aria-pressed]="editor.styleScope() === scope.id" [title]="t(scope.label)" [attr.aria-label]="t(scope.label)" (click)="setStyleScope(scope.id)"><img [src]="'/assets/icons/' + scope.icon + '.svg'" alt="" /></button>}
-      </section>
-    }
-    @if (preferences.layoutBlocks().measurement) {
-      <section class="context-block measurement-controls" [attr.aria-label]="t('Measurement')">
-        @for (aid of measurementAids; track aid.id) {
-          @if (aid.id === "guides") {<button class="guide-lock" [class.active]="preferences.guidesLocked()" [attr.aria-pressed]="preferences.guidesLocked()" [title]="t(preferences.guidesLocked() ? 'Unlock guides' : 'Lock guides')" [attr.aria-label]="t(preferences.guidesLocked() ? 'Unlock guides' : 'Lock guides')" (click)="preferences.setMeasurement('guidesLocked', !preferences.guidesLocked())"><img [src]="'/assets/icons/' + (preferences.guidesLocked() ? 'lock' : 'unlock') + '.svg'" alt="" /></button>}
-          <div class="aid-pair"><button [class.active]="aidVisible(aid.id)" [attr.aria-pressed]="aidVisible(aid.id)" [title]="t(aid.label)" [attr.aria-label]="t(aid.label)" (click)="toggleAid(aid.id)"><img [src]="'/assets/icons/' + (aid.id === 'grid' ? 'grid' : aid.id) + '.svg'" alt="" /></button><button class="magnet-toggle" [class.active]="aidSnaps(aid.id)" [attr.aria-pressed]="aidSnaps(aid.id)" [title]="t('Snap to') + ' ' + t(aid.label)" [attr.aria-label]="t('Snap to') + ' ' + t(aid.label)" (click)="toggleSnap(aid.id)"><img src="/assets/icons/magnet.svg" alt="" /></button></div>
-        }
-      </section>
-    }
-    @if (paintingTool(); as painting) {
-      <section class="context-block brush-controls" [attr.aria-label]="t(painting === 'brush' ? 'Brush' : 'Eraser')">
-        <svg class="brush-preview" viewBox="0 0 140 34" aria-hidden="true"><path [attr.d]="brushPreviewPath()" [attr.fill]="brushPreviewPaint()" fill-rule="nonzero" [attr.fill-opacity]="brush().opacity / 100"></path></svg>
-        @if (painting === 'brush') {
-          <div class="aid-pair brush-tips">
-            @for (type of brushTypes; track type) {
-              <button [class.active]="brush().type === type" [attr.aria-pressed]="brush().type === type" [title]="t(brushTypeLabels[type])" [attr.aria-label]="t(brushTypeLabels[type])" (click)="setBrush({type})"><img [src]="'/assets/icons/' + (type === 'round' ? 'brush' : type === 'pencil' ? 'pencil' : 'brush-' + type) + '.svg'" alt="" /></button>
+  @if (preferences.layoutBlocks().contextBar) {
+    <div class="contextbar">
+      @if (preferences.layoutBlocks().appearance) {
+        <section class="context-block" [attr.aria-label]="t('Appearance')">
+          <span>{{ t("Appearance") }}</span>
+          @for (target of (editor.tool() === 'brush' ? fillOnly : paintTargets); track target) {
+            <button class="paint-trigger compact-paint" [class.no-paint]="paintColor(target) === 'none'" [style.--paint]="paintColor(target)" (click)="openPaint(target, $event)" [title]="t(target === 'fill' ? 'Fill' : 'Stroke')" [attr.aria-label]="t(target === 'fill' ? 'Fill' : 'Stroke')"><span [class.stroke-preview]="target === 'stroke'"></span></button>
+          }
+          <label>{{ t("Size") }} <input type="number" min="0" step="any" [value]="displayDistance(editor.size())" (change)="setToolSize($event)" /> {{ preferences.distanceUnit() }}</label>
+        </section>
+      }
+      @if (editor.tool() === 'freeTransform') {
+        <section class="context-block" role="group" [attr.aria-label]="t('Free transform')">
+          <span>{{ t('Free transform') }}</span>
+          <div class="segmented">
+            @for (mode of freeTransformModes; track mode.id) {
+              <button [class.active]="editor.freeTransformMode() === mode.id" [attr.aria-pressed]="editor.freeTransformMode() === mode.id" [title]="t(mode.label) + ' · ' + t(mode.hint)" [attr.aria-label]="t(mode.label)" (click)="editor.freeTransformMode.set(mode.id)"><img [src]="'/assets/icons/' + mode.icon + '.svg'" alt="" /></button>
             }
           </div>
-        }
-        <label class="brush-field">{{ t('Pressure') }}<input type="range" min="1" max="100" [value]="brush().pressure" (input)="setBrushNumber('pressure', $event)" /><small>{{ brush().pressure }}%</small></label>
-        <label class="brush-field">{{ t('Opacity') }}<input type="range" min="0" max="100" [value]="brush().opacity" (input)="setBrushNumber('opacity', $event)" /><small>{{ brush().opacity }}%</small></label>
-        <label class="brush-field">{{ t('Cadence') }}<input type="range" min="1" max="100" [value]="brush().cadence" (input)="setBrushNumber('cadence', $event)" /><small>{{ brush().cadence }}%</small></label>
-        <label class="brush-field">{{ t('Diffusion') }}<input type="range" min="0" max="100" [value]="brush().diffusion" (input)="setBrushNumber('diffusion', $event)" /><small>{{ brush().diffusion }}%</small></label>
-        @if (brush().type !== 'round') {
-          <label class="brush-field">{{ t('Tip angle') }}<input type="range" min="0" max="180" [value]="brush().angle" (input)="setBrushNumber('angle', $event)" /><small>{{ brush().angle }}°</small></label>
-        }
-        @if (painting === 'brush') {
-          <label class="brush-field">{{ t('Blend') }}<select [value]="brush().blend" (change)="setBrush({blend: $any(text($event))})">@for (mode of blends; track mode) {<option [value]="mode">{{ mode === 'source-over' ? t('Normal') : mode }}</option>}</select></label>
-        }
-        <label class="brush-field speed-field">{{ t('Speed variation') }}<span class="speed-mark small" aria-hidden="true"></span><input type="range" min="-100" max="100" [value]="brush().speedVariation" (input)="setBrushNumber('speedVariation', $event)" /><span class="speed-mark large" aria-hidden="true"></span><small>{{ brush().speedVariation }}</small></label>
-      </section>
-    }
-    @if (preferences.layoutBlocks().selection) {
-      <section class="context-block measurement-controls" [attr.aria-label]="t('Selection')">
-        <div class="aid-pair">
-          <button [class.active]="preferences.areaSelectionMode() === 'intersect'" [attr.aria-pressed]="preferences.areaSelectionMode() === 'intersect'" [title]="t('Intersection') + ' · ' + t('Select every object the area touches')" [attr.aria-label]="t('Intersection')" (click)="preferences.setMeasurement('areaSelectionMode', 'intersect')"><img src="/assets/icons/select-intersect.svg" alt="" /></button><button [class.active]="preferences.areaSelectionMode() === 'inside'" [attr.aria-pressed]="preferences.areaSelectionMode() === 'inside'" [title]="t('Inner') + ' · ' + t('Select only objects fully inside the area')" [attr.aria-label]="t('Inner')" (click)="preferences.setMeasurement('areaSelectionMode', 'inside')"><img src="/assets/icons/select-inner.svg" alt="" /></button>
-        </div>
-      </section>
-    }
-    @if (preferences.layoutBlocks().pivot) {
-      <section class="context-block measurement-controls" [attr.aria-label]="t('Pivot')">
-        <button class="dimension-lock" [class.active]="preferences.pivotLocked()" [attr.aria-pressed]="preferences.pivotLocked()" [title]="t(preferences.pivotLocked() ? 'Unlock pivot' : 'Lock pivot')" [attr.aria-label]="t(preferences.pivotLocked() ? 'Unlock pivot' : 'Lock pivot')" (click)="preferences.setMeasurement('pivotLocked', !preferences.pivotLocked())"><img [src]="preferences.pivotLocked() ? '/assets/icons/lock.svg' : '/assets/icons/unlock.svg'" alt="" /></button>
-        <div class="aid-pair"><button [class.active]="preferences.pivotVisible()" [attr.aria-pressed]="preferences.pivotVisible()" [title]="t('Show pivot')" [attr.aria-label]="t('Show pivot')" (click)="preferences.setMeasurement('pivotVisible', !preferences.pivotVisible())"><img src="/assets/icons/pivot.svg" alt="" /></button><button class="magnet-toggle" [class.active]="preferences.pivotSnap()" [attr.aria-pressed]="preferences.pivotSnap()" [title]="t('Snap the pivot')" [attr.aria-label]="t('Snap the pivot')" (click)="preferences.setMeasurement('pivotSnap', !preferences.pivotSnap())"><img src="/assets/icons/magnet.svg" alt="" /></button></div>
-      </section>
-    }
-    @if (preferences.layoutBlocks().dimensions) {
-      <section class="context-block measurement-controls" [attr.aria-label]="t('Dimensions')">
-        <button class="dimension-lock" [class.active]="preferences.dimensionsLocked()" [attr.aria-pressed]="preferences.dimensionsLocked()" [title]="t(preferences.dimensionsLocked() ? 'Unlock dimensions' : 'Lock dimensions')" [attr.aria-label]="t(preferences.dimensionsLocked() ? 'Unlock dimensions' : 'Lock dimensions')" (click)="preferences.setMeasurement('dimensionsLocked', !preferences.dimensionsLocked())"><img [src]="'/assets/icons/' + (preferences.dimensionsLocked() ? 'lock' : 'unlock') + '.svg'" alt="" /></button>
-        <div class="aid-pair"><button [class.active]="preferences.dimensionsVisible()" [attr.aria-pressed]="preferences.dimensionsVisible()" [title]="t('Show dimensions')" [attr.aria-label]="t('Show dimensions')" (click)="preferences.setMeasurement('dimensionsVisible', !preferences.dimensionsVisible())"><img src="/assets/icons/dimension-linear.svg" alt="" /></button><button class="magnet-toggle" [class.active]="preferences.dimensionsSnap()" [attr.aria-pressed]="preferences.dimensionsSnap()" [title]="t('Snap dimension points')" [attr.aria-label]="t('Snap dimension points')" (click)="preferences.setMeasurement('dimensionsSnap', !preferences.dimensionsSnap())"><img src="/assets/icons/magnet.svg" alt="" /></button></div>
-      </section>
-    }
-  </div>
-  <main class="workspace" [class.no-panels]="!panels()" [class.no-tools]="!preferences.layoutBlocks().tools">
-    @if (mobile()) {
-      <button class="drawer-handle left" type="button" (click)="openDrawer('tools')" [attr.aria-label]="t('Drawing tools')" [title]="t('Drawing tools')"><span></span></button>
-      <button class="drawer-handle right" type="button" (click)="openDrawer('panels')" [attr.aria-label]="t('Editor panels')" [title]="t('Editor panels')"><span></span></button>
-      @if (toolsOpen() || panelsOpen() || mobileMenu()) {
-        <div class="drawer-backdrop" (click)="closeDrawers()" aria-hidden="true"></div>
+        </section>
       }
+      @if (['eyedropper', 'paintBucket'].includes(editor.tool())) {
+        <section class="context-block style-scope" role="group" [attr.aria-label]="t('Style transfer scope')">
+          <span>{{ t('Style transfer scope') }}</span>
+          @for (scope of styleScopes; track scope.id) {<button [class.active]="editor.styleScope() === scope.id" [attr.aria-pressed]="editor.styleScope() === scope.id" [title]="t(scope.label)" [attr.aria-label]="t(scope.label)" (click)="setStyleScope(scope.id)"><img [src]="'/assets/icons/' + scope.icon + '.svg'" alt="" /></button>}
+        </section>
+      }
+      @if (preferences.layoutBlocks().measurement) {
+        <section class="context-block measurement-controls" [attr.aria-label]="t('Measurement')">
+          @for (aid of measurementAids; track aid.id) {
+            @if (aid.id === "guides") {<button class="guide-lock" [class.active]="preferences.guidesLocked()" [attr.aria-pressed]="preferences.guidesLocked()" [title]="t(preferences.guidesLocked() ? 'Unlock guides' : 'Lock guides')" [attr.aria-label]="t(preferences.guidesLocked() ? 'Unlock guides' : 'Lock guides')" (click)="preferences.setMeasurement('guidesLocked', !preferences.guidesLocked())"><img [src]="'/assets/icons/' + (preferences.guidesLocked() ? 'lock' : 'unlock') + '.svg'" alt="" /></button>}
+            <div class="aid-pair"><button [class.active]="aidVisible(aid.id)" [attr.aria-pressed]="aidVisible(aid.id)" [title]="t(aid.label)" [attr.aria-label]="t(aid.label)" (click)="toggleAid(aid.id)"><img [src]="'/assets/icons/' + (aid.id === 'grid' ? 'grid' : aid.id) + '.svg'" alt="" /></button><button class="magnet-toggle" [class.active]="aidSnaps(aid.id)" [attr.aria-pressed]="aidSnaps(aid.id)" [title]="t('Snap to') + ' ' + t(aid.label)" [attr.aria-label]="t('Snap to') + ' ' + t(aid.label)" (click)="toggleSnap(aid.id)"><img src="/assets/icons/magnet.svg" alt="" /></button></div>
+          }
+        </section>
+      }
+      @if (paintingTool(); as painting) {
+        <section class="context-block brush-controls" [attr.aria-label]="t(painting === 'brush' ? 'Brush' : 'Eraser')">
+          <svg class="brush-preview" viewBox="0 0 140 34" aria-hidden="true"><path [attr.d]="brushPreviewPath()" [attr.fill]="brushPreviewPaint()" fill-rule="nonzero" [attr.fill-opacity]="brush().opacity / 100"></path></svg>
+          @if (painting === 'brush') {
+            <div class="aid-pair brush-tips">
+              @for (type of brushTypes; track type) {
+                <button [class.active]="brush().type === type" [attr.aria-pressed]="brush().type === type" [title]="t(brushTypeLabels[type])" [attr.aria-label]="t(brushTypeLabels[type])" (click)="setBrush({type})"><img [src]="'/assets/icons/' + (type === 'round' ? 'brush' : type === 'pencil' ? 'pencil' : 'brush-' + type) + '.svg'" alt="" /></button>
+              }
+            </div>
+          }
+          <label class="brush-field">{{ t('Pressure') }}<input type="range" min="1" max="100" [value]="brush().pressure" (input)="setBrushNumber('pressure', $event)" /><small>{{ brush().pressure }}%</small></label>
+          <label class="brush-field">{{ t('Opacity') }}<input type="range" min="0" max="100" [value]="brush().opacity" (input)="setBrushNumber('opacity', $event)" /><small>{{ brush().opacity }}%</small></label>
+          <label class="brush-field">{{ t('Cadence') }}<input type="range" min="1" max="100" [value]="brush().cadence" (input)="setBrushNumber('cadence', $event)" /><small>{{ brush().cadence }}%</small></label>
+          <label class="brush-field">{{ t('Diffusion') }}<input type="range" min="0" max="100" [value]="brush().diffusion" (input)="setBrushNumber('diffusion', $event)" /><small>{{ brush().diffusion }}%</small></label>
+          @if (brush().type !== 'round') {
+            <label class="brush-field">{{ t('Tip angle') }}<input type="range" min="0" max="180" [value]="brush().angle" (input)="setBrushNumber('angle', $event)" /><small>{{ brush().angle }}°</small></label>
+          }
+          @if (painting === 'brush') {
+            <label class="brush-field">{{ t('Blend') }}<select [value]="brush().blend" (change)="setBrush({blend: $any(text($event))})">@for (mode of blends; track mode) {<option [value]="mode">{{ mode === 'source-over' ? t('Normal') : mode }}</option>}</select></label>
+          }
+          <label class="brush-field speed-field">{{ t('Speed variation') }}<span class="speed-mark small" aria-hidden="true"></span><input type="range" min="-100" max="100" [value]="brush().speedVariation" (input)="setBrushNumber('speedVariation', $event)" /><span class="speed-mark large" aria-hidden="true"></span><small>{{ brush().speedVariation }}</small></label>
+        </section>
+      }
+      @if (preferences.layoutBlocks().selection) {
+        <section class="context-block measurement-controls" [attr.aria-label]="t('Selection')">
+          <div class="aid-pair">
+            <button [class.active]="preferences.areaSelectionMode() === 'intersect'" [attr.aria-pressed]="preferences.areaSelectionMode() === 'intersect'" [title]="t('Intersection') + ' · ' + t('Select every object the area touches')" [attr.aria-label]="t('Intersection')" (click)="preferences.setMeasurement('areaSelectionMode', 'intersect')"><img src="/assets/icons/select-intersect.svg" alt="" /></button><button [class.active]="preferences.areaSelectionMode() === 'inside'" [attr.aria-pressed]="preferences.areaSelectionMode() === 'inside'" [title]="t('Inner') + ' · ' + t('Select only objects fully inside the area')" [attr.aria-label]="t('Inner')" (click)="preferences.setMeasurement('areaSelectionMode', 'inside')"><img src="/assets/icons/select-inner.svg" alt="" /></button>
+          </div>
+        </section>
+      }
+      @if (preferences.layoutBlocks().pivot) {
+        <section class="context-block measurement-controls" [attr.aria-label]="t('Pivot')">
+          <button class="dimension-lock" [class.active]="preferences.pivotLocked()" [attr.aria-pressed]="preferences.pivotLocked()" [title]="t(preferences.pivotLocked() ? 'Unlock pivot' : 'Lock pivot')" [attr.aria-label]="t(preferences.pivotLocked() ? 'Unlock pivot' : 'Lock pivot')" (click)="preferences.setMeasurement('pivotLocked', !preferences.pivotLocked())"><img [src]="preferences.pivotLocked() ? '/assets/icons/lock.svg' : '/assets/icons/unlock.svg'" alt="" /></button>
+          <div class="aid-pair"><button [class.active]="preferences.pivotVisible()" [attr.aria-pressed]="preferences.pivotVisible()" [title]="t('Show pivot')" [attr.aria-label]="t('Show pivot')" (click)="preferences.setMeasurement('pivotVisible', !preferences.pivotVisible())"><img src="/assets/icons/pivot.svg" alt="" /></button><button class="magnet-toggle" [class.active]="preferences.pivotSnap()" [attr.aria-pressed]="preferences.pivotSnap()" [title]="t('Snap the pivot')" [attr.aria-label]="t('Snap the pivot')" (click)="preferences.setMeasurement('pivotSnap', !preferences.pivotSnap())"><img src="/assets/icons/magnet.svg" alt="" /></button></div>
+        </section>
+      }
+      @if (preferences.layoutBlocks().dimensions) {
+        <section class="context-block measurement-controls" [attr.aria-label]="t('Dimensions')">
+          <button class="dimension-lock" [class.active]="preferences.dimensionsLocked()" [attr.aria-pressed]="preferences.dimensionsLocked()" [title]="t(preferences.dimensionsLocked() ? 'Unlock dimensions' : 'Lock dimensions')" [attr.aria-label]="t(preferences.dimensionsLocked() ? 'Unlock dimensions' : 'Lock dimensions')" (click)="preferences.setMeasurement('dimensionsLocked', !preferences.dimensionsLocked())"><img [src]="'/assets/icons/' + (preferences.dimensionsLocked() ? 'lock' : 'unlock') + '.svg'" alt="" /></button>
+          <div class="aid-pair"><button [class.active]="preferences.dimensionsVisible()" [attr.aria-pressed]="preferences.dimensionsVisible()" [title]="t('Show dimensions')" [attr.aria-label]="t('Show dimensions')" (click)="preferences.setMeasurement('dimensionsVisible', !preferences.dimensionsVisible())"><img src="/assets/icons/dimension-linear.svg" alt="" /></button><button class="magnet-toggle" [class.active]="preferences.dimensionsSnap()" [attr.aria-pressed]="preferences.dimensionsSnap()" [title]="t('Snap dimension points')" [attr.aria-label]="t('Snap dimension points')" (click)="preferences.setMeasurement('dimensionsSnap', !preferences.dimensionsSnap())"><img src="/assets/icons/magnet.svg" alt="" /></button></div>
+        </section>
+      }
+    </div>
+  }
+  <main class="workspace" [class.no-panels]="!panels()" [class.no-tools]="!preferences.layoutBlocks().tools">
+    @if (toolsDrawer()) {
+      <button class="drawer-handle left" type="button" [class.open]="toolsOpen() && !mobile()" [attr.aria-expanded]="toolsOpen()" (click)="toggleDrawer('tools')" [attr.aria-label]="t('Drawing tools')" [title]="t('Drawing tools')"><span></span></button>
     }
-    @if (preferences.layoutBlocks().tools) {
-    <aside class="toolrail" [class.drawer-open]="toolsOpen()" [attr.aria-label]="t('Drawing tools')">
+    @if (panelsDrawer()) {
+      <button class="drawer-handle right" type="button" [class.open]="panelsOpen() && !mobile()" [attr.aria-expanded]="panelsOpen()" (click)="toggleDrawer('panels')" [attr.aria-label]="t('Editor panels')" [title]="t('Editor panels')"><span></span></button>
+    }
+    @if ((mobile() && (toolsOpen() || panelsOpen())) || mobileMenu()) {
+      <div class="drawer-backdrop" (click)="closeDrawers()" aria-hidden="true"></div>
+    }
+    <aside class="toolrail" [class.drawer-open]="toolsOpen() && toolsDrawer()" [attr.aria-label]="t('Drawing tools')">
       @for (section of toolbarSections; track section.id) {
         <div class="tool-section" role="group" [attr.aria-label]="t(section.label)">
           @for (family of section.families; track family.id) {
@@ -352,57 +380,59 @@
         </div>
       </div>
     </aside>
-    }
     <section class="canvas-area">
-      <div class="document-tabs" role="tablist" [attr.aria-label]="t('Documents')">
-        @for (tab of editor.tabs(); track tab.id) {
-          <div class="document-tab" role="tab" [class.active]="tab.active" [attr.aria-selected]="tab.active" (click)="switchDocument(tab.id)">
-            <img src="/assets/icons/document.svg" alt="" />
-            @if (tab.active) {
-              <input [attr.aria-label]="t('Document name')" [value]="tab.name" (change)="editor.rename(text($event))" />
-            } @else {
-              <span class="document-tab-name">{{ tab.name }}</span>
-            }
-            @if (tab.dirty) {<span class="modified-dot" [title]="t('Unsaved changes')"></span>}
-            <button class="document-tab-close" [title]="t('Close document')" [attr.aria-label]="t('Close document') + ': ' + tab.name" (click)="$event.stopPropagation(); closeDocument(tab.id)">×</button>
-          </div>
-        }
-        <button (click)="newDocument()" [title]="t('New document')" [attr.aria-label]="t('New document')">
-          +
-        </button>
-        <div class="header-spacer"></div>
-        <span
-          >{{ displayDistance(editor.document().width) }} ×
-          {{ displayDistance(editor.document().height) }} {{ preferences.distanceUnit() }}</span
-        >
-      </div>
+      @if (preferences.layoutBlocks().documentTabs) {
+        <div class="document-tabs" role="tablist" [attr.aria-label]="t('Documents')">
+          @for (tab of editor.tabs(); track tab.id) {
+            <div class="document-tab" role="tab" [class.active]="tab.active" [attr.aria-selected]="tab.active" (click)="switchDocument(tab.id)">
+              <img src="/assets/icons/document.svg" alt="" />
+              @if (tab.active) {
+                <input [attr.aria-label]="t('Document name')" [value]="tab.name" (change)="editor.rename(text($event))" />
+              } @else {
+                <span class="document-tab-name">{{ tab.name }}</span>
+              }
+              @if (tab.dirty) {<span class="modified-dot" [title]="t('Unsaved changes')"></span>}
+              <button class="document-tab-close" [title]="t('Close document')" [attr.aria-label]="t('Close document') + ': ' + tab.name" (click)="$event.stopPropagation(); closeDocument(tab.id)">×</button>
+            </div>
+          }
+          <button (click)="newDocument()" [title]="t('New document')" [attr.aria-label]="t('New document')">
+            +
+          </button>
+          <div class="header-spacer"></div>
+          <span
+            >{{ displayDistance(editor.document().width) }} ×
+            {{ displayDistance(editor.document().height) }} {{ preferences.distanceUnit() }}</span
+          >
+        </div>
+      }
       <div
         class="canvas-viewport"
         #viewport
         (pointerleave)="cursorPoint.set(null)"
-        (scroll)="refreshCursorPosition()"
+        (scroll)="refreshCursorPosition(); holdDetail()"
       >
         <div
           class="artboard-surround"
           [style.min-width.px]="editor.document().width * editor.zoom() + 100"
           [style.min-height.px]="editor.document().height * editor.zoom() + 100"
         >
-          <div class="artboard-label">{{ t("Document") }} 01</div>
           <div
             class="artboard"
+            [class.with-rulers]="preferences.rulersVisible()"
             [class.checkered]="preferences.transparencyChecker()"
             [style.--checker-size.px]="preferences.transparencyCheckerSize()"
             [style.width.px]="editor.document().width * editor.zoom()"
             [style.height.px]="editor.document().height * editor.zoom()"
           >
+            <div class="artboard-label">{{ t("Document") }} 01</div>
             @if (preferences.rulersVisible()) {
               @let marker = rulerCursorPoint();
               <div class="canvas-ruler horizontal-ruler" [attr.aria-label]="t('Drag to create horizontal guide')" (pointerdown)="startGuide($event, 'horizontal')" (pointermove)="moveGuide($event)" (pointerup)="finishGuide($event)" (pointercancel)="cancelGuide()" (lostpointercapture)="cancelGuide()">
-                @for (tick of rulerTicks('horizontal'); track tick.position) {<span class="ruler-tick" [class.minor]="!tick.major" [style.left.px]="tick.position * editor.zoom()">{{ tick.label }}</span>}
+                @for (tick of rulerTicks('horizontal'); track tick.position) {<span class="ruler-tick" [class.minor]="!tick.major" [class.half]="tick.half" [style.left.px]="tick.position * editor.zoom()">{{ tick.label }}</span>}
                 @if (marker) {<span class="ruler-cursor-marker" [style.left.px]="marker.x" aria-hidden="true"></span>}
               </div>
               <div class="canvas-ruler vertical-ruler" [attr.aria-label]="t('Drag to create vertical guide')" (pointerdown)="startGuide($event, 'vertical')" (pointermove)="moveGuide($event)" (pointerup)="finishGuide($event)" (pointercancel)="cancelGuide()" (lostpointercapture)="cancelGuide()">
-                @for (tick of rulerTicks('vertical'); track tick.position) {<span class="ruler-tick" [class.minor]="!tick.major" [style.top.px]="tick.position * editor.zoom()">{{ tick.label }}</span>}
+                @for (tick of rulerTicks('vertical'); track tick.position) {<span class="ruler-tick" [class.minor]="!tick.major" [class.half]="tick.half" [style.top.px]="tick.position * editor.zoom()">{{ tick.label }}</span>}
                 @if (marker) {<span class="ruler-cursor-marker" [style.top.px]="marker.y" aria-hidden="true"></span>}
               </div>
               <span class="ruler-origin">{{ preferences.distanceUnit() }}</span>
@@ -416,6 +446,7 @@
             <canvas
               #canvas
               aria-label="Editable design canvas"
+              [class.pixel-preview]="editor.pixelPreview()"
               [style.cursor]="toolCursor()"
               (pointerdown)="pointerDown($event)"
               (dblclick)="canvasDoubleClick($event)"
@@ -426,6 +457,7 @@
               (pointercancel)="pointerCancel()"
               (lostpointercapture)="pointerLost()"
             ></canvas>
+            <canvas #detail class="detail-canvas" aria-hidden="true"></canvas>
             @if (zoomArea(); as zoom) {
               <div class="zoom-area-frame" aria-hidden="true" [style.left.px]="zoom.x" [style.top.px]="zoom.y" [style.width.px]="zoom.width" [style.height.px]="zoom.height"></div>
             }
@@ -493,7 +525,7 @@
 
             @if (editor.document().layers.length === 0) {
               <div class="canvas-welcome">
-                <div class="welcome-mark">x</div>
+                <div class="welcome-brand" aria-label="Ximply Design Studio"><img src="/assets/icons/ximplicity-x.svg" alt="" /><span>ximply<span class="brand-sub">design studio</span></span></div>
                 <h1>{{ t("Draw, layer, explore.") }}</h1>
                 <p>{{ t("Choose a tool and make your first mark.") }}</p>
                 <button (click)="sample()">
@@ -526,8 +558,7 @@
         ><button class="fit-button" (click)="fit()" [title]="commandTitle('fit')" [attr.aria-label]="t('Fit')"><img src="/assets/icons/fit-view.svg" alt="" /></button>
       </div>
     </section>
-    @if (panels()) {
-      <aside class="inspector" [class.drawer-open]="panelsOpen()" aria-label="Editor panels">
+      <aside class="inspector" [class.drawer-open]="panelsOpen() && panelsDrawer()" aria-label="Editor panels">
         @if (preferences.layoutBlocks().swatches) {
           <details class="panel swatches-panel" open>
             <summary><span>{{ t("Swatches") }}</span></summary>
@@ -1191,7 +1222,6 @@
           }}<button (click)="openAbout()">{{ currentVersion() }}</button>
         </div>
       </aside>
-    }
   </main>
   <footer>
     <span class="status-dot"></span
@@ -1257,34 +1287,34 @@
       aria-modal="true"
       aria-labelledby="about-title"
     >
-      <header>
-        <div>
-          <small
-            ><a
-              href="https://ximplicity.es"
-              target="_blank"
-              rel="noopener noreferrer"
-              >XIMPLICITY</a
-            ></small
-          >
-          <h2 id="about-title">Ximply Design Studio</h2>
-          <p>{{ t("Create freely. Keep every layer.") }}</p>
-        </div>
-        <button (click)="closeAbout()" [attr.aria-label]="t('Close')">×</button>
-      </header>
-      <div class="release-picker">
-        <h3>{{ t("Version") }}</h3>
-        <select
-          [value]="chosenVersion()"
-          (change)="selectVersion(text($event))"
-          aria-label="Release version"
-        >
-          @for (release of releases(); track release.version) {
-            <option [value]="release.version">
-              {{ release.version }} · {{ release.date }}
-            </option>
-          }
-        </select>
+      <div class="about-head">
+        <header>
+          <div class="about-brand">
+            <img class="about-logo" src="/assets/icons/ximplicity-x.svg" alt="" />
+            <div>
+              <h2 id="about-title">Ximply Design Studio</h2>
+              <p>{{ t("Create with precision feels simple") }}</p>
+            </div>
+          </div>
+          <div class="release-picker">
+            <select
+              [value]="chosenVersion()"
+              (change)="selectVersion(text($event))"
+              [attr.aria-label]="t('Version')"
+              [title]="t('Version')"
+            >
+              @for (release of releases(); track release.version) {
+                <option [value]="release.version">
+                  {{ release.version }} · {{ release.date }}
+                </option>
+              }
+            </select>
+          </div>
+          <button class="about-close" (click)="closeAbout()" [attr.aria-label]="t('Close')">×</button>
+        </header>
+        @if (licence(); as licence) {
+          <p class="licence-hash"><span>{{ licence.name }}</span><span>SHA-256</span><code [title]="t('SHA-256 of the LICENSE file this build carries')">{{ licence.sha256 }}</code></p>
+        }
       </div>
       @if (aboutError()) {
         <p role="alert">{{ aboutError() }}</p>
@@ -1311,6 +1341,7 @@
           </section>
         }
       </div>
+      <footer class="about-credits"><ng-container *ngTemplateOutlet="footerCredits"></ng-container></footer>
     </section>
   </div>
 }
@@ -1374,6 +1405,9 @@
   (change)="symbolsInput($event)"
 />
 @if (cursorPoint(); as cursor) {
+  @if (liquifyBrush(); as brush) {
+    <div class="liquify-brush" aria-hidden="true" [style.left.px]="cursor.x" [style.top.px]="cursor.y" [style.width.px]="brush.width" [style.height.px]="brush.height" [style.transform]="'translate(-50%, -50%) rotate(' + -brush.angle + 'deg)'"></div>
+  }
   @if (
     preferences.cursorIcon() &&
     !settings() &&
@@ -1517,8 +1551,10 @@
         <label>{{ t('Minor ruler interval') }} ({{ preferences.distanceUnit() }})<input type="number" [min]="displayDistance(0.01)" step="any" [value]="displayDistance(preferences.rulerMinorStep())" (change)="preferences.setMeasurement('rulerMinorStep', distanceInput($event))" /></label>
         <div class="tick-snapping" role="group" [attr.aria-label]="t('Snap to ruler ticks')">
           <span class="tick-title">{{ t('Snap to ruler ticks') }}</span>
-          <label class="tick-row">{{ t('Major') }}<input class="toggle-switch" type="checkbox" role="switch" [checked]="preferences.snapRulerMajor()" (change)="preferences.setMeasurement('snapRulerMajor', !preferences.snapRulerMajor())" /></label>
-          <label class="tick-row">{{ t('Minor') }}<input class="toggle-switch" type="checkbox" role="switch" [checked]="preferences.snapRulerMinor()" (change)="preferences.setMeasurement('snapRulerMinor', !preferences.snapRulerMinor())" /></label>
+          <div class="tick-toggles">
+            <label class="tick-row">{{ t('Major') }}<input class="toggle-switch" type="checkbox" role="switch" [checked]="preferences.snapRulerMajor()" (change)="preferences.setMeasurement('snapRulerMajor', !preferences.snapRulerMajor())" /></label>
+            <label class="tick-row">{{ t('Minor') }}<input class="toggle-switch" type="checkbox" role="switch" [checked]="preferences.snapRulerMinor()" (change)="preferences.setMeasurement('snapRulerMinor', !preferences.snapRulerMinor())" /></label>
+          </div>
         </div>
         <label>{{ t('Snap radius') }} · {{ t('Dimensions') }} (px)<input type="number" min="0" max="100" [value]="preferences.dimensionSnapRadius()" (change)="preferences.setMeasurement('dimensionSnapRadius', number($event))" /></label>
         <label>{{ t("Grid spacing") }} ({{ preferences.distanceUnit() }})<input type="number" [min]="displayDistance(0.01)" step="any" [value]="displayDistance(preferences.gridSize())" (change)="preferences.setMeasurement('gridSize', distanceInput($event))" /></label>
@@ -1647,7 +1683,7 @@
           <div class="palette-actions"><button (click)="preferences.addPaletteColor(paintBaseColor())">{{ t('Add current color') }}</button><button [disabled]="!preferences.customPalette().includes(paintBaseColor())" (click)="preferences.removePaletteColor(paintBaseColor())">{{ t('Remove color') }}</button></div>
         }
         @default {
-          <label>{{ t('Color') }}<input type="color" [value]="paintBaseColor()" (input)="setPaintBaseColor(text($event))" /></label>
+          <label>{{ t('Color') }}<input type="color" (click)="nativeColorPicking = true" (change)="nativeColorPicking = false" (blur)="nativeColorPicking = false" [value]="paintBaseColor()" (input)="setPaintBaseColor(text($event))" /></label>
         }
       }
       <label>{{ t("Paint opacity") }}<input type="range" min="0" max="100" [value]="paintOpacity()" (input)="setPaintOpacity(number($event))" />{{ paintOpacity() }}%</label>
@@ -1662,7 +1698,7 @@
         <div class="gradient-stops">
           @for (stop of gradient.stops; track $index; let i = $index, last = $last) {
             <div class="gradient-stop">
-              <input type="color" [value]="stop.color.slice(0, 7)" (input)="setStop(i, 'color', $event)" [attr.aria-label]="t('Stop color')" />
+              <input type="color" (click)="nativeColorPicking = true" (change)="nativeColorPicking = false" (blur)="nativeColorPicking = false" [value]="stop.color.slice(0, 7)" (input)="setStop(i, 'color', $event)" [attr.aria-label]="t('Stop color')" />
               <label>{{ t('Location') }}<input type="number" min="0" max="100" step="any" [value]="stop.location" (change)="setStop(i, 'location', $event)" />%</label>
               @if (!last) {<label>{{ t('Midpoint') }}<input type="number" min="13" max="87" step="any" [value]="stop.midpoint" (change)="setStop(i, 'midpoint', $event)" />%</label>}
               <button [disabled]="gradient.stops.length <= 2" (click)="removeStop(i)" [title]="t('Delete stop')" [attr.aria-label]="t('Delete stop')">×</button>
@@ -1888,6 +1924,112 @@
   </form></div>
 }
 
+@if (saveAsDialog()) {
+  <div class="modal-backdrop"><form class="server-dialog affine-dialog save-as-dialog" role="dialog" aria-modal="true" [attr.aria-label]="t('Save as')" (submit)="$event.preventDefault(); confirmSaveAs()" (keydown.escape)="saveAsDialog.set(false); $event.stopPropagation()">
+    <h2>{{ t('Save as') }}</h2>
+    <label>{{ t('File name') }}<input type="text" name="fileName" maxlength="150" [(ngModel)]="saveAsName" required />.xds</label>
+    <div class="dialog-actions"><button type="button" (click)="saveAsDialog.set(false)">{{ t('Cancel') }}</button><button type="submit">{{ t('Save') }}</button></div>
+  </form></div>
+}
+@if (gradientMeshDialog()) {
+  <div class="modal-backdrop"><form class="server-dialog affine-dialog" role="dialog" aria-modal="true" [attr.aria-label]="t('Create gradient mesh')" (submit)="$event.preventDefault(); applyGradientMeshDialog()" (keydown.escape)="gradientMeshDialog.set(false); $event.stopPropagation()">
+    <h2>{{ t('Create gradient mesh') }}</h2>
+    <div class="property-grid"><label>{{ t('Rows') }}<input type="number" min="1" max="50" step="1" name="rows" [(ngModel)]="gradientMeshDraft.rows" /></label><label>{{ t('Columns') }}<input type="number" min="1" max="50" step="1" name="columns" [(ngModel)]="gradientMeshDraft.columns" /></label></div>
+    <label>{{ t('Appearance') }}<select name="appearance" [(ngModel)]="gradientMeshDraft.appearance">@for (a of meshAppearances; track a.id) {<option [value]="a.id">{{ t(a.label) }}</option>}</select></label>
+    <label>{{ t('Highlight') }} (%)<input type="number" min="0" max="100" step="1" name="highlight" [(ngModel)]="gradientMeshDraft.highlight" [disabled]="gradientMeshDraft.appearance === 'flat'" /></label>
+    <div class="dialog-actions"><button type="button" (click)="gradientMeshDialog.set(false)">{{ t('Cancel') }}</button><button type="submit">{{ t('OK') }}</button></div>
+  </form></div>
+}
+@if (envelopeDialog(); as kind) {
+  <div class="modal-backdrop"><form class="server-dialog affine-dialog envelope-dialog" role="dialog" aria-modal="true" [attr.aria-label]="t(kind === 'options' ? 'Envelope options' : kind === 'warp' || kind === 'resetWarp' ? 'Warp options' : 'Envelope mesh')" (submit)="$event.preventDefault(); applyEnvelopeDialog()" (keydown.escape)="cancelEnvelopeDialog(); $event.stopPropagation()">
+    <h2>{{ t(kind === 'options' ? 'Envelope options' : kind === 'warp' || kind === 'resetWarp' ? 'Warp options' : 'Envelope mesh') }}</h2>
+    @if (kind === 'warp' || kind === 'resetWarp') {
+      <div class="warp-styles" role="radiogroup" [attr.aria-label]="t('Style')">
+        @for (style of warpStyles; track style.id) {
+          <button type="button" role="radio" [class.active]="warpDraft.style === style.id" [attr.aria-checked]="warpDraft.style === style.id" [title]="t(style.label)" [attr.aria-label]="t(style.label)" (click)="setWarp('style', style.id)"><img [src]="'/assets/icons/warp-' + style.id + '.svg'" alt="" /></button>
+        }
+      </div>
+      <div class="radio-row">
+        <label class="radio-row"><input type="radio" name="axis" [checked]="warpDraft.axis === 'horizontal'" (change)="setWarp('axis', 'horizontal')" />{{ t('Horizontal') }}</label>
+        <label class="radio-row"><input type="radio" name="axis" [checked]="warpDraft.axis === 'vertical'" (change)="setWarp('axis', 'vertical')" />{{ t('Vertical') }}</label>
+      </div>
+      <label class="channel">{{ t('Bend') }}<input type="range" min="-100" max="100" [value]="warpDraft.bend" (input)="setWarpNumber('bend', $event)" /><input type="number" min="-100" max="100" [value]="warpDraft.bend" (change)="setWarpNumber('bend', $event)" [attr.aria-label]="t('Bend')" />%</label>
+      <div class="section-label">{{ t('Distortion') }}</div>
+      <label class="channel">{{ t('Horizontal') }}<input type="range" min="-100" max="100" [value]="warpDraft.horizontal" (input)="setWarpNumber('horizontal', $event)" /><input type="number" min="-100" max="100" [value]="warpDraft.horizontal" (change)="setWarpNumber('horizontal', $event)" [attr.aria-label]="t('Horizontal distortion')" />%</label>
+      <label class="channel">{{ t('Vertical') }}<input type="range" min="-100" max="100" [value]="warpDraft.vertical" (input)="setWarpNumber('vertical', $event)" /><input type="number" min="-100" max="100" [value]="warpDraft.vertical" (change)="setWarpNumber('vertical', $event)" [attr.aria-label]="t('Vertical distortion')" />%</label>
+      @if (kind === 'warp') {<label class="radio-row"><input type="checkbox" name="preview" [(ngModel)]="warpPreview" (change)="previewWarp()" />{{ t('Preview') }}</label>}
+    } @else if (kind === 'options') {
+      <label class="channel">{{ t('Fidelity') }}<input type="range" min="0" max="100" name="fidelityRange" [(ngModel)]="fidelityDraft" /><input type="number" min="0" max="100" name="fidelity" [(ngModel)]="fidelityDraft" [attr.aria-label]="t('Fidelity')" />%</label>
+    } @else {
+      <div class="property-grid"><label>{{ t('Rows') }}<input type="number" min="1" max="50" step="1" name="rows" [(ngModel)]="meshDraft.rows" /></label><label>{{ t('Columns') }}<input type="number" min="1" max="50" step="1" name="columns" [(ngModel)]="meshDraft.columns" /></label></div>
+      @if (kind === 'resetMesh') {<label class="radio-row"><input type="checkbox" name="maintain" [(ngModel)]="meshDraft.maintainShape" />{{ t('Maintain envelope shape') }}</label>}
+    }
+    <div class="dialog-actions"><button type="button" (click)="cancelEnvelopeDialog()">{{ t('Cancel') }}</button><button type="submit">{{ t('OK') }}</button></div>
+  </form></div>
+}
+@if (liquifyDialog(); as tool) {
+  <div class="modal-backdrop"><form class="server-dialog affine-dialog liquify-dialog" role="dialog" aria-modal="true" [attr.aria-label]="t(tool[0].toUpperCase() + tool.slice(1) + ' tool options')" (submit)="$event.preventDefault(); applyLiquifyOptions()" (keydown.escape)="liquifyDialog.set(null); $event.stopPropagation()">
+    <h2>{{ t(tool[0].toUpperCase() + tool.slice(1) + ' tool options') }}</h2>
+    <div class="section-label">{{ t('Global brush dimensions') }}</div>
+    <div class="property-grid">
+      <label>{{ t('Width') }}<input type="number" min="1" max="1000" step="any" name="width" [(ngModel)]="liquifyDraft.width" /></label>
+      <label>{{ t('Height') }}<input type="number" min="1" max="1000" step="any" name="height" [(ngModel)]="liquifyDraft.height" /></label>
+      <label>{{ t('Angle') }} (°)<input type="number" min="-360" max="360" step="any" name="angle" [(ngModel)]="liquifyDraft.angle" /></label>
+      <label>{{ t('Intensity') }} (%)<input type="number" min="1" max="100" step="1" name="intensity" [(ngModel)]="liquifyDraft.intensity" /></label>
+    </div>
+    <div class="section-label">{{ t(tool[0].toUpperCase() + tool.slice(1) + ' options') }}</div>
+    @if (tool === 'twirl') {<label>{{ t('Twirl rate') }} (°)<input type="number" min="-180" max="180" step="any" name="twirlRate" [(ngModel)]="liquifyDraft.twirlRate" /></label>}
+    @if (tool === 'scallop' || tool === 'crystallize' || tool === 'wrinkle') {<label>{{ t('Complexity') }}<input type="number" min="0" max="15" step="1" name="complexity" [(ngModel)]="liquifyDraft.complexity" /></label>}
+    @if (tool === 'wrinkle') {
+      <div class="property-grid"><label>{{ t('Horizontal') }} (%)<input type="number" min="0" max="100" step="any" name="horizontal" [(ngModel)]="liquifyDraft.horizontal" /></label><label>{{ t('Vertical') }} (%)<input type="number" min="0" max="100" step="any" name="vertical" [(ngModel)]="liquifyDraft.vertical" /></label></div>
+    }
+    <label>{{ t('Detail') }}<input type="number" min="1" max="10" step="1" name="detail" [(ngModel)]="liquifyDraft.detail" /></label>
+    @if (tool === 'warp' || tool === 'twirl' || tool === 'pucker' || tool === 'bloat') {<label>{{ t('Simplify') }}<input type="number" min="0.2" max="100" step="any" name="simplify" [(ngModel)]="liquifyDraft.simplify" /></label>}
+    @if (tool === 'scallop' || tool === 'crystallize' || tool === 'wrinkle') {
+      <label class="radio-row"><input type="checkbox" name="affectAnchors" [(ngModel)]="liquifyDraft.affectAnchors" />{{ t('Brush affects anchor points') }}</label>
+      <label class="radio-row"><input type="checkbox" name="affectIn" [(ngModel)]="liquifyDraft.affectIn" />{{ t('Brush affects in tangent handles') }}</label>
+      <label class="radio-row"><input type="checkbox" name="affectOut" [(ngModel)]="liquifyDraft.affectOut" />{{ t('Brush affects out tangent handles') }}</label>
+    }
+    <p class="panel-tip">{{ t('Alt-drag with the tool to size the brush; add Shift for a circle.') }}</p>
+    <div class="dialog-actions"><button type="button" (click)="resetLiquifyOptions()">{{ t('Reset') }}</button><button type="button" (click)="liquifyDialog.set(null)">{{ t('Cancel') }}</button><button type="submit">{{ t('OK') }}</button></div>
+  </form></div>
+}
+@if (affineDialog(); as kind) {
+  <div class="modal-backdrop"><form class="server-dialog affine-dialog" role="dialog" aria-modal="true" [attr.aria-label]="t(kind === 'scale' ? 'Scale' : kind === 'shear' ? 'Shear' : 'Transform each')" (submit)="$event.preventDefault(); applyAffineDialog(false)" (keydown.escape)="affineDialog.set(null); $event.stopPropagation()">
+    <h2>{{ t(kind === 'scale' ? 'Scale' : kind === 'shear' ? 'Shear' : 'Transform each') }}</h2>
+    @if (kind === 'scale') {
+      <label class="radio-row"><input type="radio" name="uniform" [checked]="affineDraft.uniform" (change)="affineDraft.uniform = true" />{{ t('Uniform') }}</label>
+      <label>{{ t('Scale') }} (%)<input type="number" step="any" name="scale" [(ngModel)]="affineDraft.scale" [disabled]="!affineDraft.uniform" /></label>
+      <label class="radio-row"><input type="radio" name="uniform" [checked]="!affineDraft.uniform" (change)="affineDraft.uniform = false" />{{ t('Non-Uniform') }}</label>
+      <div class="property-grid"><label>{{ t('Horizontal') }} (%)<input type="number" step="any" name="horizontal" [(ngModel)]="affineDraft.horizontal" [disabled]="affineDraft.uniform" /></label><label>{{ t('Vertical') }} (%)<input type="number" step="any" name="vertical" [(ngModel)]="affineDraft.vertical" [disabled]="affineDraft.uniform" /></label></div>
+      <label class="radio-row"><input type="checkbox" name="strokes" [(ngModel)]="affineDraft.scaleStrokes" />{{ t('Scale strokes & effects') }}</label>
+    } @else if (kind === 'shear') {
+      <label>{{ t('Shear angle') }} (°)<input type="number" step="any" min="-359" max="359" name="angle" [(ngModel)]="affineDraft.angle" /></label>
+      <fieldset class="axis-choice"><legend>{{ t('Axis') }}</legend>
+        <label class="radio-row"><input type="radio" name="axis" [checked]="affineDraft.axis === 'horizontal'" (change)="affineDraft.axis = 'horizontal'" />{{ t('Horizontal') }}</label>
+        <label class="radio-row"><input type="radio" name="axis" [checked]="affineDraft.axis === 'vertical'" (change)="affineDraft.axis = 'vertical'" />{{ t('Vertical') }}</label>
+        <label class="radio-row"><input type="radio" name="axis" [checked]="affineDraft.axis === 'angle'" (change)="affineDraft.axis = 'angle'" />{{ t('Angle') }}<input type="number" step="any" min="-359" max="359" name="axisAngle" [(ngModel)]="affineDraft.axisAngle" [disabled]="affineDraft.axis !== 'angle'" [attr.aria-label]="t('Axis angle')" />°</label>
+      </fieldset>
+    } @else {
+      <div class="section-label">{{ t('Scale') }}</div>
+      <div class="property-grid"><label>{{ t('Horizontal') }} (%)<input type="number" step="any" name="eachH" [(ngModel)]="affineDraft.horizontal" /></label><label>{{ t('Vertical') }} (%)<input type="number" step="any" name="eachV" [(ngModel)]="affineDraft.vertical" /></label></div>
+      <div class="section-label">{{ t('Move') }}</div>
+      <div class="property-grid"><label>{{ t('Horizontal') }} ({{ preferences.distanceUnit() }})<input type="number" step="any" name="moveX" [(ngModel)]="affineDraft.moveX" /></label><label>{{ t('Vertical') }} ({{ preferences.distanceUnit() }})<input type="number" step="any" name="moveY" [(ngModel)]="affineDraft.moveY" /></label></div>
+      <label>{{ t('Rotate') }} (°)<input type="number" step="any" name="rotation" [(ngModel)]="affineDraft.rotation" /></label>
+      <div class="each-options">
+        <div>
+          <label class="radio-row"><input type="checkbox" name="eachStrokes" [(ngModel)]="affineDraft.scaleStrokes" />{{ t('Scale strokes & effects') }}</label>
+          <label class="radio-row"><input type="checkbox" name="reflectX" [(ngModel)]="affineDraft.reflectX" />{{ t('Reflect X') }}</label>
+          <label class="radio-row"><input type="checkbox" name="reflectY" [(ngModel)]="affineDraft.reflectY" />{{ t('Reflect Y') }}</label>
+        </div>
+        <div class="reference-locator" role="radiogroup" [attr.aria-label]="t('Reference point')">
+          @for (point of referencePoints; track point) {<button type="button" role="radio" [class.active]="affineDraft.reference === point" [attr.aria-checked]="affineDraft.reference === point" [attr.aria-label]="t('Reference point') + ': ' + point" (click)="affineDraft.reference = point"></button>}
+        </div>
+      </div>
+    }
+    <div class="dialog-actions"><button type="button" (click)="affineDialog.set(null)">{{ t('Cancel') }}</button><button type="button" (click)="applyAffineDialog(true)">{{ t('Copy') }}</button><button type="submit">{{ t('OK') }}</button></div>
+  </form></div>
+}
 @if (transformDialog(); as mode) {
   <div class="modal-backdrop"><form class="server-dialog transform-dialog" role="dialog" aria-modal="true" [attr.aria-label]="t(mode === 'displacement' ? 'Enter displacement' : 'Enter rotation')" (submit)="$event.preventDefault(); applyNumericTransform()" (keydown.escape)="transformDialog.set(null); $event.stopPropagation()">
     <h2>{{ t(mode === 'displacement' ? 'Enter displacement' : 'Enter rotation') }}</h2>

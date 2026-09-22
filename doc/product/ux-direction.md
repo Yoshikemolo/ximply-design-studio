@@ -96,6 +96,16 @@ always offers Escape/Stop. Use native text fields and accessible equivalents to 
 manipulation where practical. Check WCAG targets during implementation; no compliance
 certification is claimed by this design.
 
+The local preview takes a different narrow-screen route, which the owner accepted
+visually for the maturity of this preview: on a phone the tool column and the panels are
+drawers that slide in from the left and right edges, opened with a swipe or a tap on an
+edge handle and closed with a swipe back or a tap outside, and the menus fold behind a
+menu button. On a wide screen, hiding the tools or the panels from View > Layout slides
+that column out to its side and leaves an edge handle that opens it as the same drawer
+over the canvas. View > Layout also shows and hides the context bar and the document
+tabs, and the canvas takes the space they leave. The bottom sheet above remains a
+proposal, not delivered behaviour.
+
 ## Candidate token system
 
 Dark: neutral near-black pasteboard, slightly lighter dock surfaces, off-white text.

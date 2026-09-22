@@ -4,6 +4,8 @@ import { LineEnds, lineEndGeometry, pathLineEnds, validLineEnds } from "./line-e
 import { BrushStroke, brushOutline, brushOutlineSvg, validBrushStroke } from "./brush-stroke";
 import { FillPaint, MAX_PATTERNS, MAX_PATTERN_LAYERS, MAX_SWATCHES, PatternDefinition, Swatch, gradientGeometry, renderedStops, validFillPaint, validSwatch } from "./paint";
 import { ObjectBlend, syncBlends, validateBlends } from "./object-blend";
+import { Envelope, envelopeShell, mapMesh, materializeEnvelopes } from "./envelope";
+import { GradientMesh, meshFacets, validGradientMesh } from "./gradient-mesh";
 import { FONT_FAMILIES, layoutText, TextLayoutOptions, TextTypography, TextMeasurement } from "./text-layout";
 import {
   CurvePath,
@@ -62,6 +64,10 @@ export interface Layer {
   brushStroke?: BrushStroke;
   /** A gradient or a pattern painted inside the shape instead of the flat fill. */
   fillPaint?: FillPaint;
+  /** Objects drawn through a mesh, as Object > Envelope Distort makes them; the layer has no outline of its own. */
+  envelope?: Envelope;
+  /** Colours that blend across a mesh, as the Mesh tool makes them; the mesh is the outline. */
+  gradientMesh?: GradientMesh;
   dimension?: Dimension;
   procedural?: Procedural;
   points: Point[];
@@ -70,6 +76,7 @@ export interface Layer {
   textLayout?: TextLayoutOptions;
   typography?: TextTypography;
   source: string;
+  paintLayer?: true;
   adjustments: Adjustments;
   curves?: CurvePath[];
   symbolId?: string;
@@ -217,6 +224,8 @@ export function hitTest(layer: Layer, point: Point): boolean {
   }
   const p = localPoint(layer, point),
     pad = Math.max(5, layer.strokeWidth * (layer.strokeStyle?.alignment === "outside" ? 1 : 0.5));
+  // An envelope is picked anywhere inside its box, as the objects it holds fill it.
+  if (layer.envelope || layer.gradientMesh) return p.x >= 0 && p.y >= 0 && p.x <= layer.width && p.y <= layer.height;
   if (layer.kind === "ellipse")
     return (
       ((p.x - layer.width / 2) / (layer.width / 2 + pad)) ** 2 +
@@ -283,6 +292,8 @@ export function resizeLayer(
     width,
     height,
     ...(layer.procedural ? {procedural:resizeProcedural(layer, width, height)} : {}),
+    ...(layer.envelope ? { envelope: { ...layer.envelope, mesh: mapMesh(layer.envelope.mesh, (p: Point) => ({ x: (p.x * width) / layer.width, y: (p.y * height) / layer.height })) } } : {}),
+    ...(layer.gradientMesh ? { gradientMesh: { ...layer.gradientMesh, mesh: mapMesh(layer.gradientMesh.mesh, (p: Point) => ({ x: (p.x * width) / layer.width, y: (p.y * height) / layer.height })) } } : {}),
     ...(layer.dimension ? { dimension: { ...layer.dimension, anchors: layer.dimension.anchors.map(p => ({ x: p.x * width / layer.width, y: p.y * height / layer.height })), labelPosition: { x: layer.dimension.labelPosition.x * width / layer.width, y: layer.dimension.labelPosition.y * height / layer.height } } } : {}),
     ...(layer.curves
       ? {
@@ -478,11 +489,35 @@ export function parseDocument(text: string): StudioDocument {
       swatchIds.add(swatch.id);
     }
   }
+  // Envelopes: their contents are checked with the other layers, and contents being edited
+  // must be in the document under the envelope's group.
+  const envelopeLayers: unknown[] = [];
+  for (const layer of value["layers"] as Record<string, unknown>[]) {
+    if (!record(layer) || layer["envelope"] === undefined) continue;
+    const contents = envelopeShell(layer["envelope"]);
+    if (value["version"] !== 2 || !contents || layer["kind"] !== "path" || layer["curves"] !== undefined ||
+      !Array.isArray(layer["points"]) || layer["points"].length > 0 ||
+      ["brushStroke", "dimension", "procedural", "guide", "symbolId", "fillPaint", "lineEnds"].some((key) => layer[key] !== undefined))
+      throw new Error("Invalid envelope.");
+    const envelope = layer["envelope"] as Envelope;
+    if (envelope.editing === "contents" && !(value["layers"] as Record<string, unknown>[]).some((other) =>
+      record(other) && other["envelope"] === undefined && Array.isArray(other["groupPath"]) && other["groupPath"][0] === envelope.group))
+      throw new Error("Invalid envelope.");
+    envelopeLayers.push(...contents);
+  }
+  for (const layer of value["layers"] as Record<string, unknown>[]) {
+    if (!record(layer) || layer["gradientMesh"] === undefined) continue;
+    if (value["version"] !== 2 || !validGradientMesh(layer["gradientMesh"]) || layer["kind"] !== "path" || layer["curves"] !== undefined ||
+      !Array.isArray(layer["points"]) || layer["points"].length > 0 ||
+      ["envelope", "brushStroke", "dimension", "procedural", "guide", "symbolId", "fillPaint", "lineEnds"].some((key) => layer[key] !== undefined))
+      throw new Error("Invalid gradient mesh.");
+  }
   const ids = new Set<string>();
   for (const layer of [
     ...value["layers"],
     ...definitions.map((s) => s.layer),
     ...patternLayers,
+    ...envelopeLayers,
   ]) {
     if (
       !record(layer) ||
@@ -636,6 +671,7 @@ export function parseDocument(text: string): StudioDocument {
       typeof layer["locked"] !== "boolean"
     )
       throw new Error("Unsupported layer.");
+    if (layer["paintLayer"] !== undefined && (layer["paintLayer"] !== true || layer["kind"] !== "image" || value["version"] !== 2)) throw new Error("Invalid paint layer.");
     for (const key of ["x", "y", "rotation"])
       if (!finite(layer[key], -100000, 100000))
         throw new Error("Invalid layer transform.");
@@ -756,7 +792,7 @@ function svgFill(l: Layer, index: number | string, patterns: Map<string, Pattern
 
 export function svgExport(doc: StudioDocument, measure?: TextMeasurement): string {
   const patterns = new Map((doc.patterns ?? []).map((pattern) => [pattern.id, pattern]));
-  const shapes = materializeProcedural(doc).layers
+  const shapes = materializeEnvelopes(materializeProcedural(doc)).layers
     .filter((l) => l.visible && !l.guide)
     .map((l, layerIndex) => svgLayer(l, layerIndex, patterns, measure))
     .join("\n");
@@ -765,6 +801,8 @@ export function svgExport(doc: StudioDocument, measure?: TextMeasurement): strin
 
 function svgLayer(l: Layer, layerIndex: number | string, patterns: Map<string, PatternDefinition>, measure?: TextMeasurement): string {
       if (l.dimension) return dimensionSvg(l, measure, layerIndex);
+      // A gradient mesh is written as its facets on the page, each in the colour at its middle.
+      if (l.gradientMesh) return `<g opacity="${l.opacity}">${meshFacets(l, 6).map((f) => `<polygon points="${f.points.map((p) => `${Math.round(p.x * 100) / 100},${Math.round(p.y * 100) / 100}`).join(" ")}" ${svgPaint("fill", f.color)} ${svgPaint("stroke", f.color)} stroke-width="0.5"/>`).join("")}</g>`;
       const paint = svgFill(l, layerIndex, patterns, measure);
       const style = `${l.kind === "path" && !l.curves?.some((p) => p.closed) ? svgPaint("fill", "none") : paint.fill} ${svgStroke(l)}`;
       let content = "";

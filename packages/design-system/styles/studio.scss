@@ -417,20 +417,105 @@ hr {
   font-size: 11px;
   padding: 5px 10px;
 }
+/*
+ * The tools, the canvas and the panels keep their three columns; a hidden column narrows to
+ * nothing, sliding its content out to its side, and becomes a drawer its edge handle opens.
+ */
 .workspace {
+  position: relative;
   flex: 1;
   min-height: 0;
   display: grid;
   grid-template-columns: 100px minmax(0, 1fr) 270px;
+  --panels-width: 270px;
+  --tools-width: 100px;
+  transition: grid-template-columns 0.22s ease;
 }
+.workspace > .toolrail { grid-column: 1; grid-row: 1; }
+.workspace > .canvas-area { grid-column: 2; grid-row: 1; }
+.workspace > .inspector { grid-column: 3; grid-row: 1; }
 .workspace.no-panels {
-  grid-template-columns: 100px minmax(0, 1fr);
+  grid-template-columns: 100px minmax(0, 1fr) 0px;
 }
 .workspace.no-tools {
-  grid-template-columns: minmax(0, 1fr) 270px;
+  grid-template-columns: 0px minmax(0, 1fr) 270px;
 }
 .workspace.no-tools.no-panels {
-  grid-template-columns: minmax(0, 1fr);
+  grid-template-columns: 0px minmax(0, 1fr) 0px;
+}
+.workspace.no-tools > .toolrail,
+.workspace.no-panels > .inspector {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  z-index: 55;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  visibility: hidden;
+  transition: transform 0.22s ease, visibility 0s linear 0.22s;
+}
+.workspace.no-tools > .toolrail {
+  left: 0;
+  margin: 0;
+  width: var(--tools-width);
+  box-sizing: border-box;
+  box-shadow: 10px 0 30px #0006;
+  transform: translateX(-105%);
+}
+.workspace.no-panels > .inspector {
+  right: 0;
+  width: var(--panels-width);
+  box-shadow: -10px 0 30px #0006;
+  transform: translateX(105%);
+}
+.workspace.no-tools > .toolrail.drawer-open,
+.workspace.no-panels > .inspector.drawer-open {
+  visibility: visible;
+  transform: none;
+  transition: transform 0.22s ease;
+}
+.drawer-handle {
+  position: absolute;
+  top: 50%;
+  z-index: 40;
+  display: block;
+  width: 16px;
+  height: 72px;
+  margin-top: -36px;
+  padding: 0;
+  background: var(--panel-raised);
+  border: 1px solid var(--border);
+  cursor: pointer;
+}
+.drawer-handle.left {
+  left: 0;
+  border-left: 0;
+  border-radius: 0 10px 10px 0;
+}
+.drawer-handle.right {
+  right: 0;
+  border-right: 0;
+  border-radius: 10px 0 0 10px;
+}
+.drawer-handle span {
+  display: block;
+  width: 3px;
+  height: 30px;
+  margin: 0 auto;
+  border-radius: 2px;
+  background: var(--muted);
+}
+.drawer-handle:hover span { background: var(--text); }
+/* On a wide screen an open drawer keeps its handle on its edge, to close it again. */
+.drawer-handle { transition: left 0.22s ease, right 0.22s ease; }
+.drawer-handle.left.open { left: var(--tools-width); z-index: 56; }
+.drawer-handle.right.open { right: var(--panels-width); z-index: 56; }
+.drawer-backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: 50;
+  background: #0003;
 }
 .toolrail {
   display: flex;
@@ -822,6 +907,9 @@ hr {
   /* The page itself paints its background; this only shows through transparent areas. */
   background: #fff;
 }
+.artboard.with-rulers .artboard-label {
+  bottom: calc(100% + 31px);
+}
 .artboard.checkered {
   --checker-size: 8px;
   background: repeating-conic-gradient(#d6d9de 0% 25%, #ffffff 0% 50%) 0 / calc(var(--checker-size) * 2) calc(var(--checker-size) * 2);
@@ -841,10 +929,14 @@ hr {
   min-width: 0;
   padding: 5px 2px;
 }
+/* The name of the page sits just above it, and above the rulers when they are shown. */
 .artboard-label {
   position: absolute;
-  left: 28px;
-  top: 17px;
+  left: 0;
+  bottom: calc(100% + 6px);
+  white-space: nowrap;
+  pointer-events: none;
+  line-height: 1;
   font-size: 9px;
   letter-spacing: 1.5px;
   text-transform: uppercase;
@@ -856,6 +948,10 @@ canvas {
   display: block;
   touch-action: none;
 }
+/* Pixel Preview: each page pixel is shown as a square, not smoothed. */
+canvas.pixel-preview { image-rendering: pixelated; }
+/* The visible part of the page drawn sharp over the page canvas, which still takes the pointer. */
+.artboard canvas.detail-canvas { position: absolute; display: none; pointer-events: none; }
 .canvas-welcome {
   position: absolute;
   top: 50%;
@@ -866,13 +962,19 @@ canvas {
   pointer-events: none;
   color: #182238;
 }
-.welcome-mark {
-  font-size: 70px;
-  font-weight: 750;
-  letter-spacing: -8px;
+/* The brand of the header, drawn large above the call to action of an empty page. */
+.welcome-brand {
+  display: inline-flex;
+  gap: 16px;
+  align-items: center;
+  margin-bottom: 22px;
+  color: var(--text);
+  font-weight: 650;
+  font-size: 44px;
+  letter-spacing: -1.4px;
   line-height: 1;
-  color: #0d59f2;
-  margin-bottom: 20px;
+  img { width: 64px; height: 64px; }
+  .brand-sub { display: block; margin-top: 4px; font-size: 13px; letter-spacing: 3px; font-weight: 450; color: var(--muted); }
 }
 .canvas-welcome h1 {
   font-size: clamp(17px, 2.1vw, 30px);
@@ -1570,18 +1672,20 @@ textarea {
   }
   .workspace {
     grid-template-columns: 96px minmax(0, 1fr) 230px;
+    --panels-width: 230px;
+    --tools-width: 96px;
   }
   .toolrail {
     padding-inline: 4px;
   }
   .workspace.no-panels {
-    grid-template-columns: 96px minmax(0, 1fr);
+    grid-template-columns: 96px minmax(0, 1fr) 0px;
   }
   .workspace.no-tools {
-    grid-template-columns: minmax(0, 1fr) 230px;
+    grid-template-columns: 0px minmax(0, 1fr) 230px;
   }
   .workspace.no-tools.no-panels {
-    grid-template-columns: minmax(0, 1fr);
+    grid-template-columns: 0px minmax(0, 1fr) 0px;
   }
   .contextbar {
     gap: 12px;
@@ -1609,15 +1713,13 @@ textarea {
   }
 }
 @media (max-width: 720px) {
-  .workspace {
-    grid-template-columns: 96px minmax(0, 1fr);
-  }
+  .workspace,
   .workspace.no-panels {
-    grid-template-columns: 96px minmax(0, 1fr);
+    grid-template-columns: 96px minmax(0, 1fr) 0px;
   }
   .workspace.no-tools,
   .workspace.no-tools.no-panels {
-    grid-template-columns: minmax(0, 1fr);
+    grid-template-columns: 0px minmax(0, 1fr) 0px;
   }
   .inspector {
     position: absolute;
@@ -1991,6 +2093,8 @@ textarea,
 .aid-pair button { padding: 5px 8px; border-radius: 0; }
 .aid-pair .magnet-toggle { border-left: 1px solid var(--border); padding: 4px; }
 .aid-pair button.active { background: var(--accent); color: white; }
+/* On the solid accent of an active toggle an icon is white in either theme, as on the primary buttons. */
+.aid-pair button.active img { filter: brightness(0) invert(1); }
 .rail-palette { width: 100%; padding: 10px 4px; border-top: 1px solid var(--border); }
 .overlapping-paints { position: relative; width: 68px; height: 68px; margin: auto; }
 .paint-trigger { position: relative; padding: 3px; border: 1px solid var(--muted); border-radius: 3px; background: repeating-conic-gradient(#ccc 0% 25%, #fff 0% 50%) 0 / 8px 8px; }
@@ -2054,6 +2158,9 @@ textarea,
 .tick-snapping { display: flex; flex-direction: column; gap: 5px; }
 .tick-title { font-size: 10px; color: var(--muted); }
 .tick-row { display: flex; flex-direction: row; align-items: center; justify-content: space-between; gap: 8px; font-size: 10px; min-height: 22px; }
+/* The Major and Minor switches share one row under the title, centred on the same line, as tall as a field. */
+.tick-toggles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; align-items: center; min-height: 31px; }
+.measurement-settings .tick-toggles label.tick-row { flex-direction: row; align-items: center; justify-content: center; gap: 8px; }
 .layer-row[draggable=true] { cursor: grab; }
 
 .typography-actions { display: flex; flex-wrap: wrap; gap: 5px; margin: 9px 0; }
@@ -2175,9 +2282,20 @@ textarea,
 
 .horizontal-ruler .ruler-tick.minor { height: 6px; bottom: 0; padding: 0; }
 .vertical-ruler .ruler-tick.minor { width: 6px; right: 0; padding: 0; }
+/* The minor mark half way between two major ones is longer than the others, shorter than a major one. */
+.horizontal-ruler .ruler-tick.minor.half { height: 11px; }
+.vertical-ruler .ruler-tick.minor.half { width: 11px; }
 
 .procedural-properties { border: 1px solid var(--border); border-radius: 6px; margin: 10px 0; padding: 8px; min-width: 0; legend { font-size: 11px; padding: 0 4px; } .property-grid input { min-width: 0; width: 100%; } }
 
+/* On a phone the version picker goes below the brand, the close button staying beside it. */
+@media (max-width: 720px) {
+  .modal-backdrop .about-dialog .about-head > header { flex-wrap: wrap; row-gap: 10px; }
+  .modal-backdrop .about-head .about-brand { order: 1; flex-basis: calc(100% - 48px); }
+  .modal-backdrop .about-head .about-close { order: 2; }
+  .modal-backdrop .about-head .release-picker { order: 3; flex-basis: 100%; }
+  .modal-backdrop .about-head .release-picker select { max-width: none; width: 100%; }
+}
 /*
  * Phones. The tools and the panels become drawers that slide in from the left and right
  * edges over the canvas, the menus fold behind a menu button with the credits at their
@@ -2185,7 +2303,6 @@ textarea,
  * scroll down, and the canvas keeps every touch for itself so two fingers can zoom it.
  */
 .menu-toggle,
-.drawer-handle,
 .menu-footer {
   display: none;
 }
@@ -2206,6 +2323,8 @@ textarea,
     height: 52px;
     gap: 6px;
     padding: 0 8px 0 4px;
+    /* Above the backdrop of the drawers, so the menu it holds takes the taps. */
+    z-index: 70;
   }
   .header-workspace {
     display: none;
@@ -2316,11 +2435,12 @@ textarea,
   .workspace.no-tools,
   .workspace.no-tools.no-panels {
     position: relative;
-    grid-template-columns: minmax(0, 1fr);
+    grid-template-columns: 0px minmax(0, 1fr) 0px;
   }
-  .toolrail,
-  .inspector {
+  .workspace > .toolrail,
+  .workspace > .inspector {
     position: fixed;
+    visibility: visible;
     top: 52px;
     bottom: 0;
     z-index: 55;
@@ -2330,24 +2450,28 @@ textarea,
     touch-action: pan-y;
     transition: transform 0.22s ease;
   }
-  .toolrail {
+  .workspace > .toolrail {
     left: 0;
+    width: auto;
     max-width: 86vw;
     padding: 12px 8px calc(12px + env(safe-area-inset-bottom));
     box-shadow: 10px 0 30px #0006;
     transform: translateX(-105%);
   }
-  .inspector {
+  .workspace > .inspector {
     left: auto;
     right: 0;
     width: min(88vw, 340px);
     box-shadow: -10px 0 30px #0006;
     transform: translateX(105%);
   }
-  .toolrail.drawer-open,
-  .inspector.drawer-open {
+  .workspace > .toolrail.drawer-open,
+  .workspace > .inspector.drawer-open {
     transform: none;
   }
+  /* A hidden column is a drawer here too, as wide as the phone's drawers. */
+  .workspace.no-tools > .toolrail { width: auto; }
+  .workspace.no-panels > .inspector { width: min(88vw, 340px); }
   .inspector input,
   .inspector select {
     min-width: 0;
@@ -2359,36 +2483,6 @@ textarea,
   .tool-family {
     width: 44px;
     height: 44px;
-  }
-  .drawer-handle {
-    position: absolute;
-    top: 50%;
-    z-index: 40;
-    display: block;
-    width: 16px;
-    height: 72px;
-    margin-top: -36px;
-    padding: 0;
-    background: var(--panel-raised);
-    border: 1px solid var(--border);
-  }
-  .drawer-handle.left {
-    left: 0;
-    border-left: 0;
-    border-radius: 0 10px 10px 0;
-  }
-  .drawer-handle.right {
-    right: 0;
-    border-right: 0;
-    border-radius: 10px 0 0 10px;
-  }
-  .drawer-handle span {
-    display: block;
-    width: 3px;
-    height: 30px;
-    margin: 0 auto;
-    border-radius: 2px;
-    background: var(--muted);
   }
   .drawer-backdrop {
     position: fixed;
@@ -2409,3 +2503,76 @@ textarea,
     display: none;
   }
 }
+
+/* The Scale, Shear and Transform Each dialogs of Object > Transform. */
+.affine-dialog { width: min(92vw, 340px); }
+.affine-dialog .radio-row { display: flex; align-items: center; gap: 8px; margin: 6px 0; }
+.affine-dialog .radio-row input[type=number] { width: 70px; }
+.affine-dialog .axis-choice { border: 0; padding: 0; margin: 8px 0; legend { color: var(--muted); font-size: 11px; } }
+.affine-dialog .each-options { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-top: 8px; }
+.reference-locator { display: grid; grid-template-columns: repeat(3, 14px); gap: 6px; padding: 6px; border: 1px solid var(--border); border-radius: 4px;
+  button { width: 14px; height: 14px; min-height: 0; padding: 0; border: 1px solid var(--muted); border-radius: 2px; background: var(--panel); }
+  button.active { background: var(--accent); border-color: var(--accent); } }
+
+/* The brush of the liquify tools, drawn at the cursor. */
+.liquify-brush { position: fixed; z-index: 60; pointer-events: none; border: 1px solid #0d59f2; border-radius: 50%; box-shadow: 0 0 0 1px #ffffffaa; }
+
+/* The styles of Warp Options, as a grid of their pictures. */
+.warp-styles { display: grid; grid-template-columns: repeat(5, 1fr); gap: 4px; margin-bottom: 10px;
+  button { padding: 4px; min-height: 0; aspect-ratio: 1; border: 1px solid var(--border); border-radius: 4px; }
+  button.active { border-color: var(--accent); background: var(--accent-soft, var(--panel)); }
+  img { width: 100%; height: 100%; } }
+.envelope-dialog .channel { display: grid; grid-template-columns: 80px minmax(0, 1fr) 56px auto; gap: 6px; align-items: center; margin: 6px 0;
+  input[type=range], input[type=number] { width: 100%; min-width: 0; } }
+
+/*
+ * The about screen keeps its head, from the name to the version picker, above the line and
+ * its credits at the foot; only the release notes between them scroll.
+ */
+.about-dialog {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.about-head {
+  flex-shrink: 0;
+  border-bottom: 1px solid var(--border);
+}
+/* The brand, the version picker level with the name and the close button, on one row. */
+.about-dialog .about-head > header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+.about-head .about-brand { flex: 1 1 auto; min-width: 0; }
+.about-head .release-picker { padding: 0; flex-shrink: 0; }
+.about-head .about-close { flex-shrink: 0; align-self: flex-start; line-height: 1; padding: 0 4px; }
+.about-dialog .about-head h2 { margin: 0 0 4px; }
+.about-dialog .about-head header p { margin: 0; }
+.about-dialog > .release-notes {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+}
+.about-dialog > .about-credits { flex-shrink: 0; }
+/* On a screen too short to keep the head and the credits in view, the whole screen scrolls. */
+@media (max-height: 560px) {
+  .about-dialog { overflow-y: auto; }
+  .about-dialog > .release-notes { flex: none; overflow: visible; }
+}
+/* The logo beside the name in the about screen, and the licence the build carries. */
+.about-brand { display: flex; gap: 14px; align-items: center; }
+.about-logo { width: 52px; height: 52px; flex-shrink: 0; }
+.licence-hash { display: flex; flex-wrap: wrap; gap: 4px 8px; align-items: baseline; margin: 10px 0 12px; font-size: 10px; color: var(--muted);
+  span { flex-shrink: 0; }
+  span + span::before { content: "·"; margin-right: 8px; }
+  code { overflow-wrap: anywhere; user-select: all; color: var(--text); } }
+
+/* The credits of the footer at the foot of the about screen, in the same style, wrapping where they do not fit. */
+.about-credits { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 8px 12px; margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--border); color: var(--muted); font-size: 10px; text-align: center;
+  .credits { white-space: normal; font-size: 10px; }
+  button.version { font-size: 10px; color: var(--muted); letter-spacing: 0.5px; padding: 2px 6px; min-height: 20px; white-space: nowrap; } }
