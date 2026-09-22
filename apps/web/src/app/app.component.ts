@@ -1098,7 +1098,13 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   newSwatch() { const id = this.editor.addSwatch(this.swatchTarget()); if (id) this.chosenSwatch.set(id); }
   deleteSwatch() { const id = this.chosenSwatch(); if (id && this.editor.removeSwatch(id)) this.chosenSwatch.set(null); }
   setSwatchKind(kind: string) { if (["all", "color", "gradient", "pattern"].includes(kind)) this.swatchKind.set(kind as "all" | "color" | "gradient" | "pattern"); }
-  @HostListener("document:pointerdown", ["$event"]) dismissPaint(event: PointerEvent) {
+  /**
+   * True while the browser's own colour picker of a field in the popover is open: its
+   * eyedropper takes colours from the page, and those presses must not close the popover.
+   */
+  nativeColorPicking = false;
+  dismissPaint(event: PointerEvent) {
+    if (this.nativeColorPicking) return;
     if (!(event.target instanceof Element) || !event.target.closest(".paint-popover,.paint-trigger")) this.paintPicker.set(null);
   }
   setUnit(key: "distanceUnit" | "fontUnit", event: Event) { const unit = this.text(event); if (isUnit(unit)) this.preferences.setMeasurement(key, unit); }
@@ -1306,7 +1312,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     this.mobileMenu.set(false);
   }
   /** A finger that lands near a side edge may be opening the drawer on that side. */
-  @HostListener("document:pointerdown", ["$event"]) touchStart(event: PointerEvent) {
+  touchStart(event: PointerEvent) {
     if (event.pointerType !== "touch") return;
     this.swipeStart = this.mobile() ? { point: { x: event.clientX, y: event.clientY }, id: event.pointerId } : null;
     this.startLongPress(event);
@@ -2078,7 +2084,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     };
     actions[id]?.();
   }
-  @HostListener("document:pointerdown", ["$event"]) dismissToolFlyout(
+  dismissToolFlyout(
     event: PointerEvent,
   ) {
     const target = event.target;
@@ -2555,7 +2561,18 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     }
     return dismissed;
   }
-  @HostListener("document:pointerdown", ["$event"]) dismissOutsideMenus(
+  /**
+   * Every press anywhere in the page: it closes the appearance popover, the list of a tool
+   * family and the menus when it lands outside them, and starts the touch gestures. One
+   * listener calls them all, as several listeners for the same event were not all called.
+   */
+  @HostListener("document:pointerdown", ["$event"]) documentPointerDown(event: PointerEvent) {
+    this.dismissPaint(event);
+    this.dismissToolFlyout(event);
+    this.dismissOutsideMenus(event);
+    this.touchStart(event);
+  }
+  dismissOutsideMenus(
     event: PointerEvent,
   ) {
     const target = event.target;

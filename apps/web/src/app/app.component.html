@@ -1673,7 +1673,7 @@
           <div class="palette-actions"><button (click)="preferences.addPaletteColor(paintBaseColor())">{{ t('Add current color') }}</button><button [disabled]="!preferences.customPalette().includes(paintBaseColor())" (click)="preferences.removePaletteColor(paintBaseColor())">{{ t('Remove color') }}</button></div>
         }
         @default {
-          <label>{{ t('Color') }}<input type="color" [value]="paintBaseColor()" (input)="setPaintBaseColor(text($event))" /></label>
+          <label>{{ t('Color') }}<input type="color" (click)="nativeColorPicking = true" (change)="nativeColorPicking = false" (blur)="nativeColorPicking = false" [value]="paintBaseColor()" (input)="setPaintBaseColor(text($event))" /></label>
         }
       }
       <label>{{ t("Paint opacity") }}<input type="range" min="0" max="100" [value]="paintOpacity()" (input)="setPaintOpacity(number($event))" />{{ paintOpacity() }}%</label>
@@ -1688,7 +1688,7 @@
         <div class="gradient-stops">
           @for (stop of gradient.stops; track $index; let i = $index, last = $last) {
             <div class="gradient-stop">
-              <input type="color" [value]="stop.color.slice(0, 7)" (input)="setStop(i, 'color', $event)" [attr.aria-label]="t('Stop color')" />
+              <input type="color" (click)="nativeColorPicking = true" (change)="nativeColorPicking = false" (blur)="nativeColorPicking = false" [value]="stop.color.slice(0, 7)" (input)="setStop(i, 'color', $event)" [attr.aria-label]="t('Stop color')" />
               <label>{{ t('Location') }}<input type="number" min="0" max="100" step="any" [value]="stop.location" (change)="setStop(i, 'location', $event)" />%</label>
               @if (!last) {<label>{{ t('Midpoint') }}<input type="number" min="13" max="87" step="any" [value]="stop.midpoint" (change)="setStop(i, 'midpoint', $event)" />%</label>}
               <button [disabled]="gradient.stops.length <= 2" (click)="removeStop(i)" [title]="t('Delete stop')" [attr.aria-label]="t('Delete stop')">×</button>
