@@ -2761,8 +2761,13 @@ export class EditorService {
     if (tool === "gradient") { this.startGradient(point); return; }
     if (tool === "freeTransform") { this.startFreeTransform(point); return; }
     if (this.isLiquifyTool(tool)) { this.startLiquify(tool, point, modifiers); return; }
+    if (tool === "mesh" && !this.selectedEnvelope()) {
+      // The Mesh tool takes the envelope it clicks on, as Illustrator's does, without selecting it first.
+      const target = pick(this.document().layers.filter((layer) => layer.envelope?.editing === "envelope"), point);
+      if (target && !this.isEffectivelyLocked(target)) { this.selectedIds.set([target.id]); this.selectedId.set(target.id); this.meshNode.set(null); }
+    }
     if ((tool === "direct" || tool === "mesh") && this.startMesh(point, tool)) return;
-    if (tool === "mesh") { this.status.set("Click inside a selected envelope to add a row and a column to its mesh."); return; }
+    if (tool === "mesh") { this.status.set("Click inside an envelope to add a row and a column to its mesh; gradient meshes are not available yet."); return; }
     if (tool === "paintBucket") { this.applyStyleAt(point); return; }
     if (["rectangle", "ellipse", "path", "paintbrush", "pen", "line", "rounded", "polygon", "star", "arc", "spiral", "grid", "polar", "flare", "text"].includes(tool)) point = this.snap(point);
     if (tool === "hand" || (tool === "brush" && ["none", "transparent"].includes(this.fill()))) return;

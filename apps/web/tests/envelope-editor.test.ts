@@ -179,3 +179,27 @@ describe('working with an envelope', () => {
     expect(after.y - before.y).toBeCloseTo(5, 6);
   });
 });
+
+describe('the Mesh tool on an envelope that is not selected', () => {
+  it('takes the envelope it clicks on and adds a row and a column there', () => {
+    const e = editor([rect('a', 100, 100, 100, 50)]);
+    e.makeEnvelope('mesh', { rows: 1, columns: 1 });
+    e.selectedIds.set([]);
+    e.selectedId.set(null);
+    e.setTool('mesh');
+    e.start({ x: 150, y: 120 });
+    e.end();
+    const layer = e.document().layers[0];
+    expect(e.selectedId()).toBe(layer.id);
+    expect([layer.envelope!.mesh.rows, layer.envelope!.mesh.columns]).toEqual([2, 2]);
+  });
+
+  it('says what it can do on an object that is not an envelope', () => {
+    const e = editor([rect('a', 100, 100)]);
+    e.setTool('mesh');
+    e.start({ x: 150, y: 120 });
+    e.end();
+    expect(e.status()).toContain('gradient meshes are not available yet');
+    expect(e.document().layers[0].kind).toBe('rectangle');
+  });
+});
