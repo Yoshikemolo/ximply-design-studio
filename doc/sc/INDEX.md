@@ -117,3 +117,4 @@
 | [SC-0111 — The liquify tools](SC-0111.md) |
 | [SC-0112 — Envelopes](SC-0112.md) |
 | [SC-0113 — Zooming as Illustrator does](SC-0113.md) |
+| [SC-0114 — Gradient meshes](SC-0114.md) |

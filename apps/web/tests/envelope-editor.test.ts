@@ -194,12 +194,11 @@ describe('the Mesh tool on an envelope that is not selected', () => {
     expect([layer.envelope!.mesh.rows, layer.envelope!.mesh.columns]).toEqual([2, 2]);
   });
 
-  it('says what it can do on an object that is not an envelope', () => {
+  it('turns an object that is not an envelope into a gradient mesh', () => {
     const e = editor([rect('a', 100, 100)]);
     e.setTool('mesh');
     e.start({ x: 150, y: 120 });
     e.end();
-    expect(e.status()).toContain('gradient meshes are not available yet');
-    expect(e.document().layers[0].kind).toBe('rectangle');
+    expect(e.document().layers[0].gradientMesh).toBeDefined();
   });
 });

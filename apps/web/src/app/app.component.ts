@@ -738,10 +738,20 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     { id: "perspective", label: "Perspective distort", icon: "perspective-distort", hint: "A corner moves with its neighbour, the other way." },
   ] as const;
   /** Object > Envelope Distort, in the order Illustrator gives it. */
+  readonly meshMenuCommands = ["createGradientMesh"] as const;
   readonly envelopeMenuCommands = ["envelopeWarp", "envelopeMesh", "envelopeTop", "envelopeRelease", "envelopeOptions", "envelopeExpand", "envelopeEdit", "envelopeResetWarp", "envelopeResetMesh"] as const;
   readonly warpStyles = WARP_STYLES.map((id) => ({ id, label: WARP_LABELS[id] }));
   /** The envelope dialogs: Warp Options to make or reset, the mesh size to make or reset, and Envelope Options. */
   readonly envelopeDialog = signal<"warp" | "resetWarp" | "mesh" | "resetMesh" | "options" | null>(null);
+  /** Object > Create Gradient Mesh and its values. */
+  readonly gradientMeshDialog = signal(false);
+  gradientMeshDraft: { rows: number; columns: number; appearance: "flat" | "toCenter" | "toEdge"; highlight: number } = { rows: 4, columns: 4, appearance: "flat", highlight: 100 };
+  readonly meshAppearances = [{ id: "flat", label: "Flat" }, { id: "toCenter", label: "To center" }, { id: "toEdge", label: "To edge" }] as const;
+  applyGradientMeshDialog() {
+    const layer = this.editor.selectedLayers()[0], d = this.gradientMeshDraft;
+    if (layer && this.editor.makeGradientMesh(layer.id, { rows: Math.round(d.rows), columns: Math.round(d.columns), appearance: d.appearance, highlight: Number(d.highlight) })) this.gradientMeshDialog.set(false);
+    else this.notify(new Error(this.editor.status() || "The gradient mesh cannot be made from this selection."));
+  }
   warpDraft: WarpSettings = { ...DEFAULT_WARP };
   warpPreview = true;
   meshDraft = { rows: 4, columns: 4, maintainShape: true };
@@ -1911,6 +1921,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     if (id === "transformAgain") return this.editor.selectedLayers().length > 0 && !!this.editor.lastTransform();
     if (["envelopeWarp", "envelopeMesh"].includes(id)) return this.editor.selectedLayers().some((layer) => !layer.guide && !layer.envelope);
     if (id === "envelopeTop") return this.editor.selectedLayers().length > 1;
+    if (id === "createGradientMesh") return this.editor.selectedLayers().length === 1 && !this.editor.selectedLayers()[0].gradientMesh && !this.editor.selectedLayers()[0].envelope;
     if (["envelopeRelease", "envelopeExpand", "envelopeResetWarp", "envelopeResetMesh"].includes(id)) return this.editor.selectedEnvelope()?.envelope?.editing === "envelope";
     if (["envelopeOptions", "envelopeEdit"].includes(id)) return !!this.editor.selectedEnvelope();
     if (["scaleDialog", "shearDialog", "transformEach"].includes(id)) return this.editor.selectedLayers().some((layer) => !layer.guide && !layer.locked);
@@ -1952,6 +1963,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
       duplicateSeries: () => this.openArrayDialog(),
       transformAgain: () => this.editor.transformAgain(),
       scaleDialog: () => this.openAffineDialog("scale"),
+      createGradientMesh: () => this.gradientMeshDialog.set(true),
       envelopeWarp: () => this.openEnvelopeDialog("warp"),
       envelopeMesh: () => this.openEnvelopeDialog("mesh"),
       envelopeTop: () => this.editor.makeEnvelope("object"),

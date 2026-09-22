@@ -5,6 +5,7 @@ import { ellipsePath, polyline } from './shapes';
 import { materializeProcedural, projectionCurves, projectionDash } from './procedural';
 import { GradientPaint, PatternDefinition, gradientGeometry, renderedStops } from './paint';
 import { materializeEnvelopes } from './envelope';
+import { meshPatches } from './gradient-mesh';
 
 /**
  * A small PDF writer for the documents this editor makes. It emits vector geometry, not a
@@ -94,6 +95,31 @@ export function gradientShading(paint: GradientPaint, width: number, height: num
   return {
     shading: `<< /ShadingType ${paint.type === 'radial' ? 3 : 2} /ColorSpace /DeviceRGB /Coords [${coords.map(round).join(' ')}] /Function ${fn} /Extend [true true] >>`,
     transparent: stops.some((stop) => (readPaint(stop.color)?.alpha ?? 1) < 1),
+  };
+}
+/**
+ * A gradient mesh as a type 6 shading: for each patch a flag, its twelve control points
+ * around the boundary and the colours of its four corners, as 32-bit coordinates over the
+ * bounds of the mesh and 8-bit channels.
+ */
+export function meshShading(layer: Layer): { shading: string; transparent: boolean } {
+  const patches = meshPatches(layer);
+  const xs = patches.flatMap((p) => p.points.map((q) => q.x)), ys = patches.flatMap((p) => p.points.map((q) => q.y));
+  const x0 = Math.min(...xs), x1 = Math.max(...xs) + 1e-6, y0 = Math.min(...ys), y1 = Math.max(...ys) + 1e-6;
+  const word = (value: number) => { const n = Math.max(0, Math.min(4294967295, Math.round(value))); return String.fromCharCode((n >>> 24) & 255, (n >>> 16) & 255, (n >>> 8) & 255, n & 255); };
+  let data = '', transparent = false;
+  for (const patch of patches) {
+    data += '\x00';
+    for (const p of patch.points) data += word(((p.x - x0) / (x1 - x0)) * 4294967295) + word(((p.y - y0) / (y1 - y0)) * 4294967295);
+    for (const color of patch.colors) {
+      const paint = readPaint(color);
+      if (paint && paint.alpha < 1) transparent = true;
+      data += String.fromCharCode(...(paint?.colour ?? [0, 0, 0]).map((c) => Math.round(c * 255)));
+    }
+  }
+  return {
+    shading: `<< /ShadingType 6 /ColorSpace /DeviceRGB /BitsPerCoordinate 32 /BitsPerComponent 8 /BitsPerFlag 8 /Decode [${[x0, x1, y0, y1].map(round).join(' ')} 0 1 0 1 0 1] /Length ${data.length} >>\nstream\n${data}\nendstream`,
+    transparent,
   };
 }
 /** The artwork of a pattern tile as operators, in the tile's own coordinates. */
@@ -193,6 +219,14 @@ function pageContent(source: PdfPageSource): PageContent {
         // The page is flipped, so the text matrix flips back and the glyphs stand upright.
         + ` 1 0 0 -1 ${round(origin.x)} ${round(origin.y)} Tm (${text}) Tj ET Q`);
       skipped.add('text is drawn with the standard font');
+      continue;
+    }
+    if (layer.gradientMesh) {
+      // A gradient mesh is a Coons patch mesh shading, which PDF draws itself, exactly.
+      const { shading, transparent } = meshShading(layer);
+      if (transparent) skipped.add('transparent gradient mesh colours');
+      shadings.push(shading);
+      parts.push(`q ${alphaName(layer.opacity, layer.opacity)} /Sh${shadings.length - 1} sh Q`);
       continue;
     }
     const curves = layerCurves(layer);

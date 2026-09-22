@@ -795,6 +795,23 @@ class NativeDrawingTests(unittest.TestCase):
         self.document['layers'] = [editing, member]
         self.assert_round_trip(self.document)
 
+    def test_gradient_mesh_round_trip_and_contract(self):
+        layer = self.envelope_layer()
+        mesh = layer['envelope']['mesh']
+        layer.pop('envelope')
+        layer['gradientMesh'] = {'mesh': mesh, 'colors': ['#ff0000', '#00ff00', '#0000ff', '#ffffff80']}
+        for name, broken in {'colour count': {'mesh': mesh, 'colors': ['#ff0000']}, 'no colour': {'mesh': mesh, 'colors': ['none'] * 4}}.items():
+            with self.subTest(case=name):
+                self.document['layers'] = [{**layer, 'gradientMesh': broken}]
+                self.assert_invalid(self.document)
+        self.document['layers'] = [{**layer, 'curves': self.layer['curves']}]
+        self.assert_invalid(self.document)
+        self.document['version'] = 1
+        self.document['layers'] = [layer]
+        self.assert_invalid(self.document)
+        self.document['version'] = 2
+        self.assert_round_trip(self.document)
+
     def test_dimension_format_bounds_and_types(self):
         for field, invalid in {'scale': [0, -1, 1000001, True, '2'],
                                'unit': ['yd', '', None], 'decimals': [-1, 9, 1.5, True, '2'],

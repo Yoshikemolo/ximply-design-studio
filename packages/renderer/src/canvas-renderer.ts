@@ -11,6 +11,7 @@ import { CurvePath } from "../../domain/src/curves";
 import { Layer, StudioDocument } from "../../domain/src/document";
 import { gradientGeometry, PatternDefinition, renderedStops } from "../../domain/src/paint";
 import { materializeEnvelopes } from "../../domain/src/envelope";
+import { meshFacets } from "../../domain/src/gradient-mesh";
 /** Makes the off-screen canvas a pattern tile is drawn on. */
 export type CanvasFactory = (width: number, height: number) => HTMLCanvasElement;
 const browserCanvas: CanvasFactory = (width, height) => {
@@ -130,7 +131,7 @@ export class CanvasRenderer {
             ...selectionBounds(selected),
           }
         : selected[0];
-    if (selected.length === 1 && selected[0].envelope?.editing === "envelope") this.mesh(ctx, selected[0], interaction.zoom, interaction.meshNode);
+    if (selected.length === 1 && (selected[0].envelope?.editing === "envelope" || selected[0].gradientMesh)) this.mesh(ctx, selected[0], interaction.zoom, interaction.meshNode);
     if (layer && interaction.quad?.length === 4) {
       const unit = 1 / Math.max(0.1, interaction.zoom), size = (interaction.handleSize ?? 4) * unit, q = interaction.quad;
       ctx.save();
@@ -335,9 +336,27 @@ export class CanvasRenderer {
     if (layer.kind === "text") return { ...layer, fill: ink, stroke: "none", opacity: 1, blend: "source-over" };
     return outlined;
   }
+  /** A gradient mesh, as facets in the colour at their middle, each also stroked so no seam shows between them. */
+  private gradientMesh(ctx: CanvasRenderingContext2D, layer: Layer) {
+    ctx.save();
+    ctx.globalAlpha = layer.opacity;
+    ctx.globalCompositeOperation = layer.blend;
+    ctx.lineWidth = 0.6;
+    ctx.lineJoin = "round";
+    for (const facet of meshFacets(layer)) {
+      ctx.beginPath();
+      facet.points.forEach((p, i) => (i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y)));
+      ctx.closePath();
+      ctx.fillStyle = facet.color;
+      ctx.strokeStyle = facet.color;
+      ctx.fill();
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
   /** The mesh of a selected envelope: its edges, its nodes, and the handles of the chosen node. */
   private mesh(ctx: CanvasRenderingContext2D, layer: Layer, zoom: number, chosen?: number) {
-    const mesh = layer.envelope!.mesh, unit = 1 / Math.max(0.1, zoom), w = (p: Point) => worldPoint(layer, p);
+    const mesh = (layer.envelope ?? layer.gradientMesh)!.mesh, unit = 1 / Math.max(0.1, zoom), w = (p: Point) => worldPoint(layer, p);
     const at = (i: number, j: number) => mesh.nodes[i * (mesh.columns + 1) + j];
     ctx.save();
     ctx.strokeStyle = "#0d59f2";
@@ -414,6 +433,7 @@ export class CanvasRenderer {
     painting?: HTMLCanvasElement,
   ) {
     if (l.dimension) { this.dimension(ctx, l); return; }
+    if (l.gradientMesh) { this.gradientMesh(ctx, l); return; }
     ctx.save();
     this.transform(ctx, l);
     ctx.globalAlpha = l.opacity;

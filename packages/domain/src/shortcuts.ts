@@ -110,6 +110,7 @@ export const COMMANDS: Command[] = [
   { id: "transformAgain", label: "Transform again", keys: ["Mod+D"] },
   { id: "transformEach", label: "Transform each", keys: ["Mod+Alt+Shift+D"] },
   { id: "scaleDialog", label: "Scale", keys: [] },
+  { id: "createGradientMesh", label: "Create gradient mesh", keys: [] },
   { id: "envelopeWarp", label: "Make with warp", keys: ["Mod+Alt+Shift+W"] },
   { id: "envelopeMesh", label: "Make with mesh", keys: ["Mod+Alt+M"] },
   { id: "envelopeTop", label: "Make with top object", keys: ["Mod+Alt+C"] },

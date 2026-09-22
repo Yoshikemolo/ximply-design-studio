@@ -93,6 +93,9 @@
           @for (id of transformMenuCommands; track id) {
             <button [disabled]="!commandEnabled(id)" (click)="runCommand(id)">{{ t(commandLabel(id)) }}<kbd>{{ shortcut(id) }}</kbd></button>
           }
+          @for (id of meshMenuCommands; track id) {
+            <button [disabled]="!commandEnabled(id)" (click)="runCommand(id)">{{ t(commandLabel(id)) }}<kbd>{{ shortcut(id) }}</kbd></button>
+          }
           <div class="menu-section-label">{{ t("Envelope distort") }}</div>
           @for (id of envelopeMenuCommands; track id) {
             <button [disabled]="!commandEnabled(id)" (click)="runCommand(id)">{{ t(id === 'envelopeEdit' ? envelopeEditLabel() : commandLabel(id)) }}<kbd>{{ shortcut(id) }}</kbd></button>
@@ -1911,6 +1914,15 @@
   </form></div>
 }
 
+@if (gradientMeshDialog()) {
+  <div class="modal-backdrop"><form class="server-dialog affine-dialog" role="dialog" aria-modal="true" [attr.aria-label]="t('Create gradient mesh')" (submit)="$event.preventDefault(); applyGradientMeshDialog()" (keydown.escape)="gradientMeshDialog.set(false); $event.stopPropagation()">
+    <h2>{{ t('Create gradient mesh') }}</h2>
+    <div class="property-grid"><label>{{ t('Rows') }}<input type="number" min="1" max="50" step="1" name="rows" [(ngModel)]="gradientMeshDraft.rows" /></label><label>{{ t('Columns') }}<input type="number" min="1" max="50" step="1" name="columns" [(ngModel)]="gradientMeshDraft.columns" /></label></div>
+    <label>{{ t('Appearance') }}<select name="appearance" [(ngModel)]="gradientMeshDraft.appearance">@for (a of meshAppearances; track a.id) {<option [value]="a.id">{{ t(a.label) }}</option>}</select></label>
+    <label>{{ t('Highlight') }} (%)<input type="number" min="0" max="100" step="1" name="highlight" [(ngModel)]="gradientMeshDraft.highlight" [disabled]="gradientMeshDraft.appearance === 'flat'" /></label>
+    <div class="dialog-actions"><button type="button" (click)="gradientMeshDialog.set(false)">{{ t('Cancel') }}</button><button type="submit">{{ t('OK') }}</button></div>
+  </form></div>
+}
 @if (envelopeDialog(); as kind) {
   <div class="modal-backdrop"><form class="server-dialog affine-dialog envelope-dialog" role="dialog" aria-modal="true" [attr.aria-label]="t(kind === 'options' ? 'Envelope options' : kind === 'warp' || kind === 'resetWarp' ? 'Warp options' : 'Envelope mesh')" (submit)="$event.preventDefault(); applyEnvelopeDialog()" (keydown.escape)="cancelEnvelopeDialog(); $event.stopPropagation()">
     <h2>{{ t(kind === 'options' ? 'Envelope options' : kind === 'warp' || kind === 'resetWarp' ? 'Warp options' : 'Envelope mesh') }}</h2>
