@@ -118,7 +118,8 @@
         "apps/web/tests/zoom-tool.test.ts",
         "packages/domain/tests/detail-region.test.ts",
         "packages/renderer/tests/detail-view.test.ts",
-        "apps/web/tests/sharp-view.test.ts"
+        "apps/web/tests/sharp-view.test.ts",
+        "apps/web/tests/app-icons.test.ts"
       ],
       "evidence": [
         "doc/implementation/PLAN-0002-0001.md"
