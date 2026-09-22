@@ -35,4 +35,17 @@ describe('an empty page', () => {
     expect(welcome).toContain('design studio');
     expect(welcome).not.toContain('welcome-mark');
   });
+
+  it('keeps the name, the licence and the version picker above the line and the credits at the foot, scrolling only the notes', () => {
+    const head = about.slice(about.indexOf('class="about-head"'), about.indexOf('class="release-notes"'));
+    expect(head).toContain('id="about-title"');
+    expect(head).toContain('class="licence-hash"');
+    expect(head).toContain('aria-label="Release version"');
+    expect(about.indexOf('class="release-notes"')).toBeLessThan(about.indexOf('class="about-credits"'));
+    const styles = readFileSync('packages/design-system/styles/studio.scss', 'utf8');
+    expect(styles).toMatch(/\.about-dialog \{\s*display: flex;\s*flex-direction: column;\s*overflow: hidden;/);
+    expect(styles).toMatch(/\.about-head \{[^}]*border-bottom: 1px solid var\(--border\);/);
+    expect(styles).toMatch(/\.about-dialog > \.release-notes \{[^}]*overflow-y: auto;/);
+    expect(styles).toMatch(/@media \(max-height: 560px\) \{\s*\.about-dialog \{ overflow-y: auto; \}/);
+  });
 });

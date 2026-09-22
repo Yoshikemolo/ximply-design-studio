@@ -2507,6 +2507,37 @@ textarea,
 .envelope-dialog .channel { display: grid; grid-template-columns: 80px minmax(0, 1fr) 56px auto; gap: 6px; align-items: center; margin: 6px 0;
   input[type=range], input[type=number] { width: 100%; min-width: 0; } }
 
+/*
+ * The about screen keeps its head, from the name to the version picker, above the line and
+ * its credits at the foot; only the release notes between them scroll.
+ */
+.about-dialog {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.about-head {
+  flex-shrink: 0;
+  border-bottom: 1px solid var(--border);
+}
+.about-dialog .about-head > header {
+  border-bottom: 0;
+  padding-bottom: 8px;
+}
+.about-head .release-picker { padding: 8px 0 14px; }
+.about-dialog > .release-notes {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+}
+.about-dialog > .about-credits { flex-shrink: 0; }
+/* On a screen too short to keep the head and the credits in view, the whole screen scrolls. */
+@media (max-height: 560px) {
+  .about-dialog { overflow-y: auto; }
+  .about-dialog > .release-notes { flex: none; overflow: visible; }
+}
 /* The logo beside the name in the about screen, and the licence the build carries. */
 .about-brand { display: flex; gap: 14px; align-items: center; }
 .about-logo { width: 56px; height: 56px; flex-shrink: 0; }

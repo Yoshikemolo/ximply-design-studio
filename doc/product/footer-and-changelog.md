@@ -51,6 +51,11 @@ information hierarchy: About identity, release selector, dated summary, prominen
 breaking-change notice and categorized entries. This establishes the layout pattern,
 not the exact footer destinations or another product's release claims.
 
+In the about screen the identity, the licence with its SHA-256 and the release selector sit
+above the dividing line and stay in place, with the credits of the footer fixed at the
+foot; only the release notes between them, from the breaking changes on, scroll. On a
+screen too short to hold both, under 560 pixels high, the whole screen scrolls instead.
+
 The future Angular About route is `/about?version=<exact-version>`. The footer links
 to the running version; changing the selector updates that parameter. Read versions
 from the bundled index, newest semantic version first; load only the selected
