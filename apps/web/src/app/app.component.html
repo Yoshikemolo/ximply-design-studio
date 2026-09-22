@@ -56,6 +56,8 @@
             {{ t("Delete") }}<kbd>{{ shortcut("remove") }}</kbd>
           </button>
           <hr />
+          <button [disabled]="!commandEnabled('definePattern')" (click)="runCommand('definePattern')">{{ t("Define pattern") }}<kbd>{{ shortcut("definePattern") }}</kbd></button>
+          <hr />
           <button (click)="openSettings()">
             {{ t("Settings") }}<kbd>{{ shortcut("settings") }}</kbd>
           </button>
@@ -526,6 +528,30 @@
     </section>
     @if (panels()) {
       <aside class="inspector" [class.drawer-open]="panelsOpen()" aria-label="Editor panels">
+        @if (preferences.layoutBlocks().swatches) {
+          <details class="panel swatches-panel" open>
+            <summary><span>{{ t("Swatches") }}</span></summary>
+            <div class="swatches-content">
+              <div class="swatch-toolbar">
+                <div class="segmented" role="group" [attr.aria-label]="t('Apply to')">
+                  <button [class.active]="swatchTarget() === 'fill'" [attr.aria-pressed]="swatchTarget() === 'fill'" (click)="swatchTarget.set('fill')">{{ t("Fill") }}</button>
+                  <button [class.active]="swatchTarget() === 'stroke'" [attr.aria-pressed]="swatchTarget() === 'stroke'" (click)="swatchTarget.set('stroke')">{{ t("Stroke") }}</button>
+                </div>
+                <select [attr.aria-label]="t('Show swatch kinds')" [value]="swatchKind()" (change)="setSwatchKind(text($event))">@for (kind of swatchKinds; track kind.id) {<option [value]="kind.id" [selected]="swatchKind() === kind.id">{{ t(kind.label) }}</option>}</select>
+              </div>
+              <div class="swatch-grid">
+                <button class="swatch" [title]="t('None')" [attr.aria-label]="t('None')" (click)="editor.setPaint(swatchTarget(), 'none')"><span class="no-paint"></span></button>
+                @for (swatch of visibleSwatches(); track swatch.id) {
+                  <button class="swatch" [class.active]="chosenSwatch() === swatch.id" [title]="swatch.name" [attr.aria-label]="swatch.name" (click)="pickSwatch(swatch)"><span [style.background]="swatchBackground(swatch)"></span></button>
+                }
+              </div>
+              <div class="swatch-actions">
+                <button (click)="newSwatch()" [title]="t('New swatch')" [attr.aria-label]="t('New swatch')"><img src="/assets/icons/plus.svg" alt="" /></button>
+                <button [disabled]="!chosenSwatch()" (click)="deleteSwatch()" [title]="t('Delete swatch')" [attr.aria-label]="t('Delete swatch')"><img src="/assets/icons/delete.svg" alt="" /></button>
+              </div>
+            </div>
+          </details>
+        }
         <details class="panel drawing-options" open>
           <summary><span>{{ t("Drawing tools") }}</span></summary>
           <div class="drawing-controls">
@@ -1591,9 +1617,76 @@
 @if (paintPicker()) {
   <section #paintPopover class="paint-popover" role="dialog" [attr.aria-label]="t('Appearance')" [style.left.px]="paintPicker()!.x" [style.top.px]="paintPicker()!.y" [style.--popover-top.px]="paintPicker()!.y">
     <header><strong>{{ t(paintTarget() === 'fill' ? 'Fill' : 'Stroke') }}</strong><button (click)="paintPicker.set(null)" [attr.aria-label]="t('Close')">×</button></header>
-    <label>{{ t('Color') }}<input type="color" [value]="paintBaseColor()" (input)="setPaintBaseColor(text($event))" /></label>
-    <label>{{ t("Paint opacity") }}<input type="range" min="0" max="100" [value]="paintOpacity()" (input)="setPaintOpacity(number($event))" />{{ paintOpacity() }}%</label>
-    <div class="paint-options">@for (color of quickColors; track color.value) {<button (click)="editor.setPaint(paintTarget(), color.value)" [class.active]="paintColor(paintTarget()) === color.value"><span [class.no-paint]="color.value === 'none'" [style.background]="color.value === 'none' ? '' : color.value"></span>{{ t(color.label) }}</button>}</div>
+    @if (paintTarget() === 'fill') {
+      <div class="segmented paint-kinds" role="group" [attr.aria-label]="t('Fill')">
+        @for (kind of fillKinds; track kind.id) {<button [class.active]="fillKind() === kind.id" [attr.aria-pressed]="fillKind() === kind.id" (click)="setFillKind(kind.id)">{{ t(kind.label) }}</button>}
+      </div>
+    }
+    @if (paintTarget() === 'stroke' || fillKind() === 'color' || fillKind() === 'none') {
+      <label>{{ t('Color mode') }}<select [value]="preferences.colorMode()" (change)="preferences.setColorMode(text($event))">@for (mode of colorModes; track mode.id) {<option [value]="mode.id" [selected]="preferences.colorMode() === mode.id">{{ t(mode.label) }}</option>}</select></label>
+      @switch (preferences.colorMode()) {
+        @case ('rgb') {
+          @let rgb = rgbChannels();
+          @for (channel of rgbKeys; track channel) {
+            <label class="channel">{{ channel.toUpperCase() }}<input type="range" min="0" max="255" [value]="rgb[channel]" (input)="setRgbChannel(channel, $event)" /><input type="number" min="0" max="255" [value]="rgb[channel]" (change)="setRgbChannel(channel, $event)" [attr.aria-label]="channel.toUpperCase()" /></label>
+          }
+        }
+        @case ('cmyk') {
+          @let cmyk = cmykChannels();
+          @for (channel of cmykKeys; track channel) {
+            <label class="channel">{{ channel.toUpperCase() }}<input type="range" min="0" max="100" [value]="cmyk[channel]" (input)="setCmykChannel(channel, $event)" /><input type="number" min="0" max="100" [value]="cmyk[channel]" (change)="setCmykChannel(channel, $event)" [attr.aria-label]="channel.toUpperCase()" />%</label>
+          }
+        }
+        @case ('grayscale') {
+          <label class="channel">K<input type="range" min="0" max="100" [value]="grayLevel()" (input)="setGrayLevel($event)" /><input type="number" min="0" max="100" [value]="grayLevel()" (change)="setGrayLevel($event)" aria-label="K" />%</label>
+        }
+        @case ('palette') {
+          <div class="palette-grid">
+            @for (color of preferences.customPalette(); track color) {<button class="swatch" [class.active]="paintBaseColor() === color" [title]="color" [attr.aria-label]="color" (click)="setPaintBaseColor(color)"><span [style.background]="color"></span></button>}
+          </div>
+          <div class="palette-actions"><button (click)="preferences.addPaletteColor(paintBaseColor())">{{ t('Add current color') }}</button><button [disabled]="!preferences.customPalette().includes(paintBaseColor())" (click)="preferences.removePaletteColor(paintBaseColor())">{{ t('Remove color') }}</button></div>
+        }
+        @default {
+          <label>{{ t('Color') }}<input type="color" [value]="paintBaseColor()" (input)="setPaintBaseColor(text($event))" /></label>
+        }
+      }
+      <label>{{ t("Paint opacity") }}<input type="range" min="0" max="100" [value]="paintOpacity()" (input)="setPaintOpacity(number($event))" />{{ paintOpacity() }}%</label>
+      <div class="paint-options">@for (color of quickColors; track color.value) {<button (click)="editor.setPaint(paintTarget(), color.value)" [class.active]="paintColor(paintTarget()) === color.value"><span [class.no-paint]="color.value === 'none'" [style.background]="color.value === 'none' ? '' : color.value"></span>{{ t(color.label) }}</button>}</div>
+    }
+    @if (paintTarget() === 'fill' && fillKind() === 'gradient') {
+      @let gradient = gradientPaint();
+      <div class="gradient-editor">
+        <div class="gradient-preview" [style.background]="gradientCss(gradient)"></div>
+        <label>{{ t('Type') }}<select [value]="gradient.type" (change)="setGradientType(text($event))"><option value="linear" [selected]="gradient.type === 'linear'">{{ t('Linear') }}</option><option value="radial" [selected]="gradient.type === 'radial'">{{ t('Radial') }}</option></select></label>
+        @if (gradient.type === 'linear') {<label>{{ t('Angle') }}<input type="number" min="-180" max="180" step="any" [value]="gradient.angle" (change)="setGradientAngle($event)" />°</label>}
+        <div class="gradient-stops">
+          @for (stop of gradient.stops; track $index; let i = $index, last = $last) {
+            <div class="gradient-stop">
+              <input type="color" [value]="stop.color.slice(0, 7)" (input)="setStop(i, 'color', $event)" [attr.aria-label]="t('Stop color')" />
+              <label>{{ t('Location') }}<input type="number" min="0" max="100" step="any" [value]="stop.location" (change)="setStop(i, 'location', $event)" />%</label>
+              @if (!last) {<label>{{ t('Midpoint') }}<input type="number" min="13" max="87" step="any" [value]="stop.midpoint" (change)="setStop(i, 'midpoint', $event)" />%</label>}
+              <button [disabled]="gradient.stops.length <= 2" (click)="removeStop(i)" [title]="t('Delete stop')" [attr.aria-label]="t('Delete stop')">×</button>
+            </div>
+          }
+        </div>
+        <div class="palette-actions"><button [disabled]="gradient.stops.length >= 32" (click)="addStop()">{{ t('Add stop') }}</button><button (click)="reverseGradient()">{{ t('Reverse gradient') }}</button></div>
+        <p class="panel-tip">{{ t('Drag across the selection with the Gradient tool (G) to set where the gradient runs.') }}</p>
+      </div>
+    }
+    @if (paintTarget() === 'fill' && fillKind() === 'pattern') {
+      <div class="pattern-picker">
+        @for (pattern of editor.document().patterns ?? []; track pattern.id) {
+          <button class="swatch" [class.active]="fillPatternId() === pattern.id" [title]="pattern.name" [attr.aria-label]="pattern.name" (click)="choosePattern(pattern.id)"><span [style.background]="patternCss(pattern)"></span></button>
+        }
+      </div>
+      <div class="section-label">{{ t('Ready-made patterns') }}</div>
+      <div class="pattern-picker">
+        @for (preset of presetPatterns; track preset.kind) {
+          <button class="swatch" [title]="t(preset.pattern.name)" [attr.aria-label]="t(preset.pattern.name)" (click)="choosePresetPattern(preset.kind)"><span [style.background]="patternCss(preset.pattern)"></span></button>
+        }
+      </div>
+      <button [disabled]="!commandEnabled('definePattern')" (click)="runCommand('definePattern')">{{ t('Define pattern') }}</button>
+    }
     @if (paintTarget() === 'stroke') {
       <label>{{ t('Width') }} ({{ preferences.distanceUnit() }})<input type="number" min="0" step="any" [value]="displayDistance(paintWidth())" (change)="setPaintWidth($event)" /></label>
       @for (control of strokeControls; track control.key) {

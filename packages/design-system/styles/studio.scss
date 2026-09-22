@@ -2012,6 +2012,27 @@ textarea,
 .paint-options { display: flex; gap: 4px; margin-bottom: 12px; }
 .paint-options button { display: flex; flex-direction: column; gap: 6px; align-items: center; font-size: 10px; padding: 6px; }
 .paint-options span { display: block; width: 28px; height: 24px; border: 1px solid var(--muted); }
+/* Colour, gradient and pattern controls of the paint popover, and the Swatches panel. */
+.paint-kinds { display: flex; width: 100%; margin-bottom: 12px; button { flex: 1; padding: 5px 2px; font-size: 10px; } }
+.paint-popover label.channel { display: grid; grid-template-columns: 14px minmax(0, 1fr) 52px auto; gap: 6px; input[type=range], input[type=number] { width: 100%; min-width: 0; } }
+.gradient-editor { display: flex; flex-direction: column; gap: 8px; }
+.gradient-preview { height: 22px; border: 1px solid var(--border); border-radius: 4px; }
+.gradient-stops { display: flex; flex-direction: column; gap: 6px; }
+.gradient-stop { display: grid; grid-template-columns: 30px minmax(0, 1fr) minmax(0, 1fr) 24px; gap: 4px; align-items: center; font-size: 10px;
+  label { display: flex; flex-direction: column; align-items: stretch; gap: 2px; margin: 0; }
+  label input[type=number] { width: 100%; min-width: 0; }
+  input[type=color] { width: 30px; height: 26px; padding: 1px; }
+  button { padding: 2px; min-height: 22px; } }
+.palette-actions { display: flex; gap: 6px; margin-bottom: 10px; button { flex: 1; font-size: 10px; padding: 5px; } }
+.palette-grid, .pattern-picker, .swatch-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(24px, 1fr)); gap: 4px; margin-bottom: 10px; }
+.swatch { padding: 2px; min-height: 0; aspect-ratio: 1; border: 1px solid transparent; border-radius: 4px;
+  span { display: block; width: 100%; height: 100%; border-radius: 2px; border: 1px solid var(--border); }
+  &.active { border-color: var(--accent); } }
+.swatches-content { padding: 8px 12px 12px; }
+.swatch-toolbar { display: flex; gap: 6px; align-items: center; justify-content: space-between; margin-bottom: 8px;
+  .segmented button { padding: 4px 8px; font-size: 10px; }
+  select { min-width: 0; max-width: 120px; font-size: 10px; } }
+.swatch-actions { display: flex; justify-content: flex-end; gap: 4px; button { padding: 3px; } img { width: 18px; height: 18px; } }
 .canvas-ruler { position: absolute; z-index: 5; background: var(--panel); color: var(--text); touch-action: none; font-size: 9px; overflow: hidden; }
 .horizontal-ruler { left: 0; right: 0; height: 24px; top: -25px; cursor: row-resize; border-bottom: 1px solid var(--border); }
 .vertical-ruler { top: 0; bottom: 0; width: 24px; left: -25px; cursor: col-resize; border-right: 1px solid var(--border); }

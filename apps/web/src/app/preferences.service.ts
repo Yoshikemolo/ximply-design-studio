@@ -5,6 +5,21 @@ import {
   validateShortcuts,
 } from "../../../../packages/domain/src/shortcuts";
 import { isUnit, Unit } from "../../../../packages/domain/src/measurements";
+import { COLOR_MODES, ColorMode } from "../../../../packages/domain/src/paint";
+
+const COLOR_SETTINGS = "xds-color-settings";
+export const MAX_PALETTE_COLORS = 64;
+/** The colour model and the custom palette, kept apart from the input settings. */
+function readColorSettings(): { mode: ColorMode; palette: string[] } {
+  try {
+    const saved = JSON.parse(localStorage.getItem(COLOR_SETTINGS) ?? "null");
+    if (saved?.version !== 1 || !COLOR_MODES.includes(saved.mode) || !Array.isArray(saved.palette)) throw new Error("Invalid colour settings");
+    const palette = saved.palette.filter((color: unknown): color is string => typeof color === "string" && /^#[0-9a-f]{6}$/i.test(color));
+    return { mode: saved.mode, palette: [...new Set<string>(palette)].slice(0, MAX_PALETTE_COLORS) };
+  } catch {
+    return { mode: "quick", palette: [] };
+  }
+}
 import { FreehandOptions, FreehandToolOptions, PAINTBRUSH_DEFAULTS, PENCIL_DEFAULTS, SMOOTH_DEFAULTS, validFreehandTool } from "../../../../packages/domain/src/path-fit";
 import { BrushStroke, DEFAULT_BRUSH_STROKE, validBrushStroke } from "../../../../packages/domain/src/brush-stroke";
 
@@ -93,7 +108,7 @@ export interface MeasurementSettings {
   guideSnapRadius: number;
   gridSnapRadius: number;
 }
-export type LayoutBlock = "tools" | "appearance" | "workspace" | "measurement" | "dimensions" | "pivot" | "selection";
+export type LayoutBlock = "tools" | "appearance" | "workspace" | "measurement" | "dimensions" | "pivot" | "selection" | "swatches";
 const measurementDefaults: MeasurementSettings = {
   distanceUnit: "px", fontUnit: "px", displayDecimals: 2, rulersVisible: false, guidesVisible: true, guidesLocked: false,
   gridVisible: false, snapRulers: false, snapGuides: false, snapGrid: false,
@@ -177,7 +192,35 @@ export class PreferencesService {
   saveToolOptions(options: Pick<PathSettings, "pencil" | "paintbrush" | "smooth" | "brush">): boolean {
     return this.updatePathSettings(options);
   }
-  readonly layoutBlocks = signal<Record<LayoutBlock, boolean>>({ tools: true, appearance: true, workspace: true, measurement: true, dimensions: true, pivot: true, selection: true });
+  readonly layoutBlocks = signal<Record<LayoutBlock, boolean>>({ tools: true, appearance: true, workspace: true, measurement: true, dimensions: true, pivot: true, selection: true, swatches: false });
+  /** How colours are chosen: Quick RGB by default, or RGB, CMYK, Grayscale or a custom palette. */
+  readonly colorMode = signal<ColorMode>(readColorSettings().mode);
+  readonly customPalette = signal<string[]>(readColorSettings().palette);
+  setColorMode(mode: string): boolean {
+    if (!COLOR_MODES.includes(mode as ColorMode)) return false;
+    this.colorMode.set(mode as ColorMode);
+    return this.persistColor();
+  }
+  addPaletteColor(color: string): boolean {
+    const hex = color.slice(0, 7).toLowerCase();
+    if (!/^#[0-9a-f]{6}$/.test(hex) || this.customPalette().includes(hex) || this.customPalette().length >= MAX_PALETTE_COLORS) return false;
+    this.customPalette.set([...this.customPalette(), hex]);
+    return this.persistColor();
+  }
+  removePaletteColor(color: string): boolean {
+    if (!this.customPalette().includes(color)) return false;
+    this.customPalette.set(this.customPalette().filter((c) => c !== color));
+    return this.persistColor();
+  }
+  private persistColor(): boolean {
+    try {
+      localStorage.setItem(COLOR_SETTINGS, JSON.stringify({ version: 1, mode: this.colorMode(), palette: this.customPalette() }));
+      return true;
+    } catch {
+      this.error.set("Settings could not be saved.");
+      return false;
+    }
+  }
   constructor() {
     try {
       const raw = localStorage.getItem("xds-input-settings");
@@ -191,7 +234,7 @@ export class PreferencesService {
         if (saved.measurements?.rulerMinorStep === undefined) measurements.rulerMinorStep = Math.max(0.01, measurements.rulerStep / 10);
         for (const key of Object.keys(measurements) as (keyof MeasurementSettings)[]) validateMeasurement(key, measurements[key]);
         const layout = { ...this.layoutBlocks(), ...saved.layoutBlocks };
-        for (const key of ["appearance", "workspace", "measurement", "dimensions"] as const)
+        for (const key of ["appearance", "workspace", "measurement", "dimensions", "swatches"] as const)
           if (typeof layout[key] !== "boolean") throw new Error("Invalid layout settings");
         this.bindings.set(validateShortcuts(saved.bindings));
         this.cursorIcon.set(saved.cursorIcon);

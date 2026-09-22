@@ -331,7 +331,10 @@
         "apps/web/tests/eraser-reshape.test.ts",
         "packages/domain/tests/paint.test.ts",
         "packages/domain/tests/paint-export.test.ts",
-        "packages/renderer/tests/fill-paint.test.ts"
+        "packages/renderer/tests/fill-paint.test.ts",
+        "apps/web/tests/paint-editor.test.ts",
+        "apps/web/tests/paint-ui.test.ts",
+        "packages/domain/tests/hit-test.test.ts"
       ],
       "evidence": [
         "doc/implementation/PLAN-0002-0001.md",

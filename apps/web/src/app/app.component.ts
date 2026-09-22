@@ -46,7 +46,8 @@ import { ContextMenuComponent, ContextMenuEntry } from "./context-menu.component
 import { SmartTableComponent } from "./smart-table.component";
 import { TOOLS, ToolId, TOOL_FAMILIES, ToolFamily } from "./tools";
 import { translate } from "./i18n";
-import { BLENDS, Layer, StrokeStyle, defaultStrokeStyle } from "../../../../packages/domain/src/document";
+import { BLENDS, Layer, StrokeStyle, blankDocument, defaultStrokeStyle, svgExport } from "../../../../packages/domain/src/document";
+import { COLOR_MODES, ColorMode, GradientPaint, PatternDefinition, PRESET_PATTERNS, PresetPattern, Swatch, cmykToRgb, gradientColorAt, grayToRgb, presetPattern, renderedStops, rgbToCmyk, rgbToGray, validGradient } from "../../../../packages/domain/src/paint";
 import { createSampleDocument } from "../../../../packages/domain/src/sample";
 interface Release {
   version: string;
@@ -213,7 +214,16 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   readonly quickColors = [{ value: "#000000", label: "Black" }, { value: "#ffffff", label: "White" }, { value: "none", label: "No color" }];
   readonly paintTarget = signal<"fill" | "stroke">("fill");
   readonly paintPicker = signal<{ x: number; y: number } | null>(null);
-  readonly contextBlocks = [{ id: "tools", label: "Tools" }, { id: "appearance", label: "Appearance" }, { id: "workspace", label: "Workspace" }, { id: "measurement", label: "Measurement" }, { id: "dimensions", label: "Dimensions" }, { id: "pivot", label: "Pivot" }, { id: "selection", label: "Selection" }] as const;
+  readonly contextBlocks = [{ id: "tools", label: "Tools" }, { id: "appearance", label: "Appearance" }, { id: "workspace", label: "Workspace" }, { id: "measurement", label: "Measurement" }, { id: "dimensions", label: "Dimensions" }, { id: "pivot", label: "Pivot" }, { id: "selection", label: "Selection" }, { id: "swatches", label: "Swatches" }] as const;
+  readonly colorModes: { id: ColorMode; label: string }[] = COLOR_MODES.map((id) => ({ id, label: { quick: "Quick RGB", rgb: "RGB", cmyk: "CMYK", grayscale: "Grayscale", palette: "Custom palette" }[id] }));
+  readonly fillKinds = [{ id: "color", label: "Color" }, { id: "gradient", label: "Gradient" }, { id: "pattern", label: "Pattern" }, { id: "none", label: "None" }] as const;
+  readonly presetPatterns = PRESET_PATTERNS.map((kind) => ({ kind, pattern: presetPattern(kind, "preview-" + kind) }));
+  readonly swatchKinds = [{ id: "all", label: "All swatches" }, { id: "color", label: "Color swatches" }, { id: "gradient", label: "Gradient swatches" }, { id: "pattern", label: "Pattern swatches" }] as const;
+  readonly swatchKind = signal<"all" | "color" | "gradient" | "pattern">("all");
+  readonly rgbKeys = ["r", "g", "b"] as const;
+  readonly cmykKeys = ["c", "m", "y", "k"] as const;
+  readonly swatchTarget = signal<"fill" | "stroke">("fill");
+  readonly chosenSwatch = signal<string | null>(null);
   readonly measurementAids = [{ id: "rulers", label: "Rulers" }, { id: "guides", label: "Guides" }, { id: "grid", label: "Grid" }] as const;
   readonly draggingGuideId = signal<string | null>(null);
   private guideDrag?: { axis: "vertical" | "horizontal"; pointerId: number; element: HTMLElement };
@@ -858,6 +868,122 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     const alpha = Math.round(Math.max(0, Math.min(100, opacity)) / 100 * 255).toString(16).padStart(2, "0");
     this.editor.setPaint(this.paintTarget(), this.paintBaseColor() + (alpha === "ff" ? "" : alpha));
   }
+  /** What the fill holds: a colour, a gradient, a pattern or nothing. */
+  fillKind(): "color" | "gradient" | "pattern" | "none" {
+    if (this.paintColor("fill") === "none") return "none";
+    return this.editor.currentFillPaint()?.kind ?? "color";
+  }
+  setFillKind(kind: string) {
+    if (kind === "none") { this.editor.setPaint("fill", "none"); return; }
+    if (kind === "color") {
+      const color = this.paintColor("fill");
+      this.editor.setPaint("fill", color === "none" ? "#000000" : color);
+      return;
+    }
+    if (kind === "gradient") { this.editor.setFillPaint(this.gradientPaint()); return; }
+    if (kind === "pattern") {
+      const id = this.editor.document().patterns?.[0]?.id ?? this.editor.usePresetPattern("dots");
+      if (id) this.editor.setFillPaint({ kind: "pattern", patternId: id });
+    }
+  }
+  /** The gradient being edited: the fill's own, or the one new gradients start from. */
+  gradientPaint(): GradientPaint {
+    const paint = this.editor.currentFillPaint();
+    return structuredClone(paint?.kind === "gradient" ? paint : this.editor.gradient());
+  }
+  updateGradient(change: (gradient: GradientPaint) => void) {
+    const gradient = this.gradientPaint();
+    change(gradient);
+    gradient.stops.sort((a, b) => a.location - b.location);
+    if (validGradient(gradient)) this.editor.setFillPaint(gradient);
+  }
+  setGradientType(type: string) { if (type === "linear" || type === "radial") this.updateGradient((g) => { g.type = type; }); }
+  setGradientAngle(event: Event) {
+    const angle = this.number(event);
+    if (Number.isFinite(angle) && angle >= -180 && angle <= 180) this.updateGradient((g) => { g.angle = angle; delete g.vector; });
+  }
+  setStop(index: number, key: "color" | "location" | "midpoint", event: Event) {
+    const value = key === "color" ? this.text(event) : this.number(event);
+    this.updateGradient((g) => {
+      const stop = g.stops[index];
+      if (!stop) return;
+      if (key === "color" && typeof value === "string") stop.color = value;
+      if (key === "location" && typeof value === "number" && value >= 0 && value <= 100) stop.location = value;
+      if (key === "midpoint" && typeof value === "number" && value >= 13 && value <= 87) stop.midpoint = value;
+    });
+  }
+  /** Adds a stop in the widest gap, in the colour the gradient already has there. */
+  addStop() {
+    this.updateGradient((g) => {
+      if (g.stops.length >= 32) return;
+      let at = 0;
+      for (let i = 1; i < g.stops.length; i++) if (g.stops[i].location - g.stops[i - 1].location > g.stops[at + 1].location - g.stops[at].location) at = i - 1;
+      const location = (g.stops[at].location + g.stops[at + 1].location) / 2;
+      g.stops.splice(at + 1, 0, { color: gradientColorAt(g, location / 100).slice(0, 7), location, midpoint: 50 });
+    });
+  }
+  removeStop(index: number) { this.updateGradient((g) => { if (g.stops.length > 2) g.stops.splice(index, 1); }); }
+  /** Reverse Gradient: the stops change places, their midpoints with them. */
+  reverseGradient() {
+    this.updateGradient((g) => {
+      const stops = g.stops.map((stop) => ({ ...stop }));
+      g.stops = stops.reverse().map((stop, i, all) => ({ ...stop, location: 100 - stop.location, midpoint: all[i + 1] ? 100 - all[i + 1].midpoint : 50 }));
+    });
+  }
+  /** A CSS picture of a gradient, for the previews of the panel and the swatches. */
+  gradientCss(gradient: GradientPaint): string {
+    const stops = renderedStops(gradient).map((stop) => `${stop.color} ${Math.round(stop.offset * 1000) / 10}%`).join(", ");
+    return gradient.type === "radial" ? `radial-gradient(circle, ${stops})` : `linear-gradient(${90 - gradient.angle}deg, ${stops})`;
+  }
+  /** A CSS picture of a pattern: its tile drawn as SVG and repeated. */
+  patternCss(pattern: PatternDefinition): string {
+    const svg = svgExport({ ...blankDocument(), version: 2, width: pattern.width, height: pattern.height, background: "none", layers: pattern.layers });
+    return `url("data:image/svg+xml,${encodeURIComponent(svg)}") 0 0 / ${Math.max(6, Math.min(24, pattern.width))}px auto repeat`;
+  }
+  fillPatternId(): string | null { const paint = this.editor.currentFillPaint(); return paint?.kind === "pattern" ? paint.patternId : null; }
+  choosePattern(id: string) { this.editor.setFillPaint({ kind: "pattern", patternId: id }); }
+  choosePresetPattern(kind: PresetPattern) {
+    const id = this.editor.usePresetPattern(kind);
+    if (id) this.editor.setFillPaint({ kind: "pattern", patternId: id });
+  }
+  /** The channels of the colour being edited, in the model the colour mode shows. */
+  rgbChannels() { const hex = this.paintBaseColor(); return { r: parseInt(hex.slice(1, 3), 16), g: parseInt(hex.slice(3, 5), 16), b: parseInt(hex.slice(5, 7), 16) }; }
+  setRgbChannel(key: "r" | "g" | "b", event: Event) {
+    const value = Math.round(this.number(event));
+    if (!Number.isFinite(value) || value < 0 || value > 255) return;
+    const c = { ...this.rgbChannels(), [key]: value };
+    this.setPaintBaseColor("#" + [c.r, c.g, c.b].map((n) => n.toString(16).padStart(2, "0")).join(""));
+  }
+  cmykChannels() { return rgbToCmyk(this.paintBaseColor()); }
+  setCmykChannel(key: "c" | "m" | "y" | "k", event: Event) {
+    const value = this.number(event);
+    if (!Number.isFinite(value) || value < 0 || value > 100) return;
+    const c = { ...this.cmykChannels(), [key]: value };
+    this.setPaintBaseColor(cmykToRgb(c.c, c.m, c.y, c.k));
+  }
+  grayLevel() { return rgbToGray(this.paintBaseColor()); }
+  setGrayLevel(event: Event) {
+    const value = this.number(event);
+    if (Number.isFinite(value) && value >= 0 && value <= 100) this.setPaintBaseColor(grayToRgb(value));
+  }
+  /** The swatches the panel lists, filtered by kind as Show Swatch Kinds does. */
+  visibleSwatches(): Swatch[] {
+    const kind = this.swatchKind();
+    return this.editor.documentSwatches().filter((swatch) => kind === "all" || swatch.kind === kind);
+  }
+  swatchBackground(swatch: Swatch): string {
+    if (swatch.kind === "color") return swatch.color;
+    if (swatch.kind === "gradient") return this.gradientCss(swatch.gradient);
+    const pattern = this.editor.document().patterns?.find((p) => p.id === swatch.patternId);
+    return pattern ? this.patternCss(pattern) : "";
+  }
+  pickSwatch(swatch: Swatch) {
+    this.chosenSwatch.set(swatch.id);
+    this.editor.applySwatch(swatch.id, this.swatchTarget());
+  }
+  newSwatch() { const id = this.editor.addSwatch(this.swatchTarget()); if (id) this.chosenSwatch.set(id); }
+  deleteSwatch() { const id = this.chosenSwatch(); if (id && this.editor.removeSwatch(id)) this.chosenSwatch.set(null); }
+  setSwatchKind(kind: string) { if (["all", "color", "gradient", "pattern"].includes(kind)) this.swatchKind.set(kind as "all" | "color" | "gradient" | "pattern"); }
   @HostListener("document:pointerdown", ["$event"]) dismissPaint(event: PointerEvent) {
     if (!(event.target instanceof Element) || !event.target.closest(".paint-popover,.paint-trigger")) this.paintPicker.set(null);
   }
@@ -1658,6 +1784,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     if (id === "outlineText") return this.editor.selectedLayers().some((layer) => layer.kind === "text");
     if (["lockSelection", "lockAbove", "lockOthers", "hideSelection", "hideAbove", "hideOthers"].includes(id)) return this.editor.selectedLayers().some((layer) => !layer.guide);
     if (id === "unlockAll") return this.editor.document().layers.some((layer) => layer.locked && !layer.guide);
+    if (id === "definePattern") return this.editor.selectedLayers().length > 0 && this.editor.selectedLayers().every((layer) => ["rectangle", "ellipse", "path"].includes(layer.kind) && !layer.guide && !layer.dimension && !layer.procedural && !layer.symbolId && !layer.fillPaint);
     if (id === "showAll") return this.editor.document().layers.some((layer) => !layer.visible && !layer.guide);
     const paths = this.editor.selectedLayers().some((layer) => layer.kind === "path" && !!layer.curves);
     if (["joinPaths", "simplifyPath"].includes(id)) return paths;
@@ -1717,6 +1844,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
       cutAtAnchors: () => this.editor.cutAtSelectedAnchors(),
       selectStray: () => this.editor.selectStrayPoints(),
       toggleMultipleHandles: () => this.preferences.updatePathSettings({ showHandlesMultiple: !this.preferences.pathSettings().showHandlesMultiple }),
+      definePattern: () => this.editor.definePattern(),
       lockSelection: () => this.editor.lockOrHide("locked", "selection"),
       lockAbove: () => this.editor.lockOrHide("locked", "above"),
       lockOthers: () => this.editor.lockOrHide("locked", "others"),
