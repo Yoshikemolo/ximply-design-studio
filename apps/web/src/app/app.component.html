@@ -379,28 +379,30 @@
     </aside>
     }
     <section class="canvas-area">
-      <div class="document-tabs" role="tablist" [attr.aria-label]="t('Documents')">
-        @for (tab of editor.tabs(); track tab.id) {
-          <div class="document-tab" role="tab" [class.active]="tab.active" [attr.aria-selected]="tab.active" (click)="switchDocument(tab.id)">
-            <img src="/assets/icons/document.svg" alt="" />
-            @if (tab.active) {
-              <input [attr.aria-label]="t('Document name')" [value]="tab.name" (change)="editor.rename(text($event))" />
-            } @else {
-              <span class="document-tab-name">{{ tab.name }}</span>
-            }
-            @if (tab.dirty) {<span class="modified-dot" [title]="t('Unsaved changes')"></span>}
-            <button class="document-tab-close" [title]="t('Close document')" [attr.aria-label]="t('Close document') + ': ' + tab.name" (click)="$event.stopPropagation(); closeDocument(tab.id)">×</button>
-          </div>
-        }
-        <button (click)="newDocument()" [title]="t('New document')" [attr.aria-label]="t('New document')">
-          +
-        </button>
-        <div class="header-spacer"></div>
-        <span
-          >{{ displayDistance(editor.document().width) }} ×
-          {{ displayDistance(editor.document().height) }} {{ preferences.distanceUnit() }}</span
-        >
-      </div>
+      @if (preferences.layoutBlocks().documentTabs) {
+        <div class="document-tabs" role="tablist" [attr.aria-label]="t('Documents')">
+          @for (tab of editor.tabs(); track tab.id) {
+            <div class="document-tab" role="tab" [class.active]="tab.active" [attr.aria-selected]="tab.active" (click)="switchDocument(tab.id)">
+              <img src="/assets/icons/document.svg" alt="" />
+              @if (tab.active) {
+                <input [attr.aria-label]="t('Document name')" [value]="tab.name" (change)="editor.rename(text($event))" />
+              } @else {
+                <span class="document-tab-name">{{ tab.name }}</span>
+              }
+              @if (tab.dirty) {<span class="modified-dot" [title]="t('Unsaved changes')"></span>}
+              <button class="document-tab-close" [title]="t('Close document')" [attr.aria-label]="t('Close document') + ': ' + tab.name" (click)="$event.stopPropagation(); closeDocument(tab.id)">×</button>
+            </div>
+          }
+          <button (click)="newDocument()" [title]="t('New document')" [attr.aria-label]="t('New document')">
+            +
+          </button>
+          <div class="header-spacer"></div>
+          <span
+            >{{ displayDistance(editor.document().width) }} ×
+            {{ displayDistance(editor.document().height) }} {{ preferences.distanceUnit() }}</span
+          >
+        </div>
+      }
       <div
         class="canvas-viewport"
         #viewport

@@ -18,3 +18,16 @@ describe('the context bar', () => {
     expect(readFileSync('apps/web/src/app/app.component.ts', 'utf8')).toContain('{ id: "contextBar", label: "Context bar" }');
   });
 });
+
+describe('the document tabs', () => {
+  it('show by default and are hidden or shown from View > Layout, remembered', () => {
+    const preferences = new PreferencesService();
+    expect(preferences.layoutBlocks().documentTabs).toBe(true);
+    expect(preferences.toggleLayoutBlock('documentTabs')).toBe(true);
+    expect(new PreferencesService().layoutBlocks().documentTabs).toBe(false);
+    const html = readFileSync('apps/web/src/app/app.component.html', 'utf8');
+    expect(html).toMatch(/@if \(preferences\.layoutBlocks\(\)\.documentTabs\) \{\s*<div class="document-tabs"/);
+    expect(readFileSync('apps/web/src/app/app.component.ts', 'utf8')).toContain('{ id: "documentTabs", label: "Document tabs" }');
+  });
+});
+

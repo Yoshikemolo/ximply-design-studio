@@ -217,7 +217,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   readonly quickColors = [{ value: "#000000", label: "Black" }, { value: "#ffffff", label: "White" }, { value: "none", label: "No color" }];
   readonly paintTarget = signal<"fill" | "stroke">("fill");
   readonly paintPicker = signal<{ x: number; y: number } | null>(null);
-  readonly contextBlocks = [{ id: "tools", label: "Tools" }, { id: "appearance", label: "Appearance" }, { id: "workspace", label: "Workspace" }, { id: "measurement", label: "Measurement" }, { id: "dimensions", label: "Dimensions" }, { id: "pivot", label: "Pivot" }, { id: "selection", label: "Selection" }, { id: "swatches", label: "Swatches" }, { id: "contextBar", label: "Context bar" }] as const;
+  readonly contextBlocks = [{ id: "tools", label: "Tools" }, { id: "appearance", label: "Appearance" }, { id: "workspace", label: "Workspace" }, { id: "measurement", label: "Measurement" }, { id: "dimensions", label: "Dimensions" }, { id: "pivot", label: "Pivot" }, { id: "selection", label: "Selection" }, { id: "swatches", label: "Swatches" }, { id: "contextBar", label: "Context bar" }, { id: "documentTabs", label: "Document tabs" }] as const;
   readonly colorModes: { id: ColorMode; label: string }[] = COLOR_MODES.map((id) => ({ id, label: { quick: "Quick RGB", rgb: "RGB", cmyk: "CMYK", grayscale: "Grayscale", palette: "Custom palette" }[id] }));
   readonly fillKinds = [{ id: "color", label: "Color" }, { id: "gradient", label: "Gradient" }, { id: "pattern", label: "Pattern" }, { id: "none", label: "None" }] as const;
   readonly presetPatterns = PRESET_PATTERNS.map((kind) => ({ kind, pattern: presetPattern(kind, "preview-" + kind) }));

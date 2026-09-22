@@ -44,6 +44,10 @@
         },
         {
           "type": "Improvement",
+          "description": "Show or hide the strip of document tabs from View > Layout, like the context bar; the canvas takes the height it leaves."
+        },
+        {
+          "type": "Improvement",
           "description": "Show or hide the context bar from View > Layout, like the other blocks of the workspace; the canvas takes the height it leaves, and the choice is remembered."
         },
         {

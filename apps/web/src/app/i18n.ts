@@ -1,6 +1,7 @@
 const ES: Record<string, string> = {
   "All Rights Reserved.": "Todos los derechos reservados.",
   "Outline stroke": "Contornear trazo",
+  "Document tabs": "Pestañas de documentos",
   "Save as": "Guardar como",
   "File name": "Nombre del archivo",
   "Save": "Guardar",
