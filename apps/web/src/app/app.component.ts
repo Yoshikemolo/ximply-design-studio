@@ -20,6 +20,10 @@ import {
   canvasWheelZoom,
   isCanvasZoomGesture,
 } from "../../../../packages/domain/src/input";
+import { EDGE_ZONE, LONG_PRESS_MS, LONG_PRESS_SLOP, edgeSwipe, pairOf, twoFingerChange, zoomAround } from "../../../../packages/domain/src/touch";
+import { selectionBounds } from "../../../../packages/domain/src/arrange";
+/** The width below which the studio lays itself out for a phone. */
+const PHONE_QUERY = "(max-width: 720px)";
 import { ShapeOptions } from "../../../../packages/domain/src/shapes";
 import { TraceOptions } from "../../../../packages/domain/src/tracing";
 import {
@@ -33,6 +37,7 @@ import {
   signal,
 } from "@angular/core";
 import { FormsModule } from "@angular/forms";
+import { NgTemplateOutlet } from "@angular/common";
 import type { SpatialPreview } from "./spatial";
 /** The commands a text field keeps for itself, because they edit the text it holds. */
 const FIELD_COMMANDS = ["undo", "redo", "copy", "cut", "paste", "pasteInFront", "pasteInBack", "selectAll", "remove", "finish", "cancel", "panHold"];
@@ -41,7 +46,8 @@ import { ContextMenuComponent, ContextMenuEntry } from "./context-menu.component
 import { SmartTableComponent } from "./smart-table.component";
 import { TOOLS, ToolId, TOOL_FAMILIES, ToolFamily } from "./tools";
 import { translate } from "./i18n";
-import { BLENDS, Layer, StrokeStyle, defaultStrokeStyle } from "../../../../packages/domain/src/document";
+import { BLENDS, Layer, StrokeStyle, blankDocument, defaultStrokeStyle, svgExport } from "../../../../packages/domain/src/document";
+import { COLOR_MODES, ColorMode, GradientPaint, PatternDefinition, PRESET_PATTERNS, PresetPattern, Swatch, cmykToRgb, gradientColorAt, grayToRgb, presetPattern, renderedStops, rgbToCmyk, rgbToGray, validGradient } from "../../../../packages/domain/src/paint";
 import { createSampleDocument } from "../../../../packages/domain/src/sample";
 interface Release {
   version: string;
@@ -107,7 +113,7 @@ const LEAF_TYPE_LABELS: Record<string, string> = { swing: "Hinged", sliding: "Sl
 @Component({
   selector: "xds-root",
   standalone: true,
-  imports: [FormsModule, ContextMenuComponent, SmartTableComponent],
+  imports: [FormsModule, NgTemplateOutlet, ContextMenuComponent, SmartTableComponent],
   templateUrl: "./app.component.html",
 })
 export class AppComponent implements AfterViewInit, OnDestroy {
@@ -208,7 +214,16 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   readonly quickColors = [{ value: "#000000", label: "Black" }, { value: "#ffffff", label: "White" }, { value: "none", label: "No color" }];
   readonly paintTarget = signal<"fill" | "stroke">("fill");
   readonly paintPicker = signal<{ x: number; y: number } | null>(null);
-  readonly contextBlocks = [{ id: "tools", label: "Tools" }, { id: "appearance", label: "Appearance" }, { id: "workspace", label: "Workspace" }, { id: "measurement", label: "Measurement" }, { id: "dimensions", label: "Dimensions" }, { id: "pivot", label: "Pivot" }, { id: "selection", label: "Selection" }] as const;
+  readonly contextBlocks = [{ id: "tools", label: "Tools" }, { id: "appearance", label: "Appearance" }, { id: "workspace", label: "Workspace" }, { id: "measurement", label: "Measurement" }, { id: "dimensions", label: "Dimensions" }, { id: "pivot", label: "Pivot" }, { id: "selection", label: "Selection" }, { id: "swatches", label: "Swatches" }] as const;
+  readonly colorModes: { id: ColorMode; label: string }[] = COLOR_MODES.map((id) => ({ id, label: { quick: "Quick RGB", rgb: "RGB", cmyk: "CMYK", grayscale: "Grayscale", palette: "Custom palette" }[id] }));
+  readonly fillKinds = [{ id: "color", label: "Color" }, { id: "gradient", label: "Gradient" }, { id: "pattern", label: "Pattern" }, { id: "none", label: "None" }] as const;
+  readonly presetPatterns = PRESET_PATTERNS.map((kind) => ({ kind, pattern: presetPattern(kind, "preview-" + kind) }));
+  readonly swatchKinds = [{ id: "all", label: "All swatches" }, { id: "color", label: "Color swatches" }, { id: "gradient", label: "Gradient swatches" }, { id: "pattern", label: "Pattern swatches" }] as const;
+  readonly swatchKind = signal<"all" | "color" | "gradient" | "pattern">("all");
+  readonly rgbKeys = ["r", "g", "b"] as const;
+  readonly cmykKeys = ["c", "m", "y", "k"] as const;
+  readonly swatchTarget = signal<"fill" | "stroke">("fill");
+  readonly chosenSwatch = signal<string | null>(null);
   readonly measurementAids = [{ id: "rulers", label: "Rulers" }, { id: "guides", label: "Guides" }, { id: "grid", label: "Grid" }] as const;
   readonly draggingGuideId = signal<string | null>(null);
   private guideDrag?: { axis: "vertical" | "horizontal"; pointerId: number; element: HTMLElement };
@@ -311,6 +326,9 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   readonly settingsCategory = signal<"cursor" | "selection" | "anchors" | "measurement" | "appearance" | "shortcuts">("cursor");
   /** The commands of Object > Path, and those the path panel offers, in Illustrator's order. */
   readonly pathMenuCommands = ["joinPaths", "averageAnchors", "simplifyPath", "outlineStroke", "selectStray"] as const;
+  /** Object > Lock and Object > Hide, with their companions, in the order Illustrator gives them. */
+  readonly lockMenuCommands = ["lockSelection", "lockAbove", "lockOthers", "unlockAll"] as const;
+  readonly hideMenuCommands = ["hideSelection", "hideAbove", "hideOthers", "showAll"] as const;
   readonly pathPanelCommands = ["convertCorner", "convertSmooth", "removeAnchors", "joinPaths", "cutAtAnchors", "averageAnchors", "simplifyPath"] as const;
   readonly averageAxes = [
     { id: "horizontal", label: "Horizontal" },
@@ -632,6 +650,36 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     this.pageCategory.set(value);
     this.pageFormatId.set(this.pageFormats()[0].id);
   }
+  // Document properties, shown in Properties when nothing is selected. Each change is
+  // applied at once and keeps the rest of the page setup as it was.
+  activeTabName() { return this.editor.tabs().find((tab) => tab.active)?.name ?? ""; }
+  edgeLabel(edge: "top" | "right" | "bottom" | "left") { return edge === "top" ? "Top" : edge === "right" ? "Right" : edge === "bottom" ? "Bottom" : "Left"; }
+  edgeInitial(edge: "top" | "right" | "bottom" | "left") { return this.t(this.edgeLabel(edge)).slice(0, 1).toUpperCase(); }
+  setDocumentSize(key: "width" | "height", event: Event) {
+    const value = this.distanceInput(event);
+    if (!Number.isFinite(value) || value <= 0) return;
+    if (this.editor.updatePageSetup({ [key]: value })) this.fit();
+  }
+  setDocumentOrientation(orientation: "portrait" | "landscape") {
+    const { width, height } = this.editor.document();
+    if (width === height || (orientation === "portrait") === height > width) return;
+    if (this.editor.updatePageSetup({ width: height, height: width })) this.fit();
+  }
+  setDocumentMargin(edge: "top" | "right" | "bottom" | "left", event: Event) {
+    const value = this.distanceInput(event);
+    if (!Number.isFinite(value) || value < 0) return;
+    // A margin typed in is a margin wanted, so its guides are shown.
+    const margins = { ...this.editor.pageSetup().margins, [edge]: value, edges: true };
+    this.editor.updatePageSetup({ margins });
+  }
+  toggleDocumentMargin(key: "edges" | "centerX" | "centerY", enabled: boolean) {
+    this.editor.updatePageSetup({ margins: { ...this.editor.pageSetup().margins, [key]: enabled } });
+  }
+  setDocumentMarks(event: Event) {
+    const marks = this.text(event) as RegistrationMarks;
+    if (!REGISTRATION_MARKS.includes(marks)) return;
+    this.editor.updatePageSetup({ marks });
+  }
   setPageMargin(key: "top" | "right" | "bottom" | "left", event: Event) {
     const value = this.distanceInput(event);
     if (!Number.isFinite(value) || value < 0 || value > 2048) return;
@@ -820,6 +868,122 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     const alpha = Math.round(Math.max(0, Math.min(100, opacity)) / 100 * 255).toString(16).padStart(2, "0");
     this.editor.setPaint(this.paintTarget(), this.paintBaseColor() + (alpha === "ff" ? "" : alpha));
   }
+  /** What the fill holds: a colour, a gradient, a pattern or nothing. */
+  fillKind(): "color" | "gradient" | "pattern" | "none" {
+    if (this.paintColor("fill") === "none") return "none";
+    return this.editor.currentFillPaint()?.kind ?? "color";
+  }
+  setFillKind(kind: string) {
+    if (kind === "none") { this.editor.setPaint("fill", "none"); return; }
+    if (kind === "color") {
+      const color = this.paintColor("fill");
+      this.editor.setPaint("fill", color === "none" ? "#000000" : color);
+      return;
+    }
+    if (kind === "gradient") { this.editor.setFillPaint(this.gradientPaint()); return; }
+    if (kind === "pattern") {
+      const id = this.editor.document().patterns?.[0]?.id ?? this.editor.usePresetPattern("dots");
+      if (id) this.editor.setFillPaint({ kind: "pattern", patternId: id });
+    }
+  }
+  /** The gradient being edited: the fill's own, or the one new gradients start from. */
+  gradientPaint(): GradientPaint {
+    const paint = this.editor.currentFillPaint();
+    return structuredClone(paint?.kind === "gradient" ? paint : this.editor.gradient());
+  }
+  updateGradient(change: (gradient: GradientPaint) => void) {
+    const gradient = this.gradientPaint();
+    change(gradient);
+    gradient.stops.sort((a, b) => a.location - b.location);
+    if (validGradient(gradient)) this.editor.setFillPaint(gradient);
+  }
+  setGradientType(type: string) { if (type === "linear" || type === "radial") this.updateGradient((g) => { g.type = type; }); }
+  setGradientAngle(event: Event) {
+    const angle = this.number(event);
+    if (Number.isFinite(angle) && angle >= -180 && angle <= 180) this.updateGradient((g) => { g.angle = angle; delete g.vector; });
+  }
+  setStop(index: number, key: "color" | "location" | "midpoint", event: Event) {
+    const value = key === "color" ? this.text(event) : this.number(event);
+    this.updateGradient((g) => {
+      const stop = g.stops[index];
+      if (!stop) return;
+      if (key === "color" && typeof value === "string") stop.color = value;
+      if (key === "location" && typeof value === "number" && value >= 0 && value <= 100) stop.location = value;
+      if (key === "midpoint" && typeof value === "number" && value >= 13 && value <= 87) stop.midpoint = value;
+    });
+  }
+  /** Adds a stop in the widest gap, in the colour the gradient already has there. */
+  addStop() {
+    this.updateGradient((g) => {
+      if (g.stops.length >= 32) return;
+      let at = 0;
+      for (let i = 1; i < g.stops.length; i++) if (g.stops[i].location - g.stops[i - 1].location > g.stops[at + 1].location - g.stops[at].location) at = i - 1;
+      const location = (g.stops[at].location + g.stops[at + 1].location) / 2;
+      g.stops.splice(at + 1, 0, { color: gradientColorAt(g, location / 100).slice(0, 7), location, midpoint: 50 });
+    });
+  }
+  removeStop(index: number) { this.updateGradient((g) => { if (g.stops.length > 2) g.stops.splice(index, 1); }); }
+  /** Reverse Gradient: the stops change places, their midpoints with them. */
+  reverseGradient() {
+    this.updateGradient((g) => {
+      const stops = g.stops.map((stop) => ({ ...stop }));
+      g.stops = stops.reverse().map((stop, i, all) => ({ ...stop, location: 100 - stop.location, midpoint: all[i + 1] ? 100 - all[i + 1].midpoint : 50 }));
+    });
+  }
+  /** A CSS picture of a gradient, for the previews of the panel and the swatches. */
+  gradientCss(gradient: GradientPaint): string {
+    const stops = renderedStops(gradient).map((stop) => `${stop.color} ${Math.round(stop.offset * 1000) / 10}%`).join(", ");
+    return gradient.type === "radial" ? `radial-gradient(circle, ${stops})` : `linear-gradient(${90 - gradient.angle}deg, ${stops})`;
+  }
+  /** A CSS picture of a pattern: its tile drawn as SVG and repeated. */
+  patternCss(pattern: PatternDefinition): string {
+    const svg = svgExport({ ...blankDocument(), version: 2, width: pattern.width, height: pattern.height, background: "none", layers: pattern.layers });
+    return `url("data:image/svg+xml,${encodeURIComponent(svg)}") 0 0 / ${Math.max(6, Math.min(24, pattern.width))}px auto repeat`;
+  }
+  fillPatternId(): string | null { const paint = this.editor.currentFillPaint(); return paint?.kind === "pattern" ? paint.patternId : null; }
+  choosePattern(id: string) { this.editor.setFillPaint({ kind: "pattern", patternId: id }); }
+  choosePresetPattern(kind: PresetPattern) {
+    const id = this.editor.usePresetPattern(kind);
+    if (id) this.editor.setFillPaint({ kind: "pattern", patternId: id });
+  }
+  /** The channels of the colour being edited, in the model the colour mode shows. */
+  rgbChannels() { const hex = this.paintBaseColor(); return { r: parseInt(hex.slice(1, 3), 16), g: parseInt(hex.slice(3, 5), 16), b: parseInt(hex.slice(5, 7), 16) }; }
+  setRgbChannel(key: "r" | "g" | "b", event: Event) {
+    const value = Math.round(this.number(event));
+    if (!Number.isFinite(value) || value < 0 || value > 255) return;
+    const c = { ...this.rgbChannels(), [key]: value };
+    this.setPaintBaseColor("#" + [c.r, c.g, c.b].map((n) => n.toString(16).padStart(2, "0")).join(""));
+  }
+  cmykChannels() { return rgbToCmyk(this.paintBaseColor()); }
+  setCmykChannel(key: "c" | "m" | "y" | "k", event: Event) {
+    const value = this.number(event);
+    if (!Number.isFinite(value) || value < 0 || value > 100) return;
+    const c = { ...this.cmykChannels(), [key]: value };
+    this.setPaintBaseColor(cmykToRgb(c.c, c.m, c.y, c.k));
+  }
+  grayLevel() { return rgbToGray(this.paintBaseColor()); }
+  setGrayLevel(event: Event) {
+    const value = this.number(event);
+    if (Number.isFinite(value) && value >= 0 && value <= 100) this.setPaintBaseColor(grayToRgb(value));
+  }
+  /** The swatches the panel lists, filtered by kind as Show Swatch Kinds does. */
+  visibleSwatches(): Swatch[] {
+    const kind = this.swatchKind();
+    return this.editor.documentSwatches().filter((swatch) => kind === "all" || swatch.kind === kind);
+  }
+  swatchBackground(swatch: Swatch): string {
+    if (swatch.kind === "color") return swatch.color;
+    if (swatch.kind === "gradient") return this.gradientCss(swatch.gradient);
+    const pattern = this.editor.document().patterns?.find((p) => p.id === swatch.patternId);
+    return pattern ? this.patternCss(pattern) : "";
+  }
+  pickSwatch(swatch: Swatch) {
+    this.chosenSwatch.set(swatch.id);
+    this.editor.applySwatch(swatch.id, this.swatchTarget());
+  }
+  newSwatch() { const id = this.editor.addSwatch(this.swatchTarget()); if (id) this.chosenSwatch.set(id); }
+  deleteSwatch() { const id = this.chosenSwatch(); if (id && this.editor.removeSwatch(id)) this.chosenSwatch.set(null); }
+  setSwatchKind(kind: string) { if (["all", "color", "gradient", "pattern"].includes(kind)) this.swatchKind.set(kind as "all" | "color" | "gradient" | "pattern"); }
   @HostListener("document:pointerdown", ["$event"]) dismissPaint(event: PointerEvent) {
     if (!(event.target instanceof Element) || !event.target.closest(".paint-popover,.paint-trigger")) this.paintPicker.set(null);
   }
@@ -902,6 +1066,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     return translate(key, this.locale());
   }
   ngAfterViewInit() {
+    this.watchPhoneWidth();
     document.addEventListener("scroll", this.contextScrollHandler, true);
     this.viewport?.nativeElement.addEventListener("wheel", this.wheelHandler, {
       passive: false,
@@ -983,6 +1148,172 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     }
     return `M${start.x} ${start.y}` + area.points.map(point => `L${point.x} ${point.y}`).join("") + "Z";
   }
+  // Phones. Below the phone width the tools and the panels become drawers that slide in
+  // from the left and right edges, the menus fold behind a menu button, a long press
+  // stands for the right button and two fingers zoom the canvas or transform the selection.
+  readonly mobile = signal(typeof matchMedia === "function" && matchMedia(PHONE_QUERY).matches);
+  readonly mobileMenu = signal(false);
+  readonly toolsOpen = signal(false);
+  readonly panelsOpen = signal(false);
+  private phoneQuery?: MediaQueryList;
+  private swipeStart: { point: { x: number; y: number }; id: number } | null = null;
+  private longPress?: { timer: ReturnType<typeof setTimeout>; id: number; x: number; y: number; target: EventTarget | null; native: boolean };
+  private touches = new Map<number, { x: number; y: number }>();
+  private pinch?: {
+    mode: "view" | "transform";
+    start: [{ x: number; y: number }, { x: number; y: number }];
+    ids: [number, number];
+    zoom: number;
+    origin: { x: number; y: number };
+  };
+  /** Follows the phone width, so turning a tablet or resizing a window switches the layout. */
+  watchPhoneWidth() {
+    if (typeof matchMedia !== "function") return;
+    this.phoneQuery = matchMedia(PHONE_QUERY);
+    this.phoneQuery.addEventListener?.("change", (event) => {
+      this.mobile.set(event.matches);
+      if (!event.matches) this.closeDrawers();
+    });
+  }
+  toggleMobileMenu() {
+    this.mobileMenu.update((open) => !open);
+    if (this.mobileMenu()) { this.toolsOpen.set(false); this.panelsOpen.set(false); }
+  }
+  openDrawer(side: "tools" | "panels") {
+    this.mobileMenu.set(false);
+    this.toolsOpen.set(side === "tools");
+    this.panelsOpen.set(side === "panels");
+  }
+  closeDrawers() {
+    this.toolsOpen.set(false);
+    this.panelsOpen.set(false);
+    this.mobileMenu.set(false);
+  }
+  /** A finger that lands near a side edge may be opening the drawer on that side. */
+  @HostListener("document:pointerdown", ["$event"]) touchStart(event: PointerEvent) {
+    if (event.pointerType !== "touch") return;
+    this.swipeStart = this.mobile() ? { point: { x: event.clientX, y: event.clientY }, id: event.pointerId } : null;
+    this.startLongPress(event);
+  }
+  @HostListener("document:pointermove", ["$event"]) touchMove(event: PointerEvent) {
+    if (event.pointerType !== "touch" || !this.longPress || this.longPress.id !== event.pointerId) return;
+    if (Math.hypot(event.clientX - this.longPress.x, event.clientY - this.longPress.y) > LONG_PRESS_SLOP) this.cancelLongPress();
+  }
+  @HostListener("document:pointerup", ["$event"]) touchEnd(event: PointerEvent) {
+    if (event.pointerType !== "touch") return;
+    this.cancelLongPress();
+    const start = this.swipeStart;
+    this.swipeStart = null;
+    if (!start || start.id !== event.pointerId || !this.mobile()) return;
+    const swipe = edgeSwipe(start.point, { x: event.clientX, y: event.clientY }, window.innerWidth, { left: this.toolsOpen(), right: this.panelsOpen() });
+    if (swipe === "openLeft") this.openDrawer("tools");
+    else if (swipe === "openRight") this.openDrawer("panels");
+    else if (swipe === "closeLeft") this.toolsOpen.set(false);
+    else if (swipe === "closeRight") this.panelsOpen.set(false);
+  }
+  @HostListener("document:pointercancel", ["$event"]) touchCancelled(event: PointerEvent) {
+    if (event.pointerType !== "touch") return;
+    this.cancelLongPress();
+    this.swipeStart = null;
+  }
+  /**
+   * A finger resting on the screen opens the context menu, since a phone has no right
+   * button. The press is turned into the context menu event of whatever it rests on, so
+   * the canvas, the layers and the guides each open their own menu; a browser that opens
+   * one by itself on a long press is left to do so.
+   */
+  private startLongPress(event: PointerEvent) {
+    this.cancelLongPress();
+    if (!event.isPrimary) return;
+    const target = event.target;
+    const press = { id: event.pointerId, x: event.clientX, y: event.clientY, target, native: false, timer: setTimeout(() => this.fireLongPress(), LONG_PRESS_MS) };
+    this.longPress = press;
+  }
+  private cancelLongPress() {
+    if (this.longPress) clearTimeout(this.longPress.timer);
+    this.longPress = undefined;
+  }
+  private fireLongPress() {
+    const press = this.longPress;
+    this.longPress = undefined;
+    if (!press || press.native || !(press.target instanceof Element)) return;
+    // A press that started a drawing gesture on the canvas gives it up for the menu.
+    if (press.target.closest("canvas") && this.pointerActive) this.pointerCancel();
+    this.syntheticContext = true;
+    press.target.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true, clientX: press.x, clientY: press.y, button: 2 }));
+    this.syntheticContext = false;
+  }
+  private syntheticContext = false;
+  @HostListener("document:contextmenu") nativeContext() {
+    // The browser opened a menu of its own on the long press, so ours is not needed.
+    if (!this.syntheticContext && this.longPress) { this.longPress.native = true; this.cancelLongPress(); }
+  }
+  /**
+   * Two fingers on the canvas. Landing on the selection, they scale it in proportion,
+   * turn it and move it around its pivot; anywhere else they zoom the canvas around
+   * themselves and pan it. Whatever the first finger had started is taken back.
+   */
+  private touchDown(event: PointerEvent): boolean {
+    if (event.pointerType !== "touch") return false;
+    this.touches.set(event.pointerId, { x: event.clientX, y: event.clientY });
+    if (this.touches.size !== 2) return this.touches.size > 2 || !!this.pinch;
+    this.cancelLongPress();
+    if (this.pointerActive) this.pointerCancel();
+    const [[idA, a], [idB, b]] = [...this.touches.entries()];
+    const middle = this.point({ clientX: (a.x + b.x) / 2, clientY: (a.y + b.y) / 2 } as PointerEvent);
+    const bounds = this.editor.selectedLayers().length ? selectionBounds(this.editor.selectedLayers()) : null;
+    const pad = 24 / this.editor.zoom();
+    const onSelection = !!bounds && middle.x >= bounds.x - pad && middle.x <= bounds.x + bounds.width + pad && middle.y >= bounds.y - pad && middle.y <= bounds.y + bounds.height + pad;
+    const mode = onSelection && this.editor.startTouchTransform() ? "transform" : "view";
+    const rect = this.canvas!.nativeElement.getBoundingClientRect();
+    this.pinch = { mode, start: [a, b], ids: [idA, idB], zoom: this.editor.zoom(), origin: { x: rect.left, y: rect.top } };
+    return true;
+  }
+  private touchMoveCanvas(event: PointerEvent): boolean {
+    if (event.pointerType !== "touch" || !this.touches.has(event.pointerId)) return false;
+    this.touches.set(event.pointerId, { x: event.clientX, y: event.clientY });
+    const pinch = this.pinch;
+    if (!pinch) return false;
+    const a = this.touches.get(pinch.ids[0]), b = this.touches.get(pinch.ids[1]);
+    if (!a || !b) return true;
+    const change = twoFingerChange(pinch.start, [a, b]);
+    if (pinch.mode === "transform") {
+      const zoom = this.editor.zoom();
+      this.editor.touchTransform(change.scale, change.rotation, { x: change.shift.x / zoom, y: change.shift.y / zoom });
+      return true;
+    }
+    const nextZoom = Math.min(3, Math.max(0.1, pinch.zoom * change.scale));
+    const fingers = pairOf(pinch.start[0], pinch.start[1]).middle, now = pairOf(a, b).middle;
+    const target = zoomAround(pinch.origin, pinch.zoom, nextZoom, fingers, now);
+    this.setZoom(nextZoom);
+    // The canvas takes its new size on the next frame; the view is then scrolled so the
+    // point under the fingers stays there.
+    requestAnimationFrame(() => {
+      const view = this.viewport?.nativeElement, canvas = this.canvas?.nativeElement;
+      if (!view || !canvas) return;
+      const rect = canvas.getBoundingClientRect();
+      view.scrollLeft += rect.left - target.x;
+      view.scrollTop += rect.top - target.y;
+    });
+    return true;
+  }
+  private touchUpCanvas(event: PointerEvent): boolean {
+    if (event.pointerType !== "touch") return false;
+    this.touches.delete(event.pointerId);
+    if (this.pinch && this.touches.size < 2) {
+      if (this.pinch.mode === "transform") this.editor.end();
+      this.pinch = undefined;
+      // The finger still down after a two-finger gesture draws nothing when it lifts.
+      this.pinchResidue = this.touches.size > 0;
+      return true;
+    }
+    if (this.pinchResidue) {
+      this.pinchResidue = this.touches.size > 0;
+      return true;
+    }
+    return false;
+  }
+  private pinchResidue = false;
   private point(event: MouseEvent) {
     const rect = this.canvas!.nativeElement.getBoundingClientRect();
     return {
@@ -1181,6 +1512,9 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   pointerDown(event: PointerEvent) {
     if (event.button !== 0) return;
     event.preventDefault();
+    if (this.touchDown(event)) return;
+    // Near a side edge a phone finger is opening a drawer, not drawing.
+    if (event.pointerType === "touch" && this.mobile() && (event.clientX <= EDGE_ZONE || event.clientX >= window.innerWidth - EDGE_ZONE)) return;
     this.canvas!.nativeElement.setPointerCapture(event.pointerId);
     this.pointerActive = true;
     if (this.zoomAreaActive(event)) { this.beginZoomArea(event); return; }
@@ -1216,6 +1550,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     }
   }
   pointerMove(event: PointerEvent) {
+    if (this.touchMoveCanvas(event) || this.pinchResidue) return;
     this.cursorPoint.set({ x: event.clientX, y: event.clientY });
     if (this.altHeld && this.altHeld() !== event.altKey) this.altHeld.set(event.altKey);
     if (this.zoomDrag) { this.updateZoomArea(event); return; }
@@ -1233,6 +1568,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
       });
   }
   pointerUp(event?: PointerEvent) {
+    if (event && this.touchUpCanvas(event)) return;
     this.pointerActive = false;
     if (this.zoomDrag) { this.endZoomArea(); return; }
     this.pan = undefined;
@@ -1446,6 +1782,10 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     // The clipboard actions say what they need: something selected, or something copied.
     if (["copy", "cut", "duplicate", "duplicateSeries", "outlineStroke"].includes(id)) return this.editor.selectedLayers().length > 0;
     if (id === "outlineText") return this.editor.selectedLayers().some((layer) => layer.kind === "text");
+    if (["lockSelection", "lockAbove", "lockOthers", "hideSelection", "hideAbove", "hideOthers"].includes(id)) return this.editor.selectedLayers().some((layer) => !layer.guide);
+    if (id === "unlockAll") return this.editor.document().layers.some((layer) => layer.locked && !layer.guide);
+    if (id === "definePattern") return this.editor.selectedLayers().length > 0 && this.editor.selectedLayers().every((layer) => ["rectangle", "ellipse", "path"].includes(layer.kind) && !layer.guide && !layer.dimension && !layer.procedural && !layer.symbolId && !layer.fillPaint);
+    if (id === "showAll") return this.editor.document().layers.some((layer) => !layer.visible && !layer.guide);
     const paths = this.editor.selectedLayers().some((layer) => layer.kind === "path" && !!layer.curves);
     if (["joinPaths", "simplifyPath"].includes(id)) return paths;
     if (["averageAnchors", "convertCorner", "convertSmooth", "removeAnchors", "cutAtAnchors"].includes(id))
@@ -1504,6 +1844,15 @@ export class AppComponent implements AfterViewInit, OnDestroy {
       cutAtAnchors: () => this.editor.cutAtSelectedAnchors(),
       selectStray: () => this.editor.selectStrayPoints(),
       toggleMultipleHandles: () => this.preferences.updatePathSettings({ showHandlesMultiple: !this.preferences.pathSettings().showHandlesMultiple }),
+      definePattern: () => this.editor.definePattern(),
+      lockSelection: () => this.editor.lockOrHide("locked", "selection"),
+      lockAbove: () => this.editor.lockOrHide("locked", "above"),
+      lockOthers: () => this.editor.lockOrHide("locked", "others"),
+      unlockAll: () => this.editor.unlockOrShowAll("locked"),
+      hideSelection: () => this.editor.lockOrHide("hidden", "selection"),
+      hideAbove: () => this.editor.lockOrHide("hidden", "above"),
+      hideOthers: () => this.editor.lockOrHide("hidden", "others"),
+      showAll: () => this.editor.unlockOrShowAll("hidden"),
       eraserSmaller: () => this.resizeEraser(-1),
       eraserLarger: () => this.resizeEraser(1),
       remove: () => this.editor.remove(),
@@ -1682,6 +2031,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     return (this.preferences.bindings()[id] ?? []).join(" / ");
   }
   chooseTool(id: ToolId) {
+    if (this.mobile?.()) this.toolsOpen.set(false);
     this.commitText();
     this.editor.setTool(id);
     const mode = ({ selectRectangle: "rectangle", selectEllipse: "ellipse", selectLasso: "lasso" } as const)[id as "selectRectangle" | "selectEllipse" | "selectLasso"];
@@ -1944,6 +2294,19 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     const clear = () => { this.commitText(); this.editor.reset(); this.fit(); };
     if (!this.editor.dirty()) { clear(); return; }
     this.confirmation.set({ title: "Unsaved changes", message: "The current document has unsaved changes. Clearing it removes all of its content.", action: "Clear anyway", run: clear });
+  }
+  /**
+   * On a phone the document tabs become a list in the header: choosing a document shows
+   * it, and the last two entries make a new document or close the one shown.
+   */
+  chooseDocument(event: Event) {
+    const select = event.target as HTMLSelectElement;
+    const active = () => this.editor.tabs().find((tab) => tab.active)?.id ?? "";
+    if (select.value === "new") this.newDocument();
+    else if (select.value === "close") { if (active()) this.closeDocument(active()); }
+    else this.switchDocument(select.value);
+    // After an action the list shows the document on screen again.
+    select.value = active();
   }
   switchDocument(id: string) {
     this.commitText();

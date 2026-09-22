@@ -4,9 +4,20 @@ import { describe, expect, it } from 'vitest';
 import { existsSync, readFileSync } from 'node:fs';
 
 const template = readFileSync('apps/web/src/app/app.component.html', 'utf-8');
-const footer = template.slice(template.indexOf('<footer>'), template.indexOf('</footer>'));
+const footerElement = template.slice(template.indexOf('<footer>'), template.indexOf('</footer>'));
+// The credits are one template, shown in the footer and, on a phone, at the foot of the menu.
+const start = template.indexOf('<ng-template #footerCredits>');
+const footer = template.slice(start, template.indexOf('</ng-template>', start));
 
 describe('footer credits', () => {
+  it('shows the same credits in the footer and at the foot of the phone menu', () => {
+    expect(start).toBeGreaterThan(-1);
+    expect(footerElement).toContain('*ngTemplateOutlet="footerCredits"');
+    const menu = template.slice(template.indexOf('<nav class="menus"'), template.indexOf('</nav>'));
+    expect(menu).toContain('class="menu-footer"');
+    expect(menu).toContain('*ngTemplateOutlet="footerCredits"');
+  });
+
   it('carries the credits, the version and the links, in that order', () => {
     expect(footer.indexOf('class="credits"')).toBeGreaterThan(-1);
     expect(footer.indexOf('class="credits"')).toBeLessThan(footer.indexOf('class="version"'));

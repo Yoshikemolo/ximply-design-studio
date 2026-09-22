@@ -1,11 +1,22 @@
 <div class="studio-shell">
   <header class="menubar">
+    <button class="menu-toggle" type="button" (click)="toggleMobileMenu()" [attr.aria-expanded]="mobileMenu()" [attr.aria-label]="t(mobileMenu() ? 'Close menu' : 'Open menu')" [title]="t(mobileMenu() ? 'Close menu' : 'Open menu')"><img [src]="'/assets/icons/' + (mobileMenu() ? 'close' : 'menu') + '.svg'" alt="" /></button>
     <a class="brand" href="/" aria-label="Ximply Design Studio"
       ><img src="/assets/icons/ximplicity-x.svg" alt="" /><span
         >ximply<span class="brand-sub">design studio</span></span
       ></a
     >
-    <nav class="menus" aria-label="Main menu">
+    @if (mobile()) {
+      <select class="mobile-documents" [attr.aria-label]="t('Documents')" [title]="t('Documents')" (change)="chooseDocument($event)">
+        @for (tab of editor.tabs(); track tab.id) {
+          <option [value]="tab.id" [selected]="tab.active">{{ tab.name }}{{ tab.dirty ? " •" : "" }}</option>
+        }
+        <option disabled>──────────</option>
+        <option value="new">+ {{ t("New document") }}</option>
+        <option value="close">× {{ t("Close document") }}</option>
+      </select>
+    }
+    <nav class="menus" aria-label="Main menu" [class.open]="mobileMenu()">
       <details>
         <summary>{{ t("File") }}</summary>
         <div class="menu-popover">
@@ -45,6 +56,8 @@
             {{ t("Delete") }}<kbd>{{ shortcut("remove") }}</kbd>
           </button>
           <hr />
+          <button [disabled]="!commandEnabled('definePattern')" (click)="runCommand('definePattern')">{{ t("Define pattern") }}<kbd>{{ shortcut("definePattern") }}</kbd></button>
+          <hr />
           <button (click)="openSettings()">
             {{ t("Settings") }}<kbd>{{ shortcut("settings") }}</kbd>
           </button>
@@ -76,6 +89,14 @@
           ><button [disabled]="!commandEnabled('outlineText')" (click)="runCommand('outlineText')">
             {{ t("Create outlines") }}<kbd>{{ shortcut("outlineText") }}</kbd>
           </button>
+          <div class="menu-section-label">{{ t("Lock") }}</div>
+          @for (id of lockMenuCommands; track id) {
+            <button [disabled]="!commandEnabled(id)" (click)="runCommand(id)">{{ t(commandLabel(id)) }}<kbd>{{ shortcut(id) }}</kbd></button>
+          }
+          <div class="menu-section-label">{{ t("Hide") }}</div>
+          @for (id of hideMenuCommands; track id) {
+            <button [disabled]="!commandEnabled(id)" (click)="runCommand(id)">{{ t(commandLabel(id)) }}<kbd>{{ shortcut(id) }}</kbd></button>
+          }
           <div class="menu-section-label">{{ t("Path") }}</div>
           @for (id of pathMenuCommands; track id) {
             <button [disabled]="!commandEnabled(id)" (click)="runCommand(id)">{{ t(commandLabel(id)) }}<kbd>{{ shortcut(id) }}</kbd></button>
@@ -121,6 +142,9 @@
           </button>
         </div>
       </details>
+      @if (mobile()) {
+        <div class="menu-footer"><ng-container *ngTemplateOutlet="footerCredits"></ng-container></div>
+      }
     </nav>
     <button class="preview-badge" [title]="t('Local preview explanation')" [attr.aria-label]="t('Local preview') + ': ' + t('Local preview explanation')" (click)="openServerSettings()">{{ t("Local preview") }}</button>
     <div class="header-spacer"></div>
@@ -209,8 +233,15 @@
     }
   </div>
   <main class="workspace" [class.no-panels]="!panels()" [class.no-tools]="!preferences.layoutBlocks().tools">
+    @if (mobile()) {
+      <button class="drawer-handle left" type="button" (click)="openDrawer('tools')" [attr.aria-label]="t('Drawing tools')" [title]="t('Drawing tools')"><span></span></button>
+      <button class="drawer-handle right" type="button" (click)="openDrawer('panels')" [attr.aria-label]="t('Editor panels')" [title]="t('Editor panels')"><span></span></button>
+      @if (toolsOpen() || panelsOpen() || mobileMenu()) {
+        <div class="drawer-backdrop" (click)="closeDrawers()" aria-hidden="true"></div>
+      }
+    }
     @if (preferences.layoutBlocks().tools) {
-    <aside class="toolrail" [attr.aria-label]="t('Drawing tools')">
+    <aside class="toolrail" [class.drawer-open]="toolsOpen()" [attr.aria-label]="t('Drawing tools')">
       @for (section of toolbarSections; track section.id) {
         <div class="tool-section" role="group" [attr.aria-label]="t(section.label)">
           @for (family of section.families; track family.id) {
@@ -496,7 +527,31 @@
       </div>
     </section>
     @if (panels()) {
-      <aside class="inspector" aria-label="Editor panels">
+      <aside class="inspector" [class.drawer-open]="panelsOpen()" aria-label="Editor panels">
+        @if (preferences.layoutBlocks().swatches) {
+          <details class="panel swatches-panel" open>
+            <summary><span>{{ t("Swatches") }}</span></summary>
+            <div class="swatches-content">
+              <div class="swatch-toolbar">
+                <div class="segmented" role="group" [attr.aria-label]="t('Apply to')">
+                  <button [class.active]="swatchTarget() === 'fill'" [attr.aria-pressed]="swatchTarget() === 'fill'" (click)="swatchTarget.set('fill')">{{ t("Fill") }}</button>
+                  <button [class.active]="swatchTarget() === 'stroke'" [attr.aria-pressed]="swatchTarget() === 'stroke'" (click)="swatchTarget.set('stroke')">{{ t("Stroke") }}</button>
+                </div>
+                <select [attr.aria-label]="t('Show swatch kinds')" [value]="swatchKind()" (change)="setSwatchKind(text($event))">@for (kind of swatchKinds; track kind.id) {<option [value]="kind.id" [selected]="swatchKind() === kind.id">{{ t(kind.label) }}</option>}</select>
+              </div>
+              <div class="swatch-grid">
+                <button class="swatch" [title]="t('None')" [attr.aria-label]="t('None')" (click)="editor.setPaint(swatchTarget(), 'none')"><span class="no-paint"></span></button>
+                @for (swatch of visibleSwatches(); track swatch.id) {
+                  <button class="swatch" [class.active]="chosenSwatch() === swatch.id" [title]="swatch.name" [attr.aria-label]="swatch.name" (click)="pickSwatch(swatch)"><span [style.background]="swatchBackground(swatch)"></span></button>
+                }
+              </div>
+              <div class="swatch-actions">
+                <button (click)="newSwatch()" [title]="t('New swatch')" [attr.aria-label]="t('New swatch')"><img src="/assets/icons/plus.svg" alt="" /></button>
+                <button [disabled]="!chosenSwatch()" (click)="deleteSwatch()" [title]="t('Delete swatch')" [attr.aria-label]="t('Delete swatch')"><img src="/assets/icons/delete.svg" alt="" /></button>
+              </div>
+            </div>
+          </details>
+        }
         <details class="panel drawing-options" open>
           <summary><span>{{ t("Drawing tools") }}</span></summary>
           <div class="drawing-controls">
@@ -827,6 +882,7 @@
               ><span class="panel-grip">⋮⋮</span>
             </summary>
             @if (panel === "properties") {
+              <div class="properties-content">
               @if (editor.selected(); as layer) {
                 <div class="selected-kind">
                   <span class="kind-dot"></span>{{ layer.name
@@ -1016,14 +1072,42 @@
                   </button>
                 </div>
               } @else {
-                <div class="empty-properties">
-                  <img src="/assets/icons/select.svg" alt="" />
-                  <p>{{ t("Nothing selected") }}</p>
+                @let page = editor.document();
+                @let setup = editor.pageSetup();
+                <div class="selected-kind">
+                  <img class="kind-icon" src="/assets/icons/document.svg" alt="" />{{ activeTabName() }}<span class="header-spacer"></span><small>{{ t("Document") }}</small>
                 </div>
+                <label class="document-row">{{ t("Document name") }}<input [value]="activeTabName()" (change)="editor.rename(text($event))" /></label>
+                <div class="section-label">{{ t("Page") }} · {{ preferences.distanceUnit() }}</div>
+                <div class="property-grid">
+                  <label [title]="t('Width')">W<input type="number" min="0" step="any" [value]="displayDistance(page.width)" (change)="setDocumentSize('width', $event)" [attr.aria-label]="t('Width')" /></label>
+                  <label [title]="t('Height')">H<input type="number" min="0" step="any" [value]="displayDistance(page.height)" (change)="setDocumentSize('height', $event)" [attr.aria-label]="t('Height')" /></label>
+                </div>
+                <div class="document-row">
+                  <span>{{ t("Orientation") }}</span>
+                  <div class="segmented" role="group" [attr.aria-label]="t('Orientation')">
+                    <button [class.active]="page.height >= page.width" [attr.aria-pressed]="page.height >= page.width" (click)="setDocumentOrientation('portrait')" [title]="t('Portrait')" [attr.aria-label]="t('Portrait')"><img src="/assets/icons/portrait.svg" alt="" /></button>
+                    <button [class.active]="page.width > page.height" [attr.aria-pressed]="page.width > page.height" (click)="setDocumentOrientation('landscape')" [title]="t('Landscape')" [attr.aria-label]="t('Landscape')"><img src="/assets/icons/landscape.svg" alt="" /></button>
+                  </div>
+                </div>
+                <label class="document-row">{{ t("Ruler units") }}<select [value]="preferences.distanceUnit()" (change)="setUnit('distanceUnit', $event)">@for (unit of units; track unit) {<option [value]="unit">{{ unit }}</option>}</select></label>
+                <div class="section-label">{{ t("Margin guides") }} · {{ preferences.distanceUnit() }}</div>
+                <div class="property-grid">
+                  @for (edge of pageEdgeKeys; track edge) {
+                    <label [title]="t(edgeLabel(edge))">{{ edgeInitial(edge) }}<input type="number" min="0" step="any" [value]="displayDistance(setup.margins[edge])" (change)="setDocumentMargin(edge, $event)" [attr.aria-label]="t(edgeLabel(edge))" /></label>
+                  }
+                </div>
+                <label class="document-row toggle-row">{{ t("Margin guides") }}<input class="toggle-switch" type="checkbox" role="switch" [checked]="setup.margins.edges" (change)="toggleDocumentMargin('edges', $any($event.target).checked)" /></label>
+                <label class="document-row toggle-row">{{ t("Vertical centre guide") }}<input class="toggle-switch" type="checkbox" role="switch" [checked]="setup.margins.centerX" (change)="toggleDocumentMargin('centerX', $any($event.target).checked)" /></label>
+                <label class="document-row toggle-row">{{ t("Horizontal centre guide") }}<input class="toggle-switch" type="checkbox" role="switch" [checked]="setup.margins.centerY" (change)="toggleDocumentMargin('centerY', $any($event.target).checked)" /></label>
+                <label class="document-row">{{ t("Registration marks") }}<select [value]="setup.marks" (change)="setDocumentMarks($event)">@for (option of registrationOptions; track option) {<option [value]="option">{{ t(registrationLabels[option]) }}</option>}</select></label>
+                <div class="section-label">{{ t("Background") }}</div>
                 <label class="wide-label color-row">{{ t("Background") }}<input class="color-value" type="text" maxlength="9" [value]="backgroundPaint()" (change)="setBackgroundPaint(text($event))" [title]="t('Use a hex color with optional alpha, or none.')" /><input class="color-swatch" type="color" [class.no-paint]="backgroundPaint() === 'none'" [value]="backgroundBase()" (input)="setBackgroundBase(text($event))" [attr.aria-label]="t('Background')" /></label>
                 <label class="wide-label">{{ t("Paint opacity") }}<input type="range" min="0" max="100" [value]="backgroundOpacity()" (input)="setBackgroundOpacity(number($event))" />{{ backgroundOpacity() }}%</label>
                 <div class="paint-options background-options">@for (swatch of backgroundSwatches; track swatch.value) {<button [class.active]="backgroundPaint() === swatch.value" [title]="t(swatch.label)" [attr.aria-label]="t(swatch.label)" (click)="setBackgroundPaint(swatch.value)"><span [class.no-paint]="swatch.value === 'none'" [style.background]="swatch.value === 'none' ? '' : swatch.value"></span>{{ t(swatch.label) }}</button>}</div>
+                <div class="path-actions"><button (click)="openPageDialog('format')">{{ t("Document dimensions") }}…</button></div>
               }
+              </div>
             } @else {
               <div class="layer-tools">
                 <span
@@ -1113,6 +1197,10 @@
     <span class="status-dot"></span
     ><span role="status" class="status-text">{{ t(editor.status()) }}</span>
     <div class="header-spacer"></div>
+    <ng-container *ngTemplateOutlet="footerCredits"></ng-container>
+  </footer>
+</div>
+<ng-template #footerCredits>
     <span class="credits"
       >&copy; {{ year }}.
       <a href="https://ximplicity.es" target="_blank" rel="noopener noreferrer"
@@ -1147,8 +1235,7 @@
         ><img src="/assets/icons/github.svg" alt="" /><span class="visually-hidden">GitHub</span></a
       >
     </div>
-  </footer>
-</div>
+</ng-template>
 <input
   #imageFile
   class="visually-hidden"
@@ -1530,9 +1617,76 @@
 @if (paintPicker()) {
   <section #paintPopover class="paint-popover" role="dialog" [attr.aria-label]="t('Appearance')" [style.left.px]="paintPicker()!.x" [style.top.px]="paintPicker()!.y" [style.--popover-top.px]="paintPicker()!.y">
     <header><strong>{{ t(paintTarget() === 'fill' ? 'Fill' : 'Stroke') }}</strong><button (click)="paintPicker.set(null)" [attr.aria-label]="t('Close')">×</button></header>
-    <label>{{ t('Color') }}<input type="color" [value]="paintBaseColor()" (input)="setPaintBaseColor(text($event))" /></label>
-    <label>{{ t("Paint opacity") }}<input type="range" min="0" max="100" [value]="paintOpacity()" (input)="setPaintOpacity(number($event))" />{{ paintOpacity() }}%</label>
-    <div class="paint-options">@for (color of quickColors; track color.value) {<button (click)="editor.setPaint(paintTarget(), color.value)" [class.active]="paintColor(paintTarget()) === color.value"><span [class.no-paint]="color.value === 'none'" [style.background]="color.value === 'none' ? '' : color.value"></span>{{ t(color.label) }}</button>}</div>
+    @if (paintTarget() === 'fill') {
+      <div class="segmented paint-kinds" role="group" [attr.aria-label]="t('Fill')">
+        @for (kind of fillKinds; track kind.id) {<button [class.active]="fillKind() === kind.id" [attr.aria-pressed]="fillKind() === kind.id" (click)="setFillKind(kind.id)">{{ t(kind.label) }}</button>}
+      </div>
+    }
+    @if (paintTarget() === 'stroke' || fillKind() === 'color' || fillKind() === 'none') {
+      <label>{{ t('Color mode') }}<select [value]="preferences.colorMode()" (change)="preferences.setColorMode(text($event))">@for (mode of colorModes; track mode.id) {<option [value]="mode.id" [selected]="preferences.colorMode() === mode.id">{{ t(mode.label) }}</option>}</select></label>
+      @switch (preferences.colorMode()) {
+        @case ('rgb') {
+          @let rgb = rgbChannels();
+          @for (channel of rgbKeys; track channel) {
+            <label class="channel">{{ channel.toUpperCase() }}<input type="range" min="0" max="255" [value]="rgb[channel]" (input)="setRgbChannel(channel, $event)" /><input type="number" min="0" max="255" [value]="rgb[channel]" (change)="setRgbChannel(channel, $event)" [attr.aria-label]="channel.toUpperCase()" /></label>
+          }
+        }
+        @case ('cmyk') {
+          @let cmyk = cmykChannels();
+          @for (channel of cmykKeys; track channel) {
+            <label class="channel">{{ channel.toUpperCase() }}<input type="range" min="0" max="100" [value]="cmyk[channel]" (input)="setCmykChannel(channel, $event)" /><input type="number" min="0" max="100" [value]="cmyk[channel]" (change)="setCmykChannel(channel, $event)" [attr.aria-label]="channel.toUpperCase()" />%</label>
+          }
+        }
+        @case ('grayscale') {
+          <label class="channel">K<input type="range" min="0" max="100" [value]="grayLevel()" (input)="setGrayLevel($event)" /><input type="number" min="0" max="100" [value]="grayLevel()" (change)="setGrayLevel($event)" aria-label="K" />%</label>
+        }
+        @case ('palette') {
+          <div class="palette-grid">
+            @for (color of preferences.customPalette(); track color) {<button class="swatch" [class.active]="paintBaseColor() === color" [title]="color" [attr.aria-label]="color" (click)="setPaintBaseColor(color)"><span [style.background]="color"></span></button>}
+          </div>
+          <div class="palette-actions"><button (click)="preferences.addPaletteColor(paintBaseColor())">{{ t('Add current color') }}</button><button [disabled]="!preferences.customPalette().includes(paintBaseColor())" (click)="preferences.removePaletteColor(paintBaseColor())">{{ t('Remove color') }}</button></div>
+        }
+        @default {
+          <label>{{ t('Color') }}<input type="color" [value]="paintBaseColor()" (input)="setPaintBaseColor(text($event))" /></label>
+        }
+      }
+      <label>{{ t("Paint opacity") }}<input type="range" min="0" max="100" [value]="paintOpacity()" (input)="setPaintOpacity(number($event))" />{{ paintOpacity() }}%</label>
+      <div class="paint-options">@for (color of quickColors; track color.value) {<button (click)="editor.setPaint(paintTarget(), color.value)" [class.active]="paintColor(paintTarget()) === color.value"><span [class.no-paint]="color.value === 'none'" [style.background]="color.value === 'none' ? '' : color.value"></span>{{ t(color.label) }}</button>}</div>
+    }
+    @if (paintTarget() === 'fill' && fillKind() === 'gradient') {
+      @let gradient = gradientPaint();
+      <div class="gradient-editor">
+        <div class="gradient-preview" [style.background]="gradientCss(gradient)"></div>
+        <label>{{ t('Type') }}<select [value]="gradient.type" (change)="setGradientType(text($event))"><option value="linear" [selected]="gradient.type === 'linear'">{{ t('Linear') }}</option><option value="radial" [selected]="gradient.type === 'radial'">{{ t('Radial') }}</option></select></label>
+        @if (gradient.type === 'linear') {<label>{{ t('Angle') }}<input type="number" min="-180" max="180" step="any" [value]="gradient.angle" (change)="setGradientAngle($event)" />°</label>}
+        <div class="gradient-stops">
+          @for (stop of gradient.stops; track $index; let i = $index, last = $last) {
+            <div class="gradient-stop">
+              <input type="color" [value]="stop.color.slice(0, 7)" (input)="setStop(i, 'color', $event)" [attr.aria-label]="t('Stop color')" />
+              <label>{{ t('Location') }}<input type="number" min="0" max="100" step="any" [value]="stop.location" (change)="setStop(i, 'location', $event)" />%</label>
+              @if (!last) {<label>{{ t('Midpoint') }}<input type="number" min="13" max="87" step="any" [value]="stop.midpoint" (change)="setStop(i, 'midpoint', $event)" />%</label>}
+              <button [disabled]="gradient.stops.length <= 2" (click)="removeStop(i)" [title]="t('Delete stop')" [attr.aria-label]="t('Delete stop')">×</button>
+            </div>
+          }
+        </div>
+        <div class="palette-actions"><button [disabled]="gradient.stops.length >= 32" (click)="addStop()">{{ t('Add stop') }}</button><button (click)="reverseGradient()">{{ t('Reverse gradient') }}</button></div>
+        <p class="panel-tip">{{ t('Drag across the selection with the Gradient tool (G) to set where the gradient runs.') }}</p>
+      </div>
+    }
+    @if (paintTarget() === 'fill' && fillKind() === 'pattern') {
+      <div class="pattern-picker">
+        @for (pattern of editor.document().patterns ?? []; track pattern.id) {
+          <button class="swatch" [class.active]="fillPatternId() === pattern.id" [title]="pattern.name" [attr.aria-label]="pattern.name" (click)="choosePattern(pattern.id)"><span [style.background]="patternCss(pattern)"></span></button>
+        }
+      </div>
+      <div class="section-label">{{ t('Ready-made patterns') }}</div>
+      <div class="pattern-picker">
+        @for (preset of presetPatterns; track preset.kind) {
+          <button class="swatch" [title]="t(preset.pattern.name)" [attr.aria-label]="t(preset.pattern.name)" (click)="choosePresetPattern(preset.kind)"><span [style.background]="patternCss(preset.pattern)"></span></button>
+        }
+      </div>
+      <button [disabled]="!commandEnabled('definePattern')" (click)="runCommand('definePattern')">{{ t('Define pattern') }}</button>
+    }
     @if (paintTarget() === 'stroke') {
       <label>{{ t('Width') }} ({{ preferences.distanceUnit() }})<input type="number" min="0" step="any" [value]="displayDistance(paintWidth())" (change)="setPaintWidth($event)" /></label>
       @for (control of strokeControls; track control.key) {

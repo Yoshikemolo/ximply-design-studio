@@ -506,8 +506,8 @@ hr {
   flex-direction: column;
 }
 .document-tabs {
-  /* One pixel above the tab height, so the strip never scrolls over its own content. */
-  height: 40px;
+  /* Two pixels above the tab height, so the strip never scrolls over its own content. */
+  height: 38px;
   display: flex;
   align-items: center;
   gap: 10px;
@@ -521,7 +521,7 @@ hr {
   font-size: 10px;
 }
 .document-tab {
-  height: 40px;
+  height: 36px;
   min-width: 150px;
   max-width: 260px;
   display: flex;
@@ -826,8 +826,20 @@ hr {
   --checker-size: 8px;
   background: repeating-conic-gradient(#d6d9de 0% 25%, #ffffff 0% 50%) 0 / calc(var(--checker-size) * 2) calc(var(--checker-size) * 2);
 }
-.background-options {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+/*
+ * The quick backgrounds share the width of the panel in equal columns, a little closer
+ * together than other swatches, so the last one ends where the other controls end.
+ */
+.paint-options.background-options {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  gap: 2px;
+  width: 100%;
+}
+.paint-options.background-options button {
+  min-width: 0;
+  padding: 5px 2px;
 }
 .artboard-label {
   position: absolute;
@@ -996,6 +1008,63 @@ canvas {
   gap: 8px;
   padding: 6px 15px 15px;
   font-size: 11px;
+}
+/*
+ * Properties keeps the same side margins as the other panels for everything it holds;
+ * the pieces that bring their own padding give it up inside it.
+ */
+.properties-content {
+  padding: 0 15px 14px;
+}
+.properties-content > fieldset,
+.properties-content > .selected-kind,
+.properties-content > .object-actions {
+  padding-left: 0;
+  padding-right: 0;
+}
+.properties-content .kind-icon {
+  width: 14px;
+  height: 14px;
+  /* A loose icon takes the colour of the theme, as the icons inside buttons do. */
+  filter: var(--icon);
+}
+.document-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 8px 0;
+  font-size: 11px;
+}
+.document-row select,
+.document-row input {
+  max-width: 150px;
+}
+.mobile-documents {
+  display: none;
+}
+.segmented {
+  display: inline-flex;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+.segmented button {
+  width: 32px;
+  height: 28px;
+  padding: 4px;
+  border: 0;
+  border-radius: 0;
+}
+.segmented button + button {
+  border-left: 1px solid var(--border);
+}
+.segmented button.active {
+  background: var(--selected);
+}
+.segmented img {
+  width: 18px;
+  height: 18px;
 }
 .selected-kind small {
   font-size: 9px;
@@ -1943,6 +2012,27 @@ textarea,
 .paint-options { display: flex; gap: 4px; margin-bottom: 12px; }
 .paint-options button { display: flex; flex-direction: column; gap: 6px; align-items: center; font-size: 10px; padding: 6px; }
 .paint-options span { display: block; width: 28px; height: 24px; border: 1px solid var(--muted); }
+/* Colour, gradient and pattern controls of the paint popover, and the Swatches panel. */
+.paint-kinds { display: flex; width: 100%; margin-bottom: 12px; button { flex: 1; padding: 5px 2px; font-size: 10px; } }
+.paint-popover label.channel { display: grid; grid-template-columns: 14px minmax(0, 1fr) 52px auto; gap: 6px; input[type=range], input[type=number] { width: 100%; min-width: 0; } }
+.gradient-editor { display: flex; flex-direction: column; gap: 8px; }
+.gradient-preview { height: 22px; border: 1px solid var(--border); border-radius: 4px; }
+.gradient-stops { display: flex; flex-direction: column; gap: 6px; }
+.gradient-stop { display: grid; grid-template-columns: 30px minmax(0, 1fr) minmax(0, 1fr) 24px; gap: 4px; align-items: center; font-size: 10px;
+  label { display: flex; flex-direction: column; align-items: stretch; gap: 2px; margin: 0; }
+  label input[type=number] { width: 100%; min-width: 0; }
+  input[type=color] { width: 30px; height: 26px; padding: 1px; }
+  button { padding: 2px; min-height: 22px; } }
+.palette-actions { display: flex; gap: 6px; margin-bottom: 10px; button { flex: 1; font-size: 10px; padding: 5px; } }
+.palette-grid, .pattern-picker, .swatch-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(24px, 1fr)); gap: 4px; margin-bottom: 10px; }
+.swatch { padding: 2px; min-height: 0; aspect-ratio: 1; border: 1px solid transparent; border-radius: 4px;
+  span { display: block; width: 100%; height: 100%; border-radius: 2px; border: 1px solid var(--border); }
+  &.active { border-color: var(--accent); } }
+.swatches-content { padding: 8px 12px 12px; }
+.swatch-toolbar { display: flex; gap: 6px; align-items: center; justify-content: space-between; margin-bottom: 8px;
+  .segmented button { padding: 4px 8px; font-size: 10px; }
+  select { min-width: 0; max-width: 120px; font-size: 10px; } }
+.swatch-actions { display: flex; justify-content: flex-end; gap: 4px; button { padding: 3px; } img { width: 18px; height: 18px; } }
 .canvas-ruler { position: absolute; z-index: 5; background: var(--panel); color: var(--text); touch-action: none; font-size: 9px; overflow: hidden; }
 .horizontal-ruler { left: 0; right: 0; height: 24px; top: -25px; cursor: row-resize; border-bottom: 1px solid var(--border); }
 .vertical-ruler { top: 0; bottom: 0; width: 24px; left: -25px; cursor: col-resize; border-right: 1px solid var(--border); }
@@ -2087,3 +2177,235 @@ textarea,
 .vertical-ruler .ruler-tick.minor { width: 6px; right: 0; padding: 0; }
 
 .procedural-properties { border: 1px solid var(--border); border-radius: 6px; margin: 10px 0; padding: 8px; min-width: 0; legend { font-size: 11px; padding: 0 4px; } .property-grid input { min-width: 0; width: 100%; } }
+
+/*
+ * Phones. The tools and the panels become drawers that slide in from the left and right
+ * edges over the canvas, the menus fold behind a menu button with the credits at their
+ * foot, and the whole studio fits the screen: nothing scrolls sideways, the drawers only
+ * scroll down, and the canvas keeps every touch for itself so two fingers can zoom it.
+ */
+.menu-toggle,
+.drawer-handle,
+.menu-footer {
+  display: none;
+}
+@media (max-width: 720px) {
+  html,
+  body {
+    overflow: hidden;
+    overscroll-behavior: none;
+  }
+  .studio-shell {
+    width: 100vw;
+    height: 100dvh;
+    overflow: hidden;
+    touch-action: manipulation;
+    -webkit-touch-callout: none;
+  }
+  .menubar {
+    height: 52px;
+    gap: 6px;
+    padding: 0 8px 0 4px;
+  }
+  .header-workspace {
+    display: none;
+  }
+  /* The document tabs become a list in the header, giving the canvas their height. */
+  .document-tabs {
+    display: none;
+  }
+  .mobile-documents {
+    display: block;
+    flex: 1 1 auto;
+    min-width: 0;
+    max-width: 50vw;
+    height: 32px;
+    padding: 0 8px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background-color: var(--panel);
+    color: var(--text);
+    font-size: 12px;
+    text-overflow: ellipsis;
+  }
+  .menu-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    padding: 10px;
+    border: 0;
+    background: transparent;
+  }
+  .menu-toggle img {
+    width: 24px;
+    height: 24px;
+  }
+  .menus {
+    position: fixed;
+    top: 52px;
+    left: 0;
+    bottom: 0;
+    width: min(84vw, 320px);
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0;
+    background: var(--panel);
+    border-right: 1px solid var(--border);
+    box-shadow: 10px 0 30px #0006;
+    transform: translateX(-105%);
+    transition: transform 0.22s ease;
+    overflow-x: hidden;
+    overflow-y: auto;
+    z-index: 60;
+  }
+  .menus.open {
+    transform: none;
+  }
+  .menus details,
+  .menus details:nth-child(2) {
+    display: block;
+    width: 100%;
+  }
+  .menus summary {
+    padding: 14px 18px;
+    font-size: 14px;
+    border-bottom: 1px solid var(--border);
+  }
+  .menus .menu-popover {
+    position: static;
+    min-width: 0;
+    padding: 4px 8px 10px;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+  }
+  .menus .menu-popover button {
+    min-height: 44px;
+    font-size: 14px;
+  }
+  .menu-footer {
+    position: sticky;
+    bottom: 0;
+    margin-top: auto;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    padding: 14px 16px calc(14px + env(safe-area-inset-bottom));
+    border-top: 1px solid var(--border);
+    background: var(--panel);
+    font-size: 11px;
+    text-align: center;
+  }
+  .menu-footer .credits {
+    display: block;
+  }
+  .menu-footer .socials {
+    display: flex;
+    justify-content: center;
+    gap: 14px;
+  }
+  .studio-shell > footer {
+    display: none;
+  }
+  .workspace,
+  .workspace.no-panels,
+  .workspace.no-tools,
+  .workspace.no-tools.no-panels {
+    position: relative;
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .toolrail,
+  .inspector {
+    position: fixed;
+    top: 52px;
+    bottom: 0;
+    z-index: 55;
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    touch-action: pan-y;
+    transition: transform 0.22s ease;
+  }
+  .toolrail {
+    left: 0;
+    max-width: 86vw;
+    padding: 12px 8px calc(12px + env(safe-area-inset-bottom));
+    box-shadow: 10px 0 30px #0006;
+    transform: translateX(-105%);
+  }
+  .inspector {
+    left: auto;
+    right: 0;
+    width: min(88vw, 340px);
+    box-shadow: -10px 0 30px #0006;
+    transform: translateX(105%);
+  }
+  .toolrail.drawer-open,
+  .inspector.drawer-open {
+    transform: none;
+  }
+  .inspector input,
+  .inspector select {
+    min-width: 0;
+    max-width: 100%;
+  }
+  .tool-section {
+    grid-template-columns: repeat(2, 44px);
+  }
+  .tool-family {
+    width: 44px;
+    height: 44px;
+  }
+  .drawer-handle {
+    position: absolute;
+    top: 50%;
+    z-index: 40;
+    display: block;
+    width: 16px;
+    height: 72px;
+    margin-top: -36px;
+    padding: 0;
+    background: var(--panel-raised);
+    border: 1px solid var(--border);
+  }
+  .drawer-handle.left {
+    left: 0;
+    border-left: 0;
+    border-radius: 0 10px 10px 0;
+  }
+  .drawer-handle.right {
+    right: 0;
+    border-right: 0;
+    border-radius: 10px 0 0 10px;
+  }
+  .drawer-handle span {
+    display: block;
+    width: 3px;
+    height: 30px;
+    margin: 0 auto;
+    border-radius: 2px;
+    background: var(--muted);
+  }
+  .drawer-backdrop {
+    position: fixed;
+    inset: 52px 0 0 0;
+    z-index: 50;
+    background: #0006;
+  }
+  .canvas-viewport,
+  .canvas-viewport canvas {
+    touch-action: none;
+    overscroll-behavior: contain;
+  }
+  .contextbar {
+    overflow-x: auto;
+    overflow-y: hidden;
+  }
+  .cursor-tool-badge {
+    display: none;
+  }
+}

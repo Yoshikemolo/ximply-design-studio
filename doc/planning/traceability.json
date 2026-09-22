@@ -95,15 +95,20 @@
       "scenarios": [
         "SC-0010",
         "SC-0011",
-        "SC-0012"
+        "SC-0012",
+        "SC-0108"
       ],
       "implementation": [
         "apps/web/src/app/editor.service.ts",
-        "packages/domain/src/document.ts"
+        "packages/domain/src/document.ts",
+        "packages/domain/src/touch.ts",
+        "apps/web/src/app/app.component.ts"
       ],
       "tests": [
         "packages/domain/tests/document.test.ts",
-        "apps/web/tests/editor.test.ts"
+        "apps/web/tests/editor.test.ts",
+        "apps/web/tests/mobile.test.ts",
+        "packages/domain/tests/touch.test.ts"
       ],
       "evidence": [
         "doc/implementation/PLAN-0002-0001.md"
@@ -240,7 +245,8 @@
         "ADR-0028",
         "ADR-0029",
         "ADR-0031",
-        "ADR-0032"
+        "ADR-0032",
+        "ADR-0033"
       ],
       "scenarios": [
         "SC-0022",
@@ -255,7 +261,8 @@
         "SC-0103",
         "SC-0104",
         "SC-0105",
-        "SC-0106"
+        "SC-0106",
+        "SC-0107"
       ],
       "implementation": [
         "apps/web/src/app/editor.service.ts",
@@ -280,7 +287,8 @@
         "packages/domain/src/path-edit.ts",
         "packages/domain/src/brush-stroke.ts",
         "packages/renderer/src/canvas-renderer.ts",
-        "apps/web/src/app/tools.ts"
+        "apps/web/src/app/tools.ts",
+        "packages/domain/src/paint.ts"
       ],
       "tests": [
         "packages/domain/tests/document.test.ts",
@@ -320,7 +328,15 @@
         "apps/web/tests/pencil-illustrator.test.ts",
         "apps/web/tests/path-commands.test.ts",
         "apps/web/tests/paintbrush.test.ts",
-        "apps/web/tests/eraser-reshape.test.ts"
+        "apps/web/tests/eraser-reshape.test.ts",
+        "packages/domain/tests/paint.test.ts",
+        "packages/domain/tests/paint-export.test.ts",
+        "packages/renderer/tests/fill-paint.test.ts",
+        "apps/web/tests/paint-editor.test.ts",
+        "apps/web/tests/paint-ui.test.ts",
+        "packages/domain/tests/hit-test.test.ts",
+        "packages/domain/tests/pdf-paint.test.ts",
+        "packages/domain/tests/blend-paint.test.ts"
       ],
       "evidence": [
         "doc/implementation/PLAN-0002-0001.md",

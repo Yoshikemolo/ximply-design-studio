@@ -3,6 +3,7 @@ import { CurvePath, worldPoint } from './curves';
 import { brushOutline } from './brush-stroke';
 import { ellipsePath, polyline } from './shapes';
 import { materializeProcedural, projectionCurves, projectionDash } from './procedural';
+import { GradientPaint, PatternDefinition, gradientGeometry, renderedStops } from './paint';
 
 /**
  * A small PDF writer for the documents this editor makes. It emits vector geometry, not a
@@ -64,6 +65,49 @@ function layerCurves(layer: Layer): CurvePath[] {
     })),
   }));
 }
+/** The matrix that places an object's own coordinates on the page, as worldPoint does. */
+function layerMatrix(layer: Layer): number[] {
+  const o = worldPoint(layer, { x: 0, y: 0 }), x = worldPoint(layer, { x: 1, y: 0 }), y = worldPoint(layer, { x: 0, y: 1 });
+  return [x.x - o.x, x.y - o.y, y.x - o.x, y.y - o.y, o.x, o.y];
+}
+/**
+ * A gradient as a PDF shading in the object's own coordinates: axial or radial, its stops
+ * as a stitched function of linear pieces and its ends extended, as the canvas paints it.
+ */
+export function gradientShading(paint: GradientPaint, width: number, height: number): { shading: string; transparent: boolean } {
+  const g = gradientGeometry(paint, width, height);
+  const stops = renderedStops(paint);
+  if (stops[0].offset > 0) stops.unshift({ offset: 0, color: stops[0].color });
+  if (stops[stops.length - 1].offset < 1) stops.push({ offset: 1, color: stops[stops.length - 1].color });
+  const rgb = (color: string) => (readPaint(color)?.colour ?? [0, 0, 0]).map(round).join(' ');
+  const pieces: string[] = [], bounds: number[] = [];
+  for (let i = 1; i < stops.length; i++) {
+    pieces.push(`<< /FunctionType 2 /Domain [0 1] /C0 [${rgb(stops[i - 1].color)}] /C1 [${rgb(stops[i].color)}] /N 1 >>`);
+    if (i < stops.length - 1) bounds.push(stops[i].offset);
+  }
+  const fn = pieces.length === 1 ? pieces[0]
+    : `<< /FunctionType 3 /Domain [0 1] /Functions [${pieces.join(' ')}] /Bounds [${bounds.map(round).join(' ')}] /Encode [${pieces.map(() => '0 1').join(' ')}] >>`;
+  const coords = paint.type === 'radial'
+    ? [g.start.x, g.start.y, 0, g.start.x, g.start.y, g.radius]
+    : [g.start.x, g.start.y, g.end.x, g.end.y];
+  return {
+    shading: `<< /ShadingType ${paint.type === 'radial' ? 3 : 2} /ColorSpace /DeviceRGB /Coords [${coords.map(round).join(' ')}] /Function ${fn} /Extend [true true] >>`,
+    transparent: stops.some((stop) => (readPaint(stop.color)?.alpha ?? 1) < 1),
+  };
+}
+/** The artwork of a pattern tile as operators, in the tile's own coordinates. */
+function tileOperators(pattern: PatternDefinition, skipped: Set<string>): string {
+  const parts: string[] = [];
+  for (const layer of pattern.layers) {
+    if (!layer.visible) continue;
+    const fill = readPaint(layer.fill), stroke = readPaint(layer.stroke), curves = layerCurves(layer);
+    if (!curves.length) continue;
+    if ((fill && fill.alpha < 1) || (stroke && stroke.alpha < 1) || layer.opacity < 1) skipped.add('transparency inside patterns');
+    if (fill && fill.alpha > 0) parts.push(`${colourOperator(fill, false)}\n${pathOperators(curves.map((path) => ({ ...path, closed: true })))}\nf*`);
+    if (stroke && stroke.alpha > 0 && layer.strokeWidth > 0) parts.push(`${colourOperator(stroke, true)} ${round(layer.strokeWidth)} w\n${pathOperators(curves)}\nS`);
+  }
+  return parts.join('\n');
+}
 /** The path of a contour as PDF operators, in the coordinates the caller already placed. */
 export function pathOperators(paths: CurvePath[]): string {
   return paths
@@ -96,6 +140,9 @@ interface PageContent {
   content: string;
   images: { name: string; image: PdfImage }[];
   alphas: number[];
+  /** Gradient shadings and pattern tiles the page paints with, named /Sh and /P in order. */
+  shadings: string[];
+  patterns: { id: string; body: string; stream: string }[];
   skipped: Set<string>;
 }
 /** Draws one document into a content stream, with the alpha states and images it needs. */
@@ -103,6 +150,8 @@ function pageContent(source: PdfPageSource): PageContent {
   const document = materializeProcedural(source.document);
   const images: { name: string; image: PdfImage }[] = [];
   const alphas: number[] = [];
+  const shadings: string[] = [];
+  const patterns: { id: string; body: string; stream: string }[] = [];
   const skipped = new Set<string>();
   const parts: string[] = [];
   const alphaName = (fill: number, stroke: number) => {
@@ -156,7 +205,25 @@ function pageContent(source: PdfPageSource): PageContent {
     const joins = { miter: 0, round: 1, bevel: 2 }[style.join] ?? 0;
     const settings = `${round(width)} w ${caps} J ${joins} j ${dash}`;
     // Filling closes every contour it paints, so an open path is filled as it is drawn.
-    if (fill && fill.alpha > 0 && drawn.length) {
+    const paint = layer.fillPaint;
+    const pattern = paint?.kind === 'pattern' ? document.patterns?.find((entry) => entry.id === paint.patternId) : undefined;
+    if (fill && fill.alpha > 0 && drawn.length && paint?.kind === 'gradient') {
+      // The shape clips the page and the shading fills it in the object's own coordinates.
+      const { shading, transparent } = gradientShading(paint, layer.width, layer.height);
+      if (transparent) skipped.add('transparent gradient stops');
+      shadings.push(shading);
+      parts.push(`q ${alphaName(layer.opacity * fill.alpha, layer.opacity)}\n${pathOperators(drawn.map((path) => ({ ...path, closed: true })))}\nW* n ${layerMatrix(layer).map(round).join(' ')} cm /Sh${shadings.length - 1} sh Q`);
+    } else if (fill && fill.alpha > 0 && drawn.length && pattern) {
+      let index = patterns.findIndex((entry) => entry.id === pattern.id);
+      if (index < 0) {
+        // Pattern space is the page's own, so the tile is laid out from the document origin.
+        const matrix = [POINTS_PER_PIXEL, 0, 0, -POINTS_PER_PIXEL, 0, document.height * POINTS_PER_PIXEL];
+        const stream = tileOperators(pattern, skipped);
+        patterns.push({ id: pattern.id, stream, body: `/Type /Pattern /PatternType 1 /PaintType 1 /TilingType 1 /BBox [0 0 ${round(pattern.width)} ${round(pattern.height)}] /XStep ${round(pattern.width)} /YStep ${round(pattern.height)} /Resources << >> /Matrix [${matrix.map(round).join(' ')}]` });
+        index = patterns.length - 1;
+      }
+      parts.push(`q ${alphaName(layer.opacity * fill.alpha, layer.opacity)} /Pattern cs /P${index} scn\n${pathOperators(drawn.map((path) => ({ ...path, closed: true })))}\nf* Q`);
+    } else if (fill && fill.alpha > 0 && drawn.length) {
       parts.push(`q ${alphaName(layer.opacity * fill.alpha, layer.opacity)} ${colourOperator(fill, false)}\n${pathOperators(drawn.map((path) => ({ ...path, closed: true })))}\nf* Q`);
     }
     if (layer.brushStroke && layer.curves && stroke && stroke.alpha > 0 && width > 0) {
@@ -180,7 +247,7 @@ function pageContent(source: PdfPageSource): PageContent {
   }
   // The page is written in document coordinates and flipped once into PDF space.
   const flip = `${round(POINTS_PER_PIXEL)} 0 0 ${round(-POINTS_PER_PIXEL)} 0 ${round(document.height * POINTS_PER_PIXEL)} cm`;
-  return { content: `q ${flip}\n${parts.join('\n')}\nQ`, images, alphas, skipped };
+  return { content: `q ${flip}\n${parts.join('\n')}\nQ`, images, alphas, shadings, patterns, skipped };
 }
 /**
  * Writes the documents as one PDF file, one page each, with the page size the document
@@ -208,7 +275,11 @@ export function pdfDocument(sources: PdfPageSource[]): PdfResult {
       key,
       id: add(`<< /Type /ExtGState /ca ${round(Math.floor(key / 1000) / 1000)} /CA ${round((key % 1000) / 1000)} >>`),
     }));
+    const shadingIds = page.shadings.map((body) => add(body));
+    const patternIds = page.patterns.map((pattern) => add(`<< ${pattern.body} /Length ${pattern.stream.length} >>\nstream\n${pattern.stream}\nendstream`));
     const resources = `<< /Font << /F1 ${fontId} 0 R >>`
+      + (shadingIds.length ? ` /Shading << ${shadingIds.map((id, index) => `/Sh${index} ${id} 0 R`).join(' ')} >>` : '')
+      + (patternIds.length ? ` /Pattern << ${patternIds.map((id, index) => `/P${index} ${id} 0 R`).join(' ')} >>` : '')
       + (imageIds.length ? ` /XObject << ${imageIds.map((entry) => `${entry.name} ${entry.id} 0 R`).join(' ')} >>` : '')
       + (alphaIds.length ? ` /ExtGState << ${alphaIds.map((entry, index) => `/GS${index} ${entry.id} 0 R`).join(' ')} >>` : '')
       + ' >>';

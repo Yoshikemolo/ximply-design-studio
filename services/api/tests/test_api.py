@@ -694,6 +694,59 @@ class NativeDrawingTests(unittest.TestCase):
         self.layer['kind'] = 'rectangle'
         self.assert_invalid(self.document)
 
+    def gradient(self, **extra):
+        return {'kind': 'gradient', 'type': 'linear', 'angle': 45,
+                'stops': [{'color': '#000000', 'location': 0, 'midpoint': 50},
+                          {'color': '#ffffff80', 'location': 100, 'midpoint': 30}], **extra}
+
+    def pattern(self):
+        tile = {**self.layer, 'id': 'tile', 'kind': 'rectangle', 'width': 10, 'height': 10}
+        tile.pop('curves', None)
+        tile.pop('fillPaint', None)
+        return {'id': 'dots', 'name': 'Dots', 'width': 20, 'height': 20, 'layers': [tile]}
+
+    def test_fill_paint_patterns_and_swatches_round_trip(self):
+        self.layer['fillPaint'] = self.gradient(vector={'start': {'x': 0, 'y': 0.5}, 'end': {'x': 1, 'y': 0.5}})
+        self.assert_round_trip(self.document)
+        self.layer['fillPaint'] = {'kind': 'pattern', 'patternId': 'dots'}
+        self.document['patterns'] = [self.pattern()]
+        self.document['swatches'] = [{'id': 'red', 'name': 'Red', 'kind': 'color', 'color': '#ff0000'},
+                                     {'id': 'fade', 'name': 'Fade', 'kind': 'gradient', 'gradient': self.gradient()},
+                                     {'id': 'tile', 'name': 'Dots', 'kind': 'pattern', 'patternId': 'dots'}]
+        self.assert_round_trip(self.document)
+
+    def test_fill_paint_contract(self):
+        for invalid in [self.gradient(angle=181), self.gradient(type='conic'), self.gradient(stops=[self.gradient()['stops'][0]]),
+                        self.gradient(stops=list(reversed(self.gradient()['stops']))), self.gradient(extra=1),
+                        {**self.gradient(), 'stops': [{'color': 'red', 'location': 0, 'midpoint': 50}, {'color': '#ffffff', 'location': 100, 'midpoint': 50}]},
+                        {**self.gradient(), 'stops': [{'color': '#000000', 'location': 0, 'midpoint': 90}, {'color': '#ffffff', 'location': 100, 'midpoint': 50}]},
+                        {'kind': 'pattern', 'patternId': 'missing'}]:
+            with self.subTest(paint=invalid):
+                self.layer['fillPaint'] = invalid
+                self.assert_invalid(self.document)
+        # Paints need native format 2, and only shapes and text take them.
+        self.layer['fillPaint'] = self.gradient()
+        self.document['version'] = 1
+        self.assert_invalid(self.document)
+        self.document['version'] = 2
+        self.layer['kind'] = 'image'
+        self.assert_invalid(self.document)
+
+    def test_pattern_and_swatch_contract(self):
+        tile = self.pattern()
+        self.document['patterns'] = [tile, tile]
+        self.assert_invalid(self.document)
+        self.document['patterns'] = [{**tile, 'layers': [{**tile['layers'][0], 'kind': 'text'}]}]
+        self.assert_invalid(self.document)
+        self.document['patterns'] = [{**tile, 'width': 0}]
+        self.assert_invalid(self.document)
+        self.document['patterns'] = [tile]
+        swatch = {'id': 'red', 'name': 'Red', 'kind': 'color', 'color': '#ff0000'}
+        self.document['swatches'] = [swatch, swatch]
+        self.assert_invalid(self.document)
+        self.document['swatches'] = [{'id': 'p', 'name': 'P', 'kind': 'pattern', 'patternId': 'missing'}]
+        self.assert_invalid(self.document)
+
     def test_dimension_format_bounds_and_types(self):
         for field, invalid in {'scale': [0, -1, 1000001, True, '2'],
                                'unit': ['yd', '', None], 'decimals': [-1, 9, 1.5, True, '2'],
