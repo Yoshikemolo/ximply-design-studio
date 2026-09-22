@@ -1,3 +1,4 @@
+import { drawPaintSource, finishPaint, paintFrame } from "./paint-buffer";
 import { Procedural, defaultProcedural, generateProcedural, syncProcedurals, validProcedural } from "../../../../packages/domain/src/procedural";
 import { DEFAULT_GRADIENTS, FillPaint, GradientPaint, MAX_PATTERNS, MAX_SWATCHES, PatternDefinition, PresetPattern, Swatch, defaultSwatches, presetPattern, validFillPaint } from "../../../../packages/domain/src/paint";
 import { openingHost, wallSnapPoint, WallSnap } from "./procedural-placement";
@@ -13,6 +14,7 @@ import { defaultTypography, defaultTextLayout, FONT_FAMILIES, layoutText, TextLa
 import { snapPoint, SnapConfig, rulerSnapSteps } from "../../../../packages/domain/src/measurements";
 import { Affine, Linear, about, affineLayers, applyAffine, scaleLinear, shearLinear, transformLayers } from "../../../../packages/domain/src/affine";
 import { Quad, boxQuad, distortable, mapLayers, quadMap, worldCurves } from "../../../../packages/domain/src/distort";
+import { GradientMesh, MeshAppearance, addMeshPoint, gradientMeshFor, placeGradientMesh, removeMeshPoint } from "../../../../packages/domain/src/gradient-mesh";
 import { DEFAULT_WARP, Envelope, EnvelopeMesh, WarpSettings, contentBox, envelopeArtwork, envelopeMap, fitEnvelope, gridMesh, mapMesh, meshBounds, meshLines, meshOutline, meshPoint, objectMesh, resampleMesh, validWarp, warpMesh } from "../../../../packages/domain/src/envelope";
 import { LIQUIFY_DEFAULTS, LIQUIFY_TOOLS, LiquifyOptions, LiquifyTool, liquifyStep, refine, validLiquifyOptions } from "../../../../packages/domain/src/liquify";
 import {
@@ -794,6 +796,16 @@ export class EditorService {
     this.status.set(this.outlineView() ? "Outline view" : "Preview view");
     this.revision.update((x) => x + 1);
   }
+  /**
+   * Pixel Preview: the artwork is shown as the pixels it rasterises to, one per page unit, as
+   * Illustrator shows it at 72 ppi; magnified, each pixel is a square instead of a sharp edge.
+   */
+  readonly pixelPreview = signal(false);
+  togglePixelPreview() {
+    this.pixelPreview.update((on) => !on);
+    this.status.set(this.pixelPreview() ? "Pixel Preview" : "Preview view");
+    this.revision.update((x) => x + 1);
+  }
   /** The frame and handles around the selection, which can be hidden while drawing. */
   readonly boundingBoxVisible = signal(true);
   toggleBoundingBox() {
@@ -840,7 +852,7 @@ export class EditorService {
   );
   history = new DocumentHistory();
   readonly renderer = new CanvasRenderer();
-  painting?: { id: string; canvas: HTMLCanvasElement };
+  painting?: { id: string; canvas: HTMLCanvasElement; initial: Uint8ClampedArray; selectedId: string | null; selectedIds: string[] };
   // Brush and eraser keep their own tip settings.
   readonly brushSettings = signal<Record<"brush" | "eraser", BrushSettings>>({ brush: { ...defaultBrush }, eraser: { ...defaultBrush } });
   brushFor(tool: "brush" | "eraser") { return this.brushSettings()[tool]; }
@@ -921,6 +933,8 @@ export class EditorService {
     if (target === "stroke") { this.applyAppearance({ stroke: this.stroke() }); return; }
     // A colour replaces the gradient or pattern of the fill, as choosing a colour swatch does.
     this.fillPaint.set(null);
+    // With a mesh point chosen, the colour goes to the point, as in Illustrator.
+    if (this.meshNode() && this.selectedMeshLayer()?.gradientMesh && this.colorMeshNode(this.fill())) return;
     this.applyFill(this.selectedPaintable(), this.fill(), null);
   }
   /** Objects whose fill can hold a gradient or a pattern: shapes, paths and text. */
@@ -1761,7 +1775,7 @@ export class EditorService {
     if (target) this.reorderLayer(source.id, target.id, delta < 0 ? "before" : "after");
   }
   remove() {
-    if (this.meshNode() && this.selectedEnvelope() && this.deleteMeshLines()) return;
+    if (this.meshNode() && this.selectedMeshLayer() && this.deleteMeshLines()) return;
     if (this.removeSelectedParts()) return;
     const ids = new Set(
       this.selectedLayers()
@@ -2278,7 +2292,7 @@ export class EditorService {
   private replaceEnvelope(id: string, change: (layer: Layer) => Layer | Layer[], status: string): boolean {
     const before = this.document();
     const layer = before.layers.find((l) => l.id === id);
-    if (!layer?.envelope || this.isEffectivelyLocked(layer)) return false;
+    if (!layer || this.isEffectivelyLocked(layer)) return false;
     const result = change(layer);
     const replacement = Array.isArray(result) ? result : [result];
     const next = { ...before, layers: before.layers.flatMap((l) => (l.id === id ? replacement : [l])) };
@@ -2375,11 +2389,28 @@ export class EditorService {
   /** The mesh node chosen with the Direct Selection or Mesh tool, which Delete removes with its lines. */
   readonly meshNode = signal<{ id: string; index: number } | null>(null);
   private meshGesture?: { before: StudioDocument; id: string; index: number; part: "point" | "left" | "right" | "up" | "down"; moved: boolean };
-  /** A press with the Direct Selection or Mesh tool on a node or a handle of the selected envelope's mesh. */
-  private startMesh(point: Point, tool: string): boolean {
-    const layer = this.selectedEnvelope();
-    if (!layer || layer.envelope!.editing !== "envelope" || this.isEffectivelyLocked(layer)) return false;
-    const mesh = layer.envelope!.mesh, reach = 8 / this.zoom();
+  /** The mesh a layer edits with the Mesh and Direct Selection tools: an envelope's or a gradient mesh. */
+  private meshOf(layer: Layer | null | undefined): EnvelopeMesh | null {
+    if (!layer) return null;
+    if (layer.envelope?.editing === "envelope") return layer.envelope.mesh;
+    return layer.gradientMesh?.mesh ?? null;
+  }
+  /** The layer with its mesh replaced, and its colours for a gradient mesh; an edited envelope becomes a grid. */
+  private withMesh(layer: Layer, mesh: EnvelopeMesh, colors?: string[]): Layer {
+    if (layer.gradientMesh) return { ...layer, gradientMesh: { mesh, colors: colors ?? layer.gradientMesh.colors } };
+    const { warp: _w, ...rest } = layer.envelope!;
+    return { ...layer, envelope: { ...rest, mesh, origin: layer.envelope!.origin === "warp" ? "grid" : layer.envelope!.origin } };
+  }
+  /** The selected layer that has a mesh to edit, or none. */
+  selectedMeshLayer(): Layer | null {
+    const layers = this.selectedLayers();
+    return layers.length === 1 && this.meshOf(layers[0]) ? layers[0] : null;
+  }
+  /** A press with the Direct Selection or Mesh tool on a node or a handle of the selected mesh. */
+  private startMesh(point: Point, tool: string, modifiers: { shift?: boolean; alt?: boolean } = {}): boolean {
+    const layer = this.selectedMeshLayer();
+    if (!layer || this.isEffectivelyLocked(layer)) return false;
+    const mesh = this.meshOf(layer)!, reach = 8 / this.zoom();
     const chosen = this.meshNode()?.id === layer.id ? this.meshNode()!.index : -1;
     const near = (p: Point) => Math.hypot(worldPoint(layer, p).x - point.x, worldPoint(layer, p).y - point.y) <= reach;
     // The handles of the chosen node first, then any node.
@@ -2389,25 +2420,27 @@ export class EditorService {
     }
     const index = mesh.nodes.findIndex((n) => near(n.point));
     if (index >= 0) {
+      // Alt-click with the Mesh tool deletes the mesh point and its lines, as in Illustrator.
+      if (tool === "mesh" && modifiers.alt) { this.meshNode.set({ id: layer.id, index }); this.deleteMeshLines(); return true; }
       this.meshNode.set({ id: layer.id, index });
       this.meshGesture = { before: this.document(), id: layer.id, index, part: "point", moved: false };
       return true;
     }
-    if (tool === "mesh") return this.addMeshLines(layer, point);
+    if (tool === "mesh") return this.addMeshLines(layer, point, modifiers.shift ? null : this.fill());
     return false;
   }
   private moveMesh(point: Point) {
     const g = this.meshGesture!;
     const layer = g.before.layers.find((l) => l.id === g.id)!;
-    const local = localPoint(layer, point);
-    const nodes = layer.envelope!.mesh.nodes.map((n, i) => {
+    const local = localPoint(layer, point), mesh = this.meshOf(layer)!;
+    const nodes = mesh.nodes.map((n, i) => {
       if (i !== g.index) return n;
       if (g.part !== "point") return { ...n, [g.part]: local };
       // An anchor carries its handles with it.
       const dx = local.x - n.point.x, dy = local.y - n.point.y, move = (p: Point) => ({ x: p.x + dx, y: p.y + dy });
       return { point: local, left: move(n.left), right: move(n.right), up: move(n.up), down: move(n.down) };
     });
-    const moved = { ...layer, envelope: { ...layer.envelope!, mesh: { ...layer.envelope!.mesh, nodes } } };
+    const moved = { ...layer, ...(layer.gradientMesh ? { gradientMesh: { ...layer.gradientMesh, mesh: { ...mesh, nodes } } } : { envelope: { ...layer.envelope!, mesh: { ...mesh, nodes } } }) };
     g.moved = true;
     this.document.set({ ...g.before, layers: g.before.layers.map((l) => (l.id === g.id ? moved : l)) });
   }
@@ -2415,17 +2448,23 @@ export class EditorService {
     const g = this.meshGesture!;
     this.meshGesture = undefined;
     if (!g.moved) return;
-    // A warp whose mesh was moved by hand is no longer that style: it becomes a grid.
-    const plain = (l: Layer): Layer => { const { warp: _w, ...rest } = l.envelope!; return { ...l, envelope: { ...rest, origin: l.envelope!.origin === "warp" ? "grid" : l.envelope!.origin } }; };
-    const next = { ...this.document(), layers: this.document().layers.map((l) => (l.id === g.id ? fitEnvelope(plain(l)) : l)) };
+    const fitted = (l: Layer) => (l.gradientMesh ? this.fitMeshLayer(l) : fitEnvelope(this.withMesh(l, l.envelope!.mesh)));
+    const next = { ...this.document(), layers: this.document().layers.map((l) => (l.id === g.id ? fitted(l) : l)) };
     try { parseDocument(JSON.stringify(next)); } catch { this.document.set(g.before); return; }
     this.document.set(next);
     this.commitStep(g.before);
     this.changed();
   }
+  /** Refits the box of a gradient mesh layer to its mesh, keeping it where it is on the page. */
+  private fitMeshLayer(layer: Layer): Layer {
+    const mesh = layer.gradientMesh!.mesh, b = meshBounds(mesh);
+    const centre = worldPoint(layer, { x: b.x + b.width / 2, y: b.y + b.height / 2 });
+    return { ...layer, x: centre.x - b.width / 2, y: centre.y - b.height / 2, width: b.width, height: b.height,
+      gradientMesh: { ...layer.gradientMesh!, mesh: mapMesh(mesh, (p) => ({ x: p.x - b.x, y: p.y - b.y })) } };
+  }
   /** Where on the grid a point of the page falls, as fractions u and v, by search and refinement. */
-  private meshParameters(layer: Layer, point: Point): { u: number; v: number } | null {
-    const mesh = layer.envelope!.mesh, local = localPoint(layer, point);
+  private meshParameters(layer: Layer, point: Point, mesh = this.meshOf(layer)!): { u: number; v: number } | null {
+    const local = localPoint(layer, point);
     let best = { u: 0.5, v: 0.5, d: Infinity };
     for (let i = 0; i <= 40; i++) for (let j = 0; j <= 40; j++) {
       const p = meshPoint(mesh, j / 40, i / 40), d = Math.hypot(p.x - local.x, p.y - local.y);
@@ -2439,18 +2478,27 @@ export class EditorService {
       }
     return best.d <= 4 / this.zoom() ? best : null;
   }
-  /** The Mesh tool: a click inside the mesh adds a row and a column through that point. */
-  private addMeshLines(layer: Layer, point: Point): boolean {
+  /**
+   * The Mesh tool: a click inside the mesh adds a row and a column through that point. On a
+   * gradient mesh the new mesh point takes the fill colour, or keeps the colour already
+   * there with Shift, as in Illustrator.
+   */
+  private addMeshLines(layer: Layer, point: Point, color: string | null): boolean {
     const at = this.meshParameters(layer, point);
     if (!at) return false;
-    const { us, vs } = meshLines(layer.envelope!.mesh);
+    const mesh = this.meshOf(layer)!;
+    if (mesh.us.length > 50 || mesh.vs.length > 50) { this.status.set("A mesh holds up to 50 rows and columns."); return true; }
+    if (layer.gradientMesh) {
+      const { mesh: next, index } = addMeshPoint(layer.gradientMesh, at.u, at.v, color && color !== "none" ? color : null);
+      this.replaceEnvelope(layer.id, (l) => ({ ...l, gradientMesh: next }), "Added a mesh point.");
+      this.meshNode.set({ id: layer.id, index });
+      return true;
+    }
+    const { us, vs } = meshLines(mesh);
     const fresh = (lines: number[], x: number) => (lines.some((l) => Math.abs(l - x) < 1e-3) ? lines : [...lines, x]);
-    const nextUs = fresh(us, at.u), nextVs = fresh(vs, at.v);
-    if (nextUs.length > 51 || nextVs.length > 51) { this.status.set("A mesh holds up to 50 rows and columns."); return true; }
-    const mesh = resampleMesh(layer.envelope!.mesh, nextUs, nextVs);
-    const index = mesh.us.findIndex((u) => Math.abs(u - at.u) < 1e-6) + mesh.vs.findIndex((v) => Math.abs(v - at.v) < 1e-6) * (mesh.columns + 1);
-    // An edited mesh is no longer a warp style: it becomes a grid.
-    this.replaceEnvelope(layer.id, (l) => { const { warp: _w, ...rest } = l.envelope!; return { ...l, envelope: { ...rest, mesh, origin: "grid" } }; }, "Added a row and a column to the mesh.");
+    const next = resampleMesh(mesh, fresh(us, at.u), fresh(vs, at.v));
+    const index = next.us.findIndex((u) => Math.abs(u - at.u) < 1e-3) + next.vs.findIndex((v) => Math.abs(v - at.v) < 1e-3) * (next.columns + 1);
+    this.replaceEnvelope(layer.id, (l) => this.withMesh(l, next), "Added a row and a column to the mesh.");
     this.meshNode.set({ id: layer.id, index });
     return true;
   }
@@ -2458,13 +2506,54 @@ export class EditorService {
   private deleteMeshLines(): boolean {
     const chosen = this.meshNode();
     const layer = chosen && this.document().layers.find((l) => l.id === chosen.id);
-    if (!chosen || !layer?.envelope) return false;
-    const mesh = layer.envelope.mesh, j = chosen.index % (mesh.columns + 1), i = Math.floor(chosen.index / (mesh.columns + 1));
+    const mesh = this.meshOf(layer);
+    if (!chosen || !layer || !mesh) return false;
+    if (layer.gradientMesh) {
+      const next = removeMeshPoint(layer.gradientMesh, chosen.index);
+      if (!next) { this.status.set("The border of the mesh stays; choose a point inside it."); return true; }
+      this.replaceEnvelope(layer.id, (l) => this.fitMeshLayer({ ...l, gradientMesh: next }), "Removed a mesh point.");
+      return true;
+    }
+    const j = chosen.index % (mesh.columns + 1), i = Math.floor(chosen.index / (mesh.columns + 1));
     const us = mesh.us.filter((_, k) => k !== j || k === 0 || k === mesh.columns), vs = mesh.vs.filter((_, k) => k !== i || k === 0 || k === mesh.rows);
     if (us.length === mesh.us.length && vs.length === mesh.vs.length) { this.status.set("The border of the mesh stays; choose a point inside it."); return true; }
     const next = resampleMesh(mesh, us, vs);
-    this.replaceEnvelope(layer.id, (l) => { const { warp: _w, ...rest } = l.envelope!; return fitEnvelope({ ...l, envelope: { ...rest, mesh: next, origin: "grid" } }); }, "Removed a row and a column from the mesh.");
+    this.replaceEnvelope(layer.id, (l) => fitEnvelope(this.withMesh(l, next)), "Removed a row and a column from the mesh.");
     return true;
+  }
+  /**
+   * Turns a vector object into a gradient mesh: the first click of the Mesh tool with a mesh
+   * point where it clicks, or Object > Create Gradient Mesh with rows, columns, an appearance
+   * and a highlight. Text and compound paths are refused, as in Illustrator.
+   */
+  makeGradientMesh(id: string, options: { rows: number; columns: number; appearance: MeshAppearance; highlight: number; at?: Point; color?: string | null }): boolean {
+    const layer = this.document().layers.find((l) => l.id === id);
+    if (!layer || this.isEffectivelyLocked(layer)) return false;
+    if (layer.kind === "text") { this.status.set("Create outlines of the text first (Ctrl+Shift+O), then make the mesh."); return false; }
+    const closed = worldCurves(layer)?.filter((path) => path.closed) ?? [];
+    if (!distortable(layer) || layer.envelope || layer.gradientMesh || closed.length !== 1) { this.status.set("A gradient mesh is made from one closed path or shape, not from a compound path, text or a picture."); return false; }
+    if (![options.rows, options.columns].every((n) => Number.isInteger(n) && n >= 1 && n <= 50) || !(options.highlight >= 0 && options.highlight <= 100)) return false;
+    const base = layer.fill === "none" ? this.fill() : layer.fill;
+    const world = gradientMeshFor(layer, options.rows, options.columns, options.appearance, options.highlight, base === "none" ? "#000000" : base);
+    if (!world) { this.status.set("This shape has no outline a mesh can take."); return false; }
+    const { box, mesh } = placeGradientMesh(world);
+    const { curves: _c, fillPaint: _f, brushStroke: _b, lineEnds: _e, ...rest } = layer;
+    let next: Layer = { ...rest, kind: "path", x: box.x, y: box.y, width: box.width, height: box.height, rotation: 0, skewX: 0, flipX: false, flipY: false, points: [], stroke: "none", gradientMesh: mesh };
+    let index: number | null = null;
+    if (options.at) {
+      const at = this.meshParameters(next, options.at, mesh.mesh);
+      if (at) { const added = addMeshPoint(mesh, at.u, at.v, options.color ?? null); next = { ...next, gradientMesh: added.mesh }; index = added.index; }
+    }
+    const changed = this.replaceEnvelope(id, () => next, "Made a gradient mesh.");
+    if (changed && index !== null) this.meshNode.set({ id, index });
+    return changed;
+  }
+  /** Colours the chosen mesh point of a gradient mesh, as dragging a swatch onto it does. */
+  private colorMeshNode(color: string): boolean {
+    const chosen = this.meshNode(), layer = chosen && this.document().layers.find((l) => l.id === chosen.id);
+    if (!chosen || !layer?.gradientMesh || color === "none") return false;
+    const colors = layer.gradientMesh.colors.map((c, i) => (i === chosen.index ? color : c));
+    return this.replaceEnvelope(layer.id, (l) => ({ ...l, gradientMesh: { ...l.gradientMesh!, colors } }), "Coloured the mesh point.") && (this.meshNode.set(chosen), true);
   }
   private dragLinear(g: NonNullable<EditorService["gesture"]>, linear: Linear, point: Point) {
     const ids = new Set(g.ids ?? [g.id]);
@@ -2761,8 +2850,20 @@ export class EditorService {
     if (tool === "gradient") { this.startGradient(point); return; }
     if (tool === "freeTransform") { this.startFreeTransform(point); return; }
     if (this.isLiquifyTool(tool)) { this.startLiquify(tool, point, modifiers); return; }
-    if ((tool === "direct" || tool === "mesh") && this.startMesh(point, tool)) return;
-    if (tool === "mesh") { this.status.set("Click inside a selected envelope to add a row and a column to its mesh."); return; }
+    if (tool === "mesh") {
+      // The Mesh tool takes what it clicks on, as Illustrator's does, without selecting it first.
+      const target = pick(this.document().layers.filter((layer) => layer.visible && !layer.guide), point);
+      if (target && !this.isEffectivelyLocked(target) && this.selectedMeshLayer()?.id !== target.id) {
+        if (this.meshOf(target)) { this.selectedIds.set([target.id]); this.selectedId.set(target.id); this.meshNode.set(null); }
+        else {
+          // A first click turns a vector object into a gradient mesh with a mesh point there.
+          this.makeGradientMesh(target.id, { rows: 1, columns: 1, appearance: "flat", highlight: 0, at: point, color: modifiers.shift ? null : this.fill() });
+          return;
+        }
+      }
+    }
+    if ((tool === "direct" || tool === "mesh") && this.startMesh(point, tool, modifiers)) return;
+    if (tool === "mesh") { this.status.set("Click inside a shape to make it a gradient mesh, or inside a mesh to add a mesh point."); return; }
     if (tool === "paintBucket") { this.applyStyleAt(point); return; }
     if (["rectangle", "ellipse", "path", "paintbrush", "pen", "line", "rounded", "polygon", "star", "arc", "spiral", "grid", "polar", "flare", "text"].includes(tool)) point = this.snap(point);
     if (tool === "hand" || (tool === "brush" && ["none", "transparent"].includes(this.fill()))) return;
@@ -2964,8 +3065,11 @@ export class EditorService {
         layer.width = this.document().width;
         layer.height = this.document().height;
         layer.name = "Paint layer";
+        layer.paintLayer = true;
         this.document.update((d) => ({ ...d, layers: [...d.layers, layer!] }));
       }
+      const original = layer;
+      layer = paintFrame(layer, before);
       const canvas = window.document.createElement("canvas");
       canvas.width = Math.min(4096, Math.ceil(layer.width));
       canvas.height = Math.min(4096, Math.ceil(layer.height));
@@ -2977,10 +3081,12 @@ export class EditorService {
           this.status.set("Image is loading. Try again.");
           return;
         }
-        ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
+        drawPaintSource(ctx, image, original, layer, canvas.width, canvas.height);
       }
+      this.painting = { id: layer.id, canvas, initial: canvas.getContext("2d")!.getImageData(0, 0, canvas.width, canvas.height).data.slice(), selectedId: this.selectedId(), selectedIds: [...this.selectedIds()] };
+      this.setLayer(layer.id, layer);
       this.selectedId.set(layer.id);
-      this.painting = { id: layer.id, canvas };
+      this.selectedIds.set([layer.id]);
       this.gesture = {
         before,
         start: point,
@@ -3061,7 +3167,13 @@ export class EditorService {
     // Alt held during a transform leaves the original behind, which the cursor announces.
     if (["move", "rotate", "scale", "shear"].includes(g.mode)) this.duplicatingDrag.set(!!modifiers.alt);
     if (["rectangle", "ellipse", "line", "rounded", "polygon", "star", "arc", "spiral", "grid", "polar", "flare"].includes(g.mode) || g.mode.startsWith("resize:")) point = this.snap(point);
-    if (g.mode === "rotate")
+    if (g.mode === "rotate") {
+      // The angle is measured about the pivot the rotation turns about, as in Illustrator. Right
+      // at the pivot there is no direction to read, so the last angle holds until the pointer
+      // is clear of it, and a drag that starts there takes its first clear point as its start.
+      const pivot = this.pivot(), clear = 6 / this.zoom();
+      if (Math.hypot(point.x - pivot.x, point.y - pivot.y) < clear) return;
+      if (Math.hypot(g.start.x - pivot.x, g.start.y - pivot.y) < clear) { g.start = point; return; }
       this.transformSelection(g, this.aroundPivot(g.original, {
         ...g.original,
         rotation: rotationFromDrag(
@@ -3070,8 +3182,10 @@ export class EditorService {
           point,
           modifiers.shift,
           this.snapAngle(),
+          pivot,
         ),
       }));
+    }
     else if (g.mode === "scale") this.dragScale(g, point, !!modifiers.shift);
     else if (g.mode === "shear") this.dragShear(g, point, !!modifiers.shift);
     else if (g.mode === "pen") this.dragPenAnchor(point, modifiers);
@@ -3263,10 +3377,19 @@ export class EditorService {
       this.anchorOriginals = undefined;
     }
     this.penDrag = undefined;
-    if (this.painting)
-      this.setLayer(g.id, {
-        source: this.painting.canvas.toDataURL("image/png"),
-      });
+    if (this.painting) {
+      const painting = this.painting;
+      const result = finishPaint(painting.canvas, g.original, painting.initial);
+      let candidate = result === undefined ? g.before : { ...this.document(), layers: this.document().layers.flatMap(l => l.id === g.id ? result ? [result] : [] : [l]) };
+      let valid = true;
+      try { parseDocument(JSON.stringify(candidate)); } catch { candidate = g.before; valid = false; this.status.set("Paint bounds exceed document limits"); }
+      this.document.set(candidate);
+      if (result === undefined || !valid) {
+        this.selectedId.set(painting.selectedId); this.selectedIds.set(painting.selectedIds);
+        this.gesture = undefined; this.painting = undefined; this.revision.update(v => v + 1); return;
+      }
+      if (!result) { this.selectedId.set(null); this.selectedIds.set([]); }
+    }
     if ((g.mode === "scale" || g.mode === "shear") && !g.linear) {
       // A click with the Scale or Shear tool sets the reference point, as in Illustrator.
       this.document.set(g.before);
@@ -3345,6 +3468,7 @@ export class EditorService {
     }
     if (this.gesture) this.document.set(this.gesture.before);
     if (this.movePivot) { this.setPivot(this.movePivot); this.movePivot = undefined; }
+    if (this.painting) { this.selectedId.set(this.painting.selectedId); this.selectedIds.set(this.painting.selectedIds); }
     this.gesture = undefined;
     this.painting = undefined;
     this.revision.update((x) => x + 1);
@@ -5763,13 +5887,66 @@ export class EditorService {
     link.click();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
-  save() {
-    this.download(
-      new Blob([JSON.stringify(this.document())], { type: "application/json" }),
-      this.document().name + ".xds",
-    );
+  /** The file each open document was saved as, where the browser can write to it again. */
+  private readonly savedFiles = new Map<string, { createWritable(): Promise<{ write(data: Blob): Promise<void>; close(): Promise<void> }>; name: string }>();
+  /** Whether this browser lets Save As choose a file that later saves write to. */
+  canPickSaveFile(): boolean {
+    return typeof (window as unknown as { showSaveFilePicker?: unknown }).showSaveFilePicker === "function";
+  }
+  private projectBlob() { return new Blob([JSON.stringify(this.document())], { type: "application/json" }); }
+  /**
+   * File > Save: to the file the document was saved as, when there is one, or as a download
+   * named after the document.
+   */
+  async save(): Promise<boolean> {
+    const file = this.savedFiles.get(this.activeTabId());
+    if (file) {
+      try {
+        const writable = await file.createWritable();
+        await writable.write(this.projectBlob());
+        await writable.close();
+        this.markSaved();
+        this.status.set(`Saved ${file.name}.`);
+        return true;
+      } catch {
+        // The file may have been moved or its permission withdrawn: download instead.
+        this.savedFiles.delete(this.activeTabId());
+      }
+    }
+    this.download(this.projectBlob(), this.document().name + ".xds");
     this.markSaved();
     this.status.set("Project file saved");
+    return true;
+  }
+  /**
+   * File > Save As (Shift+Ctrl+S): the document under another name, which it takes. Where the
+   * browser allows it the file is chosen in its own dialog and later saves write to it;
+   * elsewhere the name given is downloaded.
+   */
+  async saveAs(name?: string): Promise<boolean> {
+    const clean = (value: string) => value.replace(/\.xds$/i, "").replace(/[\\/:*?"<>|]/g, "").trim().slice(0, 150);
+    if (name === undefined && this.canPickSaveFile()) {
+      const picker = (window as unknown as { showSaveFilePicker(options: unknown): Promise<{ name: string; createWritable(): Promise<{ write(data: Blob): Promise<void>; close(): Promise<void> }> }> }).showSaveFilePicker;
+      let handle;
+      try {
+        handle = await picker({ suggestedName: this.document().name + ".xds", types: [{ description: "Ximply Design Studio project", accept: { "application/json": [".xds"] } }] });
+      } catch {
+        this.status.set("Save As was cancelled.");
+        return false;
+      }
+      const chosen = clean(handle.name) || this.document().name;
+      this.document.update((d) => ({ ...d, name: chosen }));
+      this.savedFiles.set(this.activeTabId(), handle);
+      return this.save();
+    }
+    const chosen = clean(name ?? "");
+    if (!chosen) { this.status.set("Give the project a name to save it as."); return false; }
+    this.document.update((d) => ({ ...d, name: chosen }));
+    this.savedFiles.delete(this.activeTabId());
+    this.download(this.projectBlob(), chosen + ".xds");
+    this.markSaved();
+    this.status.set(`Saved as ${chosen}.xds.`);
+    return true;
   }
   exportSvg() {
     this.download(

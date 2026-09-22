@@ -420,6 +420,19 @@ class Envelope(BaseModel):
         return self
 
 
+class GradientMesh(BaseModel):
+    """Colours that blend across a mesh of Coons patches, mirrored from the editor (ADR-0035)."""
+    model_config = ConfigDict(extra='forbid')
+    mesh: EnvelopeMesh
+    colors: list[Paint]
+
+    @model_validator(mode='after')
+    def one_colour_per_point(self):
+        if len(self.colors) != len(self.mesh.nodes) or 'none' in self.colors:
+            raise ValueError('A gradient mesh has one colour per mesh point')
+        return self
+
+
 class Layer(Point):
     id: Annotated[str, Field(min_length=1, max_length=100)]
     name: Annotated[str, Field(max_length=150)]
@@ -438,12 +451,14 @@ class Layer(Point):
     text: Annotated[str, Field(max_length=2000)]
     fontSize: Annotated[Number, Field(ge=1, le=500)]
     source: str
+    paintLayer: Literal[True] | None = None
     adjustments: Adjustments
     strokeStyle: StrokeStyle | None = None
     lineEnds: LineEnds | None = None
     brushStroke: BrushStroke | None = None
     fillPaint: FillPaint | None = None
     envelope: Envelope | None = None
+    gradientMesh: GradientMesh | None = None
     dimension: Dimension | None = None
     procedural: Procedural | None = None
     regroupPath: Annotated[list[Annotated[str, Field(min_length=1, max_length=100)]], Field(max_length=16)] | None = None
@@ -461,8 +476,10 @@ class Layer(Point):
     @model_validator(mode='before')
     @classmethod
     def non_nullable_extensions(cls, value):
-        if isinstance(value, dict) and any(key in value and value[key] is None for key in ('curves', 'symbolId', 'traceSourceId', 'groupPath', 'flipX', 'flipY', 'skewX', 'guide', 'textLayout', 'typography', 'strokeStyle', 'lineEnds', 'brushStroke', 'fillPaint', 'envelope', 'dimension', 'regroupPath', 'procedural')):
+        if isinstance(value, dict) and any(key in value and value[key] is None for key in ('curves', 'symbolId', 'traceSourceId', 'groupPath', 'flipX', 'flipY', 'skewX', 'guide', 'textLayout', 'typography', 'strokeStyle', 'lineEnds', 'brushStroke', 'fillPaint', 'envelope', 'gradientMesh', 'dimension', 'regroupPath', 'procedural', 'paintLayer')):
             raise ValueError('Drawing extensions cannot be null')
+        if isinstance(value, dict) and 'paintLayer' in value and (value['paintLayer'] is not True or value.get('kind') != 'image'):
+            raise ValueError('Paint marker requires an image and true')
         return value
 
     @model_validator(mode='after')
@@ -488,6 +505,9 @@ class Layer(Point):
         if self.envelope is not None and (self.kind != 'path' or self.curves is not None or self.points or any(
                 value is not None for value in (self.brushStroke, self.dimension, self.procedural, self.guide, self.symbolId, self.fillPaint, self.lineEnds))):
             raise ValueError('An envelope is a path layer without an outline of its own')
+        if self.gradientMesh is not None and (self.kind != 'path' or self.curves is not None or self.points or any(
+                value is not None for value in (self.envelope, self.brushStroke, self.dimension, self.procedural, self.guide, self.symbolId, self.fillPaint, self.lineEnds))):
+            raise ValueError('A gradient mesh is a path layer whose mesh is its outline')
         return self
 
     @field_validator('source')
@@ -576,6 +596,11 @@ class Document(BaseModel):
                 continue
             if self.version == 1:
                 raise ValueError('Envelopes require native format 2')
+        if self.version == 1 and any(layer.gradientMesh is not None for layer in self.layers):
+            raise ValueError('Gradient meshes require native format 2')
+        for layer in self.layers:
+            if layer.envelope is None:
+                continue
             group = layer.envelope.group
             if layer.envelope.editing == 'contents' and not any(
                     other.envelope is None and other.groupPath and other.groupPath[0] == group for other in self.layers):
@@ -601,7 +626,7 @@ class Document(BaseModel):
                 layer.curves is not None or layer.symbolId is not None or layer.traceSourceId is not None
                 or layer.guide is not None or layer.fill == 'none' or layer.stroke == 'none'
                 or layer.strokeStyle is not None or layer.lineEnds is not None or layer.brushStroke is not None
-                or layer.dimension is not None or layer.regroupPath is not None or layer.procedural is not None
+                or layer.dimension is not None or layer.regroupPath is not None or layer.procedural is not None or layer.paintLayer is not None
                 or layer.textLayout is not None or layer.typography is not None
                 or len(layer.fill) == 9 or len(layer.stroke) == 9
                 or layer.skewX is not None or layer.groupPath is not None or layer.flipX is not None or layer.flipY is not None

@@ -54,6 +54,18 @@ describe("measurement presentation and magnetic coordinates", () => {
     expect(rulerTicks(1e7, 1000, "mm", .01, .001).length).toBeLessThanOrEqual(1000);
     expect(rulerTicks(Number.MAX_VALUE, Number.MIN_VALUE, "px", Number.MIN_VALUE, Number.MIN_VALUE)).toEqual([{ position: 0, label: "0", major: true }]);
   });
+  it("marks the minor tick half way between two major ones, to be drawn longer", () => {
+    // Major every 100 and minor every 10: the minor ticks at 50 and 150 are the half marks.
+    const ticks = rulerTicks(200, 1, "px", 100, 10);
+    expect(ticks.filter(tick => tick.half).map(tick => tick.position)).toEqual([50, 150]);
+    expect(ticks.find(tick => tick.position === 50)).toEqual({ position: 50, label: "", major: false, half: true });
+    expect(ticks.find(tick => tick.position === 100)?.half).toBeUndefined();
+    // Only a minor tick that falls half way is marked: every 30, 150 is one but 50 is not a tick.
+    expect(rulerTicks(200, 1, "px", 100, 30).filter(tick => tick.half).map(tick => tick.position)).toEqual([150]);
+    expect(rulerTicks(200, 1, "px", 100, 40).some(tick => tick.half)).toBe(false);
+    // Without minor ticks there is no half mark either.
+    expect(rulerTicks(200, 1, "px", 100).some(tick => tick.half)).toBe(false);
+  });
   it("selects ruler snap intervals independently under the global magnetic switch", () => {
     const c = config(); c.grid.enabled = false; c.guides.enabled = false;
     c.rulers = { enabled: true, visible: true, step: 100, minorStep: 10, radius: 8, majorEnabled: true, minorEnabled: false };

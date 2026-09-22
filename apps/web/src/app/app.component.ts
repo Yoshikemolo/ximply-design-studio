@@ -48,7 +48,11 @@ import { TOOLS, ToolId, TOOL_FAMILIES, ToolFamily } from "./tools";
 import { translate } from "./i18n";
 import { BLENDS, Layer, StrokeStyle, blankDocument, defaultStrokeStyle, svgExport } from "../../../../packages/domain/src/document";
 import { LIQUIFY_DEFAULTS, LiquifyOptions, LiquifyTool } from "../../../../packages/domain/src/liquify";
-import { ZOOM_MAX, ZOOM_MIN, stepZoom } from "../../../../packages/domain/src/zoom";
+import { ZOOM_MAX, ZOOM_MIN, detailRegion, stepZoom } from "../../../../packages/domain/src/zoom";
+import type { CanvasRenderer } from "../../../../packages/renderer/src/canvas-renderer";
+import type { StudioDocument } from "../../../../packages/domain/src/document";
+/** How long the view stays still before the part in view is drawn sharp. */
+const DETAIL_IDLE_MS = 120;
 import { DEFAULT_WARP, WARP_LABELS, WARP_STYLES, WarpSettings } from "../../../../packages/domain/src/envelope";
 import { COLOR_MODES, ColorMode, GradientPaint, PatternDefinition, PRESET_PATTERNS, PresetPattern, Swatch, cmykToRgb, gradientColorAt, grayToRgb, presetPattern, renderedStops, rgbToCmyk, rgbToGray, validGradient } from "../../../../packages/domain/src/paint";
 import { createSampleDocument } from "../../../../packages/domain/src/sample";
@@ -125,6 +129,8 @@ export class AppComponent implements AfterViewInit, OnDestroy {
       element.nativeElement.querySelector<HTMLElement>("#settings-tab-" + this.settingsCategory())?.focus();
   }
   @ViewChild("canvas") canvas?: ElementRef<HTMLCanvasElement>;
+  /** The visible part of the page drawn at the screen's resolution while the view is still. */
+  @ViewChild("detail") detail?: ElementRef<HTMLCanvasElement>;
   @ViewChild("viewport") viewport?: ElementRef<HTMLDivElement>;
   @ViewChild("spatialHost") spatialHost?: ElementRef<HTMLDivElement>;
   @ViewChild("imageFile") imageFile?: ElementRef<HTMLInputElement>;
@@ -217,7 +223,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   readonly quickColors = [{ value: "#000000", label: "Black" }, { value: "#ffffff", label: "White" }, { value: "none", label: "No color" }];
   readonly paintTarget = signal<"fill" | "stroke">("fill");
   readonly paintPicker = signal<{ x: number; y: number } | null>(null);
-  readonly contextBlocks = [{ id: "tools", label: "Tools" }, { id: "appearance", label: "Appearance" }, { id: "workspace", label: "Workspace" }, { id: "measurement", label: "Measurement" }, { id: "dimensions", label: "Dimensions" }, { id: "pivot", label: "Pivot" }, { id: "selection", label: "Selection" }, { id: "swatches", label: "Swatches" }] as const;
+  readonly contextBlocks = [{ id: "tools", label: "Tools" }, { id: "appearance", label: "Appearance" }, { id: "workspace", label: "Workspace" }, { id: "measurement", label: "Measurement" }, { id: "dimensions", label: "Dimensions" }, { id: "pivot", label: "Pivot" }, { id: "selection", label: "Selection" }, { id: "swatches", label: "Swatches" }, { id: "contextBar", label: "Context bar" }, { id: "documentTabs", label: "Document tabs" }] as const;
   readonly colorModes: { id: ColorMode; label: string }[] = COLOR_MODES.map((id) => ({ id, label: { quick: "Quick RGB", rgb: "RGB", cmyk: "CMYK", grayscale: "Grayscale", palette: "Custom palette" }[id] }));
   readonly fillKinds = [{ id: "color", label: "Color" }, { id: "gradient", label: "Gradient" }, { id: "pattern", label: "Pattern" }, { id: "none", label: "None" }] as const;
   readonly presetPatterns = PRESET_PATTERNS.map((kind) => ({ kind, pattern: presetPattern(kind, "preview-" + kind) }));
@@ -436,6 +442,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
       editor.showHandles();
       editor.boundingBoxVisible();
       editor.outlineView();
+      editor.pixelPreview();
       editor.handleSize();
       editor.activeNodes();
       editor.activeSegments();
@@ -737,11 +744,34 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     { id: "distort", label: "Free distort", icon: "free-distort", hint: "A corner moves alone." },
     { id: "perspective", label: "Perspective distort", icon: "perspective-distort", hint: "A corner moves with its neighbour, the other way." },
   ] as const;
+  /** Save As: the browser's own dialog where it has one, otherwise a name asked for here. */
+  readonly saveAsDialog = signal(false);
+  saveAsName = "";
+  saveAs() {
+    this.dismissMenus();
+    if (this.editor.canPickSaveFile()) { void this.editor.saveAs(); return; }
+    this.saveAsName = this.editor.document().name;
+    this.saveAsDialog.set(true);
+    setTimeout(() => window.document.querySelector<HTMLInputElement>(".save-as-dialog input")?.select());
+  }
+  async confirmSaveAs() {
+    if (await this.editor.saveAs(this.saveAsName)) this.saveAsDialog.set(false);
+  }
   /** Object > Envelope Distort, in the order Illustrator gives it. */
+  readonly meshMenuCommands = ["createGradientMesh"] as const;
   readonly envelopeMenuCommands = ["envelopeWarp", "envelopeMesh", "envelopeTop", "envelopeRelease", "envelopeOptions", "envelopeExpand", "envelopeEdit", "envelopeResetWarp", "envelopeResetMesh"] as const;
   readonly warpStyles = WARP_STYLES.map((id) => ({ id, label: WARP_LABELS[id] }));
   /** The envelope dialogs: Warp Options to make or reset, the mesh size to make or reset, and Envelope Options. */
   readonly envelopeDialog = signal<"warp" | "resetWarp" | "mesh" | "resetMesh" | "options" | null>(null);
+  /** Object > Create Gradient Mesh and its values. */
+  readonly gradientMeshDialog = signal(false);
+  gradientMeshDraft: { rows: number; columns: number; appearance: "flat" | "toCenter" | "toEdge"; highlight: number } = { rows: 4, columns: 4, appearance: "flat", highlight: 100 };
+  readonly meshAppearances = [{ id: "flat", label: "Flat" }, { id: "toCenter", label: "To center" }, { id: "toEdge", label: "To edge" }] as const;
+  applyGradientMeshDialog() {
+    const layer = this.editor.selectedLayers()[0], d = this.gradientMeshDraft;
+    if (layer && this.editor.makeGradientMesh(layer.id, { rows: Math.round(d.rows), columns: Math.round(d.columns), appearance: d.appearance, highlight: Number(d.highlight) })) this.gradientMeshDialog.set(false);
+    else this.notify(new Error(this.editor.status() || "The gradient mesh cannot be made from this selection."));
+  }
   warpDraft: WarpSettings = { ...DEFAULT_WARP };
   warpPreview = true;
   meshDraft = { rows: 4, columns: 4, maintainShape: true };
@@ -1088,7 +1118,13 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   newSwatch() { const id = this.editor.addSwatch(this.swatchTarget()); if (id) this.chosenSwatch.set(id); }
   deleteSwatch() { const id = this.chosenSwatch(); if (id && this.editor.removeSwatch(id)) this.chosenSwatch.set(null); }
   setSwatchKind(kind: string) { if (["all", "color", "gradient", "pattern"].includes(kind)) this.swatchKind.set(kind as "all" | "color" | "gradient" | "pattern"); }
-  @HostListener("document:pointerdown", ["$event"]) dismissPaint(event: PointerEvent) {
+  /**
+   * True while the browser's own colour picker of a field in the popover is open: its
+   * eyedropper takes colours from the page, and those presses must not close the popover.
+   */
+  nativeColorPicking = false;
+  dismissPaint(event: PointerEvent) {
+    if (this.nativeColorPicking) return;
     if (!(event.target instanceof Element) || !event.target.closest(".paint-popover,.paint-trigger")) this.paintPicker.set(null);
   }
   setUnit(key: "distanceUnit" | "fontUnit", event: Event) { const unit = this.text(event); if (isUnit(unit)) this.preferences.setMeasurement(key, unit); }
@@ -1187,20 +1223,15 @@ export class AppComponent implements AfterViewInit, OnDestroy {
       this.wheelHandler,
     );
     cancelAnimationFrame(this.frame);
+    clearTimeout(this.detailTimer);
     this.spatialView?.dispose();
   }
   schedule() {
     cancelAnimationFrame(this.frame);
     this.frame = requestAnimationFrame(() => {
-      if (this.canvas)
-        this.editor.renderer.draw(
-          this.canvas.nativeElement,
-          this.renderDocument(),
-          this.editor.selectedLayers().map((l) => l.id),
-          () => this.schedule(),
-          this.editor.painting,
-          false,
-          {
+      if (!this.canvas) return;
+      const document = this.renderDocument(), ids = this.editor.selectedLayers().map((l) => l.id);
+      const options = {
             zoom: this.editor.zoom(),
             direct: this.editor.isEditingCurve() || [
               "select",
@@ -1219,9 +1250,47 @@ export class AppComponent implements AfterViewInit, OnDestroy {
             outlineInk: this.theme?.() === "light" ? "#202b3f" : "#e5e9f0",
             handleSize: this.editor.handleSize(),
             anchors: this.anchorDisplay(),
-          },
-        );
+          };
+      // The whole page is drawn at one pixel per unit, which the browser magnifies while the
+      // view pans, zooms or a gesture runs; once still, the part in view is drawn again sharp.
+      this.editor.renderer.draw(this.canvas.nativeElement, document, ids, () => this.schedule(), this.editor.painting, false, options);
+      this.drawDetail(document, ids, options);
     });
+  }
+  /** Until when the sharp view waits, for the view to have been still for a moment. */
+  private detailHeldUntil = 0;
+  private detailTimer?: ReturnType<typeof setTimeout>;
+  private detailZoom = 0;
+  /** Hides the sharp view while the view moves and draws it again once it has been still. */
+  holdDetail() {
+    this.detailHeldUntil = performance.now() + DETAIL_IDLE_MS;
+    this.hideDetail();
+    clearTimeout(this.detailTimer);
+    this.detailTimer = setTimeout(() => this.schedule(), DETAIL_IDLE_MS + 10);
+  }
+  /** Draws the sharp view again after a gesture, even one that changed nothing. */
+  private restoreDetail() {
+    if (this.detail) this.schedule();
+  }
+  private hideDetail() {
+    const detail = this.detail?.nativeElement;
+    if (!detail) return;
+    detail.style.display = "none";
+    if (this.canvas) this.canvas.nativeElement.style.opacity = "";
+  }
+  private drawDetail(document: StudioDocument, ids: string[], options: Parameters<CanvasRenderer["draw"]>[6]) {
+    const detail = this.detail?.nativeElement, canvas = this.canvas?.nativeElement, view = this.viewport?.nativeElement;
+    if (!detail || !canvas || !view) return;
+    const zoom = this.editor.zoom();
+    if (zoom !== this.detailZoom) { this.detailZoom = zoom; this.holdDetail(); return; }
+    if (this.editor.pixelPreview() || this.pointerActive || this.pinch || performance.now() < this.detailHeldUntil) { this.hideDetail(); return; }
+    const bounds = view.getBoundingClientRect(), rect = canvas.getBoundingClientRect();
+    const region = detailRegion(rect, { left: bounds.left + view.clientLeft, top: bounds.top + view.clientTop, width: view.clientWidth, height: view.clientHeight }, zoom, window.devicePixelRatio || 1);
+    if (!region) { this.hideDetail(); return; }
+    this.editor.renderer.draw(detail, document, ids, () => this.schedule(), this.editor.painting, false, options, region.page);
+    Object.assign(detail.style, { display: "block", left: `${canvas.offsetLeft + region.css.left}px`, top: `${canvas.offsetTop + region.css.top}px`, width: `${region.css.width}px`, height: `${region.css.height}px` });
+    // The page canvas stays underneath to take the pointer, but is not seen through the sharp one.
+    canvas.style.opacity = "0";
   }
   /** What the renderer needs to show anchors and handles as Illustrator does. */
   private anchorDisplay() {
@@ -1285,10 +1354,33 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     this.mobileMenu.update((open) => !open);
     if (this.mobileMenu()) { this.toolsOpen.set(false); this.panelsOpen.set(false); }
   }
+  /**
+   * Whether the tools or the panels are a drawer: always on a phone, and on a wider screen
+   * while their column is hidden, so a handle at that edge still slides them in over the canvas.
+   */
+  toolsDrawer() {
+    return this.mobile() || !this.preferences.layoutBlocks().tools;
+  }
+  panelsDrawer() {
+    return this.mobile() || !this.panels();
+  }
   openDrawer(side: "tools" | "panels") {
     this.mobileMenu.set(false);
-    this.toolsOpen.set(side === "tools");
-    this.panelsOpen.set(side === "panels");
+    // On a phone one drawer covers the other; on a wider screen both may stay open.
+    if (this.mobile()) {
+      this.toolsOpen.set(side === "tools");
+      this.panelsOpen.set(side === "panels");
+    } else (side === "tools" ? this.toolsOpen : this.panelsOpen).set(true);
+  }
+  /**
+   * The edge handle of a drawer. On a phone it opens the drawer, which a tap outside closes;
+   * on a wider screen the drawer stays open like a column while the canvas is used, and the
+   * handle, which then sits on its edge, closes it again.
+   */
+  toggleDrawer(side: "tools" | "panels") {
+    const open = side === "tools" ? this.toolsOpen : this.panelsOpen;
+    if (!this.mobile() && open()) open.set(false);
+    else this.openDrawer(side);
   }
   closeDrawers() {
     this.toolsOpen.set(false);
@@ -1296,9 +1388,9 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     this.mobileMenu.set(false);
   }
   /** A finger that lands near a side edge may be opening the drawer on that side. */
-  @HostListener("document:pointerdown", ["$event"]) touchStart(event: PointerEvent) {
+  touchStart(event: PointerEvent) {
     if (event.pointerType !== "touch") return;
-    this.swipeStart = this.mobile() ? { point: { x: event.clientX, y: event.clientY }, id: event.pointerId } : null;
+    this.swipeStart = this.toolsDrawer() || this.panelsDrawer() ? { point: { x: event.clientX, y: event.clientY }, id: event.pointerId } : null;
     this.startLongPress(event);
   }
   @HostListener("document:pointermove", ["$event"]) touchMove(event: PointerEvent) {
@@ -1310,10 +1402,10 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     this.cancelLongPress();
     const start = this.swipeStart;
     this.swipeStart = null;
-    if (!start || start.id !== event.pointerId || !this.mobile()) return;
+    if (!start || start.id !== event.pointerId) return;
     const swipe = edgeSwipe(start.point, { x: event.clientX, y: event.clientY }, window.innerWidth, { left: this.toolsOpen(), right: this.panelsOpen() });
-    if (swipe === "openLeft") this.openDrawer("tools");
-    else if (swipe === "openRight") this.openDrawer("panels");
+    if (swipe === "openLeft" && this.toolsDrawer()) this.openDrawer("tools");
+    else if (swipe === "openRight" && this.panelsDrawer()) this.openDrawer("panels");
     else if (swipe === "closeLeft") this.toolsOpen.set(false);
     else if (swipe === "closeRight") this.panelsOpen.set(false);
   }
@@ -1628,6 +1720,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     if (event.pointerType === "touch" && this.mobile() && (event.clientX <= EDGE_ZONE || event.clientX >= window.innerWidth - EDGE_ZONE)) return;
     this.canvas!.nativeElement.setPointerCapture(event.pointerId);
     this.pointerActive = true;
+    this.hideDetail();
     const zoomMode = this.zoomMode(event);
     if (zoomMode) { this.beginZoomArea(event, zoomMode); return; }
     this.commitText();
@@ -1683,6 +1776,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   pointerUp(event?: PointerEvent) {
     if (event && this.touchUpCanvas(event)) return;
     this.pointerActive = false;
+    this.restoreDetail();
     if (this.zoomDrag) { this.endZoomArea(); return; }
     this.pan = undefined;
     this.stopLiquifyTimer();
@@ -1697,6 +1791,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   }
   pointerCancel() {
     this.pointerActive = false;
+    this.restoreDetail();
     if (this.zoomDrag) { this.zoomDrag = undefined; this.zoomArea.set(null); return; }
     if (this.guideDrag) this.cancelGuide();
     this.pan = undefined;
@@ -1911,6 +2006,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     if (id === "transformAgain") return this.editor.selectedLayers().length > 0 && !!this.editor.lastTransform();
     if (["envelopeWarp", "envelopeMesh"].includes(id)) return this.editor.selectedLayers().some((layer) => !layer.guide && !layer.envelope);
     if (id === "envelopeTop") return this.editor.selectedLayers().length > 1;
+    if (id === "createGradientMesh") return this.editor.selectedLayers().length === 1 && !this.editor.selectedLayers()[0].gradientMesh && !this.editor.selectedLayers()[0].envelope;
     if (["envelopeRelease", "envelopeExpand", "envelopeResetWarp", "envelopeResetMesh"].includes(id)) return this.editor.selectedEnvelope()?.envelope?.editing === "envelope";
     if (["envelopeOptions", "envelopeEdit"].includes(id)) return !!this.editor.selectedEnvelope();
     if (["scaleDialog", "shearDialog", "transformEach"].includes(id)) return this.editor.selectedLayers().some((layer) => !layer.guide && !layer.locked);
@@ -1946,12 +2042,14 @@ export class AppComponent implements AfterViewInit, OnDestroy {
       undo: () => this.editor.undo(),
       redo: () => this.editor.redo(),
       save: () => this.editor.save(),
+      saveAs: () => this.saveAs(),
       open: () => this.projectFile?.nativeElement.click(),
       new: () => this.newDocument(),
       duplicate: () => this.editor.duplicate(),
       duplicateSeries: () => this.openArrayDialog(),
       transformAgain: () => this.editor.transformAgain(),
       scaleDialog: () => this.openAffineDialog("scale"),
+      createGradientMesh: () => this.gradientMeshDialog.set(true),
       envelopeWarp: () => this.openEnvelopeDialog("warp"),
       envelopeMesh: () => this.openEnvelopeDialog("mesh"),
       envelopeTop: () => this.editor.makeEnvelope("object"),
@@ -1970,6 +2068,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
       pasteInBack: () => this.editor.paste("back"),
       toggleBoundingBox: () => this.editor.toggleBoundingBox(),
       toggleOutline: () => this.editor.toggleOutlineView(),
+      togglePixelPreview: () => this.editor.togglePixelPreview(),
       outlineStroke: () => this.editor.outlineStrokeSelection(),
       outlineText: () => { void this.editor.outlineTextSelection().catch((error) => this.notify(error)); },
       joinPaths: () => this.runJoin(),
@@ -2066,7 +2165,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     };
     actions[id]?.();
   }
-  @HostListener("document:pointerdown", ["$event"]) dismissToolFlyout(
+  dismissToolFlyout(
     event: PointerEvent,
   ) {
     const target = event.target;
@@ -2173,6 +2272,8 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     return (this.preferences.bindings()[id] ?? []).join(" / ");
   }
   chooseTool(id: ToolId) {
+    // On a phone the drawer closes when a tool is chosen, so the canvas is free to draw on;
+    // on a wider screen it stays open, as the column of panels does.
     if (this.mobile?.()) this.toolsOpen.set(false);
     this.commitText();
     this.editor.setTool(id);
@@ -2543,7 +2644,18 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     }
     return dismissed;
   }
-  @HostListener("document:pointerdown", ["$event"]) dismissOutsideMenus(
+  /**
+   * Every press anywhere in the page: it closes the appearance popover, the list of a tool
+   * family and the menus when it lands outside them, and starts the touch gestures. One
+   * listener calls them all, as several listeners for the same event were not all called.
+   */
+  @HostListener("document:pointerdown", ["$event"]) documentPointerDown(event: PointerEvent) {
+    this.dismissPaint(event);
+    this.dismissToolFlyout(event);
+    this.dismissOutsideMenus(event);
+    this.touchStart(event);
+  }
+  dismissOutsideMenus(
     event: PointerEvent,
   ) {
     const target = event.target;
@@ -2712,6 +2824,8 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     this.pointerCancel();
     this.cursorPoint.set(null);
   }
+  /** The licence the build carries: its name and the SHA-256 of the LICENSE file, from the release data. */
+  readonly licence = signal<{ name: string; sha256: string } | null>(null);
   async loadReleaseIndex() {
     try {
       const response = await fetch("/assets/changelog/index.json");
@@ -2719,6 +2833,8 @@ export class AppComponent implements AfterViewInit, OnDestroy {
       const data = await response.json();
       this.releases.set(data.entries);
       this.currentVersion.set(data.currentVersion);
+      if (data.licence && typeof data.licence.sha256 === "string" && /^[0-9a-f]{64}$/.test(data.licence.sha256))
+        this.licence.set({ name: String(data.licence.name ?? "LICENSE"), sha256: data.licence.sha256 });
       await this.selectVersion(
         new URLSearchParams(location.search).get("version") ??
           data.currentVersion,

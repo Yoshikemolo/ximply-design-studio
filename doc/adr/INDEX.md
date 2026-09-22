@@ -38,3 +38,5 @@
 | [Vector Paintbrush strokes carried by paths in the native format](ADR-0032.md) |
 | [Gradient and pattern fills, patterns and swatches in the native format](ADR-0033.md) |
 | [Envelopes carried by path layers in the native format](ADR-0034.md) |
+| [Gradient meshes carried by path layers in the native format](ADR-0035.md) |
+| [Paint layers marked and cropped in the native format](ADR-0036.md) |

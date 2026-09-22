@@ -24,7 +24,7 @@ function phone() {
     temporarySelect: signal(false), temporaryPan: signal(false), cursorPoint: signal(null),
     textEditing: signal(null), textDraft: signal(''), recording: signal(null), flyout: signal(null),
     settings: signal(false), about: signal(false), dialog: signal(false), spatial: signal(false),
-    altHeld: signal(false), mobile: signal(true), mobileMenu: signal(false), toolsOpen: signal(false), panelsOpen: signal(false),
+    altHeld: signal(false), mobile: signal(true), mobileMenu: signal(false), toolsOpen: signal(false), panelsOpen: signal(false), panels: signal(true),
     touches: new Map(), pinchResidue: false, syntheticContext: false, swipeStart: null,
     canvas: { nativeElement: canvas },
     viewport: { nativeElement: { scrollLeft: 0, scrollTop: 0 } },
@@ -175,5 +175,16 @@ describe('the phone layout', () => {
     expect(phoneStyles).toContain('touch-action: none');
     expect(phoneStyles).toContain('overflow-x: hidden');
     expect(phoneStyles).toContain('.studio-shell > footer');
+  });
+});
+
+describe('the menu on a phone', () => {
+  it('lies above the backdrop of the drawers, so its options take the taps', () => {
+    const styles = readFileSync('packages/design-system/styles/studio.scss', 'utf8');
+    const phoneStyles = styles.slice(styles.lastIndexOf('@media (max-width: 720px)'));
+    const header = Number(/\.menubar \{[^}]*z-index: (\d+)/.exec(phoneStyles)![1]);
+    const backdrop = Number(/\.drawer-backdrop \{[^}]*z-index: (\d+)/.exec(phoneStyles)![1]);
+    // The menu is inside the header, whose stacking decides whether a tap reaches it.
+    expect(header).toBeGreaterThan(backdrop);
   });
 });

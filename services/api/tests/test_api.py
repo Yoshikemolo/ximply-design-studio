@@ -795,6 +795,23 @@ class NativeDrawingTests(unittest.TestCase):
         self.document['layers'] = [editing, member]
         self.assert_round_trip(self.document)
 
+    def test_gradient_mesh_round_trip_and_contract(self):
+        layer = self.envelope_layer()
+        mesh = layer['envelope']['mesh']
+        layer.pop('envelope')
+        layer['gradientMesh'] = {'mesh': mesh, 'colors': ['#ff0000', '#00ff00', '#0000ff', '#ffffff80']}
+        for name, broken in {'colour count': {'mesh': mesh, 'colors': ['#ff0000']}, 'no colour': {'mesh': mesh, 'colors': ['none'] * 4}}.items():
+            with self.subTest(case=name):
+                self.document['layers'] = [{**layer, 'gradientMesh': broken}]
+                self.assert_invalid(self.document)
+        self.document['layers'] = [{**layer, 'curves': self.layer['curves']}]
+        self.assert_invalid(self.document)
+        self.document['version'] = 1
+        self.document['layers'] = [layer]
+        self.assert_invalid(self.document)
+        self.document['version'] = 2
+        self.assert_round_trip(self.document)
+
     def test_dimension_format_bounds_and_types(self):
         for field, invalid in {'scale': [0, -1, 1000001, True, '2'],
                                'unit': ['yd', '', None], 'decimals': [-1, 9, 1.5, True, '2'],
@@ -890,6 +907,22 @@ class NativeDrawingTests(unittest.TestCase):
                     self.layer['lineEnds'] = copy.deepcopy(base)
                     self.layer['lineEnds'][side][field] = value
                     self.assert_invalid(self.document)
+
+    def test_paint_layer_marker_is_strict_and_requires_native_two_image(self):
+        self.layer.pop('curves', None)
+        self.layer['kind'] = 'image'
+        self.layer['paintLayer'] = True
+        for value in (False, None, 0, 1, 'true'):
+            self.layer['paintLayer'] = value
+            self.assert_invalid(self.document)
+        self.layer['paintLayer'] = True
+        self.layer['kind'] = 'rectangle'
+        self.assert_invalid(self.document)
+        self.layer['kind'] = 'image'
+        self.document['version'] = 1
+        self.assert_invalid(self.document)
+        self.document['version'] = 2
+        self.assert_round_trip(self.document)
 
     def test_new_extensions_require_version_two_and_non_null_regroup_path(self):
         for field, value in (('regroupPath', ['outer', 'inner']), ('dimension', self.dimension_data()),

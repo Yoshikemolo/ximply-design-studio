@@ -1,6 +1,7 @@
 """Build application-shipped release data from versioned Markdown sources."""
 from __future__ import annotations
 import argparse
+import hashlib
 from datetime import date
 from functools import cmp_to_key
 import json
@@ -99,7 +100,13 @@ def build(root: Path) -> dict[str, str]:
     current = json.loads((root/'release/version.json').read_text())['version']
     if current not in [entry['version'] for entry in entries]:
         raise ValueError('Current version has no Markdown release notes')
-    data = json.dumps({'currentVersion': current, 'entries': entries}, indent=2) + '\n'
+    # The licence the build carries, named by the first line of LICENSE and identified by the
+    # SHA-256 of its text, which the about screen shows.
+    # Line endings are counted as LF, as the repository stores them, so every checkout agrees.
+    licence_bytes = (root/'LICENSE').read_bytes().replace(b'\r\n', b'\n')
+    licence = {'file': 'LICENSE', 'name': licence_bytes.decode('utf-8').splitlines()[0].strip(),
+               'sha256': hashlib.sha256(licence_bytes).hexdigest()}
+    data = json.dumps({'currentVersion': current, 'licence': licence, 'entries': entries}, indent=2) + '\n'
     outputs['release/changelog.json'] = data
     outputs['apps/web/public/assets/changelog/index.json'] = data
     links = ['# Changelog', '', 'Authoritative notes are versioned Markdown under doc/changelog.',
