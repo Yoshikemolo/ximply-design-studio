@@ -76,6 +76,7 @@ Generated titles and paths only; authoritative content remains in each linked do
 - [REL-0026 — Colour, gradients and patterns, and the studio on a phone](changelog/0.7.0.md)
 - [REL-0027 — Scaling, shearing, distorting and envelopes](changelog/0.8.0.md)
 - [REL-0028 — Gradient meshes, a sharp magnified view and wide screen drawers](changelog/0.9.0.md)
+- [REL-0029 — Application icons](changelog/0.9.1.md)
 - [REL-0003 — Pending changes](changelog/Unreleased.md)
 - [DOC-ROOT-0002 — Code and contract map](code-map.md)
 - [DOC-ENGINEERING-0001 — Documentation navigation migration](engineering/context-migration.md)
