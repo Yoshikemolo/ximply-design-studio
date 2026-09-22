@@ -23,6 +23,7 @@ export const COMMANDS: Command[] = [
     text: ["Text", "T"],
     paintbrush: ["Paintbrush", "B"],
     gradient: ["Gradient", "G"],
+    freeTransform: ["Free transform", "E"],
     eraser: ["Eraser", "Shift+E"],
     rotate: ["Rotate", "R"],
     hand: ["Pan", "H"],

@@ -26,6 +26,7 @@ None.
 
 - Shear with the Shear tool, beside Scale and Reshape: a drag that starts up or down shears along the vertical axis and one that starts sideways along the horizontal axis, about the pivot, with Shift keeping the original width or height; a click moves the reference point first, and Alt-click moves it and opens the Shear dialog, which takes an angle from -359 to 359 along a horizontal, vertical or angled axis, with Copy. Every object keeps its kind, text and pictures included.
 - Scale with the Scale dialog, from a double-click on the tool, Alt-click or Object > Transform > Scale: Uniform or Non-Uniform percentages, negative ones reflecting, Scale Strokes & Effects and Copy.
+- Transform with the Free Transform tool (E): its box moves the selection from inside, scales it from a handle against the opposite one, Shift keeping the proportions and Alt scaling from the centre, and rotates it from outside, Shift by 45 degrees. Holding Ctrl+Alt while a side handle is dragged shears along that side, Ctrl on a corner handle distorts freely and Shift+Alt+Ctrl distorts in perspective. Distorted shapes become paths that pass within half a pixel of the exact map; text, pictures, symbols, dimensions and floor-plan objects are left as they are and named.
 - Transform each selected object about its own reference point with Object > Transform > Transform Each (Alt+Shift+Ctrl+D): scale, move, rotate and reflect, with the nine reference points and Copy.
 
 ## Improvements

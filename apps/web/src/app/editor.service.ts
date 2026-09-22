@@ -11,7 +11,8 @@ import { AreaSelectionKind, SelectionArea, layerInsideArea, layerIntersectsArea,
 import { blendCompatible, blendProgress, interpolateBlendLayer, syncBlends, ObjectBlend, BlendEasing } from "../../../../packages/domain/src/object-blend";
 import { defaultTypography, defaultTextLayout, FONT_FAMILIES, layoutText, TextLayoutOptions, TextTypography } from "../../../../packages/domain/src/text-layout";
 import { snapPoint, SnapConfig, rulerSnapSteps } from "../../../../packages/domain/src/measurements";
-import { Linear, about, affineLayers, applyAffine, scaleLinear, shearLinear, transformLayers } from "../../../../packages/domain/src/affine";
+import { Affine, Linear, about, affineLayers, applyAffine, scaleLinear, shearLinear, transformLayers } from "../../../../packages/domain/src/affine";
+import { Quad, boxQuad, distortable, mapLayers, quadMap } from "../../../../packages/domain/src/distort";
 import {
   alignLayers,
   booleanLayers,
@@ -1987,6 +1988,106 @@ export class EditorService {
     if (Math.abs(linear[0] * linear[3] - linear[1] * linear[2]) < 1e-4) return;
     this.dragLinear(g, linear, point);
   }
+  /**
+   * The Free Transform tool (E). Its box is the bounds of the selection: a drag inside moves,
+   * a handle scales against the opposite one, Shift keeping proportions and Alt scaling from
+   * the centre, and a drag outside rotates, Shift by 45 degrees. Ctrl+Alt held on a side
+   * handle shears along that side; Ctrl held on a corner handle distorts freely, and
+   * Shift+Alt+Ctrl distorts in perspective. The modifiers are read as the drag goes, as in
+   * Illustrator, where they are pressed after the drag begins.
+   */
+  private freeGesture?: { before: StudioDocument; ids: Set<string>; box: { x: number; y: number; width: number; height: number }; start: Point; handle: string; quad: Quad; changed: boolean };
+  readonly freeQuad = signal<Quad | null>(null);
+  /** The box the Free Transform tool shows: the one it is dragging, or the bounds of the selection. */
+  freeTransformQuad(): Quad | null {
+    if (this.freeGesture) return this.freeGesture.quad;
+    const layers = this.selectedLayers().filter((layer) => !layer.guide);
+    return layers.length ? boxQuad(selectionBounds(layers)) : null;
+  }
+  private static readonly FREE_HANDLES: Record<string, [number, number]> = { tl: [0, 0], t: [0.5, 0], tr: [1, 0], r: [1, 0.5], br: [1, 1], b: [0.5, 1], bl: [0, 1], l: [0, 0.5] };
+  private startFreeTransform(point: Point): boolean {
+    const layers = this.selectedLayers().filter((layer) => !layer.guide);
+    if (!layers.length) return false;
+    if (layers.some((layer) => this.isEffectivelyLocked(layer))) { this.status.set("Unlock the objects to transform them."); return true; }
+    const box = selectionBounds(layers), reach = 10 / this.zoom();
+    const handle = Object.entries(EditorService.FREE_HANDLES).find(([, [u, v]]) => Math.hypot(point.x - (box.x + box.width * u), point.y - (box.y + box.height * v)) <= reach)?.[0]
+      ?? (point.x >= box.x && point.x <= box.x + box.width && point.y >= box.y && point.y <= box.y + box.height ? "move" : "rotate");
+    this.freeGesture = { before: this.document(), ids: new Set(layers.map((layer) => layer.id)), box, start: point, handle, quad: boxQuad(box), changed: false };
+    this.freeQuad.set(this.freeGesture.quad);
+    return true;
+  }
+  private moveFreeTransform(point: Point, m: { shift?: boolean; alt?: boolean; ctrl?: boolean }) {
+    const g = this.freeGesture!;
+    const { box, start, handle } = g;
+    const centre = { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+    const corners = ["tl", "tr", "br", "bl"];
+    let affine: Affine | null = null, quad: Quad | null = null;
+    if (handle === "move") {
+      const end = m.shift ? snapDirection(start, point, 45) : point;
+      affine = { a: 1, b: 0, c: 0, d: 1, e: end.x - start.x, f: end.y - start.y };
+    } else if (handle === "rotate") {
+      let angle = Math.atan2(point.y - centre.y, point.x - centre.x) - Math.atan2(start.y - centre.y, start.x - centre.x);
+      if (m.shift) angle = Math.round(angle / (Math.PI / 4)) * (Math.PI / 4);
+      const cos = Math.cos(angle), sin = Math.sin(angle);
+      affine = about([cos, sin, -sin, cos], centre);
+    } else if (corners.includes(handle) && m.ctrl) {
+      const index = corners.indexOf(handle), q = boxQuad(box);
+      const dx = point.x - q[index].x, dy = point.y - q[index].y;
+      if (m.shift && m.alt) {
+        // Perspective: the corner and its neighbour along the side it is dragged along move apart.
+        const along = Math.abs(dx) >= Math.abs(dy);
+        const neighbour = along ? [1, 0, 3, 2][index] : [3, 2, 1, 0][index];
+        q[index] = along ? { x: q[index].x + dx, y: q[index].y } : { x: q[index].x, y: q[index].y + dy };
+        q[neighbour] = along ? { x: q[neighbour].x - dx, y: q[neighbour].y } : { x: q[neighbour].x, y: q[neighbour].y - dy };
+      } else q[index] = { ...point };
+      quad = q;
+    } else {
+      const [u, v] = EditorService.FREE_HANDLES[handle];
+      const grip = { x: box.x + box.width * u, y: box.y + box.height * v };
+      const anchor = m.alt && !m.ctrl ? centre : { x: box.x + box.width * (1 - u), y: box.y + box.height * (1 - v) };
+      const side = handle.length === 1;
+      if (side && m.ctrl && m.alt) {
+        // Shear along the side: the handle's side slides, the opposite one stays.
+        const horizontal = handle === "t" || handle === "b";
+        const across = horizontal ? grip.y - anchor.y : grip.x - anchor.x;
+        const k = ((horizontal ? point.x - start.x : point.y - start.y)) / (across || 1);
+        const stretch = m.shift ? 1 : ((horizontal ? point.y - anchor.y : point.x - anchor.x)) / (across || 1);
+        affine = about(horizontal ? [1, 0, k, stretch] : [stretch, k, 0, 1], anchor);
+      } else {
+        const guard = (n: number) => (Math.abs(n) < 0.01 ? (n < 0 ? -0.01 : 0.01) : n);
+        let sx = u === 0.5 ? 1 : (point.x - anchor.x) / ((grip.x - anchor.x) || 1);
+        let sy = v === 0.5 ? 1 : (point.y - anchor.y) / ((grip.y - anchor.y) || 1);
+        if (m.shift && !side) { const s = Math.abs(sx) > Math.abs(sy) ? sx : sy; sx = Math.sign(sx || 1) * Math.abs(s); sy = Math.sign(sy || 1) * Math.abs(s); }
+        affine = about(scaleLinear(guard(sx), guard(sy)), anchor);
+      }
+    }
+    const layers = g.before.layers.filter((layer) => g.ids.has(layer.id));
+    let mapped: Layer[];
+    if (affine) {
+      const a = affine;
+      mapped = affineLayers(layers, a, { scaleStrokes: this.scaleStrokes() });
+      g.quad = boxQuad(box).map((p) => applyAffine(a, p)) as Quad;
+    } else {
+      mapped = mapLayers(layers, quadMap(box, quad!), 8);
+      g.quad = quad!;
+    }
+    const byId = new Map(mapped.map((layer) => [layer.id, layer]));
+    const next = { ...g.before, layers: g.before.layers.map((layer) => byId.get(layer.id) ?? layer) };
+    try { parseDocument(JSON.stringify(next)); } catch { return; }
+    g.changed = true;
+    this.freeQuad.set(g.quad);
+    this.document.set(next);
+  }
+  private endFreeTransform() {
+    const g = this.freeGesture!;
+    this.freeGesture = undefined;
+    this.freeQuad.set(null);
+    if (!g.changed) return;
+    const skipped = g.before.layers.filter((layer) => g.ids.has(layer.id) && !distortable(layer) && layer === this.document().layers.find((l) => l.id === layer.id));
+    this.commitStep(g.before);
+    this.changed();
+    if (skipped.length) this.status.set(`Left ${skipped.length} object${skipped.length > 1 ? "s" : ""} a distortion cannot reshape: text, pictures, symbols, dimensions and floor-plan objects.`);
+  }
   private dragLinear(g: NonNullable<EditorService["gesture"]>, linear: Linear, point: Point) {
     const ids = new Set(g.ids ?? [g.id]);
     const layers = g.before.layers.filter((layer) => ids.has(layer.id) && !layer.guide);
@@ -2280,6 +2381,7 @@ export class EditorService {
     if (areaTools[tool]) { this.startAreaSelection(point, areaTools[tool]!, !!modifiers.shift); return; }
     if (tool === "eyedropper") { this.sampleStyle(point); return; }
     if (tool === "gradient") { this.startGradient(point); return; }
+    if (tool === "freeTransform") { this.startFreeTransform(point); return; }
     if (tool === "paintBucket") { this.applyStyleAt(point); return; }
     if (["rectangle", "ellipse", "path", "paintbrush", "pen", "line", "rounded", "polygon", "star", "arc", "spiral", "grid", "polar", "flare", "text"].includes(tool)) point = this.snap(point);
     if (tool === "hand" || (tool === "brush" && ["none", "transparent"].includes(this.fill()))) return;
@@ -2566,6 +2668,7 @@ export class EditorService {
     if(this.proceduralGesture){const g=this.proceduralGesture;const end=modifiers.shift?snapDirection(g.start,point,this.snapAngle()):(g.type==='wall'?this.wallTarget(g.start,point,g.id):this.snap(point));try{const layer=this.proceduralLayer(g.type,g.start,end,g.id);const next=syncProcedurals({...g.before,layers:[...g.before.layers,layer]});parseDocument(JSON.stringify(next));this.document.set(next);this.selectedId.set(layer.id);this.selectedIds.set([layer.id]);}catch{/* Keep the last valid preview. */}return;}
     if(this.dimensionLabelGesture){const layer=this.document().layers.find(l=>l.id===this.dimensionLabelGesture!.id)!;this.setLayer(layer.id,{dimension:{...layer.dimension!,labelPosition:localPoint(layer,point)}});return;}
     if (this.gradientGesture) { this.moveGradient(point, !!modifiers.shift); return; }
+    if (this.freeGesture) { this.moveFreeTransform(point, modifiers); return; }
     const draft=this.dimensionDraft();if(draft){const count=draft.kind==="chain"?Infinity:(draft.kind==="angular"?3:2);const placing=draft.ready===true||draft.points.length>=count;this.dimensionDraft.set({...draft,cursor:placing?this.dimensionOffsetPoint(draft.points,point):this.dimensionPoint(point,true)});if(placing)this.dimensionSnapTarget.set(null);return;}
     if(!this.gesture&&["dimensionSmart","dimensionLinear","dimensionAngular","dimensionChain","dimensionRadius","dimensionDiameter"].includes(this.tool())){this.hoverDimension(point);return;}
     if(!this.gesture&&!this.proceduralGesture&&this.tool()==='wall'){this.hoverWall(modifiers.shift&&this.wallChain()?snapDirection(this.wallChain()!,point,this.snapAngle()):point);return;}
@@ -2727,6 +2830,7 @@ export class EditorService {
     if(this.proceduralGesture){const g=this.proceduralGesture;this.proceduralGesture=undefined;const drawn=this.document().layers.find(l=>l.id===g.id);if(drawn){this.commitStep(g.before);this.changed();if(g.type==='wall'&&drawn.procedural?.type==='wall')this.wallChain.set(worldPoint(drawn,drawn.procedural.end));}return;}
     if(this.dimensionLabelGesture){this.commitStep(this.dimensionLabelGesture.before);this.dimensionLabelGesture=undefined;this.changed();return;}
     if (this.gradientGesture) { this.endGradient(); return; }
+    if (this.freeGesture) { this.endFreeTransform(); return; }
     if (this.areaGesture) {
       if (!this.areaGesture.moved && !this.areaGesture.shift) { this.selectedId.set(null); this.selectedIds.set([]); this.activeNodes.set([]); }
       this.areaGesture = undefined; this.areaSelection.set(null); return;
@@ -2846,6 +2950,7 @@ export class EditorService {
     this.dimensionDraft.set(null);this.dimensionSnapTarget.set(null);
     if(this.dimensionLabelGesture)this.document.set(this.dimensionLabelGesture.before);this.dimensionLabelGesture=undefined;
     if (this.gradientGesture) { this.document.set(this.gradientGesture.before); this.gradientGesture = undefined; }
+    if (this.freeGesture) { this.document.set(this.freeGesture.before); this.freeGesture = undefined; this.freeQuad.set(null); }
     this.cancelGuideDrag();
     if (this.areaGesture) {
       this.selectedIds.set(this.areaGesture.ids); this.selectedId.set(this.areaGesture.primary); this.activeNodes.set(this.areaGesture.nodes);

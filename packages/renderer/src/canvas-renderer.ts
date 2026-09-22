@@ -64,6 +64,11 @@ export class CanvasRenderer {
       showHandles?: boolean;
       /** The frame, the resizing handles and the rotation knob of the selection. */
       boundingBox?: boolean;
+      /**
+       * The box of the Free Transform tool, corners clockwise from the top left in page
+       * coordinates; it replaces the bounding box and follows a distortion.
+       */
+      quad?: Point[];
       /** Outline view: the artwork is drawn as hairline contours without its paints. */
       outline?: boolean;
       /** Ink of the outline view, which the shell picks from the theme. */
@@ -121,6 +126,20 @@ export class CanvasRenderer {
             ...selectionBounds(selected),
           }
         : selected[0];
+    if (layer && interaction.quad?.length === 4) {
+      const unit = 1 / Math.max(0.1, interaction.zoom), size = (interaction.handleSize ?? 4) * unit, q = interaction.quad;
+      ctx.save();
+      ctx.strokeStyle = "#0d59f2";
+      ctx.fillStyle = "#ffffff";
+      ctx.lineWidth = 1.5 * unit;
+      ctx.beginPath();
+      q.forEach((p, i) => (i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y)));
+      ctx.closePath();
+      ctx.stroke();
+      const handles = [...q, ...q.map((p, i) => ({ x: (p.x + q[(i + 1) % 4].x) / 2, y: (p.y + q[(i + 1) % 4].y) / 2 }))];
+      for (const p of handles) { ctx.fillRect(p.x - size, p.y - size, size * 2, size * 2); ctx.strokeRect(p.x - size, p.y - size, size * 2, size * 2); }
+      ctx.restore();
+    }
     if (layer) {
       const zoom = Math.max(0.1, interaction.zoom),
         unit = 1 / zoom,
@@ -131,7 +150,7 @@ export class CanvasRenderer {
       ctx.fillStyle = "#ffffff";
       ctx.lineWidth = 1.5 * unit;
       // The bounding box can be hidden to see the artwork without its frame and handles.
-      if (interaction.boundingBox !== false) {
+      if (interaction.boundingBox !== false && !interaction.quad) {
         ctx.setLineDash([5 * unit, 3 * unit]);
         ctx.strokeRect(
           -3 * unit,

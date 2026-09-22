@@ -1139,6 +1139,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
             ].includes(this.activeTool()),
             showHandles: this.editor.showHandles(),
             boundingBox: this.editor.boundingBoxVisible(),
+            quad: this.activeTool() === "freeTransform" ? (this.editor.freeQuad() ?? this.editor.freeTransformQuad() ?? undefined) : undefined,
             outline: this.editor.outlineView(),
             outlineInk: this.theme?.() === "light" ? "#202b3f" : "#e5e9f0",
             handleSize: this.editor.handleSize(),
@@ -1981,7 +1982,8 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     return this.tools.filter((tool) => tool.group === this.toolGroup());
   }
   activeTool(): ToolId {
-    return this.temporarySelect() && !this.editor.isEditingCurve()
+    // Ctrl pressed during a Free Transform drag distorts, as in Illustrator, rather than selecting.
+    return this.temporarySelect() && !this.editor.isEditingCurve() && !this.editor.freeQuad()
       ? this.temporarySelectionTool()
       : this.editor.tool();
   }
