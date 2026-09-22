@@ -2755,6 +2755,8 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     this.pointerCancel();
     this.cursorPoint.set(null);
   }
+  /** The licence the build carries: its name and the SHA-256 of the LICENSE file, from the release data. */
+  readonly licence = signal<{ name: string; sha256: string } | null>(null);
   async loadReleaseIndex() {
     try {
       const response = await fetch("/assets/changelog/index.json");
@@ -2762,6 +2764,8 @@ export class AppComponent implements AfterViewInit, OnDestroy {
       const data = await response.json();
       this.releases.set(data.entries);
       this.currentVersion.set(data.currentVersion);
+      if (data.licence && typeof data.licence.sha256 === "string" && /^[0-9a-f]{64}$/.test(data.licence.sha256))
+        this.licence.set({ name: String(data.licence.name ?? "LICENSE"), sha256: data.licence.sha256 });
       await this.selectVersion(
         new URLSearchParams(location.search).get("version") ??
           data.currentVersion,

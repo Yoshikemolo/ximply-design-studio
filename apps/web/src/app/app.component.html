@@ -521,7 +521,7 @@
 
             @if (editor.document().layers.length === 0) {
               <div class="canvas-welcome">
-                <div class="welcome-mark">x</div>
+                <div class="welcome-brand" aria-label="Ximply Design Studio"><img src="/assets/icons/ximplicity-x.svg" alt="" /><span>ximply<span class="brand-sub">design studio</span></span></div>
                 <h1>{{ t("Draw, layer, explore.") }}</h1>
                 <p>{{ t("Choose a tool and make your first mark.") }}</p>
                 <button (click)="sample()">
@@ -1286,20 +1286,30 @@
       aria-labelledby="about-title"
     >
       <header>
-        <div>
-          <small
-            ><a
-              href="https://ximplicity.es"
-              target="_blank"
-              rel="noopener noreferrer"
-              >XIMPLICITY</a
-            ></small
-          >
-          <h2 id="about-title">Ximply Design Studio</h2>
-          <p>{{ t("Create freely. Keep every layer.") }}</p>
+        <div class="about-brand">
+          <img class="about-logo" src="/assets/icons/ximplicity-x.svg" alt="" />
+          <div>
+            <small
+              ><a
+                href="https://ximplicity.es"
+                target="_blank"
+                rel="noopener noreferrer"
+                >XIMPLICITY</a
+              ></small
+            >
+            <h2 id="about-title">Ximply Design Studio</h2>
+            <p>{{ t("Create freely. Keep every layer.") }}</p>
+          </div>
         </div>
         <button (click)="closeAbout()" [attr.aria-label]="t('Close')">×</button>
       </header>
+      @if (licence(); as licence) {
+        <div class="about-licence">
+          <h3>{{ t("Licence") }}</h3>
+          <p>{{ licence.name }}</p>
+          <p class="licence-hash"><span>SHA-256</span><code [title]="t('SHA-256 of the LICENSE file this build carries')">{{ licence.sha256 }}</code></p>
+        </div>
+      }
       <div class="release-picker">
         <h3>{{ t("Version") }}</h3>
         <select
@@ -1339,6 +1349,7 @@
           </section>
         }
       </div>
+      <footer class="about-credits"><ng-container *ngTemplateOutlet="footerCredits"></ng-container></footer>
     </section>
   </div>
 }

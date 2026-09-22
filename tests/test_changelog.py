@@ -1,4 +1,5 @@
 """Release-note oracles for current version, compatibility and generated assets."""
+import hashlib
 import json
 from pathlib import Path
 import shutil
@@ -50,11 +51,26 @@ class ChangelogTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 sections(body)
 
+    def test_licence_hash_is_the_same_whatever_the_line_endings(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            shutil.copytree(ROOT/'doc/changelog', root/'doc/changelog')
+            shutil.copytree(ROOT/'release', root/'release')
+            text = (ROOT/'LICENSE').read_bytes().replace(b'\r\n', b'\n')
+            (root/'LICENSE').write_bytes(text)
+            unix = json.loads(build(root)['release/changelog.json'])['licence']
+            (root/'LICENSE').write_bytes(text.replace(b'\n', b'\r\n'))
+            windows = json.loads(build(root)['release/changelog.json'])['licence']
+            self.assertEqual(unix, windows)
+            self.assertEqual(hashlib.sha256(text).hexdigest(), unix['sha256'])
+            self.assertEqual(text.decode('utf-8').splitlines()[0].strip(), unix['name'])
+
     def test_missing_current_version_and_breaking_mismatch_fail(self):
         with tempfile.TemporaryDirectory() as folder:
             root = Path(folder)
             shutil.copytree(ROOT/'doc/changelog', root/'doc/changelog')
             shutil.copytree(ROOT/'release', root/'release')
+            shutil.copy(ROOT/'LICENSE', root/'LICENSE')
             (root/'release/version.json').write_text('{"version":"9.9.9"}')
             with self.assertRaisesRegex(ValueError, 'Current version'):
                 build(root)

@@ -1,6 +1,8 @@
 const ES: Record<string, string> = {
   "All Rights Reserved.": "Todos los derechos reservados.",
   "Outline stroke": "Contornear trazo",
+  "Licence": "Licencia",
+  "SHA-256 of the LICENSE file this build carries": "SHA-256 del archivo LICENSE que incluye esta versión",
   "Document tabs": "Pestañas de documentos",
   "Save as": "Guardar como",
   "File name": "Nombre del archivo",
