@@ -183,6 +183,16 @@
         <label>{{ t("Size") }} <input type="number" min="0" step="any" [value]="displayDistance(editor.size())" (change)="setToolSize($event)" /> {{ preferences.distanceUnit() }}</label>
       </section>
     }
+    @if (editor.tool() === 'freeTransform') {
+      <section class="context-block" role="group" [attr.aria-label]="t('Free transform')">
+        <span>{{ t('Free transform') }}</span>
+        <div class="segmented">
+          @for (mode of freeTransformModes; track mode.id) {
+            <button [class.active]="editor.freeTransformMode() === mode.id" [attr.aria-pressed]="editor.freeTransformMode() === mode.id" [title]="t(mode.label) + ' · ' + t(mode.hint)" [attr.aria-label]="t(mode.label)" (click)="editor.freeTransformMode.set(mode.id)"><img [src]="'/assets/icons/' + mode.icon + '.svg'" alt="" /></button>
+          }
+        </div>
+      </section>
+    }
     @if (['eyedropper', 'paintBucket'].includes(editor.tool())) {
       <section class="context-block style-scope" role="group" [attr.aria-label]="t('Style transfer scope')">
         <span>{{ t('Style transfer scope') }}</span>

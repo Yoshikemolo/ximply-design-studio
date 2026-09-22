@@ -731,6 +731,11 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     if (applied) this.affineDialog.set(null);
     else this.notify(new Error("The transformation cannot be applied to this selection."));
   }
+  readonly freeTransformModes = [
+    { id: "transform", label: "Free transform", icon: "free-transform", hint: "A corner scales; hold Ctrl to distort, Shift+Alt+Ctrl for perspective." },
+    { id: "distort", label: "Free distort", icon: "free-distort", hint: "A corner moves alone." },
+    { id: "perspective", label: "Perspective distort", icon: "perspective-distort", hint: "A corner moves with its neighbour, the other way." },
+  ] as const;
   /** Object > Envelope Distort, in the order Illustrator gives it. */
   readonly envelopeMenuCommands = ["envelopeWarp", "envelopeMesh", "envelopeTop", "envelopeRelease", "envelopeOptions", "envelopeExpand", "envelopeEdit", "envelopeResetWarp", "envelopeResetMesh"] as const;
   readonly warpStyles = WARP_STYLES.map((id) => ({ id, label: WARP_LABELS[id] }));
@@ -1621,7 +1626,9 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     this.pointerActive = true;
     if (this.zoomAreaActive(event)) { this.beginZoomArea(event); return; }
     this.commitText();
-    this.temporarySelect.set(event.ctrlKey);
+    // Ctrl on a handle of the Free Transform box distorts, whether it was pressed before the
+    // drag or during it; elsewhere Ctrl gives the selection tool, as usual.
+    this.temporarySelect.set(event.ctrlKey && !(this.editor.tool() === "freeTransform" && this.editor.freeTransformHandleAt(this.point(event))));
     const tool = this.activeTool();
     if (tool === "zoom" && !this.temporaryPan()) {
       this.setZoom(this.editor.zoom() * (event.altKey ? 0.8 : 1.25));

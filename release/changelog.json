@@ -19,7 +19,7 @@
         },
         {
           "type": "Feature",
-          "description": "Transform with the Free Transform tool (E): its box moves the selection from inside, scales it from a handle against the opposite one, Shift keeping the proportions and Alt scaling from the centre, and rotates it from outside, Shift by 45 degrees. Holding Ctrl+Alt while a side handle is dragged shears along that side, Ctrl on a corner handle distorts freely and Shift+Alt+Ctrl distorts in perspective. Distorted shapes become paths that pass within half a pixel of the exact map; text, pictures, symbols, dimensions and floor-plan objects are left as they are and named."
+          "description": "Transform with the Free Transform tool (E): its box moves the selection from inside, scales it from a handle against the opposite one, Shift keeping the proportions and Alt scaling from the centre, and rotates it from outside, Shift by 45 degrees. Holding Ctrl+Alt while a side handle is dragged shears along that side, Ctrl on a corner handle distorts freely and Shift+Alt+Ctrl distorts in perspective. Ctrl works whether it is pressed before the drag or during it. Three buttons in the context bar, as the tool's widget in later Illustrator versions has them, choose Free Transform, where a corner scales, Free Distort, where it moves alone, and Perspective Distort, where it moves with its neighbour, so no key needs to be held. Distorted shapes become paths that pass within half a pixel of the exact map; text, pictures, symbols, dimensions and floor-plan objects are left as they are and named."
         },
         {
           "type": "Feature",

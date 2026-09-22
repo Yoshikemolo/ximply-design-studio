@@ -1,6 +1,11 @@
 const ES: Record<string, string> = {
   "All Rights Reserved.": "Todos los derechos reservados.",
   "Outline stroke": "Contornear trazo",
+  "Free distort": "Distorsión libre",
+  "Perspective distort": "Distorsión de perspectiva",
+  "A corner scales; hold Ctrl to distort, Shift+Alt+Ctrl for perspective.": "Una esquina escala; mantén Ctrl para distorsionar, Mayús+Alt+Ctrl para la perspectiva.",
+  "A corner moves alone.": "Una esquina se mueve sola.",
+  "A corner moves with its neighbour, the other way.": "Una esquina se mueve con su vecina, en sentido contrario.",
   "Envelope distort": "Distorsión de envolvente",
   "Make with warp": "Crear con deformación",
   "Make with mesh": "Crear con malla",

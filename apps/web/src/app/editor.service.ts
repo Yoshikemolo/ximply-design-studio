@@ -2001,6 +2001,12 @@ export class EditorService {
    */
   private freeGesture?: { before: StudioDocument; ids: Set<string>; box: { x: number; y: number; width: number; height: number }; start: Point; handle: string; quad: Quad; changed: boolean };
   readonly freeQuad = signal<Quad | null>(null);
+  /**
+   * The mode of the Free Transform tool, as its widget offers it in later Illustrator
+   * versions: a corner scales in Free Transform, and moves alone in Free Distort, or with its
+   * neighbour in Perspective Distort, without holding Ctrl.
+   */
+  readonly freeTransformMode = signal<"transform" | "distort" | "perspective">("transform");
   /** The box the Free Transform tool shows: the one it is dragging, or the bounds of the selection. */
   freeTransformQuad(): Quad | null {
     if (this.freeGesture) return this.freeGesture.quad;
@@ -2008,6 +2014,13 @@ export class EditorService {
     return layers.length ? boxQuad(selectionBounds(layers)) : null;
   }
   private static readonly FREE_HANDLES: Record<string, [number, number]> = { tl: [0, 0], t: [0.5, 0], tr: [1, 0], r: [1, 0.5], br: [1, 1], b: [0.5, 1], bl: [0, 1], l: [0, 0.5] };
+  /** The handle of the Free Transform box under a point, if there is one. */
+  freeTransformHandleAt(point: Point): string | null {
+    const layers = this.selectedLayers().filter((layer) => !layer.guide);
+    if (!layers.length) return null;
+    const box = selectionBounds(layers), reach = 10 / this.zoom();
+    return Object.entries(EditorService.FREE_HANDLES).find(([, [u, v]]) => Math.hypot(point.x - (box.x + box.width * u), point.y - (box.y + box.height * v)) <= reach)?.[0] ?? null;
+  }
   private startFreeTransform(point: Point): boolean {
     const layers = this.selectedLayers().filter((layer) => !layer.guide);
     if (!layers.length) return false;
@@ -2033,10 +2046,10 @@ export class EditorService {
       if (m.shift) angle = Math.round(angle / (Math.PI / 4)) * (Math.PI / 4);
       const cos = Math.cos(angle), sin = Math.sin(angle);
       affine = about([cos, sin, -sin, cos], centre);
-    } else if (corners.includes(handle) && m.ctrl) {
+    } else if (corners.includes(handle) && (m.ctrl || this.freeTransformMode() !== "transform")) {
       const index = corners.indexOf(handle), q = boxQuad(box);
       const dx = point.x - q[index].x, dy = point.y - q[index].y;
-      if (m.shift && m.alt) {
+      if ((m.ctrl && m.shift && m.alt) || this.freeTransformMode() === "perspective") {
         // Perspective: the corner and its neighbour along the side it is dragged along move apart.
         const along = Math.abs(dx) >= Math.abs(dy);
         const neighbour = along ? [1, 0, 3, 2][index] : [3, 2, 1, 0][index];

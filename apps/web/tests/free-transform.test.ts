@@ -117,3 +117,32 @@ describe('Ctrl during a Free Transform drag', () => {
     expect(app.activeTool()).not.toBe('freeTransform');
   });
 });
+
+describe('the Free Transform modes', () => {
+  it('distorts a corner without Ctrl in Free Distort, and in perspective in Perspective Distort', () => {
+    const e = tool();
+    e.freeTransformMode.set('distort');
+    drag(e, { x: 300, y: 100 }, { x: 330, y: 60 });
+    let nodes = worldCurves(first(e))![0].nodes.filter((_, i) => i % 8 === 0).map((n) => n.point);
+    expect(nodes[1].x).toBeCloseTo(330, 6);
+    expect(nodes[1].y).toBeCloseTo(60, 6);
+    const f = tool();
+    f.freeTransformMode.set('perspective');
+    drag(f, { x: 300, y: 100 }, { x: 340, y: 102 });
+    nodes = worldCurves(first(f))![0].nodes.filter((_, i) => i % 8 === 0).map((n) => n.point);
+    expect(nodes[1].x).toBeCloseTo(340, 6);
+    expect(nodes[0].x).toBeCloseTo(60, 6);
+  });
+
+  it('keeps scaling from a corner in Free Transform, as the CS3 manual has it', () => {
+    const e = tool();
+    drag(e, { x: 300, y: 100 }, { x: 330, y: 60 });
+    expect(first(e).kind).toBe('rectangle');
+  });
+
+  it('finds the handle of its box under a point, for a Ctrl held before the press', () => {
+    const e = tool();
+    expect(e.freeTransformHandleAt({ x: 301, y: 99 })).toBe('tr');
+    expect(e.freeTransformHandleAt({ x: 200, y: 150 })).toBeNull();
+  });
+});
