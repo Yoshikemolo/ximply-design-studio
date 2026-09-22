@@ -45,6 +45,10 @@
         },
         {
           "type": "Improvement",
+          "description": "Hide the tools or the panels on a wide screen as on a phone: View > Hide panels and Tools in View > Layout slide the column out to its side while the canvas widens, and a handle at that edge slides it back in over the canvas as a drawer, which a click outside or a chosen tool closes; showing the column again puts it back in place."
+        },
+        {
+          "type": "Improvement",
           "description": "Draw a magnified page sharp. While the view pans, zooms or a gesture runs, the page is still drawn at one pixel per unit and magnified, which keeps it fast; once the view has been still for a moment, the part in view is drawn again at the screen's resolution, high pixel density screens included, and replaces it until the view moves again."
         },
         {

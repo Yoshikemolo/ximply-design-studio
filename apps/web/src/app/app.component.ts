@@ -1354,6 +1354,16 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     this.mobileMenu.update((open) => !open);
     if (this.mobileMenu()) { this.toolsOpen.set(false); this.panelsOpen.set(false); }
   }
+  /**
+   * Whether the tools or the panels are a drawer: always on a phone, and on a wider screen
+   * while their column is hidden, so a handle at that edge still slides them in over the canvas.
+   */
+  toolsDrawer() {
+    return this.mobile() || !this.preferences.layoutBlocks().tools;
+  }
+  panelsDrawer() {
+    return this.mobile() || !this.panels();
+  }
   openDrawer(side: "tools" | "panels") {
     this.mobileMenu.set(false);
     this.toolsOpen.set(side === "tools");
@@ -1367,7 +1377,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   /** A finger that lands near a side edge may be opening the drawer on that side. */
   touchStart(event: PointerEvent) {
     if (event.pointerType !== "touch") return;
-    this.swipeStart = this.mobile() ? { point: { x: event.clientX, y: event.clientY }, id: event.pointerId } : null;
+    this.swipeStart = this.toolsDrawer() || this.panelsDrawer() ? { point: { x: event.clientX, y: event.clientY }, id: event.pointerId } : null;
     this.startLongPress(event);
   }
   @HostListener("document:pointermove", ["$event"]) touchMove(event: PointerEvent) {
@@ -1379,10 +1389,10 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     this.cancelLongPress();
     const start = this.swipeStart;
     this.swipeStart = null;
-    if (!start || start.id !== event.pointerId || !this.mobile()) return;
+    if (!start || start.id !== event.pointerId) return;
     const swipe = edgeSwipe(start.point, { x: event.clientX, y: event.clientY }, window.innerWidth, { left: this.toolsOpen(), right: this.panelsOpen() });
-    if (swipe === "openLeft") this.openDrawer("tools");
-    else if (swipe === "openRight") this.openDrawer("panels");
+    if (swipe === "openLeft" && this.toolsDrawer()) this.openDrawer("tools");
+    else if (swipe === "openRight" && this.panelsDrawer()) this.openDrawer("panels");
     else if (swipe === "closeLeft") this.toolsOpen.set(false);
     else if (swipe === "closeRight") this.panelsOpen.set(false);
   }
@@ -2249,7 +2259,8 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     return (this.preferences.bindings()[id] ?? []).join(" / ");
   }
   chooseTool(id: ToolId) {
-    if (this.mobile?.()) this.toolsOpen.set(false);
+    // A drawer closes when a tool is chosen, so the canvas is free to draw on.
+    this.toolsOpen?.set(false);
     this.commitText();
     this.editor.setTool(id);
     const mode = ({ selectRectangle: "rectangle", selectEllipse: "ellipse", selectLasso: "lasso" } as const)[id as "selectRectangle" | "selectEllipse" | "selectLasso"];

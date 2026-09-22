@@ -70,7 +70,7 @@
         <div class="menu-popover">
           <button (click)="fit()">
             {{ t("Fit") }}<kbd>{{ shortcut("fit") }}</kbd></button
-          ><button (click)="panels.set(!panels())">
+          ><button (click)="closeDrawers(); panels.set(!panels())">
             {{ t(panels() ? "Hide panels" : "Show panels") }}</button
           ><button (click)="editor.toggleOutlineView()">
             {{ editor.outlineView() ? "✓" : "○" }} {{ t("Outline view") }}<kbd>{{ shortcut("toggleOutline") }}</kbd></button
@@ -80,7 +80,7 @@
           >
           <div class="layout-menu"><strong>{{ t("Layout") }}</strong>
             @for (block of contextBlocks; track block.id) {
-              <button (click)="preferences.toggleLayoutBlock(block.id)" [attr.aria-pressed]="preferences.layoutBlocks()[block.id]">{{ preferences.layoutBlocks()[block.id] ? "✓" : "○" }} {{ t(block.label) }}</button>
+              <button (click)="closeDrawers(); preferences.toggleLayoutBlock(block.id)" [attr.aria-pressed]="preferences.layoutBlocks()[block.id]">{{ preferences.layoutBlocks()[block.id] ? "✓" : "○" }} {{ t(block.label) }}</button>
             }
           </div>
         </div>
@@ -260,15 +260,16 @@
     </div>
   }
   <main class="workspace" [class.no-panels]="!panels()" [class.no-tools]="!preferences.layoutBlocks().tools">
-    @if (mobile()) {
+    @if (toolsDrawer()) {
       <button class="drawer-handle left" type="button" (click)="openDrawer('tools')" [attr.aria-label]="t('Drawing tools')" [title]="t('Drawing tools')"><span></span></button>
-      <button class="drawer-handle right" type="button" (click)="openDrawer('panels')" [attr.aria-label]="t('Editor panels')" [title]="t('Editor panels')"><span></span></button>
-      @if (toolsOpen() || panelsOpen() || mobileMenu()) {
-        <div class="drawer-backdrop" (click)="closeDrawers()" aria-hidden="true"></div>
-      }
     }
-    @if (preferences.layoutBlocks().tools) {
-    <aside class="toolrail" [class.drawer-open]="toolsOpen()" [attr.aria-label]="t('Drawing tools')">
+    @if (panelsDrawer()) {
+      <button class="drawer-handle right" type="button" (click)="openDrawer('panels')" [attr.aria-label]="t('Editor panels')" [title]="t('Editor panels')"><span></span></button>
+    }
+    @if ((toolsOpen() && toolsDrawer()) || (panelsOpen() && panelsDrawer()) || mobileMenu()) {
+      <div class="drawer-backdrop" (click)="closeDrawers()" aria-hidden="true"></div>
+    }
+    <aside class="toolrail" [class.drawer-open]="toolsOpen() && toolsDrawer()" [attr.aria-label]="t('Drawing tools')">
       @for (section of toolbarSections; track section.id) {
         <div class="tool-section" role="group" [attr.aria-label]="t(section.label)">
           @for (family of section.families; track family.id) {
@@ -379,7 +380,6 @@
         </div>
       </div>
     </aside>
-    }
     <section class="canvas-area">
       @if (preferences.layoutBlocks().documentTabs) {
         <div class="document-tabs" role="tablist" [attr.aria-label]="t('Documents')">
@@ -558,8 +558,7 @@
         ><button class="fit-button" (click)="fit()" [title]="commandTitle('fit')" [attr.aria-label]="t('Fit')"><img src="/assets/icons/fit-view.svg" alt="" /></button>
       </div>
     </section>
-    @if (panels()) {
-      <aside class="inspector" [class.drawer-open]="panelsOpen()" aria-label="Editor panels">
+      <aside class="inspector" [class.drawer-open]="panelsOpen() && panelsDrawer()" aria-label="Editor panels">
         @if (preferences.layoutBlocks().swatches) {
           <details class="panel swatches-panel" open>
             <summary><span>{{ t("Swatches") }}</span></summary>
@@ -1223,7 +1222,6 @@
           }}<button (click)="openAbout()">{{ currentVersion() }}</button>
         </div>
       </aside>
-    }
   </main>
   <footer>
     <span class="status-dot"></span

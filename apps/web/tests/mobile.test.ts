@@ -24,7 +24,7 @@ function phone() {
     temporarySelect: signal(false), temporaryPan: signal(false), cursorPoint: signal(null),
     textEditing: signal(null), textDraft: signal(''), recording: signal(null), flyout: signal(null),
     settings: signal(false), about: signal(false), dialog: signal(false), spatial: signal(false),
-    altHeld: signal(false), mobile: signal(true), mobileMenu: signal(false), toolsOpen: signal(false), panelsOpen: signal(false),
+    altHeld: signal(false), mobile: signal(true), mobileMenu: signal(false), toolsOpen: signal(false), panelsOpen: signal(false), panels: signal(true),
     touches: new Map(), pinchResidue: false, syntheticContext: false, swipeStart: null,
     canvas: { nativeElement: canvas },
     viewport: { nativeElement: { scrollLeft: 0, scrollTop: 0 } },

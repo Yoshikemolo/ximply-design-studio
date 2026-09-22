@@ -112,6 +112,7 @@
         "packages/domain/tests/document.test.ts",
         "apps/web/tests/editor.test.ts",
         "apps/web/tests/mobile.test.ts",
+        "apps/web/tests/desktop-drawers.test.ts",
         "packages/domain/tests/touch.test.ts",
         "packages/domain/tests/zoom.test.ts",
         "apps/web/tests/zoom-tool.test.ts",

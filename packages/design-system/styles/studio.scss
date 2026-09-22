@@ -417,20 +417,101 @@ hr {
   font-size: 11px;
   padding: 5px 10px;
 }
+/*
+ * The tools, the canvas and the panels keep their three columns; a hidden column narrows to
+ * nothing, sliding its content out to its side, and becomes a drawer its edge handle opens.
+ */
 .workspace {
+  position: relative;
   flex: 1;
   min-height: 0;
   display: grid;
   grid-template-columns: 100px minmax(0, 1fr) 270px;
+  --panels-width: 270px;
+  --tools-width: 100px;
+  transition: grid-template-columns 0.22s ease;
 }
+.workspace > .toolrail { grid-column: 1; grid-row: 1; }
+.workspace > .canvas-area { grid-column: 2; grid-row: 1; }
+.workspace > .inspector { grid-column: 3; grid-row: 1; }
 .workspace.no-panels {
-  grid-template-columns: 100px minmax(0, 1fr);
+  grid-template-columns: 100px minmax(0, 1fr) 0px;
 }
 .workspace.no-tools {
-  grid-template-columns: minmax(0, 1fr) 270px;
+  grid-template-columns: 0px minmax(0, 1fr) 270px;
 }
 .workspace.no-tools.no-panels {
-  grid-template-columns: minmax(0, 1fr);
+  grid-template-columns: 0px minmax(0, 1fr) 0px;
+}
+.workspace.no-tools > .toolrail,
+.workspace.no-panels > .inspector {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  z-index: 55;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  visibility: hidden;
+  transition: transform 0.22s ease, visibility 0s linear 0.22s;
+}
+.workspace.no-tools > .toolrail {
+  left: 0;
+  margin: 0;
+  width: var(--tools-width);
+  box-sizing: border-box;
+  box-shadow: 10px 0 30px #0006;
+  transform: translateX(-105%);
+}
+.workspace.no-panels > .inspector {
+  right: 0;
+  width: var(--panels-width);
+  box-shadow: -10px 0 30px #0006;
+  transform: translateX(105%);
+}
+.workspace.no-tools > .toolrail.drawer-open,
+.workspace.no-panels > .inspector.drawer-open {
+  visibility: visible;
+  transform: none;
+  transition: transform 0.22s ease;
+}
+.drawer-handle {
+  position: absolute;
+  top: 50%;
+  z-index: 40;
+  display: block;
+  width: 16px;
+  height: 72px;
+  margin-top: -36px;
+  padding: 0;
+  background: var(--panel-raised);
+  border: 1px solid var(--border);
+  cursor: pointer;
+}
+.drawer-handle.left {
+  left: 0;
+  border-left: 0;
+  border-radius: 0 10px 10px 0;
+}
+.drawer-handle.right {
+  right: 0;
+  border-right: 0;
+  border-radius: 10px 0 0 10px;
+}
+.drawer-handle span {
+  display: block;
+  width: 3px;
+  height: 30px;
+  margin: 0 auto;
+  border-radius: 2px;
+  background: var(--muted);
+}
+.drawer-handle:hover span { background: var(--text); }
+.drawer-backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: 50;
+  background: #0003;
 }
 .toolrail {
   display: flex;
@@ -1587,18 +1668,20 @@ textarea {
   }
   .workspace {
     grid-template-columns: 96px minmax(0, 1fr) 230px;
+    --panels-width: 230px;
+    --tools-width: 96px;
   }
   .toolrail {
     padding-inline: 4px;
   }
   .workspace.no-panels {
-    grid-template-columns: 96px minmax(0, 1fr);
+    grid-template-columns: 96px minmax(0, 1fr) 0px;
   }
   .workspace.no-tools {
-    grid-template-columns: minmax(0, 1fr) 230px;
+    grid-template-columns: 0px minmax(0, 1fr) 230px;
   }
   .workspace.no-tools.no-panels {
-    grid-template-columns: minmax(0, 1fr);
+    grid-template-columns: 0px minmax(0, 1fr) 0px;
   }
   .contextbar {
     gap: 12px;
@@ -1626,15 +1709,13 @@ textarea {
   }
 }
 @media (max-width: 720px) {
-  .workspace {
-    grid-template-columns: 96px minmax(0, 1fr);
-  }
+  .workspace,
   .workspace.no-panels {
-    grid-template-columns: 96px minmax(0, 1fr);
+    grid-template-columns: 96px minmax(0, 1fr) 0px;
   }
   .workspace.no-tools,
   .workspace.no-tools.no-panels {
-    grid-template-columns: minmax(0, 1fr);
+    grid-template-columns: 0px minmax(0, 1fr) 0px;
   }
   .inspector {
     position: absolute;
@@ -2204,7 +2285,6 @@ textarea,
  * scroll down, and the canvas keeps every touch for itself so two fingers can zoom it.
  */
 .menu-toggle,
-.drawer-handle,
 .menu-footer {
   display: none;
 }
@@ -2337,11 +2417,12 @@ textarea,
   .workspace.no-tools,
   .workspace.no-tools.no-panels {
     position: relative;
-    grid-template-columns: minmax(0, 1fr);
+    grid-template-columns: 0px minmax(0, 1fr) 0px;
   }
-  .toolrail,
-  .inspector {
+  .workspace > .toolrail,
+  .workspace > .inspector {
     position: fixed;
+    visibility: visible;
     top: 52px;
     bottom: 0;
     z-index: 55;
@@ -2351,24 +2432,28 @@ textarea,
     touch-action: pan-y;
     transition: transform 0.22s ease;
   }
-  .toolrail {
+  .workspace > .toolrail {
     left: 0;
+    width: auto;
     max-width: 86vw;
     padding: 12px 8px calc(12px + env(safe-area-inset-bottom));
     box-shadow: 10px 0 30px #0006;
     transform: translateX(-105%);
   }
-  .inspector {
+  .workspace > .inspector {
     left: auto;
     right: 0;
     width: min(88vw, 340px);
     box-shadow: -10px 0 30px #0006;
     transform: translateX(105%);
   }
-  .toolrail.drawer-open,
-  .inspector.drawer-open {
+  .workspace > .toolrail.drawer-open,
+  .workspace > .inspector.drawer-open {
     transform: none;
   }
+  /* A hidden column is a drawer here too, as wide as the phone's drawers. */
+  .workspace.no-tools > .toolrail { width: auto; }
+  .workspace.no-panels > .inspector { width: min(88vw, 340px); }
   .inspector input,
   .inspector select {
     min-width: 0;
@@ -2380,36 +2465,6 @@ textarea,
   .tool-family {
     width: 44px;
     height: 44px;
-  }
-  .drawer-handle {
-    position: absolute;
-    top: 50%;
-    z-index: 40;
-    display: block;
-    width: 16px;
-    height: 72px;
-    margin-top: -36px;
-    padding: 0;
-    background: var(--panel-raised);
-    border: 1px solid var(--border);
-  }
-  .drawer-handle.left {
-    left: 0;
-    border-left: 0;
-    border-radius: 0 10px 10px 0;
-  }
-  .drawer-handle.right {
-    right: 0;
-    border-right: 0;
-    border-radius: 10px 0 0 10px;
-  }
-  .drawer-handle span {
-    display: block;
-    width: 3px;
-    height: 30px;
-    margin: 0 auto;
-    border-radius: 2px;
-    background: var(--muted);
   }
   .drawer-backdrop {
     position: fixed;
