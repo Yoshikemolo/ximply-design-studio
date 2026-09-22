@@ -1,0 +1,14 @@
+{
+  "name": "Ximply Design Studio",
+  "short_name": "Ximply DS",
+  "description": "A layered vector and image editor by Ximplicity.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "theme_color": "#13151b",
+  "background_color": "#13151b",
+  "icons": [
+    { "src": "/assets/favicon/android-chrome-192x192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/assets/favicon/android-chrome-512x512.png", "sizes": "512x512", "type": "image/png" }
+  ]
+}
