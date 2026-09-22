@@ -280,7 +280,8 @@
         "SC-0110",
         "SC-0111",
         "SC-0112",
-        "SC-0114"
+        "SC-0114",
+        "SC-0116"
       ],
       "implementation": [
         "apps/web/src/app/editor.service.ts",

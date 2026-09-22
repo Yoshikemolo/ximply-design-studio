@@ -252,6 +252,7 @@ Generated titles and paths only; authoritative content remains in each linked do
 - [SC-0113 — SC-0113 — Zooming as Illustrator does](sc/SC-0113.md)
 - [SC-0114 — SC-0114 — Gradient meshes](sc/SC-0114.md)
 - [SC-0115 — SC-0115 — Sharp magnified view and Pixel Preview](sc/SC-0115.md)
+- [SC-0116 — SC-0116 — Ruler marks and ruler snapping settings](sc/SC-0116.md)
 - [SEC-0001 — SEC-0001 — Identity and project isolation](sec/SEC-0001.md)
 - [SEC-0002 — SEC-0002 — Revocation and session lifetime](sec/SEC-0002.md)
 - [SEC-0003 — SEC-0003 — Plugin least privilege](sec/SEC-0003.md)

@@ -2154,6 +2154,9 @@ textarea,
 .tick-snapping { display: flex; flex-direction: column; gap: 5px; }
 .tick-title { font-size: 10px; color: var(--muted); }
 .tick-row { display: flex; flex-direction: row; align-items: center; justify-content: space-between; gap: 8px; font-size: 10px; min-height: 22px; }
+/* The Major and Minor switches share one row under the title, centred on the same line, as tall as a field. */
+.tick-toggles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; align-items: center; min-height: 31px; }
+.measurement-settings .tick-toggles label.tick-row { flex-direction: row; align-items: center; justify-content: center; gap: 8px; }
 .layer-row[draggable=true] { cursor: grab; }
 
 .typography-actions { display: flex; flex-wrap: wrap; gap: 5px; margin: 9px 0; }
@@ -2275,6 +2278,9 @@ textarea,
 
 .horizontal-ruler .ruler-tick.minor { height: 6px; bottom: 0; padding: 0; }
 .vertical-ruler .ruler-tick.minor { width: 6px; right: 0; padding: 0; }
+/* The minor mark half way between two major ones is longer than the others, shorter than a major one. */
+.horizontal-ruler .ruler-tick.minor.half { height: 11px; }
+.vertical-ruler .ruler-tick.minor.half { width: 11px; }
 
 .procedural-properties { border: 1px solid var(--border); border-radius: 6px; margin: 10px 0; padding: 8px; min-width: 0; legend { font-size: 11px; padding: 0 4px; } .property-grid input { min-width: 0; width: 100%; } }
 

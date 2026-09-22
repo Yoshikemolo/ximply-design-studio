@@ -428,11 +428,11 @@
             @if (preferences.rulersVisible()) {
               @let marker = rulerCursorPoint();
               <div class="canvas-ruler horizontal-ruler" [attr.aria-label]="t('Drag to create horizontal guide')" (pointerdown)="startGuide($event, 'horizontal')" (pointermove)="moveGuide($event)" (pointerup)="finishGuide($event)" (pointercancel)="cancelGuide()" (lostpointercapture)="cancelGuide()">
-                @for (tick of rulerTicks('horizontal'); track tick.position) {<span class="ruler-tick" [class.minor]="!tick.major" [style.left.px]="tick.position * editor.zoom()">{{ tick.label }}</span>}
+                @for (tick of rulerTicks('horizontal'); track tick.position) {<span class="ruler-tick" [class.minor]="!tick.major" [class.half]="tick.half" [style.left.px]="tick.position * editor.zoom()">{{ tick.label }}</span>}
                 @if (marker) {<span class="ruler-cursor-marker" [style.left.px]="marker.x" aria-hidden="true"></span>}
               </div>
               <div class="canvas-ruler vertical-ruler" [attr.aria-label]="t('Drag to create vertical guide')" (pointerdown)="startGuide($event, 'vertical')" (pointermove)="moveGuide($event)" (pointerup)="finishGuide($event)" (pointercancel)="cancelGuide()" (lostpointercapture)="cancelGuide()">
-                @for (tick of rulerTicks('vertical'); track tick.position) {<span class="ruler-tick" [class.minor]="!tick.major" [style.top.px]="tick.position * editor.zoom()">{{ tick.label }}</span>}
+                @for (tick of rulerTicks('vertical'); track tick.position) {<span class="ruler-tick" [class.minor]="!tick.major" [class.half]="tick.half" [style.top.px]="tick.position * editor.zoom()">{{ tick.label }}</span>}
                 @if (marker) {<span class="ruler-cursor-marker" [style.top.px]="marker.y" aria-hidden="true"></span>}
               </div>
               <span class="ruler-origin">{{ preferences.distanceUnit() }}</span>
@@ -1551,8 +1551,10 @@
         <label>{{ t('Minor ruler interval') }} ({{ preferences.distanceUnit() }})<input type="number" [min]="displayDistance(0.01)" step="any" [value]="displayDistance(preferences.rulerMinorStep())" (change)="preferences.setMeasurement('rulerMinorStep', distanceInput($event))" /></label>
         <div class="tick-snapping" role="group" [attr.aria-label]="t('Snap to ruler ticks')">
           <span class="tick-title">{{ t('Snap to ruler ticks') }}</span>
-          <label class="tick-row">{{ t('Major') }}<input class="toggle-switch" type="checkbox" role="switch" [checked]="preferences.snapRulerMajor()" (change)="preferences.setMeasurement('snapRulerMajor', !preferences.snapRulerMajor())" /></label>
-          <label class="tick-row">{{ t('Minor') }}<input class="toggle-switch" type="checkbox" role="switch" [checked]="preferences.snapRulerMinor()" (change)="preferences.setMeasurement('snapRulerMinor', !preferences.snapRulerMinor())" /></label>
+          <div class="tick-toggles">
+            <label class="tick-row">{{ t('Major') }}<input class="toggle-switch" type="checkbox" role="switch" [checked]="preferences.snapRulerMajor()" (change)="preferences.setMeasurement('snapRulerMajor', !preferences.snapRulerMajor())" /></label>
+            <label class="tick-row">{{ t('Minor') }}<input class="toggle-switch" type="checkbox" role="switch" [checked]="preferences.snapRulerMinor()" (change)="preferences.setMeasurement('snapRulerMinor', !preferences.snapRulerMinor())" /></label>
+          </div>
         </div>
         <label>{{ t('Snap radius') }} · {{ t('Dimensions') }} (px)<input type="number" min="0" max="100" [value]="preferences.dimensionSnapRadius()" (change)="preferences.setMeasurement('dimensionSnapRadius', number($event))" /></label>
         <label>{{ t("Grid spacing") }} ({{ preferences.distanceUnit() }})<input type="number" [min]="displayDistance(0.01)" step="any" [value]="displayDistance(preferences.gridSize())" (change)="preferences.setMeasurement('gridSize', distanceInput($event))" /></label>
