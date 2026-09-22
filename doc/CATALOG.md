@@ -248,6 +248,7 @@ Generated titles and paths only; authoritative content remains in each linked do
 - [SC-0110 — SC-0110 — The Free Transform tool](sc/SC-0110.md)
 - [SC-0111 — SC-0111 — The liquify tools](sc/SC-0111.md)
 - [SC-0112 — SC-0112 — Envelopes](sc/SC-0112.md)
+- [SC-0113 — SC-0113 — Zooming as Illustrator does](sc/SC-0113.md)
 - [SEC-0001 — SEC-0001 — Identity and project isolation](sec/SEC-0001.md)
 - [SEC-0002 — SEC-0002 — Revocation and session lifetime](sec/SEC-0002.md)
 - [SEC-0003 — SEC-0003 — Plugin least privilege](sec/SEC-0003.md)

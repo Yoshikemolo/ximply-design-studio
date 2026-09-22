@@ -48,6 +48,7 @@ import { TOOLS, ToolId, TOOL_FAMILIES, ToolFamily } from "./tools";
 import { translate } from "./i18n";
 import { BLENDS, Layer, StrokeStyle, blankDocument, defaultStrokeStyle, svgExport } from "../../../../packages/domain/src/document";
 import { LIQUIFY_DEFAULTS, LiquifyOptions, LiquifyTool } from "../../../../packages/domain/src/liquify";
+import { ZOOM_MAX, ZOOM_MIN, stepZoom } from "../../../../packages/domain/src/zoom";
 import { DEFAULT_WARP, WARP_LABELS, WARP_STYLES, WarpSettings } from "../../../../packages/domain/src/envelope";
 import { COLOR_MODES, ColorMode, GradientPaint, PatternDefinition, PRESET_PATTERNS, PresetPattern, Swatch, cmykToRgb, gradientColorAt, grayToRgb, presetPattern, renderedStops, rgbToCmyk, rgbToGray, validGradient } from "../../../../packages/domain/src/paint";
 import { createSampleDocument } from "../../../../packages/domain/src/sample";
@@ -1488,6 +1489,9 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   }
   openToolOptions(id: ToolId) {
     if (id === "scale" || id === "shear") { this.openAffineDialog(id); return; }
+    // Double-clicking the Zoom tool shows the artwork at its actual size, and the Hand tool fits it.
+    if (id === "zoom") { this.flyout.set(null); this.setZoom(1); return; }
+    if (id === "hand") { this.flyout.set(null); this.fit(); return; }
     if (this.editor.isLiquifyTool(id)) { this.openLiquifyOptions(id); return; }
     if (id === "eraser") {
       this.flyout.set(null);
@@ -1624,16 +1628,13 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     if (event.pointerType === "touch" && this.mobile() && (event.clientX <= EDGE_ZONE || event.clientX >= window.innerWidth - EDGE_ZONE)) return;
     this.canvas!.nativeElement.setPointerCapture(event.pointerId);
     this.pointerActive = true;
-    if (this.zoomAreaActive(event)) { this.beginZoomArea(event); return; }
+    const zoomMode = this.zoomMode(event);
+    if (zoomMode) { this.beginZoomArea(event, zoomMode); return; }
     this.commitText();
     // Ctrl on a handle of the Free Transform box distorts, whether it was pressed before the
     // drag or during it; elsewhere Ctrl gives the selection tool, as usual.
     this.temporarySelect.set(event.ctrlKey && !(this.editor.tool() === "freeTransform" && this.editor.freeTransformHandleAt(this.point(event))));
     const tool = this.activeTool();
-    if (tool === "zoom" && !this.temporaryPan()) {
-      this.setZoom(this.editor.zoom() * (event.altKey ? 0.8 : 1.25));
-      return;
-    }
     if (tool === "hand" || this.temporaryPan()) {
       const view = this.viewport!.nativeElement;
       this.pan = {
@@ -1830,7 +1831,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
           rotate: ["rotateCW", "rotateCCW"],
           mirror: ["mirrorH", "mirrorV"],
           scale: ["scaleUp", "scaleDown"],
-          zoom: ["zoomIn", "zoomOut", "fit"],
+          zoom: ["zoomIn", "zoomOut", "actualSize", "fit"],
           // Outlining a stroke belongs with the tools that draw one, and outlining a text
           // with the tool that writes it.
           paint: ["outlineStroke"],
@@ -2058,8 +2059,9 @@ export class AppComponent implements AfterViewInit, OnDestroy {
       rotateCCW: () => this.editor.transformBy(-90),
       scaleUp: () => this.editor.transformBy(0, 2),
       scaleDown: () => this.editor.transformBy(0, 0.5),
-      zoomIn: () => this.setZoom(this.editor.zoom() * 1.25),
-      zoomOut: () => this.setZoom(this.editor.zoom() * 0.8),
+      zoomIn: () => this.zoomView("in"),
+      zoomOut: () => this.zoomView("out"),
+      actualSize: () => this.setZoom(1),
       fit: () => this.fit(),
     };
     actions[id]?.();
@@ -2078,6 +2080,8 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     return this.tools.filter((tool) => tool.group === this.toolGroup());
   }
   activeTool(): ToolId {
+    // Ctrl+Space and Ctrl+Alt+Space hold the Zoom tool over the tool in use.
+    if (this.zoomHold?.()) return "zoom";
     // Ctrl pressed during a Free Transform drag distorts, as in Illustrator, rather than selecting.
     return this.temporarySelect() && !this.editor.isEditingCurve() && !this.editor.freeQuad()
       ? this.temporarySelectionTool()
@@ -2095,6 +2099,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   }
   toolIcon() {
     if (this.temporaryPan()) return "hand";
+    if (this.activeTool() === "zoom") return this.zoomHold?.() === "out" || (this.altHeld?.() && !this.zoomHold?.()) ? "zoom-out" : "zoom-in";
     const tool = this.activeTool();
     // Alt turns a tool into its partner while it is held, as in Illustrator.
     if (this.altHeld?.()) {
@@ -2294,27 +2299,74 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   }
   /** Rectangle being dragged with the zoom area tool, in client coordinates. */
   readonly zoomArea = signal<{ x: number; y: number; width: number; height: number } | null>(null);
-  private zoomDrag?: { start: { x: number; y: number } };
-  private zoomAreaActive(event: { ctrlKey: boolean; metaKey?: boolean }) {
-    return this.activeTool() === "zoomArea" || (this.spaceHeld && (event.ctrlKey || event.metaKey === true));
+  private zoomDrag?: { start: { x: number; y: number }; last: { x: number; y: number }; mode: "in" | "out" | "area"; spaceAtStart: boolean; moved: boolean };
+  /**
+   * The Zoom tool held with the keys, as in Illustrator: Ctrl+Space zooms in and
+   * Ctrl+Alt+Space zooms out, and letting the keys go gives back the tool in use.
+   */
+  readonly zoomHold = signal<"in" | "out" | null>(null);
+  private updateZoomHold(event: KeyboardEvent) {
+    this.zoomHold?.set(this.spaceHeld && (event.ctrlKey || event.metaKey) && !this.textEditing?.() ? (event.altKey ? "out" : "in") : null);
   }
-  private beginZoomArea(event: PointerEvent) {
-    this.zoomDrag = { start: { x: event.clientX, y: event.clientY } };
-    this.zoomArea.set({ x: event.clientX, y: event.clientY, width: 0, height: 0 });
+  /** What a press on the canvas zooms: in or out with a click, or the area of a drag. */
+  private zoomMode(event: { ctrlKey: boolean; metaKey?: boolean; altKey: boolean }): "in" | "out" | "area" | null {
+    if (this.spaceHeld && (event.ctrlKey || event.metaKey === true)) return event.altKey ? "out" : "in";
+    const tool = this.activeTool();
+    if (tool === "zoomArea") return "area";
+    if (tool === "zoom" && !this.temporaryPan()) return event.altKey ? "out" : "in";
+    return null;
+  }
+  private zoomAreaActive(event: { ctrlKey: boolean; metaKey?: boolean; altKey?: boolean }) {
+    return this.zoomMode({ altKey: false, ...event }) !== null;
+  }
+  private beginZoomArea(event: PointerEvent, mode: "in" | "out" | "area" = this.zoomMode(event) ?? "area") {
+    this.zoomDrag = { start: { x: event.clientX, y: event.clientY }, last: { x: event.clientX, y: event.clientY }, mode, spaceAtStart: this.spaceHeld, moved: false };
+    if (mode === "area") this.zoomArea.set({ x: event.clientX, y: event.clientY, width: 0, height: 0 });
   }
   private updateZoomArea(event: PointerEvent) {
     const drag = this.zoomDrag;
     if (!drag) return;
+    // Space held during the drag of the Zoom tool moves the marquee instead of resizing it.
+    if (this.spaceHeld && !drag.spaceAtStart && drag.moved) {
+      drag.start = { x: drag.start.x + event.clientX - drag.last.x, y: drag.start.y + event.clientY - drag.last.y };
+    }
+    drag.last = { x: event.clientX, y: event.clientY };
+    drag.moved ||= drag.mode === "area" || Math.hypot(event.clientX - drag.start.x, event.clientY - drag.start.y) > 4;
+    if (!drag.moved) return;
     this.zoomArea.set({
       x: Math.min(drag.start.x, event.clientX), y: Math.min(drag.start.y, event.clientY),
       width: Math.abs(event.clientX - drag.start.x), height: Math.abs(event.clientY - drag.start.y),
     });
   }
-  /** Fits the dragged rectangle into the visible workspace and centres it. */
+  /**
+   * A click of the Zoom tool zooms in, or out with Alt, to the next preset about the point
+   * clicked, which comes to the centre of the view, as Illustrator does.
+   */
+  private zoomAt(client: { x: number; y: number }, direction: "in" | "out") {
+    const canvas = this.canvas?.nativeElement, view = this.viewport?.nativeElement;
+    const target = canvas ? this.point({ clientX: client.x, clientY: client.y } as MouseEvent) : null;
+    this.setZoom(stepZoom(this.editor.zoom(), direction));
+    if (!target || !view) return;
+    requestAnimationFrame(() => {
+      const rect = canvas!.getBoundingClientRect(), bounds = view.getBoundingClientRect(), doc = this.editor.document();
+      const at = { x: rect.left + (target.x * rect.width) / doc.width, y: rect.top + (target.y * rect.height) / doc.height };
+      view.scrollLeft += at.x - (bounds.left + view.clientWidth / 2);
+      view.scrollTop += at.y - (bounds.top + view.clientHeight / 2);
+    });
+  }
+  /** View > Zoom In and Zoom Out: the next preset about the centre of the view. */
+  zoomView(direction: "in" | "out") {
+    const view = this.viewport?.nativeElement;
+    if (!view || !this.canvas) { this.setZoom(stepZoom(this.editor.zoom(), direction)); return; }
+    const bounds = view.getBoundingClientRect();
+    this.zoomAt({ x: bounds.left + view.clientWidth / 2, y: bounds.top + view.clientHeight / 2 }, direction);
+  }
+  /** Fits the dragged rectangle into the visible workspace and centres it; a click zooms by a step. */
   private endZoomArea() {
-    const area = this.zoomArea(), view = this.viewport?.nativeElement;
+    const area = this.zoomArea(), view = this.viewport?.nativeElement, drag = this.zoomDrag;
     this.zoomDrag = undefined;
     this.zoomArea.set(null);
+    if (drag && !drag.moved && drag.mode !== "area") { this.zoomAt(drag.start, drag.mode); return; }
     if (!area || !view || area.width < 8 || area.height < 8) return;
     const zoom = this.editor.zoom();
     const bounds = view.getBoundingClientRect();
@@ -2343,7 +2395,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
       );
   }
   setZoom(value: number) {
-    this.editor.zoom.set(Math.min(3, Math.max(0.1, value)));
+    this.editor.zoom.set(Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, value)));
   }
   number(event: Event) {
     return Number((event.target as HTMLInputElement).value);
@@ -2550,6 +2602,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     }
     if (event.key === "Escape" && this.paintPicker?.()) { this.paintPicker.set(null); event.preventDefault(); return; }
     if (event.code === "Space" && !event.isComposing) this.spaceHeld = true;
+    this.updateZoomHold(event);
     const target = event.target as HTMLElement;
     if (
       event.isComposing ||
@@ -2641,6 +2694,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     this.editor?.setDuplicatingDrag(event.altKey);
     this.altHeld?.set(event.altKey);
     if (event.code === "Space") this.spaceHeld = false;
+    this.updateZoomHold(event);
     if (event.code === this.panKey) {
       this.temporaryPan.set(false);
       this.panKey = "";
@@ -2651,6 +2705,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     this.dismissMenus();
     this.flyout.set(null);
     this.spaceHeld = false;
+    this.zoomHold?.set(null);
     this.temporaryPan.set(false);
     this.temporarySelect.set(false);
     this.panKey = "";

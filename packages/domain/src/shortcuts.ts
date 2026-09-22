@@ -76,6 +76,7 @@ export const COMMANDS: Command[] = [
   { id: "selectAll", label: "Select all", keys: ["Mod+A"] },
   { id: "zoomIn", label: "Zoom in", keys: ["Mod++"] },
   { id: "zoomOut", label: "Zoom out", keys: ["Mod+-"] },
+  { id: "actualSize", label: "Actual size", keys: ["Mod+1"] },
   ...Object.entries({
     mirrorH: "Reflect horizontally",
     mirrorV: "Reflect vertically",

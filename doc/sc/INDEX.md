@@ -116,3 +116,4 @@
 | [SC-0110 — The Free Transform tool](SC-0110.md) |
 | [SC-0111 — The liquify tools](SC-0111.md) |
 | [SC-0112 — Envelopes](SC-0112.md) |
+| [SC-0113 — Zooming as Illustrator does](SC-0113.md) |
