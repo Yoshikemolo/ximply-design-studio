@@ -138,6 +138,40 @@ export function gradientColorAt(paint: GradientPaint, position: number): string 
   return stops[stops.length - 1].color;
 }
 
+/**
+ * The fill paint of a blend step between two objects. Two gradients mix stop by stop at the
+ * locations of both, and their angles or lines move between the two; a gradient and a flat
+ * colour mix as if the colour were a gradient of that colour alone, so the steps fade from
+ * the gradient into the colour. Patterns are not mixed: a step keeps the nearer end's.
+ */
+export function blendFillPaint(back: { fill: string; fillPaint?: FillPaint }, front: { fill: string; fillPaint?: FillPaint }, t: number): FillPaint | undefined {
+  const near = t < 0.5 ? back : front;
+  const a = back.fillPaint, b = front.fillPaint;
+  if (a?.kind === "pattern" || b?.kind === "pattern") return near.fillPaint?.kind === "pattern" ? structuredClone(near.fillPaint) : undefined;
+  if (!a && !b) return undefined;
+  const flat = (color: string, like: GradientPaint): GradientPaint => ({
+    ...structuredClone(like),
+    // A missing fill fades in as the gradient's own colours made transparent.
+    stops: like.stops.map((stop) => ({ ...stop, color: color === "none" ? stop.color.slice(0, 7) + "00" : color })),
+  });
+  const from = a ?? flat(back.fill, b as GradientPaint), to = b ?? flat(front.fill, a as GradientPaint);
+  const offsets = [...new Set([...renderedStops(from), ...renderedStops(to)].map((stop) => Math.round(stop.offset * 1e6) / 1e6))].sort((x, y) => x - y);
+  const sampled = offsets.length > MAX_STOPS ? Array.from({ length: MAX_STOPS }, (_, i) => i / (MAX_STOPS - 1)) : offsets;
+  const turn = ((to.angle - from.angle) % 360 + 540) % 360 - 180;
+  const angle = ((from.angle + turn * t + 180) % 360 + 360) % 360 - 180;
+  const lerpPoint = (p: Point, q: Point) => ({ x: p.x + (q.x - p.x) * t, y: p.y + (q.y - p.y) * t });
+  const result: GradientPaint = {
+    kind: "gradient",
+    type: from.type === to.type ? from.type : (t < 0.5 ? from : to).type,
+    angle: Math.max(-180, Math.min(180, Math.round(angle * 1e6) / 1e6)),
+    stops: sampled.map((offset) => ({ color: mixColors(gradientColorAt(from, offset), gradientColorAt(to, offset), t), location: Math.round(offset * 100 * 1e6) / 1e6, midpoint: 50 })),
+  };
+  if (result.stops.length < 2) result.stops = [{ ...result.stops[0], location: 0 }, { ...result.stops[0], location: 100 }];
+  if (from.vector && to.vector) result.vector = { start: lerpPoint(from.vector.start, to.vector.start), end: lerpPoint(from.vector.end, to.vector.end) };
+  else if ((t < 0.5 ? from : to).vector) result.vector = structuredClone((t < 0.5 ? from : to).vector);
+  return result;
+}
+
 export function parseHex(color: string): { r: number; g: number; b: number; a: number } {
   const hex = HEX.test(color) ? color.slice(1) : "000000";
   return {

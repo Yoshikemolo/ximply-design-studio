@@ -1,6 +1,7 @@
 import type { Layer, StudioDocument } from "./document";
 import { CurvePath, lerp, splitSegment } from "./curves";
 import { ellipsePath, polyline } from "./shapes";
+import { blendFillPaint } from "./paint";
 
 export type BlendEasing = "linear" | "ease-in" | "ease-out" | "ease-in-out";
 export interface ObjectBlend {
@@ -103,6 +104,11 @@ export function interpolateBlendLayer(back: Layer, front: Layer, t: number, id: 
     strokeWidth:mix(back.strokeWidth,front.strokeWidth,t), opacity:mix(back.opacity,front.opacity,t),
     points:[], curves, source:"", text:"", locked:false,
   };
+  // Gradients blend between the ends, and a gradient fades into a flat colour at the other.
+  const fillPaint = blendFillPaint(back, front, t);
+  if (fillPaint && result.fill !== "none") result.fillPaint = fillPaint;
+  else if (fillPaint?.kind === "gradient") { result.fill = fillPaint.stops[0].color.slice(0, 7); result.fillPaint = fillPaint; }
+  else delete result.fillPaint;
   delete result.groupPath;
   delete result.symbolId;
   delete result.traceSourceId;
