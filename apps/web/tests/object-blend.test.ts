@@ -94,3 +94,17 @@ describe("live object blends", () => {
     expect(e.document().layers.every(layer => !layer.groupPath?.length)).toBe(true);
   });
 });
+describe("blending gradients between objects", () => {
+  it("fades the gradient of one end into the flat fill of the other across the steps", () => {
+    const e = new EditorService();
+    const fade = { kind: "gradient" as const, type: "linear" as const, angle: 0, stops: [{ color: "#ff0000", location: 0, midpoint: 50 }, { color: "#0000ff", location: 100, midpoint: 50 }] };
+    e.document.update(doc => ({ ...doc, version: 2, layers: [{ ...shape("back", 0), fill: "#ff0000", fillPaint: fade }, shape("front", 200)] }));
+    e.selectAll();
+    expect(e.createBlend(3)).toBe(true);
+    const steps = e.document().layers.slice(1, 4);
+    expect(steps.map(layer => layer.fillPaint?.kind)).toEqual(["gradient", "gradient", "gradient"]);
+    // The middle step is half way from red and blue to the white of the front end.
+    expect(steps[1].fillPaint!.kind === "gradient" && steps[1].fillPaint!.stops.map(stop => stop.color)).toEqual(["#ff8080", "#8080ff"]);
+    expect(() => parseDocument(JSON.stringify(e.document()))).not.toThrow();
+  });
+});

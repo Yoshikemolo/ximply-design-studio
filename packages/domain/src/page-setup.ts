@@ -145,3 +145,35 @@ export function resizePage(document: StudioDocument, edges: PageEdges): StudioDo
     layers: document.layers.map(layer => ({ ...layer, x: layer.x + edges.left, y: layer.y + edges.top })),
   };
 }
+
+/**
+ * The margin guides and registration marks a page carries now, read back from the guide
+ * layers and the marks layer that page setup writes, since neither is stored on its own.
+ */
+export function readPageSetup(document: { width: number; height: number; layers: Layer[] }): { margins: MarginGuides; marks: RegistrationMarks } {
+  const guide = (suffix: string) => document.layers.find((layer) => layer.guide && layer.name === `${MARGIN_GUIDE_PREFIX} ${suffix}`);
+  const left = guide('left'), right = guide('right'), top = guide('top'), bottom = guide('bottom');
+  const edges = !!(left && right && top && bottom);
+  const margins: MarginGuides = {
+    top: edges ? top!.y : 0,
+    right: edges ? document.width - right!.x : 0,
+    bottom: edges ? document.height - bottom!.y : 0,
+    left: edges ? left!.x : 0,
+    edges,
+    centerX: !!guide('centre vertical'),
+    centerY: !!guide('centre horizontal'),
+  };
+  const layer = document.layers.find((item) => item.name === REGISTRATION_LAYER_NAME);
+  let marks: RegistrationMarks = 'none';
+  if (layer?.curves) {
+    const at = (l: Layer) => l.curves!.map((path) => path.nodes[0]?.point).map((p) => p && { x: p.x + l.x, y: p.y + l.y });
+    const drawn = at(layer);
+    for (const kind of REGISTRATION_MARKS.filter((k) => k !== 'none')) {
+      const candidate = registrationLayer(kind, document, 'probe');
+      if (!candidate?.curves || candidate.curves.length !== layer.curves.length) continue;
+      const expected = at(candidate);
+      if (expected.every((p, i) => p && drawn[i] && Math.abs(p.x - drawn[i]!.x) < 0.5 && Math.abs(p.y - drawn[i]!.y) < 0.5)) { marks = kind; break; }
+    }
+  }
+  return { margins, marks };
+}

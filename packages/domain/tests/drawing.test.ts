@@ -175,7 +175,10 @@ describe("drawing geometry", () => {
     expect(parseDocument(JSON.stringify(doc))).toEqual(doc);
     expect(svgExport(doc)).toContain("C 0 100 100 100 100 0");
     expect(hitTest(doc.layers[0], { x: 50, y: 75 })).toBe(true);
-    expect(hitTest(doc.layers[0], { x: 50, y: 10 })).toBe(false);
+    // Its fill paints the open curve as if closed, so a click there selects it; without a
+    // fill only the outline does.
+    expect(hitTest(doc.layers[0], { x: 50, y: 10 })).toBe(true);
+    expect(hitTest({ ...doc.layers[0], fill: "none" }, { x: 50, y: 10 })).toBe(false);
     expect(() =>
       parseDocument(JSON.stringify({ ...doc, version: 1 })),
     ).toThrow();

@@ -8,9 +8,25 @@ import { selectionBounds } from "../../domain/src/arrange";
 import { newLayer, defaultStrokeStyle, strokeBounds } from "../../domain/src/document";
 import { CurvePath } from "../../domain/src/curves";
 import { Layer, StudioDocument } from "../../domain/src/document";
+import { gradientGeometry, PatternDefinition, renderedStops } from "../../domain/src/paint";
+/** Makes the off-screen canvas a pattern tile is drawn on. */
+export type CanvasFactory = (width: number, height: number) => HTMLCanvasElement;
+const browserCanvas: CanvasFactory = (width, height) => {
+  const canvas = window.document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  return canvas;
+};
+
 export class CanvasRenderer {
+  constructor(private readonly createCanvas: CanvasFactory = browserCanvas) {}
   private images = new Map<string, HTMLImageElement>();
   private measureContext?: CanvasRenderingContext2D;
+  /** The patterns of the document being drawn, and their tiles drawn once each. */
+  private patterns = new Map<string, PatternDefinition>();
+  private tiles = new Map<PatternDefinition, HTMLCanvasElement>();
+  /** The transform of the page, so a pattern lines up with the document origin. */
+  private pageTransform?: DOMMatrix;
   readonly measureText: TextMeasurement = (text, size, typography = { ...defaultTypography }) => {
     this.measureContext ??= window.document.createElement("canvas").getContext("2d")!;
     this.measureContext.font = textFont(size, typography);
@@ -80,6 +96,7 @@ export class CanvasRenderer {
       ctx.fillRect(0, 0, canvas.width, canvas.height);
     }
     const hairline = 1 / Math.max(0.1, interaction.zoom || 1);
+    this.usePatterns(document, ctx);
     for (const layer of materializeProcedural(document).layers)
       if (layer.visible && !layer.guide)
         this.layer(
@@ -294,6 +311,47 @@ export class CanvasRenderer {
     if (layer.kind === "text") return { ...layer, fill: ink, stroke: "none", opacity: 1, blend: "source-over" };
     return outlined;
   }
+  private usePatterns(document: StudioDocument, ctx: CanvasRenderingContext2D) {
+    const patterns = document.patterns ?? [];
+    this.patterns = new Map(patterns.map((pattern) => [pattern.id, pattern]));
+    for (const pattern of this.tiles.keys()) if (!patterns.includes(pattern)) this.tiles.delete(pattern);
+    this.pageTransform = typeof ctx.getTransform === "function" ? ctx.getTransform() : undefined;
+  }
+  /** The tile of a pattern, drawn from its own artwork on a canvas of its size. */
+  private tile(pattern: PatternDefinition): HTMLCanvasElement {
+    let tile = this.tiles.get(pattern);
+    if (tile) return tile;
+    tile = this.createCanvas(Math.max(1, Math.round(pattern.width)), Math.max(1, Math.round(pattern.height)));
+    const ctx = tile.getContext("2d");
+    if (ctx) for (const layer of pattern.layers) if (layer.visible) this.layer(ctx, layer, () => undefined);
+    this.tiles.set(pattern, tile);
+    return tile;
+  }
+  /**
+   * The fill of an object: its colour, or the gradient or pattern it holds. A gradient runs
+   * in the object's own box and turns with it; a pattern tiles from the document origin,
+   * as Illustrator lays patterns out from the ruler origin.
+   */
+  private fillStyle(ctx: CanvasRenderingContext2D, l: Layer): string | CanvasGradient | CanvasPattern {
+    const paint = l.fillPaint;
+    if (!paint) return l.fill;
+    if (paint.kind === "gradient") {
+      const g = gradientGeometry(paint, l.width, l.height);
+      const gradient = paint.type === "radial"
+        ? ctx.createRadialGradient(g.start.x, g.start.y, 0, g.start.x, g.start.y, g.radius)
+        : ctx.createLinearGradient(g.start.x, g.start.y, g.end.x, g.end.y);
+      if (!gradient) return l.fill;
+      for (const stop of renderedStops(paint)) gradient.addColorStop(Math.min(1, Math.max(0, stop.offset)), stop.color);
+      return gradient;
+    }
+    const pattern = this.patterns.get(paint.patternId);
+    if (!pattern) return l.fill;
+    const fill = ctx.createPattern(this.tile(pattern), "repeat");
+    if (!fill) return l.fill;
+    if (this.pageTransform && typeof fill.setTransform === "function" && typeof ctx.getTransform === "function")
+      fill.setTransform(ctx.getTransform().inverse().multiply(this.pageTransform));
+    return fill;
+  }
   private layer(
     ctx: CanvasRenderingContext2D,
     l: Layer,
@@ -307,7 +365,8 @@ export class CanvasRenderer {
     ctx.globalCompositeOperation = l.blend;
     const hasFill = l.fill !== "none";
     const hasStroke = l.stroke !== "none" && l.strokeWidth > 0;
-    if (hasFill) ctx.fillStyle = l.fill;
+    const fill = hasFill ? this.fillStyle(ctx, l) : l.fill;
+    if (hasFill) ctx.fillStyle = fill;
     if (hasStroke) ctx.strokeStyle = l.stroke;
     ctx.lineWidth = l.strokeWidth;
     const strokeStyle = l.strokeStyle ?? defaultStrokeStyle;
@@ -416,7 +475,7 @@ export class CanvasRenderer {
         }
       ctx.restore();
       if (type.decoration !== "none" && (hasFill || hasStroke)) {
-        ctx.fillStyle = hasFill ? l.fill : l.stroke;
+        ctx.fillStyle = hasFill ? fill : l.stroke;
         for (const line of layout.lines) {
           const offset = type.decoration === "underline" ? layout.fontSize * 0.12 : -layout.fontSize * 0.3;
           ctx.fillRect(line.x, line.y + offset * type.verticalScale, line.width, Math.max(1, layout.fontSize / 16) * type.verticalScale);
