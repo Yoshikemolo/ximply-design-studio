@@ -143,3 +143,11 @@
 | [SC-0137 — Admin menu only for administrators](SC-0137.md) |
 | [SC-0138 — Issuing, extending and revoking licences](SC-0138.md) |
 | [SC-0139 — Keycloak unavailable or misconfigured](SC-0139.md) |
+| [SC-0140 — Branded Keycloak pages](SC-0140.md) |
+| [SC-0141 — Administration workspace and smart tables](SC-0141.md) |
+| [SC-0142 — Creating, editing and deleting users](SC-0142.md) |
+| [SC-0143 — Passwords, bans and their lifting](SC-0143.md) |
+| [SC-0144 — Roles and permissions](SC-0144.md) |
+| [SC-0145 — Licences with state and period](SC-0145.md) |
+| [SC-0146 — Documents and owners](SC-0146.md) |
+| [SC-0147 — Super administrator access and the advanced tools block](SC-0147.md) |
