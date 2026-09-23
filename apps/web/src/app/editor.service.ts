@@ -1,5 +1,5 @@
 import { alphaBounds, drawPaintSource, finishPaint, paintFrame } from "./paint-buffer";
-import { aliasPixels, alignToPixels, DEFAULT_RASTER_OPTIONS, rasterFrame, rasterPixels, rasterScale, rasterTarget, RasterOptions, validRasterOptions } from "../../../../packages/domain/src/rasterize";
+import { aliasPixels, alignToPixels, cropPixels, DEFAULT_RASTER_OPTIONS, rasterFrame, rasterPixels, rasterScale, rasterTarget, RasterOptions, validRasterOptions } from "../../../../packages/domain/src/rasterize";
 import { Procedural, defaultProcedural, generateProcedural, syncProcedurals, validProcedural } from "../../../../packages/domain/src/procedural";
 import { DEFAULT_GRADIENTS, FillPaint, GradientPaint, MAX_PATTERNS, MAX_SWATCHES, PatternDefinition, PresetPattern, Swatch, defaultSwatches, presetPattern, validFillPaint } from "../../../../packages/domain/src/paint";
 import { openingHost, wallSnapPoint, WallSnap } from "./procedural-placement";
@@ -5819,9 +5819,9 @@ export class EditorService {
     const area = alignToPixels(target.area, scale);
     if (!rasterPixels(area, scale)) { this.status.set("The pixel image would be too large; choose a lower resolution."); return null; }
     const drawn = await this.renderer.rasterize(syncBlends(syncProcedurals(document)), target.ids, area, scale);
-    const context = drawn.getContext("2d")!;
-    const pixels = context.getImageData(0, 0, drawn.width, drawn.height);
-    if (options.antialias === "none") { aliasPixels(pixels.data); context.putImageData(pixels, 0, 0); }
+    // The drawing is read back once; aliasing and cropping then work on those pixels.
+    const pixels = drawn.getContext("2d")!.getImageData(0, 0, drawn.width, drawn.height);
+    if (options.antialias === "none") aliasPixels(pixels.data);
     const painted = alphaBounds(pixels.data, drawn.width, drawn.height);
     if (!painted) { this.status.set("There is nothing visible to convert."); return null; }
     const { pixels: box, frame } = rasterFrame(area, painted, scale, options.margin);
@@ -5829,8 +5829,9 @@ export class EditorService {
     const result = window.document.createElement("canvas");
     result.width = box.width;
     result.height = box.height;
-    // Reading past the edges of the drawing gives transparent pixels, which is the margin.
-    result.getContext("2d")!.putImageData(context.getImageData(box.x, box.y, box.width, box.height), 0, 0);
+    const output = result.getContext("2d")!, image = output.createImageData(box.width, box.height);
+    image.data.set(cropPixels(pixels.data, drawn.width, drawn.height, box));
+    output.putImageData(image, 0, 0);
     return { source: result.toDataURL("image/png"), frame, target };
   }
   /**

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { aliasPixels, alignToPixels, MAX_RASTER_SIDE, paintArea, rasterFrame, rasterPixels, rasterScale, rasterTarget, validRasterOptions } from '../src/rasterize';
+import { aliasPixels, alignToPixels, cropPixels, MAX_RASTER_SIDE, paintArea, rasterFrame, rasterPixels, rasterScale, rasterTarget, validRasterOptions } from '../src/rasterize';
 import { blankDocument, newLayer, type Layer, type StudioDocument } from '../src/document';
 
 const rect = (id: string, x: number, y: number, width: number, height: number, extra: Partial<Layer> = {}): Layer =>
@@ -78,5 +78,24 @@ describe('pixel grid', () => {
   it('widens an area to whole pixels of a grid anchored at the page origin', () => {
     expect(alignToPixels({ x: 0.3, y: -0.3, width: 1, height: 1 }, 2)).toEqual({ x: 0, y: -0.5, width: 1.5, height: 1.5 });
     expect(alignToPixels({ x: 5, y: 5, width: 0, height: 0 }, 1)).toEqual({ x: 5, y: 5, width: 1, height: 1 });
+  });
+});
+
+describe('cropping in memory', () => {
+  const pixel = (n: number) => [n, n, n, 255];
+  // A 3 by 2 image whose pixels are numbered 1 to 6 row by row.
+  const data = new Uint8ClampedArray([1, 2, 3, 4, 5, 6].flatMap(pixel));
+  it('copies an inner box row by row', () => {
+    expect(Array.from(cropPixels(data, 3, 2, { x: 1, y: 0, width: 2, height: 2 }))).toEqual([2, 3, 5, 6].flatMap(pixel));
+  });
+  it('leaves transparent the part of the box past the edges', () => {
+    const empty = [0, 0, 0, 0];
+    expect(Array.from(cropPixels(data, 3, 2, { x: -1, y: -1, width: 5, height: 4 }))).toEqual([
+      ...empty, ...empty, ...empty, ...empty, ...empty,
+      ...empty, ...pixel(1), ...pixel(2), ...pixel(3), ...empty,
+      ...empty, ...pixel(4), ...pixel(5), ...pixel(6), ...empty,
+      ...empty, ...empty, ...empty, ...empty, ...empty,
+    ]);
+    expect(Array.from(cropPixels(data, 3, 2, { x: 5, y: 0, width: 1, height: 1 }))).toEqual(empty);
   });
 });

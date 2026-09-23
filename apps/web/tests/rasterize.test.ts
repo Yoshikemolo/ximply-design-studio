@@ -177,3 +177,21 @@ describe('Convert to pixel image in the shell', () => {
     expect(template).toContain('@if (rasterizeDialog())');
   });
 });
+
+describe('reading the drawing back', () => {
+  it('reads the drawn canvas once per conversion, whatever the anti-aliasing and margin', async () => {
+    for (const antialias of ['art', 'none'] as const) {
+      const e = editor(overlapping(), ['a', 'b']);
+      const original = e.renderer.rasterize.bind(e.renderer);
+      let reads = 0;
+      vi.spyOn(e.renderer, 'rasterize').mockImplementation(async (...args) => {
+        const canvas = await original(...args), context = canvas.getContext('2d')!, read = context.getImageData.bind(context);
+        context.getImageData = ((...box: Parameters<typeof read>) => { reads++; return read(...box); }) as typeof read;
+        return canvas;
+      });
+      const image = await e.rasterizePng({ ppi: 150, antialias, margin: 3 });
+      expect(image).not.toBeNull();
+      expect(reads).toBe(1);
+    }
+  });
+});

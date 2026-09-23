@@ -113,6 +113,22 @@ export function rasterFrame(area: Box, painted: Box, scale: number, margin: numb
   };
 }
 
+/**
+ * Copies a box out of RGBA pixels, leaving transparent the part of the box that lies past
+ * their edges, which is where the margin falls. Cropping in memory lets the drawing be read
+ * back from the canvas once.
+ */
+export function cropPixels(data: Uint8ClampedArray, width: number, height: number, box: Box): Uint8ClampedArray {
+  const result = new Uint8ClampedArray(box.width * box.height * 4);
+  const left = Math.max(0, box.x), right = Math.min(width, box.x + box.width);
+  if (right <= left) return result;
+  for (let y = Math.max(0, box.y); y < Math.min(height, box.y + box.height); y++) {
+    const from = (y * width + left) * 4;
+    result.set(data.subarray(from, from + (right - left) * 4), ((y - box.y) * box.width + left - box.x) * 4);
+  }
+  return result;
+}
+
 /** Anti-aliasing none: every pixel is either fully painted or empty, split at half coverage. */
 export function aliasPixels(data: Uint8ClampedArray): void {
   for (let index = 3; index < data.length; index += 4) data[index] = data[index] >= 128 ? 255 : 0;
