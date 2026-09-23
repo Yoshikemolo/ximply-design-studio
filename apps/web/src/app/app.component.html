@@ -160,6 +160,14 @@
       @if (mobile()) {
         <div class="menu-footer"><ng-container *ngTemplateOutlet="footerCredits"></ng-container></div>
       }
+      @if (session.isAdmin()) {
+        <details>
+          <summary>{{ t("Admin") }}</summary>
+          <div class="menu-popover">
+            <button (click)="openAdmin()">{{ t("Users and licences") }}…</button>
+          </div>
+        </details>
+      }
     </nav>
     <button class="preview-badge" [title]="t('Local preview explanation')" [attr.aria-label]="t('Local preview') + ': ' + t('Local preview explanation')" (click)="openServerSettings()">{{ t("Local preview") }}</button>
     <div class="header-spacer"></div>
@@ -175,6 +183,33 @@
       <option value="en">EN</option>
       <option value="es">ES</option>
     </select>
+    @switch (session.state()) {
+      @case ("signed-in") {
+        <details class="account-menu">
+          <summary [title]="session.session()?.email || session.session()?.username || ''"><img src="/assets/icons/user.svg" alt="" /><span>{{ session.session()?.name }}</span></summary>
+          <div class="menu-popover account-popover">
+            <strong>{{ session.session()?.name }}</strong>
+            <span class="account-detail">{{ session.session()?.email }}</span>
+            <span class="account-licence" [class.valid]="session.session()?.licence?.state === 'valid'">{{ licenceSummary(session.session()!.licence) }}</span>
+            @if (session.session()?.licence?.permissions?.length) {
+              <ul class="account-permissions">
+                @for (permission of session.session()!.licence.permissions; track permission) {<li>{{ permissionLabel(permission) }}</li>}
+              </ul>
+            }
+            @if (session.isAdmin()) {<span class="account-detail">{{ t("Administrator") }}</span>}
+            <hr />
+            <button (click)="session.signOut()">{{ t("Sign out") }}</button>
+          </div>
+        </details>
+      }
+      @case ("not-configured") {
+        <span class="advanced-note" [title]="t('Advanced mode is not configured on this server.')">{{ t("Demo") }}</span>
+      }
+      @case ("loading") {}
+      @default {
+        <button class="sign-in" (click)="session.signIn()" [title]="t(session.message() || 'Sign in or register to use advanced capabilities.')">{{ t("Sign in") }}</button>
+      }
+    }
     <button class="theme-toggle" (click)="theme.set(theme() === 'dark' ? 'light' : 'dark')" [title]="t(theme() === 'dark' ? 'Light theme' : 'Dark theme')" [attr.aria-label]="t(theme() === 'dark' ? 'Light theme' : 'Dark theme')"><img [src]="'/assets/icons/' + (theme() === 'dark' ? 'moon' : 'sun') + '.svg'" alt="" /></button>
     <button class="primary small icon-action" (click)="openExport()" [title]="t('Export')" [attr.aria-label]="t('Export')">
       <img src="/assets/icons/export.svg" alt="" />
@@ -1941,6 +1976,68 @@
     <label>{{ t('File name') }}<input type="text" name="fileName" maxlength="150" [(ngModel)]="saveAsName" required />.xds</label>
     <div class="dialog-actions"><button type="button" (click)="saveAsDialog.set(false)">{{ t('Cancel') }}</button><button type="submit">{{ t('Save') }}</button></div>
   </form></div>
+}
+@if (adminOpen()) {
+  <div class="modal-backdrop">
+    <section class="server-dialog admin-dialog" role="dialog" aria-modal="true" aria-labelledby="admin-title" (keydown.escape)="adminOpen.set(false); $event.stopPropagation()">
+      <header>
+        <h2 id="admin-title">{{ t("Users and licences") }}</h2>
+        <button (click)="adminOpen.set(false)" [attr.aria-label]="t('Close')">×</button>
+      </header>
+      <form class="admin-search" (submit)="$event.preventDefault(); loadAdminUsers(0)">
+        <input type="search" name="search" maxlength="100" [(ngModel)]="adminSearch" [placeholder]="t('Search users')" [attr.aria-label]="t('Search users')" />
+        <button type="submit" [disabled]="adminBusy()">{{ t("Search") }}</button>
+      </form>
+      @if (adminError()) {<p class="admin-error" role="alert">{{ t(adminError()) }}</p>}
+      <div class="admin-layout">
+        <table class="admin-users">
+          <thead><tr><th>{{ t("User") }}</th><th>{{ t("Licence") }}</th><th>{{ t("Permissions") }}</th></tr></thead>
+          <tbody>
+            @for (user of adminPage()?.users ?? []; track user.id) {
+              <tr [class.selected]="adminSelected()?.id === user.id" [class.disabled]="!user.enabled" tabindex="0" (click)="selectAdminUser(user)" (keydown.enter)="selectAdminUser(user)">
+                <td><strong>{{ user.name }}</strong><span>{{ user.email || user.username }}</span></td>
+                <td [class.expired]="user.licence.state === 'expired'">{{ licenceSummary(user.licence) }}</td>
+                <td>{{ permissionList(user.licence.permissions) }}</td>
+              </tr>
+            } @empty {
+              <tr><td colspan="3">{{ t(adminBusy() ? "Loading…" : "No users found.") }}</td></tr>
+            }
+          </tbody>
+        </table>
+        @if (adminSelected(); as user) {
+          <aside class="admin-licence" [attr.aria-label]="t('Licence of') + ' ' + user.name">
+            <h3>{{ user.name }}</h3>
+            <p>{{ licenceSummary(user.licence) }}</p>
+            <fieldset>
+              <legend>{{ t("Issue a licence") }}</legend>
+              @for (permission of licencePermissions; track permission.id) {
+                <label class="check-row"><input type="checkbox" [name]="'permission-' + permission.id" [(ngModel)]="adminDraft.permissions[permission.id]" />{{ t(permission.label) }}</label>
+              }
+              <label class="check-row"><input type="radio" name="period" value="days" [(ngModel)]="adminDraft.period" />{{ t("Days from today") }}</label>
+              @if (adminDraft.period === "days") {<input type="number" name="days" min="1" max="3650" step="1" [(ngModel)]="adminDraft.days" [attr.aria-label]="t('Days from today')" />}
+              <label class="check-row"><input type="radio" name="period" value="until" [(ngModel)]="adminDraft.period" />{{ t("Until a date") }}</label>
+              @if (adminDraft.period === "until") {<input type="date" name="until" [(ngModel)]="adminDraft.until" [attr.aria-label]="t('Until a date')" />}
+              <button class="primary" (click)="issueLicence()" [disabled]="adminBusy()">{{ t("Issue") }}</button>
+            </fieldset>
+            @if (user.licence.state !== "none") {
+              <fieldset>
+                <legend>{{ t("Extend") }}</legend>
+                <label>{{ t("Days") }}<input type="number" name="extend" min="1" max="3650" step="1" [(ngModel)]="adminDraft.extendDays" /></label>
+                <button (click)="extendLicence()" [disabled]="adminBusy()">{{ t("Extend") }}</button>
+              </fieldset>
+              <button class="danger" (click)="revokeLicence()" [disabled]="adminBusy()">{{ t(adminConfirmRevoke() ? "Confirm revocation" : "Revoke licence") }}</button>
+            }
+          </aside>
+        }
+      </div>
+      <footer class="admin-paging">
+        <span>{{ adminPage()?.total ?? 0 }} {{ t("users") }}</span>
+        <button (click)="loadAdminUsers(adminPageIndex - 1)" [disabled]="adminBusy() || adminPageIndex === 0" [attr.aria-label]="t('Previous page')">‹</button>
+        <span>{{ adminPageIndex + 1 }} / {{ adminPages() }}</span>
+        <button (click)="loadAdminUsers(adminPageIndex + 1)" [disabled]="adminBusy() || adminPageIndex + 1 >= adminPages()" [attr.aria-label]="t('Next page')">›</button>
+      </footer>
+    </section>
+  </div>
 }
 @if (rasterizeDialog()) {
   <div class="modal-backdrop"><form class="server-dialog affine-dialog" role="dialog" aria-modal="true" [attr.aria-label]="t('Convert to pixel image')" (submit)="$event.preventDefault(); applyRasterizeDialog()" (keydown.escape)="rasterizeDialog.set(false); $event.stopPropagation()">

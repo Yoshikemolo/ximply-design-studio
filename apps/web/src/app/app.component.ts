@@ -7,6 +7,7 @@ import { ArraySettings, DEFAULT_ARRAY, validArraySettings } from "../../../../pa
 import { defaultMarginGuides, MarginGuides, PAGE_FORMATS, PAGE_RESOLUTIONS, PageCategory, PageOrientation, pageSize, pageSizeFits, RegistrationMarks, REGISTRATION_MARKS, registrationFits } from "../../../../packages/domain/src/page-setup";
 import { BlendEasing } from "../../../../packages/domain/src/object-blend";
 import { FONT_FAMILIES, defaultTypography, defaultTextLayout, TextTypography, TextLayoutOptions } from "../../../../packages/domain/src/text-layout";
+import { AdminPage, AdminUser, Permission, SessionService } from "./session.service";
 import { RASTER_RESOLUTIONS, RasterAntialias, RasterOptions } from "../../../../packages/domain/src/rasterize";
 import { measurementUnits, isUnit, snapPoint, fromPixels, toPixels, formatMeasurement, rulerTicks as makeRulerTicks, SnapConfig } from "../../../../packages/domain/src/measurements";
 import { PreferencesService } from "./preferences.service";
@@ -407,6 +408,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   constructor(
     readonly editor: EditorService,
     readonly preferences: PreferencesService,
+    readonly session: SessionService,
   ) {
     effect(() => {
       const config: SnapConfig = {
@@ -780,6 +782,90 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     const layer = this.editor.selectedLayers()[0], d = this.gradientMeshDraft;
     if (layer && this.editor.makeGradientMesh(layer.id, { rows: Math.round(d.rows), columns: Math.round(d.columns), appearance: d.appearance, highlight: Number(d.highlight) })) this.gradientMeshDialog.set(false);
     else this.notify(new Error(this.editor.status() || "The gradient mesh cannot be made from this selection."));
+  }
+  /** Admin > Users and licences (FEAT-0032): only administrators see it, and the API decides. */
+  readonly adminOpen = signal(false);
+  readonly adminPage = signal<AdminPage | null>(null);
+  readonly adminSelected = signal<AdminUser | null>(null);
+  readonly adminError = signal("");
+  readonly adminBusy = signal(false);
+  readonly adminConfirmRevoke = signal(false);
+  readonly licencePermissions: { id: Permission; label: string }[] = [{ id: "ai-tools", label: "AI Tools" }, { id: "change-control", label: "Change control" }];
+  adminSearch = "";
+  adminPageIndex = 0;
+  adminDraft = { permissions: { "ai-tools": true, "change-control": false } as Record<Permission, boolean>, period: "days" as "days" | "until", days: 30, until: "", extendDays: 30 };
+  openAdmin() {
+    this.dismissMenus();
+    this.adminOpen.set(true);
+    this.adminSelected.set(null);
+    void this.loadAdminUsers(0);
+  }
+  async loadAdminUsers(page = this.adminPageIndex) {
+    this.adminBusy.set(true);
+    this.adminError.set("");
+    try {
+      this.adminPage.set(await this.session.adminUsers(this.adminSearch.trim(), page));
+      this.adminPageIndex = page;
+    } catch (error) {
+      this.adminError.set(error instanceof Error ? error.message : String(error));
+    } finally {
+      this.adminBusy.set(false);
+    }
+  }
+  adminPages() {
+    const page = this.adminPage();
+    return page ? Math.max(1, Math.ceil(page.total / page.size)) : 1;
+  }
+  selectAdminUser(user: AdminUser) {
+    this.adminSelected.set(user);
+    this.adminConfirmRevoke.set(false);
+    this.adminError.set("");
+    const granted = user.licence.permissions;
+    this.adminDraft.permissions = { "ai-tools": granted.includes("ai-tools") || !granted.length, "change-control": granted.includes("change-control") };
+  }
+  /** Runs one licence change and puts the answer in place of the user in the list. */
+  private async changeLicence(change: () => Promise<AdminUser>) {
+    this.adminBusy.set(true);
+    this.adminError.set("");
+    try {
+      const user = await change();
+      this.adminSelected.set(user);
+      this.adminConfirmRevoke.set(false);
+      this.adminPage.update((page) => page && { ...page, users: page.users.map((item) => (item.id === user.id ? user : item)) });
+    } catch (error) {
+      this.adminError.set(error instanceof Error ? error.message : String(error));
+    } finally {
+      this.adminBusy.set(false);
+    }
+  }
+  issueLicence() {
+    const user = this.adminSelected(), d = this.adminDraft;
+    const permissions = this.licencePermissions.map((item) => item.id).filter((id) => d.permissions[id]);
+    if (!user) return;
+    if (!permissions.length) { this.adminError.set("Choose at least one permission."); return; }
+    void this.changeLicence(() => this.session.issueLicence(user.id, permissions, d.period === "days" ? { days: Math.round(Number(d.days)) } : { until: d.until }));
+  }
+  extendLicence() {
+    const user = this.adminSelected();
+    if (user) void this.changeLicence(() => this.session.extendLicence(user.id, Math.round(Number(this.adminDraft.extendDays))));
+  }
+  revokeLicence() {
+    const user = this.adminSelected();
+    if (!user) return;
+    // Revoking asks twice in place, without a browser dialog.
+    if (!this.adminConfirmRevoke()) { this.adminConfirmRevoke.set(true); return; }
+    void this.changeLicence(() => this.session.revokeLicence(user.id));
+  }
+  licenceSummary(licence: { state: string; expires: string | null }) {
+    if (licence.state === "none" || !licence.expires) return this.t("No licence");
+    const date = new Date(licence.expires).toLocaleString(this.locale() === "es" ? "es-ES" : "en-GB", { dateStyle: "medium", timeStyle: "short" });
+    return this.t(licence.state === "valid" ? "Valid until" : "Expired on") + " " + date;
+  }
+  permissionList(permissions: string[]) {
+    return permissions.length ? permissions.map((permission) => this.permissionLabel(permission)).join(", ") : "—";
+  }
+  permissionLabel(permission: string) {
+    return this.t(this.licencePermissions.find((item) => item.id === permission)?.label ?? permission);
   }
   /** Convert to pixel image and its values, as Object > Rasterize offers them in Illustrator. */
   readonly rasterizeDialog = signal(false);
@@ -1238,6 +1324,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     this.schedule();
     void this.loadReleaseIndex();
     if (location.pathname === "/about") this.about.set(true);
+    void this.session.start();
   }
   ngOnDestroy() {
     document.removeEventListener("scroll", this.contextScrollHandler, true);
