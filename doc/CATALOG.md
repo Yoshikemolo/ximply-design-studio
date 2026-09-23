@@ -55,6 +55,7 @@ Generated titles and paths only; authoritative content remains in each linked do
 - [DOC-ARCHITECTURE-0006 — Workspaces, windows and design system](architecture/workspaces-and-design-system.md)
 - [REL-0001 — Initial design foundation](changelog/0.1.0-design.1.md)
 - [REL-0002 — Navigable documentation and quality evidence](changelog/0.1.0-design.2.md)
+- [REL-0031 — Convert to pixel image](changelog/0.10.0.md)
 - [REL-0004 — First local drawing and image-retouching preview](changelog/0.2.0-alpha.1.md)
 - [REL-0005 — Validated local container preview](changelog/0.2.0-alpha.2.md)
 - [REL-0006 — Drawing workbench preview](changelog/0.3.0-alpha.1.md)

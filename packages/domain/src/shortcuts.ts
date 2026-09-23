@@ -99,6 +99,7 @@ export const COMMANDS: Command[] = [
   }).map(([id, label]) => ({ id, label, keys: [] })),
   { id: "about", label: "About", keys: [] },
   { id: "importImage", label: "Import", keys: [] },
+  { id: "rasterize", label: "Convert to pixel image", keys: [] },
   { id: "exportPng", label: "Export PNG", keys: [] },
   { id: "exportSvg", label: "Export SVG", keys: [] },
   { id: "undo", label: "Undo", keys: ["Mod+Z"] },

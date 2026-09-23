@@ -1001,7 +1001,7 @@
       "id": "FEAT-0030",
       "title": "Convert to pixel image",
       "path": "doc/feat/FEAT-0030.md",
-      "status": "Planned",
+      "status": "Implementing",
       "iteration": "ITER-0004",
       "dependsOn": [
         "FEAT-0007",
@@ -1015,9 +1015,20 @@
         "SC-0123",
         "SC-0124"
       ],
-      "implementation": [],
-      "tests": [],
-      "evidence": []
+      "implementation": [
+        "packages/domain/src/rasterize.ts",
+        "packages/renderer/src/canvas-renderer.ts",
+        "apps/web/src/app/editor.service.ts",
+        "apps/web/src/app/app.component.ts"
+      ],
+      "tests": [
+        "packages/domain/tests/rasterize.test.ts",
+        "apps/web/tests/rasterize.test.ts"
+      ],
+      "evidence": [
+        "doc/implementation/PLAN-0030-0001.md",
+        "doc/changelog/0.10.0.md"
+      ]
     },
     {
       "id": "FEAT-0031",

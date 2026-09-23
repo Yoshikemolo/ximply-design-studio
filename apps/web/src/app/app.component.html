@@ -361,13 +361,24 @@
                 <span></span>
               </button>
             </div>
-            <button
-              (click)="imageFile.click()"
-              [title]="commandTitle('importImage')"
-              [attr.aria-label]="t('Import')"
-            >
-              <img src="/assets/icons/image.svg" alt="" />
-            </button>
+            <div class="tool-family">
+              <button
+                class="family-primary"
+                (click)="imageFile.click()"
+                [title]="commandTitle('importImage')"
+                [attr.aria-label]="t('Import')"
+              >
+                <img src="/assets/icons/image.svg" alt="" /></button
+              ><button
+                class="family-expander"
+                [attr.aria-label]="t('More tools') + ' · ' + t(imageGroup.label)"
+                [attr.aria-expanded]="flyout() === imageGroup.id"
+                aria-haspopup="menu"
+                (click)="toggleFlyout(imageGroup.id, $event)"
+              >
+                <span></span>
+              </button>
+            </div>
           }
         </div>
       }
@@ -1929,6 +1940,17 @@
     <h2>{{ t('Save as') }}</h2>
     <label>{{ t('File name') }}<input type="text" name="fileName" maxlength="150" [(ngModel)]="saveAsName" required />.xds</label>
     <div class="dialog-actions"><button type="button" (click)="saveAsDialog.set(false)">{{ t('Cancel') }}</button><button type="submit">{{ t('Save') }}</button></div>
+  </form></div>
+}
+@if (rasterizeDialog()) {
+  <div class="modal-backdrop"><form class="server-dialog affine-dialog" role="dialog" aria-modal="true" [attr.aria-label]="t('Convert to pixel image')" (submit)="$event.preventDefault(); applyRasterizeDialog()" (keydown.escape)="rasterizeDialog.set(false); $event.stopPropagation()">
+    <h2>{{ t('Convert to pixel image') }}</h2>
+    <p>{{ t(editor.selectedLayers().length ? 'The selected objects become a picture above them; they are kept.' : 'Nothing is selected: every visible layer becomes a picture at the top of the document.') }}</p>
+    <label>{{ t('Resolution') }}<select name="resolution" [(ngModel)]="rasterizeDraft.resolution">@for (ppi of rasterResolutions; track ppi) {<option [value]="'' + ppi">{{ ppi }} ppi</option>}<option value="other">{{ t('Other') }}</option></select></label>
+    @if (rasterizeDraft.resolution === 'other') {<label>{{ t('Resolution') }} (ppi)<input type="number" min="1" max="2400" step="1" name="ppi" [(ngModel)]="rasterizeDraft.ppi" /></label>}
+    <label>{{ t('Anti-aliasing') }}<select name="antialias" [(ngModel)]="rasterizeDraft.antialias">@for (a of rasterAntialiasing; track a.id) {<option [value]="a.id">{{ t(a.label) }}</option>}</select></label>
+    <label>{{ t('Add around object') }} ({{ preferences.distanceUnit() }})<input type="number" min="0" step="any" name="margin" [(ngModel)]="rasterizeDraft.margin" /></label>
+    <div class="dialog-actions"><button type="button" (click)="rasterizeDialog.set(false)">{{ t('Cancel') }}</button><button type="submit">{{ t('OK') }}</button></div>
   </form></div>
 }
 @if (gradientMeshDialog()) {
