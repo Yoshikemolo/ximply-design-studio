@@ -207,7 +207,7 @@
       }
       @case ("loading") {}
       @default {
-        <button class="sign-in" (click)="session.signIn()" [title]="t(session.message() || 'Sign in or register to use advanced capabilities.')">{{ t("Sign in") }}</button>
+        <button class="sign-in" (click)="session.signIn()" [title]="t(session.message() || 'Sign in or register to use advanced capabilities.')"><img src="/assets/icons/user.svg" alt="" />{{ t("Sign in") }}</button>
       }
     }
     <button class="theme-toggle" (click)="theme.set(theme() === 'dark' ? 'light' : 'dark')" [title]="t(theme() === 'dark' ? 'Light theme' : 'Dark theme')" [attr.aria-label]="t(theme() === 'dark' ? 'Light theme' : 'Dark theme')"><img [src]="'/assets/icons/' + (theme() === 'dark' ? 'moon' : 'sun') + '.svg'" alt="" /></button>
