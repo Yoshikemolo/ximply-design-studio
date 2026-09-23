@@ -202,6 +202,25 @@ commands through the same authorization path as the UI. Long jobs report progres
 and cancellation; results remain separate candidate layers until approved/applied.
 Content inside documents, plugins and model outputs cannot grant permissions.
 
+The first external-provider slice is [FEAT-0029](../feat/FEAT-0029.md): an AI Tools tab in
+the right column, opened from an AI button at the right end of the header, sends a
+prompt with the context the designer chose (serialized layers, a canvas preview and a
+selection image) through the API service to the OpenAI API, and shows the answer as a
+proposal of new or changed objects to apply as ordinary undoable commands.
+[FEAT-0030](../feat/FEAT-0030.md), Convert to pixel image, turns the selection or every
+visible layer into a transparent PNG inserted above it, and draws the previews that
+FEAT-0029 attaches. Both are planned.
+
+## 9a. Change control
+
+[FEAT-0031](../feat/FEAT-0031.md) versions a project directory as a Git repository from a
+History tab in the right column: commit graph with branches and merges, commit details, a
+context menu on each commit and a toolbar for commit, branches, merge, checkout, pull,
+push, fetch, undo and redo. The API service runs the operations and holds the GitHub
+credential. Several people share a project through a common repository, local or on
+GitHub. This history is separate from document undo. Planned; its decisions ADR-0038 to
+ADR-0040 are proposed.
+
 Preferences include theme, language, density, units, color, performance/GPU/cache,
 shortcuts, autosave, collaboration/privacy, AI providers/permissions, plugin lifecycle,
 workspace presets and accessibility. EN and ES ship from the first shell iteration.

@@ -603,9 +603,33 @@ export class CanvasRenderer {
     document: StudioDocument,
     transparent = false,
   ): Promise<HTMLCanvasElement> {
+    await this.decodeImages(document);
+    const canvas = window.document.createElement("canvas");
+    this.draw(canvas, document, null, () => {}, undefined, transparent);
+    return canvas;
+  }
+  /**
+   * Draws only the chosen layers of a page area at a scale onto a transparent canvas, as
+   * Convert to pixel image needs. The other layers are hidden rather than removed, so the
+   * objects the chosen ones depend on, such as the wall a door is set in, still resolve.
+   */
+  async rasterize(
+    document: StudioDocument,
+    ids: readonly string[],
+    area: { x: number; y: number; width: number; height: number },
+    scale: number,
+  ): Promise<HTMLCanvasElement> {
+    const chosen = new Set(ids);
+    const only = { ...document, layers: document.layers.map((layer) => (chosen.has(layer.id) ? layer : { ...layer, visible: false })) };
+    await this.decodeImages(only);
+    const canvas = this.createCanvas(1, 1);
+    this.draw(canvas, only, null, () => {}, undefined, true, { zoom: scale, direct: false }, { ...area, scale });
+    return canvas;
+  }
+  private async decodeImages(document: StudioDocument) {
     await Promise.all(
       document.layers
-        .filter((l) => l.kind === "image" && l.source)
+        .filter((l) => l.kind === "image" && l.source && l.visible)
         .map(async (l) => {
           let image = this.images.get(l.source);
           if (!image) {
@@ -616,8 +640,5 @@ export class CanvasRenderer {
           await image.decode();
         }),
     );
-    const canvas = window.document.createElement("canvas");
-    this.draw(canvas, document, null, () => {}, undefined, transparent);
-    return canvas;
   }
 }

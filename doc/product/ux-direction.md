@@ -72,6 +72,20 @@ temporary directory and default work directory. These are recorded future needs,
 not implemented capabilities; directory controls require an appropriate filesystem
 capability and undo-memory controls require defined history accounting semantics.
 
+Two planned categories follow the same structure: AI Tools ([FEAT-0029](../feat/FEAT-0029.md))
+and Change control ([FEAT-0031](../feat/FEAT-0031.md)). Their controls appear only when the
+behaviour behind them is implemented. Secret fields never show a stored value; they
+report whether one is configured.
+
+## Right column tabs and header AI button — planned
+
+The owner requested that the right column header carry three tabs, Properties, AI Tools
+and History, and that the primary Export button at the right end of the header become an
+AI button that shows and hides the right column on the AI Tools tab. Export stays in
+File > Export…. The Properties tab keeps the current Properties and Layers panels. The
+History tab draws the commit graph in the style of a Git client such as GitKraken, as a
+visual reference only, with the project's own icons.
+
 ## Core interactions
 
 - Selecting an object updates Properties without moving panel positions.

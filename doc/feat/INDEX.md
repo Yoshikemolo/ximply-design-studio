@@ -32,3 +32,6 @@
 | [FEAT-0026 — Commercial administration and seat allocation](FEAT-0026.md) |
 | [FEAT-0027 — Ximplicity UX and commercial capability states](FEAT-0027.md) |
 | [FEAT-0028 — Shared footer and single-source changelog](FEAT-0028.md) |
+| [FEAT-0029 — AI Tools panel and external agent provider](FEAT-0029.md) |
+| [FEAT-0030 — Convert to pixel image](FEAT-0030.md) |
+| [FEAT-0031 — Change control with Git project history](FEAT-0031.md) |
