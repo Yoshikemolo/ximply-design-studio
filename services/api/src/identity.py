@@ -77,13 +77,29 @@ class IdentityConfig:
         )
 
 
+def keycloak_refusal(code: int, body: bytes) -> IdentityError:
+    """Turns a Keycloak refusal into a reason the editor can show, without echoing input."""
+    try:
+        detail = json.loads(body or b'{}')
+    except ValueError:
+        detail = {}
+    message = str(detail.get('errorMessage') or detail.get('error_description') or '')[:200]
+    if code == 409:
+        return IdentityError(409, 'That username or email is already in use')
+    if code == 404:
+        return IdentityError(404, 'There is no such user')
+    if code == 400 and message:
+        return IdentityError(422, 'Keycloak refused the change: ' + message)
+    return IdentityError(502, f'Keycloak answered {code}')
+
+
 def fetch_json(url: str, data: bytes | None = None, headers: dict | None = None, method: str | None = None, timeout: float = 10):
     request = urllib.request.Request(url, data=data, headers=headers or {}, method=method)
     try:
         with urllib.request.urlopen(request, timeout=timeout) as response:  # noqa: S310 - configured Keycloak URL only
             body = response.read()
     except urllib.error.HTTPError as error:
-        raise IdentityError(502, f'Keycloak answered {error.code}') from None
+        raise keycloak_refusal(error.code, error.read() if error.fp else b'') from None
     except (urllib.error.URLError, TimeoutError, OSError):
         raise IdentityError(503, 'Keycloak is unreachable') from None
     return json.loads(body) if body else None
@@ -176,8 +192,15 @@ def session_from_claims(claims: dict, audience: str, now: datetime) -> dict:
         'email': claims.get('email', ''),
         'admin': admin,
         'licence': {'state': state, 'expires': format_instant(expires) if expires and not admin else None,
+                    'tier': tier_of(claims.get(TIER_ATTRIBUTE)) if expires else None,
                     'permissions': list(PERMISSIONS) if admin else permissions if state == 'valid' else []},
     }
+
+
+def tier_of(value) -> str:
+    """The tier of a licence; every tier grants the same for now, and an unknown value reads as pro."""
+    tier = single(value)
+    return tier if tier in TIERS else 'pro'
 
 
 def require_permission(session: dict, permission: str) -> None:
@@ -218,12 +241,36 @@ def extended_expiry(current: datetime | None, now: datetime, days: int) -> datet
     return max(current or now, now) + timedelta(days=days)
 
 
-class KeycloakAdmin(Protocol):
-    """The user administration the Admin menu needs; the real adapter talks to Keycloak."""
+TIERS = ('free', 'pro', 'teams', 'studio', 'enterprise')
+TIER_ATTRIBUTE = 'xds_licence_tier'
+BAN_UNTIL_ATTRIBUTE = 'xds_ban_until'
+BAN_REASON_ATTRIBUTE = 'xds_ban_reason'
+ROLES = (ADMIN_ROLE,) + PERMISSIONS
+ROLE_DESCRIPTIONS = {
+    ADMIN_ROLE: 'Super administrator: manages users, roles, licences and documents, and uses every advanced capability.',
+    'ai-tools': 'Licence permission for AI Tools.',
+    'change-control': 'Licence permission for change control.',
+}
 
-    def list_users(self, search: str, first: int, maximum: int) -> tuple[int, list[dict]]: ...
+
+class KeycloakAdmin(Protocol):
+    """The realm administration the studio needs; the real adapter talks to Keycloak.
+
+    Users are plain records: id, username, firstName, lastName, email, enabled, created
+    (datetime or None), attributes (name to single string) and roles (set of the role
+    names in ROLES the user holds).
+    """
+
+    def users(self, limit: int = 2000) -> list[dict]: ...
     def get_user(self, user_id: str) -> dict: ...
-    def set_licence(self, user_id: str, expires: datetime | None, permissions: list[str]) -> None: ...
+    def create_user(self, data: dict) -> str: ...
+    def update_user(self, user_id: str, data: dict) -> None: ...
+    def delete_user(self, user_id: str) -> None: ...
+    def set_password(self, user_id: str, password: str, temporary: bool) -> None: ...
+    def end_sessions(self, user_id: str) -> None: ...
+    def set_attributes(self, user_id: str, values: dict) -> None: ...
+    def set_role(self, user_id: str, role: str, granted: bool) -> None: ...
+    def last_logins(self) -> dict: ...
 
 
 class KeycloakAdminClient:
@@ -262,43 +309,85 @@ class KeycloakAdminClient:
             self._client_uuid = clients[0]['id']
         return self._client_uuid
 
-    def _roles(self, user_id: str) -> list[str]:
-        mapped = self._admin(f'/users/{user_id}/role-mappings/clients/{self._api_client()}') or []
-        return [role['name'] for role in mapped]
+    def _role(self, role: str) -> tuple[str, dict]:
+        """The path that grants a role to a user and the role's representation."""
+        if role == ADMIN_ROLE:
+            return 'realm', self._admin(f'/roles/{role}')
+        if role in PERMISSIONS:
+            client = self._api_client()
+            return f'clients/{client}', self._admin(f'/clients/{client}/roles/{role}')
+        raise IdentityError(404, 'There is no such role')
 
-    def _describe(self, user: dict) -> dict:
-        return {'id': user['id'], 'username': user.get('username', ''),
-                'name': ' '.join(part for part in (user.get('firstName'), user.get('lastName')) if part) or user.get('username', ''),
-                'email': user.get('email', ''), 'enabled': bool(user.get('enabled')),
-                'expires': parse_instant((user.get('attributes') or {}).get(LICENCE_ATTRIBUTE)),
-                'roles': [role for role in self._roles(user['id']) if role in PERMISSIONS]}
+    def _members(self, role: str) -> set[str]:
+        scope, _ = self._role(role)
+        path = f'/roles/{role}/users' if scope == 'realm' else f'/{scope}/roles/{role}/users'
+        return {user['id'] for user in self._admin(path + '?first=0&max=5000') or []}
 
-    def list_users(self, search: str, first: int, maximum: int) -> tuple[int, list[dict]]:
-        query = urllib.parse.urlencode({'search': search, 'first': first, 'max': maximum, 'briefRepresentation': 'false'})
-        # Keycloak counts service accounts when a search is given, even an empty one.
-        total = self._admin('/users/count' + ('?' + urllib.parse.urlencode({'search': search}) if search else ''))
-        return int(total or 0), [self._describe(user) for user in self._admin('/users?' + query) or []]
+    @staticmethod
+    def _record(user: dict, roles: set[str]) -> dict:
+        created = user.get('createdTimestamp')
+        return {'id': user['id'], 'username': user.get('username', ''), 'firstName': user.get('firstName', ''),
+                'lastName': user.get('lastName', ''), 'email': user.get('email', ''), 'enabled': bool(user.get('enabled')),
+                'created': datetime.fromtimestamp(created / 1000, timezone.utc) if isinstance(created, (int, float)) else None,
+                'attributes': {name: single(value) for name, value in (user.get('attributes') or {}).items() if single(value) is not None},
+                'roles': roles}
+
+    def users(self, limit: int = 2000) -> list[dict]:
+        members = {role: self._members(role) for role in ROLES}
+        found = self._admin(f'/users?first=0&max={limit}&briefRepresentation=false') or []
+        return [self._record(user, {role for role in ROLES if user['id'] in members[role]}) for user in found]
 
     def get_user(self, user_id: str) -> dict:
-        return self._describe(self._admin(f'/users/{user_id}'))
+        user = self._admin(f'/users/{user_id}')
+        roles = {role['name'] for role in self._admin(f'/users/{user_id}/role-mappings/realm') or []} & {ADMIN_ROLE}
+        roles |= {role['name'] for role in self._admin(f'/users/{user_id}/role-mappings/clients/{self._api_client()}') or []} & set(PERMISSIONS)
+        return self._record(user, roles)
 
-    def set_licence(self, user_id: str, expires: datetime | None, permissions: list[str]) -> None:
+    def create_user(self, data: dict) -> str:
+        self._admin('/users', {'username': data['username'], 'email': data['email'], 'firstName': data['firstName'],
+                               'lastName': data['lastName'], 'enabled': True, 'emailVerified': True,
+                               'credentials': [{'type': 'password', 'value': data['password'], 'temporary': data['temporary']}]}, 'POST')
+        found = self._admin('/users?' + urllib.parse.urlencode({'username': data['username'], 'exact': 'true'})) or []
+        if not found:
+            raise IdentityError(502, 'Keycloak did not create the user')
+        return found[0]['id']
+
+    def update_user(self, user_id: str, data: dict) -> None:
+        user = self._admin(f'/users/{user_id}')
+        self._admin(f'/users/{user_id}', {**user, **data}, 'PUT')
+
+    def delete_user(self, user_id: str) -> None:
+        self._admin(f'/users/{user_id}', method='DELETE')
+
+    def set_password(self, user_id: str, password: str, temporary: bool) -> None:
+        self._admin(f'/users/{user_id}/reset-password', {'type': 'password', 'value': password, 'temporary': temporary}, 'PUT')
+
+    def end_sessions(self, user_id: str) -> None:
+        self._admin(f'/users/{user_id}/logout', method='POST')
+
+    def set_attributes(self, user_id: str, values: dict) -> None:
         user = self._admin(f'/users/{user_id}')
         attributes = dict(user.get('attributes') or {})
-        if expires is None:
-            attributes.pop(LICENCE_ATTRIBUTE, None)
-        else:
-            attributes[LICENCE_ATTRIBUTE] = [format_instant(expires)]
+        for name, value in values.items():
+            if value is None:
+                attributes.pop(name, None)
+            else:
+                attributes[name] = [value]
         self._admin(f'/users/{user_id}', {**user, 'attributes': attributes}, 'PUT')
-        client = self._api_client()
-        available = {role['name']: role for role in self._admin(f'/clients/{client}/roles') or [] if role['name'] in PERMISSIONS}
-        current = set(self._roles(user_id))
-        grant = [available[name] for name in permissions if name not in current and name in available]
-        revoke = [available[name] for name in current if name not in permissions and name in available]
-        if grant:
-            self._admin(f'/users/{user_id}/role-mappings/clients/{client}', grant, 'POST')
-        if revoke:
-            self._admin(f'/users/{user_id}/role-mappings/clients/{client}', revoke, 'DELETE')
+
+    def set_role(self, user_id: str, role: str, granted: bool) -> None:
+        scope, representation = self._role(role)
+        self._admin(f'/users/{user_id}/role-mappings/{scope}', [representation], 'POST' if granted else 'DELETE')
+
+    def last_logins(self) -> dict:
+        """The latest sign-in per user among the login events the realm keeps."""
+        latest: dict[str, datetime] = {}
+        for event in self._admin('/events?type=LOGIN&first=0&max=10000') or []:
+            instant = datetime.fromtimestamp(event.get('time', 0) / 1000, timezone.utc)
+            user = event.get('userId')
+            if user and (user not in latest or instant > latest[user]):
+                latest[user] = instant
+        return latest
 
 
 class AuditLog:
@@ -320,11 +409,3 @@ def valid_user_id(user_id: str) -> str:
     if not USER_ID.fullmatch(user_id):
         raise IdentityError(404, 'There is no such user')
     return user_id
-
-
-def public_user(user: dict, now: datetime) -> dict:
-    expires = user['expires']
-    state = licence_state(expires, now)
-    return {'id': user['id'], 'username': user['username'], 'name': user['name'], 'email': user['email'],
-            'enabled': user['enabled'],
-            'licence': {'state': state, 'expires': format_instant(expires) if expires else None, 'permissions': sorted(user['roles'])}}

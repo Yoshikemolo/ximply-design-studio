@@ -12,6 +12,7 @@ services:
       XDS_KEYCLOAK_INTERNAL_URL: ${XDS_KEYCLOAK_INTERNAL_URL:-}
       XDS_ADMIN_CLIENT_ID: xds-admin-service
       XDS_ADMIN_CLIENT_SECRET: ${XDS_ADMIN_CLIENT_SECRET:-}
+      XDS_TOKEN_KEY: ${XDS_TOKEN_KEY:-}
     volumes:
       - projects:/data
     init: true
@@ -65,6 +66,7 @@ services:
       XDS_FIRST_ADMIN_PASSWORD: ${XDS_FIRST_ADMIN_PASSWORD:?Start the launcher with --identity}
     volumes:
       - ./infra/keycloak/xds-realm.json:/opt/keycloak/data/import/xds-realm.json:ro
+      - ./infra/keycloak/themes/xds:/opt/keycloak/themes/xds:ro
       - identity:/opt/keycloak/data
     init: true
     restart: unless-stopped

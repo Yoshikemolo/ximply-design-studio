@@ -8,17 +8,20 @@ import os
 from pathlib import Path
 import re
 import tempfile
+import threading
 from threading import Lock
+import time
 from typing import Annotated, Literal, Protocol
 from uuid import uuid4
 
-from fastapi import Depends, FastAPI, HTTPException, Query, Request
+from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import JSONResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from .administration import TIERS, administration_router, lift_expired_bans
+from .external_tokens import TokenVault, check_openai, tokens_router
 from .identity import (PERMISSIONS, AuditLog, IdentityConfig, IdentityError, KeycloakAdmin, KeycloakAdminClient,
-                       TokenVerifier, extended_expiry, licence_expiry, public_user, require_permission,
-                       session_from_claims, valid_user_id)
+                       TokenVerifier, require_permission, session_from_claims)
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator, model_validator
 
 MAX_DOCUMENT = 35_000_000
@@ -715,9 +718,11 @@ class Document(BaseModel):
 
 
 class DocumentRepository(Protocol):
-    def create(self, document: Document) -> str: ...
+    def create(self, document: Document, owner: str | None = None) -> str: ...
     def read(self, identifier: str) -> Document: ...
     def list(self) -> list[dict]: ...
+    def describe(self) -> list[dict]: ...
+    def delete(self, identifier: str) -> None: ...
 
 
 class FileDocumentRepository:
@@ -726,7 +731,7 @@ class FileDocumentRepository:
         self.directory = directory
         self.lock = Lock()
 
-    def create(self, document: Document) -> str:
+    def create(self, document: Document, owner: str | None = None) -> str:
         payload = document.model_dump_json(exclude_none=True)
         with self.lock:
             self.directory.mkdir(parents=True, exist_ok=True)
@@ -745,7 +750,40 @@ class FileDocumentRepository:
             finally:
                 if temporary is not None:
                     temporary.unlink(missing_ok=True)
+            if owner:
+                # The owner is the verified subject that saved it, kept beside the document.
+                meta = self.directory / 'meta'
+                meta.mkdir(exist_ok=True)
+                (meta / f'{identifier}.json').write_text(json.dumps({'owner': owner}), encoding='utf-8')
             return identifier
+
+    def owner(self, identifier: str) -> str | None:
+        try:
+            return json.loads((self.directory / 'meta' / f'{identifier}.json').read_text(encoding='utf-8')).get('owner')
+        except (OSError, ValueError):
+            return None
+
+    def describe(self) -> list[dict]:
+        """Every stored document with its name, owner, size and last change, for administration."""
+        result = []
+        for entry in self.list():
+            path = self.directory / f"{entry['id']}.json"
+            try:
+                size = path.stat().st_size
+            except OSError:
+                continue
+            result.append({**entry, 'owner': self.owner(entry['id']), 'size': size})
+        return result
+
+    def delete(self, identifier: str) -> None:
+        if not re.fullmatch(r'[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}', identifier):
+            raise HTTPException(404, 'Project not found')
+        with self.lock:
+            try:
+                (self.directory / f'{identifier}.json').unlink()
+            except FileNotFoundError:
+                raise HTTPException(404, 'Project not found') from None
+            (self.directory / 'meta' / f'{identifier}.json').unlink(missing_ok=True)
 
     def read(self, identifier: str) -> Document:
         if not re.fullmatch(r'[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}', identifier):
@@ -787,22 +825,11 @@ def inline_document_schema() -> dict:
     return expand(schema)
 
 
-class LicenceRequest(BaseModel):
-    model_config = ConfigDict(extra='forbid')
-    permissions: Annotated[list[Literal['ai-tools', 'change-control']], Field(min_length=1, max_length=len(PERMISSIONS))]
-    days: Annotated[int, Field(ge=1, le=3650)] | None = None
-    until: Annotated[str, Field(pattern=r'^\d{4}-\d{2}-\d{2}$')] | None = None
-
-
-class ExtendRequest(BaseModel):
-    model_config = ConfigDict(extra='forbid')
-    days: Annotated[int, Field(ge=1, le=3650)]
-
-
 def create_app(repository: DocumentRepository | None = None, token: str | None = None, *,
                identity: IdentityConfig | None | Literal['environment'] = 'environment',
                verifier: TokenVerifier | None = None, admin: KeycloakAdmin | None = None,
-               clock=lambda: datetime.now(timezone.utc)) -> FastAPI:
+               clock=lambda: datetime.now(timezone.utc), lift_bans_every: float | None = 60,
+               token_checker=check_openai) -> FastAPI:
     configured_version = os.environ.get('XDS_VERSION_FILE')
     version_file = Path(configured_version) if configured_version else Path(__file__).resolve().parents[3]/'release/version.json'
     version = json.loads(version_file.read_text())['version']
@@ -810,40 +837,6 @@ def create_app(repository: DocumentRepository | None = None, token: str | None =
     store = repository or FileDocumentRepository(Path(os.environ.get('XDS_DATA_DIR', './data')))
     secret = token if token is not None else os.environ.get('XDS_API_TOKEN', '')
     bearer = HTTPBearer(auto_error=False)
-
-    def authenticated(credentials: HTTPAuthorizationCredentials | None = Depends(bearer)):
-        if len(secret) < 32:
-            raise HTTPException(503, 'Local API token is not configured')
-        if credentials is None or not hmac.compare_digest(credentials.credentials, secret):
-            raise HTTPException(401, 'Invalid bearer token', headers={'WWW-Authenticate': 'Bearer'})
-
-    @app.get('/api/health', tags=['health'])
-    def health():
-        return {'status': 'ok', 'mode': 'single-user-local-preview', 'storageConfigured': len(secret) >= 32, 'version': version}
-
-    @app.get('/api/projects', dependencies=[Depends(authenticated)], tags=['projects'])
-    async def projects():
-        return await run_in_threadpool(store.list)
-
-    @app.post('/api/projects', status_code=201, dependencies=[Depends(authenticated)], tags=['projects'],
-              openapi_extra={'requestBody': {'required': True, 'content': {'application/json': {'schema': inline_document_schema()}}}})
-    async def save(request: Request):
-        chunks, size = [], 0
-        async for chunk in request.stream():
-            size += len(chunk)
-            if size > MAX_DOCUMENT:
-                raise HTTPException(413, 'Project exceeds the 35 MB preview limit')
-            chunks.append(chunk)
-        try:
-            document = Document.model_validate_json(b''.join(chunks))
-        except ValidationError:
-            raise HTTPException(422, 'Invalid native project document') from None
-        identifier = await run_in_threadpool(store.create, document)
-        return {'id': identifier, 'name': document.name}
-
-    @app.get('/api/projects/{identifier}', dependencies=[Depends(authenticated)], response_model=Document, response_model_exclude_none=True, tags=['projects'])
-    async def read(identifier: str):
-        return await run_in_threadpool(store.read, identifier)
 
     # Sign-in, licences and administration (FEAT-0032). Without an issuer the service runs
     # in demo mode: nothing advanced is available and nothing falls back to a local licence.
@@ -856,6 +849,45 @@ def create_app(repository: DocumentRepository | None = None, token: str | None =
     async def refused(_: Request, error: IdentityError):
         headers = {'WWW-Authenticate': 'Bearer'} if error.status == 401 else None
         return JSONResponse({'detail': error.reason}, status_code=error.status, headers=headers)
+
+    async def storage_owner(credentials: HTTPAuthorizationCredentials | None = Depends(bearer)) -> str | None:
+        """The local API token stores without an owner; a signed-in user stores as the owner (SC-0146)."""
+        if credentials is not None and len(secret) >= 32 and hmac.compare_digest(credentials.credentials, secret):
+            return None
+        if credentials is not None and tokens is not None:
+            claims = await run_in_threadpool(tokens.verify, credentials.credentials)
+            return claims['sub']
+        if len(secret) < 32 and tokens is None:
+            raise HTTPException(503, 'Local API token is not configured')
+        raise HTTPException(401, 'Invalid bearer token', headers={'WWW-Authenticate': 'Bearer'})
+
+    @app.get('/api/health', tags=['health'])
+    def health():
+        return {'status': 'ok', 'mode': 'single-user-local-preview', 'storageConfigured': len(secret) >= 32, 'version': version}
+
+    @app.get('/api/projects', dependencies=[Depends(storage_owner)], tags=['projects'])
+    async def projects():
+        return await run_in_threadpool(store.list)
+
+    @app.post('/api/projects', status_code=201, tags=['projects'],
+              openapi_extra={'requestBody': {'required': True, 'content': {'application/json': {'schema': inline_document_schema()}}}})
+    async def save(request: Request, owner: str | None = Depends(storage_owner)):
+        chunks, size = [], 0
+        async for chunk in request.stream():
+            size += len(chunk)
+            if size > MAX_DOCUMENT:
+                raise HTTPException(413, 'Project exceeds the 35 MB preview limit')
+            chunks.append(chunk)
+        try:
+            document = Document.model_validate_json(b''.join(chunks))
+        except ValidationError:
+            raise HTTPException(422, 'Invalid native project document') from None
+        identifier = await run_in_threadpool(store.create, document, owner)
+        return {'id': identifier, 'name': document.name}
+
+    @app.get('/api/projects/{identifier}', dependencies=[Depends(storage_owner)], response_model=Document, response_model_exclude_none=True, tags=['projects'])
+    async def read(identifier: str):
+        return await run_in_threadpool(store.read, identifier)
 
     async def session(credentials: HTTPAuthorizationCredentials | None = Depends(bearer)) -> dict:
         if oidc is None or tokens is None:
@@ -880,7 +912,7 @@ def create_app(repository: DocumentRepository | None = None, token: str | None =
         if oidc is None:
             return {'configured': False, 'mode': 'demo'}
         return {'configured': True, 'mode': 'advanced-available', 'issuer': oidc.issuer, 'clientId': oidc.client_id,
-                'permissions': list(PERMISSIONS)}
+                'permissions': list(PERMISSIONS), 'tiers': list(TIERS)}
 
     @app.get('/api/session', tags=['identity'])
     def current_session(current: dict = Depends(session)):
@@ -891,40 +923,20 @@ def create_app(repository: DocumentRepository | None = None, token: str | None =
         require_permission(current, permission)
         return {'permission': permission, 'allowed': True, 'expires': current['licence']['expires']}
 
-    @app.get('/api/admin/users', tags=['admin'])
-    async def users(search: Annotated[str, Query(max_length=100)] = '', page: Annotated[int, Query(ge=0, le=10000)] = 0,
-                    size: Annotated[int, Query(ge=1, le=100)] = 20, _: dict = Depends(administrator)):
-        total, found = await run_in_threadpool(keycloak().list_users, search, page * size, size)
-        now = clock()
-        return {'total': total, 'page': page, 'size': size, 'users': [public_user(user, now) for user in found]}
+    app.include_router(administration_router(administrator, keycloak, store, audit, clock))
+    vault = TokenVault(Path(os.environ.get('XDS_DATA_DIR', './data')) / 'tokens', os.environ.get('XDS_TOKEN_KEY', ''))
+    app.include_router(tokens_router(session, vault, audit, clock, token_checker))
 
-    async def change(user_id: str, current: dict, kind: str, decide) -> dict:
-        user_id = valid_user_id(user_id)
-        port, now = keycloak(), clock()
-        user = await run_in_threadpool(port.get_user, user_id)
-        expires, permissions = decide(user, now)
-        await run_in_threadpool(port.set_licence, user_id, expires, permissions)
-        await run_in_threadpool(audit.record, current['subject'], user_id, kind,
-                                {'expires': public_user({**user, 'expires': expires, 'roles': permissions}, now)['licence']['expires'],
-                                 'permissions': sorted(permissions)}, now)
-        return public_user({**user, 'expires': expires, 'roles': permissions}, now)
-
-    @app.put('/api/admin/users/{user_id}/licence', tags=['admin'])
-    async def issue(user_id: str, body: LicenceRequest, current: dict = Depends(administrator)):
-        return await change(user_id, current, 'issue',
-                            lambda user, now: (licence_expiry(now, body.days, body.until), sorted(set(body.permissions))))
-
-    @app.post('/api/admin/users/{user_id}/licence/extend', tags=['admin'])
-    async def extend(user_id: str, body: ExtendRequest, current: dict = Depends(administrator)):
-        def decide(user, now):
-            if user['expires'] is None or not user['roles']:
-                raise IdentityError(409, 'This user has no licence to extend; issue one')
-            return extended_expiry(user['expires'], now, body.days), list(user['roles'])
-        return await change(user_id, current, 'extend', decide)
-
-    @app.delete('/api/admin/users/{user_id}/licence', tags=['admin'])
-    async def revoke(user_id: str, current: dict = Depends(administrator)):
-        return await change(user_id, current, 'revoke', lambda user, now: (None, []))
+    # Temporary bans end on their own: a background check lifts them once a minute (SC-0143).
+    if lift_bans_every and oidc is not None and oidc.admin_client_id and oidc.admin_client_secret:
+        def lift_forever():
+            while True:
+                time.sleep(lift_bans_every)
+                try:
+                    lift_expired_bans(keycloak(), audit, clock())
+                except Exception:  # noqa: BLE001 - Keycloak may be down; the next round retries
+                    continue
+        threading.Thread(target=lift_forever, name='ban-lifter', daemon=True).start()
 
     return app
 

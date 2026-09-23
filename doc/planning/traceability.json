@@ -975,7 +975,7 @@
       "id": "FEAT-0029",
       "title": "AI Tools panel and external agent provider",
       "path": "doc/feat/FEAT-0029.md",
-      "status": "Planned",
+      "status": "Implementing",
       "iteration": "ITER-0007",
       "dependsOn": [
         "FEAT-0006",
@@ -993,7 +993,8 @@
         "SC-0119",
         "SC-0120",
         "SC-0121",
-        "SC-0122"
+        "SC-0122",
+        "SC-0148"
       ],
       "implementation": [],
       "tests": [],

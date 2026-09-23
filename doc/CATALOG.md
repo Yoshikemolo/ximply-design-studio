@@ -302,6 +302,7 @@ Generated titles and paths only; authoritative content remains in each linked do
 - [SC-0145 — SC-0145 — Licences with state and period](sc/SC-0145.md)
 - [SC-0146 — SC-0146 — Documents and owners](sc/SC-0146.md)
 - [SC-0147 — SC-0147 — Super administrator access and the advanced tools block](sc/SC-0147.md)
+- [SC-0148 — SC-0148 — Each user's own OpenAI API token](sc/SC-0148.md)
 - [SEC-0001 — SEC-0001 — Identity and project isolation](sec/SEC-0001.md)
 - [SEC-0002 — SEC-0002 — Revocation and session lifetime](sec/SEC-0002.md)
 - [SEC-0003 — SEC-0003 — Plugin least privilege](sec/SEC-0003.md)

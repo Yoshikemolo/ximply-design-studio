@@ -17,16 +17,28 @@
   "revokeRefreshToken": true,
   "refreshTokenMaxReuse": 0,
   "internationalizationEnabled": true,
-  "supportedLocales": ["en", "es"],
+  "supportedLocales": [
+    "en",
+    "es"
+  ],
   "defaultLocale": "en",
   "roles": {
     "realm": [
-      { "name": "xds-admin", "description": "Administers users and licences of Ximply Design Studio; grants no capability by itself." }
+      {
+        "name": "xds-admin",
+        "description": "Administers users and licences of Ximply Design Studio; grants no capability by itself."
+      }
     ],
     "client": {
       "xds-api": [
-        { "name": "ai-tools", "description": "Licence permission for AI Tools." },
-        { "name": "change-control", "description": "Licence permission for change control." }
+        {
+          "name": "ai-tools",
+          "description": "Licence permission for AI Tools."
+        },
+        {
+          "name": "change-control",
+          "description": "Licence permission for change control."
+        }
       ]
     }
   },
@@ -42,8 +54,14 @@
       "serviceAccountsEnabled": false,
       "frontchannelLogout": true,
       "fullScopeAllowed": true,
-      "redirectUris": ["${XDS_STUDIO_ORIGIN}/*", "http://localhost:4200/*", "http://127.0.0.1:4200/*"],
-      "webOrigins": ["+"],
+      "redirectUris": [
+        "${XDS_STUDIO_ORIGIN}/*",
+        "http://localhost:4200/*",
+        "http://127.0.0.1:4200/*"
+      ],
+      "webOrigins": [
+        "+"
+      ],
       "attributes": {
         "pkce.code.challenge.method": "S256",
         "post.logout.redirect.uris": "${XDS_STUDIO_ORIGIN}/*##http://localhost:4200/*##http://127.0.0.1:4200/*"
@@ -53,7 +71,12 @@
           "name": "API audience",
           "protocol": "openid-connect",
           "protocolMapper": "oidc-audience-mapper",
-          "config": { "included.client.audience": "xds-api", "access.token.claim": "true", "id.token.claim": "false", "introspection.token.claim": "true" }
+          "config": {
+            "included.client.audience": "xds-api",
+            "access.token.claim": "true",
+            "id.token.claim": "false",
+            "introspection.token.claim": "true"
+          }
         },
         {
           "name": "Licence expiry",
@@ -62,6 +85,36 @@
           "config": {
             "user.attribute": "xds_licence_expires",
             "claim.name": "xds_licence_expires",
+            "jsonType.label": "String",
+            "multivalued": "false",
+            "access.token.claim": "true",
+            "id.token.claim": "false",
+            "userinfo.token.claim": "false",
+            "introspection.token.claim": "true"
+          }
+        },
+        {
+          "name": "xds_licence_status",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-attribute-mapper",
+          "config": {
+            "user.attribute": "xds_licence_status",
+            "claim.name": "xds_licence_status",
+            "jsonType.label": "String",
+            "multivalued": "false",
+            "access.token.claim": "true",
+            "id.token.claim": "false",
+            "userinfo.token.claim": "false",
+            "introspection.token.claim": "true"
+          }
+        },
+        {
+          "name": "xds_licence_tier",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-attribute-mapper",
+          "config": {
+            "user.attribute": "xds_licence_tier",
+            "claim.name": "xds_licence_tier",
             "jsonType.label": "String",
             "multivalued": "false",
             "access.token.claim": "true",
@@ -98,7 +151,18 @@
   ],
   "clientScopeMappings": {
     "realm-management": [
-      { "client": "xds-admin-service", "roles": ["view-users", "query-users", "manage-users", "view-clients", "query-clients"] }
+      {
+        "client": "xds-admin-service",
+        "roles": [
+          "manage-users",
+          "query-clients",
+          "query-users",
+          "view-clients",
+          "view-events",
+          "view-realm",
+          "view-users"
+        ]
+      }
     ]
   },
   "users": [
@@ -106,7 +170,17 @@
       "username": "service-account-xds-admin-service",
       "enabled": true,
       "serviceAccountClientId": "xds-admin-service",
-      "clientRoles": { "realm-management": ["view-users", "query-users", "manage-users", "view-clients", "query-clients"] }
+      "clientRoles": {
+        "realm-management": [
+          "manage-users",
+          "query-clients",
+          "query-users",
+          "view-clients",
+          "view-events",
+          "view-realm",
+          "view-users"
+        ]
+      }
     },
     {
       "username": "${XDS_FIRST_ADMIN_USERNAME}",
@@ -115,8 +189,17 @@
       "firstName": "Studio",
       "lastName": "Administrator",
       "email": "${XDS_FIRST_ADMIN_EMAIL}",
-      "credentials": [{ "type": "password", "value": "${XDS_FIRST_ADMIN_PASSWORD}", "temporary": true }],
-      "realmRoles": ["default-roles-xds", "xds-admin"]
+      "credentials": [
+        {
+          "type": "password",
+          "value": "${XDS_FIRST_ADMIN_PASSWORD}",
+          "temporary": true
+        }
+      ],
+      "realmRoles": [
+        "default-roles-xds",
+        "xds-admin"
+      ]
     }
   ],
   "components": {
@@ -126,10 +209,17 @@
         "subComponents": {},
         "config": {
           "kc.user.profile.config": [
-            "{\"attributes\":[{\"name\":\"username\",\"displayName\":\"Username\",\"validations\":{\"length\":{\"min\":3,\"max\":255},\"username-prohibited-characters\":{},\"up-username-not-idn-homograph\":{}},\"permissions\":{\"view\":[\"admin\",\"user\"],\"edit\":[\"admin\",\"user\"]},\"multivalued\":false},{\"name\":\"email\",\"displayName\":\"Email\",\"validations\":{\"email\":{},\"length\":{\"max\":255}},\"required\":{\"roles\":[\"user\"]},\"permissions\":{\"view\":[\"admin\",\"user\"],\"edit\":[\"admin\",\"user\"]},\"multivalued\":false},{\"name\":\"firstName\",\"displayName\":\"First name\",\"validations\":{\"length\":{\"max\":255},\"person-name-prohibited-characters\":{}},\"required\":{\"roles\":[\"user\"]},\"permissions\":{\"view\":[\"admin\",\"user\"],\"edit\":[\"admin\",\"user\"]},\"multivalued\":false},{\"name\":\"lastName\",\"displayName\":\"Last name\",\"validations\":{\"length\":{\"max\":255},\"person-name-prohibited-characters\":{}},\"required\":{\"roles\":[\"user\"]},\"permissions\":{\"view\":[\"admin\",\"user\"],\"edit\":[\"admin\",\"user\"]},\"multivalued\":false},{\"name\":\"xds_licence_expires\",\"displayName\":\"Licence expiry\",\"validations\":{\"length\":{\"max\":40}},\"permissions\":{\"view\":[\"admin\"],\"edit\":[\"admin\"]},\"multivalued\":false}],\"groups\":[{\"name\":\"user-metadata\",\"displayHeader\":\"User metadata\",\"displayDescription\":\"Attributes, which refer to user metadata\"}]}"
+            "{\"attributes\":[{\"name\":\"username\",\"displayName\":\"Username\",\"validations\":{\"length\":{\"min\":3,\"max\":255},\"username-prohibited-characters\":{},\"up-username-not-idn-homograph\":{}},\"permissions\":{\"view\":[\"admin\",\"user\"],\"edit\":[\"admin\",\"user\"]},\"multivalued\":false},{\"name\":\"email\",\"displayName\":\"Email\",\"validations\":{\"email\":{},\"length\":{\"max\":255}},\"required\":{\"roles\":[\"user\"]},\"permissions\":{\"view\":[\"admin\",\"user\"],\"edit\":[\"admin\",\"user\"]},\"multivalued\":false},{\"name\":\"firstName\",\"displayName\":\"First name\",\"validations\":{\"length\":{\"max\":255},\"person-name-prohibited-characters\":{}},\"required\":{\"roles\":[\"user\"]},\"permissions\":{\"view\":[\"admin\",\"user\"],\"edit\":[\"admin\",\"user\"]},\"multivalued\":false},{\"name\":\"lastName\",\"displayName\":\"Last name\",\"validations\":{\"length\":{\"max\":255},\"person-name-prohibited-characters\":{}},\"required\":{\"roles\":[\"user\"]},\"permissions\":{\"view\":[\"admin\",\"user\"],\"edit\":[\"admin\",\"user\"]},\"multivalued\":false},{\"name\":\"xds_licence_expires\",\"displayName\":\"Licence expiry\",\"validations\":{\"length\":{\"max\":40}},\"permissions\":{\"view\":[\"admin\"],\"edit\":[\"admin\"]},\"multivalued\":false},{\"name\":\"xds_licence_status\",\"displayName\":\"Licence status\",\"validations\":{\"length\":{\"max\":200}},\"permissions\":{\"view\":[\"admin\"],\"edit\":[\"admin\"]},\"multivalued\":false},{\"name\":\"xds_licence_tier\",\"displayName\":\"Licence tier\",\"validations\":{\"length\":{\"max\":200}},\"permissions\":{\"view\":[\"admin\"],\"edit\":[\"admin\"]},\"multivalued\":false},{\"name\":\"xds_licence_issued\",\"displayName\":\"Licence issued\",\"validations\":{\"length\":{\"max\":200}},\"permissions\":{\"view\":[\"admin\"],\"edit\":[\"admin\"]},\"multivalued\":false},{\"name\":\"xds_ban_until\",\"displayName\":\"Banned until\",\"validations\":{\"length\":{\"max\":200}},\"permissions\":{\"view\":[\"admin\"],\"edit\":[\"admin\"]},\"multivalued\":false},{\"name\":\"xds_ban_reason\",\"displayName\":\"Ban reason\",\"validations\":{\"length\":{\"max\":200}},\"permissions\":{\"view\":[\"admin\"],\"edit\":[\"admin\"]},\"multivalued\":false}],\"groups\":[{\"name\":\"user-metadata\",\"displayHeader\":\"User metadata\",\"displayDescription\":\"Attributes, which refer to user metadata\"}]}"
           ]
         }
       }
     ]
-  }
+  },
+  "loginTheme": "xds",
+  "eventsEnabled": true,
+  "eventsExpiration": 7776000,
+  "enabledEventTypes": [
+    "LOGIN"
+  ],
+  "passwordPolicy": "length(8)"
 }
