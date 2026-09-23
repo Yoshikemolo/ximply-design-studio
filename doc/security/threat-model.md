@@ -29,6 +29,8 @@ plugin/host, API/internal services, IAM/application, object store, AI provider a
 | CI secret exposure / dependency substitution | SEC-0008 | Untrusted fork workflow inspection and SBOM |
 | Cross-window token leak / forged IPC | SEC-0009 | Origin/sender/epoch validation |
 | Sensitive logs and cached revoked assets | SEC-0010 | Redaction and cache authorization tests |
+| Unconsented egress to an external model, key leak, out-of-scope model edits | SEC-0012 | Payload equality at the adapter, injected and out-of-scope operation tests |
+| Git option injection, path traversal, hostile hooks, credential leak | SEC-0013 | Adversarial fixture repositories and credential absence checks |
 
 Access tokens validate signature, algorithm allowlist, issuer, audience, expiry and
 not-before with bounded clock skew. Cache JWKS with controlled refresh; unknown keys

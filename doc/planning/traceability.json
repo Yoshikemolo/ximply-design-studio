@@ -970,6 +970,84 @@
         "doc/product/footer-and-changelog.md",
         "doc/implementation/PLAN-0002-0001.md"
       ]
+    },
+    {
+      "id": "FEAT-0029",
+      "title": "AI Tools panel and external agent provider",
+      "path": "doc/feat/FEAT-0029.md",
+      "status": "Planned",
+      "iteration": "ITER-0007",
+      "dependsOn": [
+        "FEAT-0006",
+        "FEAT-0007",
+        "FEAT-0030"
+      ],
+      "adrs": [
+        "ADR-0015",
+        "ADR-0037"
+      ],
+      "scenarios": [
+        "SC-0118",
+        "SC-0119",
+        "SC-0120",
+        "SC-0121",
+        "SC-0122"
+      ],
+      "implementation": [],
+      "tests": [],
+      "evidence": []
+    },
+    {
+      "id": "FEAT-0030",
+      "title": "Convert to pixel image",
+      "path": "doc/feat/FEAT-0030.md",
+      "status": "Planned",
+      "iteration": "ITER-0004",
+      "dependsOn": [
+        "FEAT-0007",
+        "FEAT-0010"
+      ],
+      "adrs": [
+        "ADR-0024",
+        "ADR-0036"
+      ],
+      "scenarios": [
+        "SC-0123",
+        "SC-0124"
+      ],
+      "implementation": [],
+      "tests": [],
+      "evidence": []
+    },
+    {
+      "id": "FEAT-0031",
+      "title": "Change control with Git project history",
+      "path": "doc/feat/FEAT-0031.md",
+      "status": "Planned",
+      "iteration": "ITER-0006",
+      "dependsOn": [
+        "FEAT-0002",
+        "FEAT-0006"
+      ],
+      "adrs": [
+        "ADR-0038",
+        "ADR-0039",
+        "ADR-0040"
+      ],
+      "scenarios": [
+        "SC-0125",
+        "SC-0126",
+        "SC-0127",
+        "SC-0128",
+        "SC-0129",
+        "SC-0130",
+        "SC-0131",
+        "SC-0132",
+        "SC-0133"
+      ],
+      "implementation": [],
+      "tests": [],
+      "evidence": []
     }
   ]
 }
