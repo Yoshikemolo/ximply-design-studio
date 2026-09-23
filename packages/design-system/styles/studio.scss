@@ -2750,3 +2750,12 @@ textarea,
     width: auto;
   }
 }
+
+/* The advanced tools block: shown to everyone, dimmed where the licence does not reach. */
+.advanced-tools .family-primary.locked {
+  opacity: 0.45;
+}
+.preview-badge.licensed {
+  color: var(--accent);
+  border-color: var(--accent);
+}

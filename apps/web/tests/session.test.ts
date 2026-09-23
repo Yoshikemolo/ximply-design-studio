@@ -339,3 +339,36 @@ describe('session edge cases', () => {
     expect(session.state()).toBe('not-configured');
   });
 });
+
+describe('super administrator, suspension and the advanced tools block (SC-0147, SC-0145)', () => {
+  async function signedIn(licence: object, admin = false) {
+    const world = environment({ '/api/identity': configured, '/api/session': () => json({ ...SESSION, admin, licence }) });
+    world.store.set('xds-session-tokens', JSON.stringify({ access: 'a', refresh: 'r', idToken: 'i', expiresAt: 2_000_000 }));
+    const session = service(world.env);
+    await session.start();
+    return session;
+  }
+  it('works in licensed mode as super administrator and with a valid licence only', async () => {
+    const admin = await signedIn({ state: 'unrestricted', expires: null, permissions: ['ai-tools', 'change-control'] }, true);
+    expect([admin.licensed(), admin.capability('ai-tools').allowed, admin.capability('change-control').allowed]).toEqual([true, true, true]);
+    const suspended = await signedIn({ state: 'suspended', expires: '2026-12-01T00:00:00Z', permissions: [] });
+    expect([suspended.licensed(), suspended.capability('ai-tools').reason]).toEqual([false, 'Your licence is suspended.']);
+    const valid = await signedIn(SESSION.licence);
+    expect(valid.licensed()).toBe(true);
+    const demo = service(environment({ '/api/identity': () => json({ configured: false }) }).env);
+    await demo.start();
+    expect(demo.licensed()).toBe(false);
+  });
+  it('shows the block apart from the drawing tools, with its own icons', () => {
+    const template = readFileSync('apps/web/src/app/app.component.html', 'utf-8');
+    const rail = template.slice(template.indexOf('<aside class="toolrail"'), template.indexOf('<div class="rail-palette"'));
+    expect(rail).toContain('class="tool-section advanced-tools"');
+    expect(rail).toContain('(click)="openAdvancedTool(tool)"');
+    expect(rail).toContain('[class.locked]="!session.capability(tool.permission).allowed"');
+    const source = readFileSync('apps/web/src/app/app.component.ts', 'utf-8');
+    for (const icon of ['ai-tools', 'change-control']) {
+      expect(source).toContain(`icon: "${icon}"`);
+      expect(readFileSync(`apps/web/public/assets/icons/${icon}.svg`, 'utf-8')).toContain('<svg');
+    }
+  });
+});

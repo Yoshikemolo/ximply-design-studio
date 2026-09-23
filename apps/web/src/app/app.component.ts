@@ -783,6 +783,25 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     if (layer && this.editor.makeGradientMesh(layer.id, { rows: Math.round(d.rows), columns: Math.round(d.columns), appearance: d.appearance, highlight: Number(d.highlight) })) this.gradientMeshDialog.set(false);
     else this.notify(new Error(this.editor.status() || "The gradient mesh cannot be made from this selection."));
   }
+  /** The advanced tools block of the tool rail; each entry is the root of its feature's tools. */
+  readonly advancedTools: { id: string; label: string; icon: string; permission: Permission }[] = [
+    { id: "ai-tools", label: "AI Tools", icon: "ai-tools", permission: "ai-tools" },
+    { id: "change-control", label: "Change control", icon: "change-control", permission: "change-control" },
+  ];
+  advancedTitle(tool: { label: string; permission: Permission }) {
+    const capability = this.session.capability(tool.permission);
+    return this.t(tool.label) + " · " + this.t(capability.allowed ? "Its panel is under development." : capability.reason);
+  }
+  /** Until FEAT-0029 and FEAT-0031 deliver their panels, an entry says so rather than opening an empty one. */
+  openAdvancedTool(tool: { label: string; permission: Permission }) {
+    const capability = this.session.capability(tool.permission);
+    this.editor.status.set(this.t(tool.label) + ": " + this.t(capability.allowed ? "Its panel is under development." : capability.reason));
+  }
+  modeExplanation() {
+    if (this.session.licensed()) return this.t("Pro: your licence, or your administrator role, enables the advanced tools. Click to open the settings of the local document service.");
+    const note = this.session.state() === "not-configured" ? " " + this.t("Advanced mode is not configured on this server.") : "";
+    return this.t("Demo: every drawing tool is available; sign in with a licence to use the advanced tools. Click to open the settings of the local document service.") + note;
+  }
   /** Admin > Users and licences (FEAT-0032): only administrators see it, and the API decides. */
   readonly adminOpen = signal(false);
   readonly adminPage = signal<AdminPage | null>(null);
@@ -857,9 +876,10 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     void this.changeLicence(() => this.session.revokeLicence(user.id));
   }
   licenceSummary(licence: { state: string; expires: string | null }) {
+    if (licence.state === "unrestricted") return this.t("Unrestricted as administrator");
     if (licence.state === "none" || !licence.expires) return this.t("No licence");
     const date = new Date(licence.expires).toLocaleString(this.locale() === "es" ? "es-ES" : "en-GB", { dateStyle: "medium", timeStyle: "short" });
-    return this.t(licence.state === "valid" ? "Valid until" : "Expired on") + " " + date;
+    return this.t(licence.state === "valid" ? "Valid until" : licence.state === "suspended" ? "Suspended, expires" : "Expired on") + " " + date;
   }
   permissionList(permissions: string[]) {
     return permissions.length ? permissions.map((permission) => this.permissionLabel(permission)).join(", ") : "—";

@@ -6,6 +6,7 @@
         >ximply<span class="brand-sub">design studio</span></span
       ></a
     >
+    <button class="preview-badge" [class.licensed]="session.licensed()" [title]="modeExplanation()" [attr.aria-label]="t(session.licensed() ? 'Pro' : 'Demo') + ': ' + modeExplanation()" (click)="openServerSettings()">{{ t(session.licensed() ? "Pro" : "Demo") }}</button>
     @if (mobile()) {
       <select class="mobile-documents" [attr.aria-label]="t('Documents')" [title]="t('Documents')" (change)="chooseDocument($event)">
         @for (tab of editor.tabs(); track tab.id) {
@@ -169,7 +170,6 @@
         </details>
       }
     </nav>
-    <button class="preview-badge" [title]="t('Local preview explanation')" [attr.aria-label]="t('Local preview') + ': ' + t('Local preview explanation')" (click)="openServerSettings()">{{ t("Local preview") }}</button>
     <div class="header-spacer"></div>
     @if (preferences.layoutBlocks().workspace) {
       <label class="header-workspace">{{ t("Workspace") }}<select [value]="workspace()" (change)="workspace.set(text($event)); editor.tool.set(workspace() === 'Retouching' ? 'brush' : 'select')"><option value="Drawing">{{ t("Drawing") }}</option><option value="Retouching">{{ t("Retouching") }}</option></select></label>
@@ -202,9 +202,7 @@
           </div>
         </details>
       }
-      @case ("not-configured") {
-        <span class="advanced-note" [title]="t('Advanced mode is not configured on this server.')">{{ t("Demo") }}</span>
-      }
+      @case ("not-configured") {}
       @case ("loading") {}
       @default {
         <button class="sign-in" (click)="session.signIn()" [title]="t(session.message() || 'Sign in or register to use advanced capabilities.')"><img src="/assets/icons/user.svg" alt="" />{{ t("Sign in") }}</button>
@@ -417,6 +415,14 @@
           }
         </div>
       }
+      <!-- The advanced tools grow from this block: AI Tools and change control first (FEAT-0032). -->
+      <div class="tool-section advanced-tools" role="group" [attr.aria-label]="t('Advanced tools')">
+        @for (tool of advancedTools; track tool.id) {
+          <div class="tool-family">
+            <button class="family-primary" [class.locked]="!session.capability(tool.permission).allowed" [title]="advancedTitle(tool)" [attr.aria-label]="t(tool.label)" (click)="openAdvancedTool(tool)"><img [src]="'/assets/icons/' + tool.icon + '.svg'" alt="" /></button>
+          </div>
+        }
+      </div>
       <div class="rail-palette" [attr.aria-label]="t('Appearance')">
         <div class="overlapping-paints">
           @for (target of paintTargets; track target) {

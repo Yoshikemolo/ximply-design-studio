@@ -23,6 +23,8 @@ import jwt
 PERMISSIONS = ('ai-tools', 'change-control')
 ADMIN_ROLE = 'xds-admin'
 LICENCE_ATTRIBUTE = 'xds_licence_expires'
+STATUS_ATTRIBUTE = 'xds_licence_status'
+ISSUED_ATTRIBUTE = 'xds_licence_issued'
 ALGORITHMS = ['RS256']
 USER_ID = re.compile(r'^[0-9a-fA-F-]{36}$')
 
@@ -145,25 +147,36 @@ def format_instant(instant: datetime) -> str:
     return instant.astimezone(timezone.utc).replace(microsecond=0).isoformat().replace('+00:00', 'Z')
 
 
-def licence_state(expires: datetime | None, now: datetime) -> str:
+def licence_state(expires: datetime | None, now: datetime, status: str | None = None) -> str:
+    """none, expired, suspended or valid; an expired licence is expired whatever its status."""
     if expires is None:
         return 'none'
-    return 'valid' if expires > now else 'expired'
+    if expires <= now:
+        return 'expired'
+    return 'suspended' if status == 'suspended' else 'valid'
+
+
+def single(value) -> str | None:
+    if isinstance(value, list):
+        value = value[0] if len(value) == 1 else None
+    return value if isinstance(value, str) else None
 
 
 def session_from_claims(claims: dict, audience: str, now: datetime) -> dict:
     roles = ((claims.get('resource_access') or {}).get(audience) or {}).get('roles') or []
     permissions = sorted(role for role in roles if role in PERMISSIONS)
     expires = parse_instant(claims.get(LICENCE_ATTRIBUTE))
-    state = licence_state(expires, now)
+    admin = ADMIN_ROLE in ((claims.get('realm_access') or {}).get('roles') or [])
+    # The super administrator uses every advanced capability without a licence (ADR-0041 amendment).
+    state = 'unrestricted' if admin else licence_state(expires, now, single(claims.get(STATUS_ATTRIBUTE)))
     return {
         'subject': claims['sub'],
         'username': claims.get('preferred_username', ''),
         'name': claims.get('name') or claims.get('preferred_username', ''),
         'email': claims.get('email', ''),
-        'admin': ADMIN_ROLE in ((claims.get('realm_access') or {}).get('roles') or []),
-        'licence': {'state': state, 'expires': format_instant(expires) if expires else None,
-                    'permissions': permissions if state == 'valid' else []},
+        'admin': admin,
+        'licence': {'state': state, 'expires': format_instant(expires) if expires and not admin else None,
+                    'permissions': list(PERMISSIONS) if admin else permissions if state == 'valid' else []},
     }
 
 
@@ -173,6 +186,8 @@ def require_permission(session: dict, permission: str) -> None:
         raise IdentityError(403, 'You have no licence for advanced capabilities')
     if licence['state'] == 'expired':
         raise IdentityError(403, 'Your licence has expired')
+    if licence['state'] == 'suspended':
+        raise IdentityError(403, 'Your licence is suspended')
     if permission not in licence['permissions']:
         raise IdentityError(403, 'Your licence does not include this capability')
 

@@ -6,7 +6,7 @@ import { Injectable, computed, signal } from "@angular/core";
  * the tab, never in documents, local storage or logs; the API decides every licence.
  */
 export type Permission = "ai-tools" | "change-control";
-export interface Licence { state: "valid" | "expired" | "none"; expires: string | null; permissions: Permission[] }
+export interface Licence { state: "valid" | "expired" | "suspended" | "none" | "unrestricted"; expires: string | null; permissions: Permission[] }
 export interface Session { subject: string; username: string; name: string; email: string; admin: boolean; licence: Licence }
 export interface IdentityConfiguration { configured: boolean; issuer?: string; clientId?: string }
 export type SessionState = "loading" | "not-configured" | "unavailable" | "signed-out" | "signed-in";
@@ -62,6 +62,8 @@ export class SessionService {
   readonly session = signal<Session | null>(null);
   readonly message = signal("");
   readonly isAdmin = computed(() => !!this.session()?.admin);
+  /** A signed-in user whose licence is valid, or the super administrator, works in licensed mode. */
+  readonly licensed = computed(() => this.state() === "signed-in" && ["valid", "unrestricted"].includes(this.session()?.licence.state ?? ""));
   private config: IdentityConfiguration = { configured: false };
   private tokens: Tokens | null = null;
   private refreshTimer: unknown = null;
@@ -189,6 +191,7 @@ export class SessionService {
     if (state !== "signed-in" || !session) return { allowed: false, reason: "Sign in to use advanced capabilities." };
     if (session.licence.state === "none") return { allowed: false, reason: "You have no licence for advanced capabilities." };
     if (session.licence.state === "expired") return { allowed: false, reason: "Your licence has expired." };
+    if (session.licence.state === "suspended") return { allowed: false, reason: "Your licence is suspended." };
     if (!session.licence.permissions.includes(permission)) return { allowed: false, reason: "Your licence does not include this capability." };
     return { allowed: true, reason: "" };
   }

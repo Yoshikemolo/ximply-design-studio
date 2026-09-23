@@ -24,10 +24,13 @@ describe('shell template', () => {
     expect(template).not.toMatch(/\bconfirm\(\s*["']/);
   });
 
-  it('shows the local preview badge as a button into the local service settings', () => {
+  it('shows the mode badge, Demo or Pro, after the logo as a button into the local service settings', () => {
     const badge = section('class="preview-badge"', '</button>');
     expect(badge).toContain('(click)="openServerSettings()"');
-    expect(badge).toContain("t('Local preview explanation')");
+    expect(badge).toContain('session.licensed() ? "Pro" : "Demo"');
+    expect(template.indexOf('class="preview-badge"')).toBeGreaterThan(template.indexOf('class="brand"'));
+    expect(template.indexOf('class="preview-badge"')).toBeLessThan(template.indexOf('<nav class="menus"'));
+    expect(badge).toContain('[title]="modeExplanation()"');
   });
 
   it('names every typography measure by an icon and a tooltip, in line with its control', () => {

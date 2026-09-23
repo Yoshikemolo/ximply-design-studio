@@ -184,6 +184,26 @@ class IdentityApiTests(unittest.TestCase):
                                  params={'xds_licence_expires': '2030-01-01T00:00:00Z'})
         self.assertEqual(403, answer.status_code)
 
+    # SC-0147 and SC-0145: the super administrator and suspended licences.
+    def test_super_administrator_is_unrestricted(self):
+        admin = token(realm_access={'roles': ['xds-admin']})
+        session = self.get('/api/session', admin).json()
+        self.assertEqual({'state': 'unrestricted', 'expires': None, 'permissions': ['ai-tools', 'change-control']}, session['licence'])
+        for permission in ('ai-tools', 'change-control'):
+            self.assertEqual(200, self.get('/api/licence/' + permission, admin).status_code)
+        # The role counts only from the verified token.
+        forged = self.client.get('/api/licence/ai-tools', headers={'Authorization': 'Bearer ' + token(), 'X-Role': 'xds-admin'})
+        self.assertEqual(403, forged.status_code)
+
+    def test_suspended_licence_is_refused_until_it_expires(self):
+        suspended = licensed(xds_licence_status=['suspended'])
+        answer = self.get('/api/licence/ai-tools', suspended)
+        self.assertEqual((403, 'Your licence is suspended'), (answer.status_code, answer.json()['detail']))
+        self.assertEqual('suspended', self.get('/api/session', suspended).json()['licence']['state'])
+        expired = licensed(expires='2026-09-23T09:00:00Z', xds_licence_status='suspended')
+        self.assertEqual('expired', self.get('/api/session', expired).json()['licence']['state'])
+        self.assertEqual(200, self.get('/api/licence/ai-tools', licensed(xds_licence_status='active')).status_code)
+
     # SC-0137: authority.
     def test_admin_endpoints_need_the_admin_role(self):
         self.assertEqual(401, self.get('/api/admin/users').status_code)
@@ -191,10 +211,8 @@ class IdentityApiTests(unittest.TestCase):
         self.assertEqual((403, 'Only administrators can manage users and licences'), (answer.status_code, answer.json()['detail']))
         self.assertEqual(403, self.send('PUT', f'/api/admin/users/{USER}/licence', licensed(), {'permissions': ['ai-tools'], 'days': 5}).status_code)
         self.assertEqual(403, self.send('DELETE', f'/api/admin/users/{USER}/licence', licensed()).status_code)
-        # An administrator without a licence administers but cannot use the capabilities.
         admin = token(realm_access={'roles': ['xds-admin']})
         self.assertEqual(200, self.get('/api/admin/users', admin).status_code)
-        self.assertEqual(403, self.get('/api/licence/ai-tools', admin).status_code)
 
     def test_users_are_listed_with_search_and_paging(self):
         admin = token(realm_access={'roles': ['xds-admin']})
