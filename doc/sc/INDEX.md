@@ -121,3 +121,19 @@
 | [SC-0115 — Sharp magnified view and Pixel Preview](SC-0115.md) |
 | [SC-0116 — Ruler marks and ruler snapping settings](SC-0116.md) |
 | [SC-0117 — Paint layers cropped to what is painted](SC-0117.md) |
+| [SC-0118 — AI Tools entry points and disabled state](SC-0118.md) |
+| [SC-0119 — Context sent is exactly the context shown](SC-0119.md) |
+| [SC-0120 — Proposal preview, apply and reject](SC-0120.md) |
+| [SC-0121 — Out-of-scope or malformed model output](SC-0121.md) |
+| [SC-0122 — Provider failure, cancellation and key secrecy](SC-0122.md) |
+| [SC-0123 — Selection converted to a transparent pixel image](SC-0123.md) |
+| [SC-0124 — Whole document conversion and refused conversions](SC-0124.md) |
+| [SC-0125 — Change control settings and repository setup](SC-0125.md) |
+| [SC-0126 — Commit graph of branches and merges](SC-0126.md) |
+| [SC-0127 — Commit of project changes](SC-0127.md) |
+| [SC-0128 — Branch creation, renaming, deletion and checkout](SC-0128.md) |
+| [SC-0129 — Merges and conflicts](SC-0129.md) |
+| [SC-0130 — Pull, push and fetch with a GitHub remote](SC-0130.md) |
+| [SC-0131 — Undo and redo of Git operations](SC-0131.md) |
+| [SC-0132 — Confined repository operations and secret credentials](SC-0132.md) |
+| [SC-0133 — Commit node context menu](SC-0133.md) |
