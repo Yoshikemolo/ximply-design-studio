@@ -77,6 +77,13 @@ and Change control ([FEAT-0031](../feat/FEAT-0031.md)). Their controls appear on
 behaviour behind them is implemented. Secret fields never show a stored value; they
 report whether one is configured.
 
+## Sign-in, licence state and Admin menu — planned
+
+A Sign in button sits at the right of the header; signed in, it becomes the user with a
+menu showing the licence state, its permissions and Sign out. Advanced capabilities stay
+visible to demo users with a precise reason and a route to sign in, never silently
+hidden. The Admin menu appears in the menu bar only for administrators ([FEAT-0032](../feat/FEAT-0032.md)).
+
 ## Right column tabs and header AI button — planned
 
 The owner requested that the right column header carry three tabs, Properties, AI Tools

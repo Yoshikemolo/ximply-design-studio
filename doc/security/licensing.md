@@ -45,6 +45,15 @@ jku/x5u URLs. Trusted public keys are shipped or updated through an authenticate
 versioned trust channel. Verify the signed bytes with a maintained library, not
 custom serialization or hand-written cryptography.
 
+## Owner decision for the current phase
+
+On 2026-09-23 the owner decided ([ADR-0041](../adr/ADR-0041.md)) to keep licences in
+Keycloak for now: an expiry attribute and permission roles, checked by the API on every
+advanced request, with short-lived tokens that only carry a copy of the licence. This
+differs from the signed design of this document on purpose and is recorded as such; it
+gives no offline use, seat counting or proof outside Keycloak. The signed design stays
+proposed (ADR-0019) for a later phase.
+
 ## Issuance and enforcement
 
 1. Authorized vendor super administrator approves the plugin/bundle offer and its terms.

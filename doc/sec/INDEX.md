@@ -17,3 +17,4 @@
 | [SEC-0011 — Licence authority and seat integrity](SEC-0011.md) |
 | [SEC-0012 — External model data egress and output authority](SEC-0012.md) |
 | [SEC-0013 — Repository operations and remote credentials](SEC-0013.md) |
+| [SEC-0014 — Licence gating and administration authority](SEC-0014.md) |

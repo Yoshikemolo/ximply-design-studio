@@ -980,11 +980,13 @@
       "dependsOn": [
         "FEAT-0006",
         "FEAT-0007",
-        "FEAT-0030"
+        "FEAT-0030",
+        "FEAT-0032"
       ],
       "adrs": [
         "ADR-0015",
-        "ADR-0037"
+        "ADR-0037",
+        "ADR-0041"
       ],
       "scenarios": [
         "SC-0118",
@@ -1038,12 +1040,15 @@
       "iteration": "ITER-0006",
       "dependsOn": [
         "FEAT-0002",
-        "FEAT-0006"
+        "FEAT-0006",
+        "FEAT-0032"
       ],
       "adrs": [
         "ADR-0038",
         "ADR-0039",
-        "ADR-0040"
+        "ADR-0040",
+        "ADR-0041",
+        "ADR-0012"
       ],
       "scenarios": [
         "SC-0125",
@@ -1055,6 +1060,31 @@
         "SC-0131",
         "SC-0132",
         "SC-0133"
+      ],
+      "implementation": [],
+      "tests": [],
+      "evidence": []
+    },
+    {
+      "id": "FEAT-0032",
+      "title": "Sign-in, time-limited licences and Admin menu",
+      "path": "doc/feat/FEAT-0032.md",
+      "status": "Planned",
+      "iteration": "ITER-0001",
+      "dependsOn": [
+        "FEAT-0002"
+      ],
+      "adrs": [
+        "ADR-0012",
+        "ADR-0041"
+      ],
+      "scenarios": [
+        "SC-0134",
+        "SC-0135",
+        "SC-0136",
+        "SC-0137",
+        "SC-0138",
+        "SC-0139"
       ],
       "implementation": [],
       "tests": [],
