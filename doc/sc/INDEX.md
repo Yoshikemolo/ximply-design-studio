@@ -137,3 +137,9 @@
 | [SC-0131 — Undo and redo of Git operations](SC-0131.md) |
 | [SC-0132 — Confined repository operations and secret credentials](SC-0132.md) |
 | [SC-0133 — Commit node context menu](SC-0133.md) |
+| [SC-0134 — Demo mode without sign-in](SC-0134.md) |
+| [SC-0135 — Registration, sign-in and sign-out with PKCE](SC-0135.md) |
+| [SC-0136 — Advanced requests need a valid licence and permission](SC-0136.md) |
+| [SC-0137 — Admin menu only for administrators](SC-0137.md) |
+| [SC-0138 — Issuing, extending and revoking licences](SC-0138.md) |
+| [SC-0139 — Keycloak unavailable or misconfigured](SC-0139.md) |

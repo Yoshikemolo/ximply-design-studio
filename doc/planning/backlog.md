@@ -5,7 +5,7 @@ status: "proposed"
 domain: "planning"
 owners: ["Yoshikemolo"]
 applies_to: ["ximply-design-studio"]
-related: ["FEAT-0001", "FEAT-0002", "FEAT-0003", "FEAT-0004", "FEAT-0005", "FEAT-0006", "FEAT-0007", "FEAT-0008", "FEAT-0009", "FEAT-0010", "FEAT-0011", "FEAT-0012", "FEAT-0013", "FEAT-0014", "FEAT-0015", "FEAT-0016", "FEAT-0017", "FEAT-0018", "FEAT-0019", "FEAT-0020", "FEAT-0021", "FEAT-0022", "FEAT-0023", "FEAT-0024", "FEAT-0025", "FEAT-0026", "FEAT-0027", "FEAT-0028", "FEAT-0029", "FEAT-0030", "FEAT-0031"]
+related: ["FEAT-0001", "FEAT-0002", "FEAT-0003", "FEAT-0004", "FEAT-0005", "FEAT-0006", "FEAT-0007", "FEAT-0008", "FEAT-0009", "FEAT-0010", "FEAT-0011", "FEAT-0012", "FEAT-0013", "FEAT-0014", "FEAT-0015", "FEAT-0016", "FEAT-0017", "FEAT-0018", "FEAT-0019", "FEAT-0020", "FEAT-0021", "FEAT-0022", "FEAT-0023", "FEAT-0024", "FEAT-0025", "FEAT-0026", "FEAT-0027", "FEAT-0028", "FEAT-0029", "FEAT-0030", "FEAT-0031", "FEAT-0032"]
 source: ["Project owner requirements and design foundation; methodology application recorded in AUDIT-0001"]
 ---
 
@@ -47,3 +47,4 @@ preview; none is verified, and the rest are planned.
 | [FEAT-0029](../feat/FEAT-0029.md) | AI Tools panel and external agent provider | ITER-0007 |
 | [FEAT-0030](../feat/FEAT-0030.md) | Convert to pixel image | ITER-0004 |
 | [FEAT-0031](../feat/FEAT-0031.md) | Change control with Git project history | ITER-0006 |
+| [FEAT-0032](../feat/FEAT-0032.md) | Sign-in, time-limited licences and Admin menu | ITER-0001 |

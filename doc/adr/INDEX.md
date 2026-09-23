@@ -43,4 +43,5 @@
 | [External agent provider called through the API service](ADR-0037.md) |
 | [Project directory as a diff-friendly versioned tree](ADR-0038.md) |
 | [Git operations executed by the API service](ADR-0039.md) |
-| [GitHub remote credentials held by the API service](ADR-0040.md) |
+| [GitHub access through the Keycloak identity](ADR-0040.md) |
+| [Demo and advanced modes with licences kept in Keycloak](ADR-0041.md) |

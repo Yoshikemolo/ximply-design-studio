@@ -238,6 +238,13 @@ video timeline and audio editing are separate later capabilities.
 
 ## 10. Commercial licences and Ximplicity UX
 
+The owner decided on 2026-09-23 ([ADR-0041](../adr/ADR-0041.md)) that the current editor
+stays open as a demo, and that advanced capabilities, starting with AI Tools and change
+control, require Keycloak sign-in and a licence limited in time with the matching
+permission. The owner administers users and licences from an Admin menu
+([FEAT-0032](../feat/FEAT-0032.md), planned). Licences are kept in Keycloak in this phase;
+the signed licences below remain the design for a later commercial or offline phase.
+
 See [commercial model](commercial-model.md), [UX direction](ux-direction.md) and
 [licence security](../security/licensing.md). Community/Free is the initial edition;
 signed bundle/plugin grants enforce time and named-user limits through the same
