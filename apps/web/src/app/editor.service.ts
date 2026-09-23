@@ -1,4 +1,5 @@
-import { drawPaintSource, finishPaint, paintFrame } from "./paint-buffer";
+import { alphaBounds, drawPaintSource, finishPaint, paintFrame } from "./paint-buffer";
+import { aliasPixels, alignToPixels, DEFAULT_RASTER_OPTIONS, rasterFrame, rasterPixels, rasterScale, rasterTarget, RasterOptions, validRasterOptions } from "../../../../packages/domain/src/rasterize";
 import { Procedural, defaultProcedural, generateProcedural, syncProcedurals, validProcedural } from "../../../../packages/domain/src/procedural";
 import { DEFAULT_GRADIENTS, FillPaint, GradientPaint, MAX_PATTERNS, MAX_SWATCHES, PatternDefinition, PresetPattern, Swatch, defaultSwatches, presetPattern, validFillPaint } from "../../../../packages/domain/src/paint";
 import { openingHost, wallSnapPoint, WallSnap } from "./procedural-placement";
@@ -5802,6 +5803,65 @@ export class EditorService {
     this.selectedId.set(layer.id);
     this.tool.set("select");
     this.changed();
+  }
+  /**
+   * Draws the selected objects, or every visible printing layer when nothing is selected,
+   * as a PNG with transparency cropped to its painted pixels, without changing the
+   * document. The AI Tools use it for the previews they attach. Returns null, with the
+   * reason in the status line, when nothing would be drawn or the image is too large.
+   */
+  async rasterizePng(options: RasterOptions = DEFAULT_RASTER_OPTIONS, selectedIds = this.selectedLayers().map((layer) => layer.id)) {
+    if (!validRasterOptions(options)) { this.status.set("Choose a resolution and a margin within their limits."); return null; }
+    const document = this.document();
+    const target = rasterTarget(document, selectedIds);
+    if (!target) { this.status.set("There is nothing visible to convert."); return null; }
+    const scale = rasterScale(options.ppi);
+    const area = alignToPixels(target.area, scale);
+    if (!rasterPixels(area, scale)) { this.status.set("The pixel image would be too large; choose a lower resolution."); return null; }
+    const drawn = await this.renderer.rasterize(syncBlends(syncProcedurals(document)), target.ids, area, scale);
+    const context = drawn.getContext("2d")!;
+    const pixels = context.getImageData(0, 0, drawn.width, drawn.height);
+    if (options.antialias === "none") { aliasPixels(pixels.data); context.putImageData(pixels, 0, 0); }
+    const painted = alphaBounds(pixels.data, drawn.width, drawn.height);
+    if (!painted) { this.status.set("There is nothing visible to convert."); return null; }
+    const { pixels: box, frame } = rasterFrame(area, painted, scale, options.margin);
+    if (!rasterPixels({ x: 0, y: 0, width: box.width, height: box.height }, 1)) { this.status.set("The pixel image would be too large; choose a lower resolution."); return null; }
+    const result = window.document.createElement("canvas");
+    result.width = box.width;
+    result.height = box.height;
+    // Reading past the edges of the drawing gives transparent pixels, which is the margin.
+    result.getContext("2d")!.putImageData(context.getImageData(box.x, box.y, box.width, box.height), 0, 0);
+    return { source: result.toDataURL("image/png"), frame, target };
+  }
+  /**
+   * Convert to pixel image: inserts the PNG of rasterizePng as a new placed picture directly
+   * above the topmost selected object, in its group, or at the top of the document when
+   * nothing is selected. The sources are kept and the conversion is one undo step.
+   */
+  async rasterizeSelection(options: RasterOptions = DEFAULT_RASTER_OPTIONS): Promise<boolean> {
+    const before = this.document();
+    if (before.layers.length >= MAX_LAYERS) { this.status.set("The document cannot hold more layers."); return false; }
+    const image = await this.rasterizePng(options);
+    if (!image) return false;
+    // The document may have changed while the image was drawn; a stale result is not inserted.
+    if (this.document() !== before) { this.status.set("The document changed while converting; convert again."); return false; }
+    const layer = newLayer("image", crypto.randomUUID(), { x: image.frame.x, y: image.frame.y });
+    Object.assign(layer, { name: "Pixel image", width: image.frame.width, height: image.frame.height, source: image.source });
+    // An image never joins the group of a blend, whose members the blend itself manages.
+    const blendGroups = new Set((before.blends ?? []).map((blend) => blend.groupId));
+    const path = image.target.groupPath ?? [];
+    const blendAt = path.findIndex((id) => blendGroups.has(id));
+    const groupPath = blendAt >= 0 ? path.slice(0, blendAt) : path;
+    if (groupPath.length) layer.groupPath = groupPath;
+    const layers = [...before.layers];
+    layers.splice(image.target.insertAt, 0, layer);
+    this.commitStep(before);
+    this.document.set({ ...before, layers });
+    this.selectedId.set(layer.id);
+    this.selectedIds.set([layer.id]);
+    this.status.set("Converted to a pixel image.");
+    this.changed();
+    return true;
   }
   /**
    * Imports a drawing or an image. The file is data: vector readers parse it in the domain,

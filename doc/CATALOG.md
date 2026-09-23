@@ -82,6 +82,7 @@ Generated titles and paths only; authoritative content remains in each linked do
 - [REL-0028 — Gradient meshes, a sharp magnified view and wide screen drawers](changelog/0.9.0.md)
 - [REL-0029 — Application icons](changelog/0.9.1.md)
 - [REL-0030 — The web manifest served as JSON](changelog/0.9.2.md)
+- [REL-0031 — Convert to pixel image](changelog/0.9.3.md)
 - [REL-0003 — Pending changes](changelog/Unreleased.md)
 - [DOC-ROOT-0002 — Code and contract map](code-map.md)
 - [DOC-ENGINEERING-0001 — Documentation navigation migration](engineering/context-migration.md)

@@ -7,6 +7,7 @@ import { ArraySettings, DEFAULT_ARRAY, validArraySettings } from "../../../../pa
 import { defaultMarginGuides, MarginGuides, PAGE_FORMATS, PAGE_RESOLUTIONS, PageCategory, PageOrientation, pageSize, pageSizeFits, RegistrationMarks, REGISTRATION_MARKS, registrationFits } from "../../../../packages/domain/src/page-setup";
 import { BlendEasing } from "../../../../packages/domain/src/object-blend";
 import { FONT_FAMILIES, defaultTypography, defaultTextLayout, TextTypography, TextLayoutOptions } from "../../../../packages/domain/src/text-layout";
+import { RASTER_RESOLUTIONS, RasterAntialias, RasterOptions } from "../../../../packages/domain/src/rasterize";
 import { measurementUnits, isUnit, snapPoint, fromPixels, toPixels, formatMeasurement, rulerTicks as makeRulerTicks, SnapConfig } from "../../../../packages/domain/src/measurements";
 import { PreferencesService } from "./preferences.service";
 import { DEFAULT_SIMPLIFY, FreehandToolOptions, PAINTBRUSH_DEFAULTS, PENCIL_DEFAULTS, SMOOTH_DEFAULTS, SimplifyOptions, validFreehandTool } from "../../../../packages/domain/src/path-fit";
@@ -113,6 +114,7 @@ const COMMAND_ICONS: Record<string, string> = {
   outlineStroke: "outline-stroke", outlineText: "outline-text",
   copy: "copy", cut: "cut", paste: "paste", pasteInFront: "paste-front", pasteInBack: "paste-back",
   duplicateSeries: "duplicate-series",
+  importImage: "image", rasterize: "rasterize",
   layerUp: "layer-up", layerDown: "layer-down", fit: "fit-view", zoomIn: "zoom-in", zoomOut: "zoom-out",
 };
 const LEAF_TYPE_LABELS: Record<string, string> = { swing: "Hinged", sliding: "Sliding", folding: "Folding", pocket: "Pocket", fixed: "Fixed glazing", opening: "Passage without leaves" };
@@ -281,6 +283,13 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     label: "Copy and paste",
     icon: "copy",
     commands: ["copy", "cut", "paste", "pasteInFront", "pasteInBack", "duplicate", "duplicateSeries", "transformAgain"],
+  };
+  /** Import, and Convert to pixel image, which turns artwork already in the document into a picture. */
+  readonly imageGroup = {
+    id: "image",
+    label: "Import",
+    icon: "image",
+    commands: ["importImage", "rasterize"],
   };
   readonly actionGroups = [
     {
@@ -771,6 +780,20 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     const layer = this.editor.selectedLayers()[0], d = this.gradientMeshDraft;
     if (layer && this.editor.makeGradientMesh(layer.id, { rows: Math.round(d.rows), columns: Math.round(d.columns), appearance: d.appearance, highlight: Number(d.highlight) })) this.gradientMeshDialog.set(false);
     else this.notify(new Error(this.editor.status() || "The gradient mesh cannot be made from this selection."));
+  }
+  /** Convert to pixel image and its values, as Object > Rasterize offers them in Illustrator. */
+  readonly rasterizeDialog = signal(false);
+  readonly rasterResolutions = RASTER_RESOLUTIONS;
+  rasterizeDraft: { resolution: string; ppi: number; antialias: RasterAntialias; margin: number } = { resolution: "150", ppi: 150, antialias: "art", margin: 0 };
+  readonly rasterAntialiasing = [{ id: "art", label: "Art optimized" }, { id: "none", label: "None" }] as const;
+  openRasterizeDialog() { this.rasterizeDialog.set(true); }
+  /** Converts with the values of the dialog; the margin is entered in the distance unit. */
+  async applyRasterizeDialog() {
+    const d = this.rasterizeDraft;
+    const ppi = d.resolution === "other" ? Number(d.ppi) : Number(d.resolution);
+    const options: RasterOptions = { ppi, antialias: d.antialias, margin: toPixels(Number(d.margin) || 0, this.preferences.distanceUnit()) };
+    if (await this.editor.rasterizeSelection(options)) this.rasterizeDialog.set(false);
+    else this.notify(new Error(this.editor.status()));
   }
   warpDraft: WarpSettings = { ...DEFAULT_WARP };
   warpPreview = true;
@@ -1920,7 +1943,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   /** Commands a tool family offers beside its tools, which give it a list of its own. */
   flyoutActionsFor(id: string): string[] {
     return (
-      [...this.actionGroups, this.clipboardGroup].find((group) => group.id === id)?.commands ??
+      [...this.actionGroups, this.clipboardGroup, this.imageGroup].find((group) => group.id === id)?.commands ??
       (
         {
           rotate: ["rotateCW", "rotateCCW"],
@@ -1994,6 +2017,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     if (id === "expandBlend" || id === "releaseBlend") return !!this.editor.selectedBlend() && !this.blendIsLocked();
     // The clipboard actions say what they need: something selected, or something copied.
     if (["copy", "cut", "duplicate", "duplicateSeries", "outlineStroke"].includes(id)) return this.editor.selectedLayers().length > 0;
+    if (id === "rasterize") return this.editor.document().layers.some((layer) => layer.visible && !layer.guide);
     if (id === "outlineText") return this.editor.selectedLayers().some((layer) => layer.kind === "text");
     if (["lockSelection", "lockAbove", "lockOthers", "hideSelection", "hideAbove", "hideOthers"].includes(id)) return this.editor.selectedLayers().some((layer) => !layer.guide);
     if (id === "unlockAll") return this.editor.document().layers.some((layer) => layer.locked && !layer.guide);
@@ -2035,6 +2059,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
       cropDocument: () => this.openPageDialog("crop"),
       about: () => this.openAbout(),
       importImage: () => this.imageFile?.nativeElement.click(),
+      rasterize: () => this.openRasterizeDialog(),
       exportPng: () => {
         void this.editor.exportPng();
       },
