@@ -40,3 +40,7 @@
 | [Envelopes carried by path layers in the native format](ADR-0034.md) |
 | [Gradient meshes carried by path layers in the native format](ADR-0035.md) |
 | [Paint layers marked and cropped in the native format](ADR-0036.md) |
+| [External agent provider called through the API service](ADR-0037.md) |
+| [Project directory as a diff-friendly versioned tree](ADR-0038.md) |
+| [Git operations executed by the API service](ADR-0039.md) |
+| [GitHub remote credentials held by the API service](ADR-0040.md) |
