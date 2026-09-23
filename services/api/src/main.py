@@ -12,9 +12,13 @@ from threading import Lock
 from typing import Annotated, Literal, Protocol
 from uuid import uuid4
 
-from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi import Depends, FastAPI, HTTPException, Query, Request
 from fastapi.concurrency import run_in_threadpool
+from fastapi.responses import JSONResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from .identity import (PERMISSIONS, AuditLog, IdentityConfig, IdentityError, KeycloakAdmin, KeycloakAdminClient,
+                       TokenVerifier, extended_expiry, licence_expiry, public_user, require_permission,
+                       session_from_claims, valid_user_id)
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator, model_validator
 
 MAX_DOCUMENT = 35_000_000
@@ -783,7 +787,22 @@ def inline_document_schema() -> dict:
     return expand(schema)
 
 
-def create_app(repository: DocumentRepository | None = None, token: str | None = None) -> FastAPI:
+class LicenceRequest(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    permissions: Annotated[list[Literal['ai-tools', 'change-control']], Field(min_length=1, max_length=len(PERMISSIONS))]
+    days: Annotated[int, Field(ge=1, le=3650)] | None = None
+    until: Annotated[str, Field(pattern=r'^\d{4}-\d{2}-\d{2}$')] | None = None
+
+
+class ExtendRequest(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    days: Annotated[int, Field(ge=1, le=3650)]
+
+
+def create_app(repository: DocumentRepository | None = None, token: str | None = None, *,
+               identity: IdentityConfig | None | Literal['environment'] = 'environment',
+               verifier: TokenVerifier | None = None, admin: KeycloakAdmin | None = None,
+               clock=lambda: datetime.now(timezone.utc)) -> FastAPI:
     configured_version = os.environ.get('XDS_VERSION_FILE')
     version_file = Path(configured_version) if configured_version else Path(__file__).resolve().parents[3]/'release/version.json'
     version = json.loads(version_file.read_text())['version']
@@ -825,6 +844,87 @@ def create_app(repository: DocumentRepository | None = None, token: str | None =
     @app.get('/api/projects/{identifier}', dependencies=[Depends(authenticated)], response_model=Document, response_model_exclude_none=True, tags=['projects'])
     async def read(identifier: str):
         return await run_in_threadpool(store.read, identifier)
+
+    # Sign-in, licences and administration (FEAT-0032). Without an issuer the service runs
+    # in demo mode: nothing advanced is available and nothing falls back to a local licence.
+    oidc = IdentityConfig.from_environment() if identity == 'environment' else identity
+    tokens = verifier or (TokenVerifier(oidc) if oidc else None)
+    audit = AuditLog(Path(os.environ.get('XDS_DATA_DIR', './data')) / 'audit' / 'admin.jsonl')
+    administration: list[KeycloakAdmin | None] = [admin]
+
+    @app.exception_handler(IdentityError)
+    async def refused(_: Request, error: IdentityError):
+        headers = {'WWW-Authenticate': 'Bearer'} if error.status == 401 else None
+        return JSONResponse({'detail': error.reason}, status_code=error.status, headers=headers)
+
+    async def session(credentials: HTTPAuthorizationCredentials | None = Depends(bearer)) -> dict:
+        if oidc is None or tokens is None:
+            raise IdentityError(503, 'Advanced mode is not configured on this server')
+        if credentials is None:
+            raise IdentityError(401, 'Sign in to use advanced capabilities')
+        claims = await run_in_threadpool(tokens.verify, credentials.credentials)
+        return session_from_claims(claims, oidc.audience, clock())
+
+    async def administrator(current: dict = Depends(session)) -> dict:
+        if not current['admin']:
+            raise IdentityError(403, 'Only administrators can manage users and licences')
+        return current
+
+    def keycloak() -> KeycloakAdmin:
+        if administration[0] is None:
+            administration[0] = KeycloakAdminClient(oidc)
+        return administration[0]
+
+    @app.get('/api/identity', tags=['identity'])
+    def identity_configuration():
+        if oidc is None:
+            return {'configured': False, 'mode': 'demo'}
+        return {'configured': True, 'mode': 'advanced-available', 'issuer': oidc.issuer, 'clientId': oidc.client_id,
+                'permissions': list(PERMISSIONS)}
+
+    @app.get('/api/session', tags=['identity'])
+    def current_session(current: dict = Depends(session)):
+        return current
+
+    @app.get('/api/licence/{permission}', tags=['identity'])
+    def check_licence(permission: Literal['ai-tools', 'change-control'], current: dict = Depends(session)):
+        require_permission(current, permission)
+        return {'permission': permission, 'allowed': True, 'expires': current['licence']['expires']}
+
+    @app.get('/api/admin/users', tags=['admin'])
+    async def users(search: Annotated[str, Query(max_length=100)] = '', page: Annotated[int, Query(ge=0, le=10000)] = 0,
+                    size: Annotated[int, Query(ge=1, le=100)] = 20, _: dict = Depends(administrator)):
+        total, found = await run_in_threadpool(keycloak().list_users, search, page * size, size)
+        now = clock()
+        return {'total': total, 'page': page, 'size': size, 'users': [public_user(user, now) for user in found]}
+
+    async def change(user_id: str, current: dict, kind: str, decide) -> dict:
+        user_id = valid_user_id(user_id)
+        port, now = keycloak(), clock()
+        user = await run_in_threadpool(port.get_user, user_id)
+        expires, permissions = decide(user, now)
+        await run_in_threadpool(port.set_licence, user_id, expires, permissions)
+        await run_in_threadpool(audit.record, current['subject'], user_id, kind,
+                                {'expires': public_user({**user, 'expires': expires, 'roles': permissions}, now)['licence']['expires'],
+                                 'permissions': sorted(permissions)}, now)
+        return public_user({**user, 'expires': expires, 'roles': permissions}, now)
+
+    @app.put('/api/admin/users/{user_id}/licence', tags=['admin'])
+    async def issue(user_id: str, body: LicenceRequest, current: dict = Depends(administrator)):
+        return await change(user_id, current, 'issue',
+                            lambda user, now: (licence_expiry(now, body.days, body.until), sorted(set(body.permissions))))
+
+    @app.post('/api/admin/users/{user_id}/licence/extend', tags=['admin'])
+    async def extend(user_id: str, body: ExtendRequest, current: dict = Depends(administrator)):
+        def decide(user, now):
+            if user['expires'] is None or not user['roles']:
+                raise IdentityError(409, 'This user has no licence to extend; issue one')
+            return extended_expiry(user['expires'], now, body.days), list(user['roles'])
+        return await change(user_id, current, 'extend', decide)
+
+    @app.delete('/api/admin/users/{user_id}/licence', tags=['admin'])
+    async def revoke(user_id: str, current: dict = Depends(administrator)):
+        return await change(user_id, current, 'revoke', lambda user, now: (None, []))
 
     return app
 

@@ -1,0 +1,135 @@
+{
+  "realm": "xds",
+  "displayName": "Ximply Design Studio",
+  "enabled": true,
+  "sslRequired": "external",
+  "registrationAllowed": true,
+  "registrationEmailAsUsername": false,
+  "loginWithEmailAllowed": true,
+  "duplicateEmailsAllowed": false,
+  "resetPasswordAllowed": false,
+  "verifyEmail": false,
+  "rememberMe": false,
+  "bruteForceProtected": true,
+  "accessTokenLifespan": 300,
+  "ssoSessionIdleTimeout": 1800,
+  "ssoSessionMaxLifespan": 36000,
+  "revokeRefreshToken": true,
+  "refreshTokenMaxReuse": 0,
+  "internationalizationEnabled": true,
+  "supportedLocales": ["en", "es"],
+  "defaultLocale": "en",
+  "roles": {
+    "realm": [
+      { "name": "xds-admin", "description": "Administers users and licences of Ximply Design Studio; grants no capability by itself." }
+    ],
+    "client": {
+      "xds-api": [
+        { "name": "ai-tools", "description": "Licence permission for AI Tools." },
+        { "name": "change-control", "description": "Licence permission for change control." }
+      ]
+    }
+  },
+  "clients": [
+    {
+      "clientId": "xds-studio",
+      "name": "Ximply Design Studio editor",
+      "enabled": true,
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false,
+      "frontchannelLogout": true,
+      "fullScopeAllowed": true,
+      "redirectUris": ["${XDS_STUDIO_ORIGIN}/*", "http://localhost:4200/*", "http://127.0.0.1:4200/*"],
+      "webOrigins": ["+"],
+      "attributes": {
+        "pkce.code.challenge.method": "S256",
+        "post.logout.redirect.uris": "${XDS_STUDIO_ORIGIN}/*##http://localhost:4200/*##http://127.0.0.1:4200/*"
+      },
+      "protocolMappers": [
+        {
+          "name": "API audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "config": { "included.client.audience": "xds-api", "access.token.claim": "true", "id.token.claim": "false", "introspection.token.claim": "true" }
+        },
+        {
+          "name": "Licence expiry",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-attribute-mapper",
+          "config": {
+            "user.attribute": "xds_licence_expires",
+            "claim.name": "xds_licence_expires",
+            "jsonType.label": "String",
+            "multivalued": "false",
+            "access.token.claim": "true",
+            "id.token.claim": "false",
+            "userinfo.token.claim": "false",
+            "introspection.token.claim": "true"
+          }
+        }
+      ]
+    },
+    {
+      "clientId": "xds-api",
+      "name": "Ximply Design Studio API",
+      "enabled": true,
+      "bearerOnly": true,
+      "publicClient": false,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false
+    },
+    {
+      "clientId": "xds-admin-service",
+      "name": "Ximply Design Studio administration service",
+      "enabled": true,
+      "publicClient": false,
+      "clientAuthenticatorType": "client-secret",
+      "secret": "${XDS_ADMIN_CLIENT_SECRET}",
+      "standardFlowEnabled": false,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": true,
+      "fullScopeAllowed": false
+    }
+  ],
+  "clientScopeMappings": {
+    "realm-management": [
+      { "client": "xds-admin-service", "roles": ["view-users", "query-users", "manage-users", "view-clients", "query-clients"] }
+    ]
+  },
+  "users": [
+    {
+      "username": "service-account-xds-admin-service",
+      "enabled": true,
+      "serviceAccountClientId": "xds-admin-service",
+      "clientRoles": { "realm-management": ["view-users", "query-users", "manage-users", "view-clients", "query-clients"] }
+    },
+    {
+      "username": "${XDS_FIRST_ADMIN_USERNAME}",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "Studio",
+      "lastName": "Administrator",
+      "email": "${XDS_FIRST_ADMIN_EMAIL}",
+      "credentials": [{ "type": "password", "value": "${XDS_FIRST_ADMIN_PASSWORD}", "temporary": true }],
+      "realmRoles": ["default-roles-xds", "xds-admin"]
+    }
+  ],
+  "components": {
+    "org.keycloak.userprofile.UserProfileProvider": [
+      {
+        "providerId": "declarative-user-profile",
+        "subComponents": {},
+        "config": {
+          "kc.user.profile.config": [
+            "{\"attributes\":[{\"name\":\"username\",\"displayName\":\"Username\",\"validations\":{\"length\":{\"min\":3,\"max\":255},\"username-prohibited-characters\":{},\"up-username-not-idn-homograph\":{}},\"permissions\":{\"view\":[\"admin\",\"user\"],\"edit\":[\"admin\",\"user\"]},\"multivalued\":false},{\"name\":\"email\",\"displayName\":\"Email\",\"validations\":{\"email\":{},\"length\":{\"max\":255}},\"required\":{\"roles\":[\"user\"]},\"permissions\":{\"view\":[\"admin\",\"user\"],\"edit\":[\"admin\",\"user\"]},\"multivalued\":false},{\"name\":\"firstName\",\"displayName\":\"First name\",\"validations\":{\"length\":{\"max\":255},\"person-name-prohibited-characters\":{}},\"required\":{\"roles\":[\"user\"]},\"permissions\":{\"view\":[\"admin\",\"user\"],\"edit\":[\"admin\",\"user\"]},\"multivalued\":false},{\"name\":\"lastName\",\"displayName\":\"Last name\",\"validations\":{\"length\":{\"max\":255},\"person-name-prohibited-characters\":{}},\"required\":{\"roles\":[\"user\"]},\"permissions\":{\"view\":[\"admin\",\"user\"],\"edit\":[\"admin\",\"user\"]},\"multivalued\":false},{\"name\":\"xds_licence_expires\",\"displayName\":\"Licence expiry\",\"validations\":{\"length\":{\"max\":40}},\"permissions\":{\"view\":[\"admin\"],\"edit\":[\"admin\"]},\"multivalued\":false}],\"groups\":[{\"name\":\"user-metadata\",\"displayHeader\":\"User metadata\",\"displayDescription\":\"Attributes, which refer to user metadata\"}]}"
+          ]
+        }
+      }
+    ]
+  }
+}
