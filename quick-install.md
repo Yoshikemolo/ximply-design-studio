@@ -34,6 +34,16 @@ The token stays only in page memory. Browser reload requires entering it again.
 Never commit or share `.env.local`. The service supports one local user, not tenant
 isolation. Keycloak and PostgreSQL integration remain later slices.
 
+## Advanced mode with sign-in
+
+Start with `./scripts/local.sh start --identity` (PowerShell: `./scripts/local.ps1 start
+--identity`) to add a local Keycloak. Sign in from the header as `admin` with the
+`XDS_FIRST_ADMIN_PASSWORD` of `.env.local`; Keycloak asks for a new password. The Admin menu
+then manages users, roles, licences and documents. `./scripts/local.ps1 reset-identity
+--confirm identity` imports the realm again and deletes the local Keycloak users. For live
+editing, run `./scripts/live.ps1` after starting the stack: the editor at
+http://localhost:8090 reloads on every saved change.
+
 ## First trial
 
 1. Choose Rectangle, drag on the artboard, then Select and move/resize it.
