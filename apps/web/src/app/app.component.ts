@@ -12,6 +12,7 @@ import { RASTER_RESOLUTIONS, RasterAntialias, RasterOptions } from "../../../../
 import { measurementUnits, isUnit, snapPoint, fromPixels, toPixels, formatMeasurement, rulerTicks as makeRulerTicks, SnapConfig } from "../../../../packages/domain/src/measurements";
 import { PreferencesService } from "./preferences.service";
 import { AgentToolsService } from "./agent-tools.service";
+import { ChangeControlService, HistoryRow } from "./change-control.service";
 import { AgentAction, LibraryPrompt } from "../../../../packages/domain/src/agent-prompts";
 import { DEFAULT_SIMPLIFY, FreehandToolOptions, PAINTBRUSH_DEFAULTS, PENCIL_DEFAULTS, SMOOTH_DEFAULTS, SimplifyOptions, validFreehandTool } from "../../../../packages/domain/src/path-fit";
 import { BrushStroke, DEFAULT_BRUSH_STROKE } from "../../../../packages/domain/src/brush-stroke";
@@ -418,7 +419,15 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     readonly preferences: PreferencesService,
     readonly session: SessionService,
     readonly agent: AgentToolsService,
+    readonly vcs: ChangeControlService,
   ) {
+    effect(() => {
+      // The project list loads the first time the History tab is shown to a licensed user.
+      if (this.inspectorTab() === "history" && session.capability("change-control").allowed && !this.vcsListed) {
+        this.vcsListed = true;
+        void vcs.loadProjects();
+      }
+    });
     effect(() => {
       // The prompt library loads the first time the AI Tools tab is shown to a licensed user.
       if (this.inspectorTab() === "ai" && session.capability("ai-tools").allowed) void agent.loadPrompts();
@@ -1233,6 +1242,125 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     if (this.mobile()) this.openDrawer("panels");
     else this.panels.set(true);
   }
+
+  /** History tab (FEAT-0031): the graph, its node menu, the inline forms and the thumbnails. */
+  private vcsListed = false;
+  readonly projectName = signal("");
+  readonly commitMessage = signal("");
+  readonly commentText = signal("");
+  readonly vcsForm = signal<{ kind: "branch" | "rename" | "merge" | "checkout"; value: string; from?: string; at?: string } | null>(null);
+  readonly vcsHover = signal<{ sha: string; x: number; y: number } | null>(null);
+  readonly vcsMenu = signal<{ sha: string; x: number; y: number } | null>(null);
+  private readonly laneColors = ["#3979ff", "#14a38b", "#8b5cf6", "#d9962b", "#e0569b", "#0ea5e9", "#84cc16", "#f97316"];
+  laneColor(lane: number) { return this.laneColors[lane % this.laneColors.length]; }
+  laneX(lane: number) { return 9 + lane * 14; }
+  graphWidth() { return this.laneX(this.vcs.lanes() - 1) + 9; }
+  /** The lines of one row of the graph: lanes passing, coming into the node and leaving it. */
+  rowLines(row: HistoryRow): { d: string; color: string }[] {
+    const x = (lane: number) => this.laneX(lane), node = x(row.lane);
+    return [
+      ...row.passes.map((lane) => ({ d: `M${x(lane)} 0V32`, color: this.laneColor(lane) })),
+      ...row.incoming.map((lane) => ({ d: lane === row.lane ? `M${node} 0V16` : `M${x(lane)} 0C${x(lane)} 10 ${node} 8 ${node} 16`, color: this.laneColor(lane) })),
+      ...row.outgoing.map((lane) => ({ d: lane === row.lane ? `M${node} 16V32` : `M${node} 16C${node} 24 ${x(lane)} 22 ${x(lane)} 32`, color: this.laneColor(lane) })),
+    ];
+  }
+  hoverCommit(event: MouseEvent, sha: string) {
+    // The column is at the right edge, so the picture opens to the left of the pointer.
+    this.vcsHover.set({ sha, x: Math.max(8, event.clientX - 228), y: Math.max(8, event.clientY - 40) });
+    void this.vcs.thumbnail(sha);
+  }
+  openVcsMenu(event: MouseEvent | KeyboardEvent, sha: string) {
+    event.preventDefault();
+    void this.vcs.select(sha);
+    const box = (event.target as HTMLElement).getBoundingClientRect();
+    const point = event instanceof MouseEvent && event.clientX ? { x: event.clientX, y: event.clientY } : { x: box.left + 24, y: box.bottom };
+    this.vcsHover.set(null);
+    this.vcsMenu.set({ sha, ...point });
+  }
+  vcsRowKey(event: KeyboardEvent, sha: string) {
+    if (event.key === "ContextMenu" || (event.key === "F10" && event.shiftKey)) this.openVcsMenu(event, sha);
+    else if (event.key === "Enter" || event.key === " ") { event.preventDefault(); void this.vcs.select(sha); }
+  }
+  readonly vcsMenuEntries = computed<ContextMenuEntry[]>(() => {
+    const menu = this.vcsMenu();
+    const row = menu && this.vcs.rows().find((item) => item.commit.sha === menu.sha);
+    if (!row) return [];
+    const current = this.vcs.status()?.branch;
+    const entries: ContextMenuEntry[] = [];
+    for (const ref of row.refs) {
+      if (ref.name !== current && ref.name !== `origin/${current}`) entries.push({ id: `checkout:${ref.name}`, label: this.t("Check out {name}").replace("{name}", ref.name), section: "move" });
+    }
+    entries.push({ id: `checkout:${row.commit.sha}`, label: this.t("Check out this commit"), section: "move", disabled: row.head });
+    entries.push({ id: `branch-here:${row.commit.sha}`, label: this.t("Create a branch here"), section: "branch" });
+    for (const ref of row.refs) {
+      if (ref.name !== current && ref.name !== `origin/${current}`) entries.push({ id: `merge:${ref.name}`, label: this.t("Merge {name} into the current branch").replace("{name}", ref.name), section: "branch" });
+    }
+    for (const ref of row.refs.filter((item) => item.kind === "local")) {
+      entries.push({ id: `rename:${ref.name}`, label: this.t("Rename {name}").replace("{name}", ref.name), section: "branch" });
+      entries.push({ id: `delete:${ref.name}`, label: this.t("Delete {name}").replace("{name}", ref.name), section: "delete", destructive: true, disabled: ref.name === current });
+    }
+    entries.push({ id: `revert:${row.commit.sha}`, label: this.t("Revert this commit"), section: "commit", disabled: !row.commit.parents.length });
+    entries.push({ id: `copy:${row.commit.sha}`, label: this.t("Copy the commit identifier"), section: "commit" });
+    entries.push({ id: `details:${row.commit.sha}`, label: this.t("Show details"), section: "commit" });
+    return entries;
+  });
+  runVcsMenu(id: string) {
+    this.vcsMenu.set(null);
+    const [action, ...rest] = id.split(":"), value = rest.join(":");
+    switch (action) {
+      case "checkout": return this.vcsReplacing("checkout", () => this.vcs.checkout(value));
+      case "merge": return this.vcsReplacing("merge", () => this.vcs.merge(value));
+      case "branch-here": return this.vcsForm.set({ kind: "branch", value: "", at: value });
+      case "rename": return this.vcsForm.set({ kind: "rename", value, from: value });
+      case "delete": return this.deleteVcsBranch(value);
+      case "revert": return this.vcsReplacing("revert", () => this.vcs.revert(value));
+      case "copy": return void this.vcs.copySha(value);
+      case "details": return void this.vcs.select(value);
+    }
+  }
+  /** Asks before an operation replaces a document with changes that are not committed. */
+  vcsReplacing(operation: "checkout" | "merge" | "pull" | "undo" | "redo" | "revert", run: () => Promise<unknown>) {
+    if (this.vcs.replacesDocument(operation)) this.askConfirmation("Discard the changes", this.t("The document has changes that are not committed. They are replaced by the result; commit first to keep them."), "Discard", run);
+    else void run();
+  }
+  deleteVcsBranch(name: string) {
+    this.askConfirmation("Delete branch", this.t("The branch {name} is deleted. Undo in the History tab recreates it.").replace("{name}", name), "Delete", async () => {
+      if (await this.vcs.deleteBranch(name)) return;
+      if (this.vcs.outcome()?.text === "The branch has commits that no other branch holds") {
+        this.askConfirmation("Delete branch", this.t("The branch {name} has commits that no other branch holds. Delete it anyway?").replace("{name}", name), "Delete", () => this.vcs.deleteBranch(name, true));
+      }
+    });
+  }
+  openVcsForm(kind: "branch" | "rename" | "merge" | "checkout") {
+    const current = this.vcs.status()?.branch ?? "";
+    const others = this.vcs.otherBranches();
+    this.vcsForm.set(kind === "rename" ? { kind, value: current, from: current } : kind === "branch" ? { kind, value: "" } : { kind, value: others[0] ?? "" });
+  }
+  async submitVcsForm() {
+    const form = this.vcsForm();
+    if (!form || !form.value.trim()) return;
+    if (form.kind === "checkout" || form.kind === "merge") {
+      this.vcsForm.set(null);
+      this.vcsReplacing(form.kind, () => form.kind === "checkout" ? this.vcs.checkout(form.value) : this.vcs.merge(form.value));
+      return;
+    }
+    const done = form.kind === "branch" ? await this.vcs.newBranch(form.value, form.at) : await this.vcs.renameBranch(form.from ?? "", form.value);
+    if (done) this.vcsForm.set(null);
+  }
+  deleteCurrentSelection() {
+    const row = this.vcs.rows().find((item) => item.commit.sha === this.vcs.selected());
+    const branch = row?.refs.find((ref) => ref.kind === "local" && ref.name !== this.vcs.status()?.branch);
+    if (branch) this.deleteVcsBranch(branch.name);
+    else this.vcs.outcome.set({ ok: false, text: "Select a commit with a branch other than the current one." });
+  }
+  async commitVcs() { if (await this.vcs.commit(this.commitMessage())) this.commitMessage.set(""); }
+  async createVcsProject() { if (await this.vcs.createProject(this.projectName() || this.editor.document().name)) this.projectName.set(""); }
+  async sendComment() { if (await this.vcs.addComment(this.commentText())) this.commentText.set(""); }
+  readonly vcsBusyLabels: Record<string, string> = {
+    projects: "Loading projects…", create: "Creating the project…", open: "Opening the project…", commit: "Committing…", branch: "Creating the branch…",
+    rename: "Renaming the branch…", delete: "Deleting the branch…", checkout: "Checking out…", merge: "Merging…", abort: "Aborting the merge…",
+    resolve: "Resolving…", fetch: "Fetching…", pull: "Pulling…", push: "Pushing…", revert: "Reverting…", undo: "Undoing…", redo: "Redoing…", comment: "Saving the comment…",
+  };
 
   /** AI Tools panel (FEAT-0029): labels and small helpers the template uses. */
   readonly promptTitle = signal("");

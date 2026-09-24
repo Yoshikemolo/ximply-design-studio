@@ -3493,3 +3493,380 @@ option.destructive-option {
   .agent-progress span { width: 100%; animation: none; opacity: 0.6; }
   .agent-panel[aria-busy="true"] .generate img { animation: none; }
 }
+
+/*
+ * History tab (FEAT-0031): a vertical graph of commits with coloured lanes, the details of the
+ * chosen commit and its comments, and the commit field and Git toolbar at the foot of the column.
+ */
+.history-panel {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  font-size: 11px;
+}
+.history-start {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+}
+.history-start h4,
+.history-details h4 {
+  margin: 6px 0 0;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.history-start .hint,
+.history-panel .hint {
+  margin: 0;
+  color: var(--muted);
+}
+.history-projects {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.history-projects button {
+  width: 100%;
+  justify-content: flex-start;
+}
+.history-projects span {
+  flex: 1;
+  overflow: hidden;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.history-projects small {
+  color: var(--muted);
+}
+.history-inline {
+  display: flex;
+  gap: 6px;
+  align-items: flex-start;
+}
+.history-inline input,
+.history-inline select,
+.history-inline textarea {
+  flex: 1;
+  min-width: 0;
+}
+.history-inline textarea {
+  resize: vertical;
+}
+.history-head {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 8px 8px 12px;
+  border-bottom: 1px solid var(--border);
+}
+.history-head > div {
+  flex: 1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.history-head strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.history-branch {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 1px 6px;
+  border: 1px solid var(--accent);
+  border-radius: 9px;
+  color: var(--text);
+}
+.history-branch.detached {
+  border-color: #d9962b;
+}
+.history-branch img {
+  width: 12px;
+  height: 12px;
+  filter: var(--icon);
+}
+.history-count {
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.history-panel .icon-only {
+  width: 26px;
+  min-height: 26px;
+  padding: 0;
+}
+.history-conflicts {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 8px;
+  padding: 8px;
+  border: 1px solid color-mix(in srgb, #d9962b 60%, transparent);
+  border-radius: 6px;
+  background: color-mix(in srgb, #d9962b 10%, transparent);
+}
+.history-conflicts p {
+  margin: 0;
+}
+.history-conflict {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.history-conflict span {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.history-conflict button,
+.history-conflicts > button {
+  border-color: var(--border);
+}
+.history-graph {
+  margin: 0;
+  padding: 4px 0;
+  list-style: none;
+}
+.history-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding-right: 8px;
+  cursor: pointer;
+}
+.history-row:hover {
+  background: var(--panel-raised);
+}
+.history-row.selected {
+  background: var(--selected);
+}
+.history-row:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+.history-row.working {
+  color: var(--muted);
+  font-style: italic;
+  cursor: default;
+}
+.history-lanes {
+  flex: none;
+  margin-left: 4px;
+  overflow: visible;
+}
+.history-lanes path {
+  fill: none;
+  stroke-width: 2;
+}
+.history-lanes circle {
+  stroke: var(--panel);
+  stroke-width: 2;
+}
+.history-lanes .head-node {
+  stroke: var(--text);
+}
+.history-lanes .working-node {
+  fill: var(--panel);
+  stroke-dasharray: 2 2;
+}
+.history-message {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+.history-subject {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.history-ref {
+  flex: none;
+  max-width: 96px;
+  padding: 0 5px;
+  overflow: hidden;
+  border: 1px solid var(--accent);
+  border-radius: 4px;
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.history-ref.remote {
+  border-style: dashed;
+  color: var(--muted);
+}
+.history-ref.current {
+  font-weight: 700;
+}
+.history-comments {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  color: var(--muted);
+}
+.history-comments img {
+  width: 12px;
+  height: 12px;
+  filter: var(--icon);
+}
+.history-date {
+  flex: none;
+  color: var(--muted);
+}
+.history-note {
+  padding: 0 12px 6px;
+}
+.history-details {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 12px;
+  border-top: 1px solid var(--border);
+}
+.history-details-message {
+  margin: 0;
+  white-space: pre-wrap;
+  font-weight: 600;
+}
+.history-details dl {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 2px 8px;
+  margin: 0;
+}
+.history-details dt {
+  color: var(--muted);
+}
+.history-details dd {
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.history-details .link-button {
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  color: var(--accent);
+  font-family: ui-monospace, monospace;
+  font-size: 11px;
+}
+.history-details-thumb {
+  max-width: 100%;
+  max-height: 160px;
+  align-self: flex-start;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: #fff;
+}
+.history-files,
+.history-comment-list {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.history-files li {
+  display: flex;
+  gap: 6px;
+  overflow-wrap: anywhere;
+}
+.file-status {
+  flex: none;
+  width: 14px;
+  font-weight: 700;
+  text-align: center;
+  color: #14a38b;
+}
+.file-status[data-status="D"] {
+  color: #e5484d;
+}
+.file-status[data-status="M"] {
+  color: #d9962b;
+}
+.history-comment-list li {
+  padding: 6px 8px;
+  border-radius: 4px;
+  background: var(--panel-raised);
+}
+.history-comment-list li.hint {
+  background: none;
+  padding: 0;
+}
+.history-comment-list li > div {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.history-comment-list li > div small {
+  flex: 1;
+  color: var(--muted);
+}
+.history-comment-list p {
+  margin: 3px 0 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.history-footer {
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: auto;
+  padding: 10px 12px 12px;
+  border-top: 1px solid var(--border);
+  background: var(--panel);
+}
+.history-footer .history-inline button {
+  border-color: var(--border);
+}
+.history-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px;
+}
+.history-toolbar button {
+  width: 28px;
+  padding: 0;
+}
+.history-toolbar .divider {
+  width: 1px;
+  height: 18px;
+  margin: 0 3px;
+  background: var(--border);
+}
+.history-thumb {
+  position: fixed;
+  z-index: 40;
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--panel);
+  box-shadow: 0 8px 24px #0006;
+  pointer-events: none;
+}
+.history-thumb img {
+  display: block;
+  max-width: 200px;
+  max-height: 160px;
+  background: #fff;
+}

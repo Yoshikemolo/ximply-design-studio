@@ -93,7 +93,12 @@ keyboard shortcuts, cleanup and development commands.
   (change or reinterpret the style, rescale, improve quality, remove watermarks, clean the
   background, remove an object, convert to paths and groups), a prompt, creativity, saved and
   favourite prompts, Repeat, and Generate with progress and Cancel. The result is inserted as a
-  new object through the API with the user's own token. The History panel is still being built.
+  new object through the API with the user's own token.
+- Change control in the History tab: a project made from the open document becomes a Git
+  repository on the server, with a clone per user and a shared repository for pull and push;
+  a vertical graph of branches with a thumbnail of each commit on hover, commit details and
+  comments, a node context menu, conflicts resolved by side, and commit, branch, rename,
+  delete, merge, check out, fetch, pull, push, undo and redo. The API needs Git installed.
 - Copies, duplicates and converted pictures leave the groups their originals were only members
   of, as in Illustrator; Paste in Front and Paste in Back at a group member join its group.
 
