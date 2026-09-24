@@ -152,3 +152,4 @@
 | [SC-0146 — Documents and owners](SC-0146.md) |
 | [SC-0147 — Super administrator access and the advanced tools block](SC-0147.md) |
 | [SC-0148 — Each user's own OpenAI API token](SC-0148.md) |
+| [SC-0149 — Copies leave the groups of their originals](SC-0149.md) |

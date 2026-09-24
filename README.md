@@ -82,6 +82,16 @@ keyboard shortcuts, cleanup and development commands.
 - About screen with the licence name and SHA-256, a version selector and bundled Markdown
   release notes.
 - Bearer-protected FastAPI artifact storage for one local user.
+- Advanced mode with a local Keycloak: sign-in with PKCE, time-limited licences with tiers
+  (Free, Pro, Teams, Studio and Enterprise, all equal for now), a Demo or tier badge after the
+  logo, and an administration workspace for users, roles and permissions, licences and
+  documents, with bulk actions and typed filters. The online preview has no Keycloak and runs
+  in demo mode.
+- Convert to pixel image, the advanced tools block, the Properties, AI Tools and History tabs
+  and each user's own OpenAI API token in Settings > External tokens; the AI Tools and History
+  panels are still being built.
+- Copies, duplicates and converted pictures leave the groups their originals were only members
+  of, as in Illustrator; Paste in Front and Paste in Back at a group member join its group.
 
 Native saves use format 2; preserve original v1 files because older readers cannot
 open new saves, and a project that uses a newer field, such as an envelope, a gradient
@@ -93,7 +103,10 @@ graphic styles remain pending. See the [drawing roadmap](doc/planning/drawing-ro
 Dimension anchors are independent annotations, not persistent CAD constraints.
 Procedural floor plans are bounded 2D vector geometry, without BIM or structural validation.
 
-The preview does not implement production Keycloak integration, PostgreSQL/TypeORM
+Start the local stack with `./scripts/local.ps1 start --identity` for advanced mode and
+`./scripts/live.ps1` for a live preview with hot reload at http://localhost:8090.
+
+The preview does not implement a production Keycloak deployment, PostgreSQL/TypeORM
 transactions, multiuser collaboration, desktop windows, third-party plugin loading,
 CSG modeling, advanced selection masks, animation or PSD/Illustrator native fidelity.
 The local file repository is an artifact adapter, not a replacement for the planned
