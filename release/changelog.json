@@ -1,11 +1,30 @@
 {
-  "currentVersion": "0.13.0",
+  "currentVersion": "0.13.1",
   "licence": {
     "file": "LICENSE",
     "name": "Ximply Design Studio \u2014 Limited Use Licence",
     "sha256": "b6f77aae5f066cc5f5e8aa54699d8dcc84a96387007299d30cb78a4f3f7fd6ae"
   },
   "entries": [
+    {
+      "version": "0.13.1",
+      "date": "2026-09-24",
+      "summary": "The agent tools say whether OpenAI refused a request for lack of API credit or for too many requests",
+      "breakingChanges": [],
+      "changes": [
+        {
+          "type": "Fix",
+          "description": "When OpenAI refuses a generation with a rate or quota limit, the panel now says which: the account of the token has no API credit left, or it made too many requests per minute; any other limit shows OpenAI's own message. Before, every case showed the same generic text, which suggested the prompt was too long."
+        },
+        {
+          "type": "Engineering",
+          "description": "SC-0154 records the refusal reasons and that the connection test cannot detect a missing credit."
+        }
+      ],
+      "capabilityStatus": "local-preview",
+      "markdown": "0.13.1.md",
+      "source": "doc/changelog/0.13.1.md"
+    },
     {
       "version": "0.13.0",
       "date": "2026-09-24",
