@@ -290,6 +290,10 @@ export class SessionService {
   async savePrompts(prompts: SavedPrompt[]): Promise<SavedPrompt[]> {
     return (await this.adminCall<{ prompts: SavedPrompt[] }>("/api/me/prompts", { method: "PUT", body: JSON.stringify({ prompts }) })).prompts;
   }
+  /** Change control (FEAT-0031): the closed set of repository operations of the API. */
+  vcs<T>(path: string, method: "GET" | "POST" | "PATCH" | "DELETE" = "GET", body?: unknown): Promise<T> {
+    return this.adminCall(`/api/vcs${path}`, method === "GET" ? {} : { method, ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
+  }
   private async adminCall<T>(path: string, init: RequestInit = {}): Promise<T> {
     const answer = await this.request(path, init);
     if (!answer) throw new Error(this.message() || "The server is unreachable.");

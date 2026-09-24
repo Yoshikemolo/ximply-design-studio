@@ -5873,6 +5873,39 @@ export class EditorService {
     if (!selection) return null;
     return { selectionPng: selection.source, documentPng: document?.source, selectionData: contextData(selected), frame: selection.frame, count: selected.length };
   }
+  /**
+   * Change control (FEAT-0031, SC-0155): a small picture of the visible artwork, at most
+   * `maxSide` pixels on its longer side, kept with each commit. Null for an empty document.
+   */
+  async documentThumbnail(maxSide = 240): Promise<string | null> {
+    const target = rasterTarget(this.document(), []);
+    if (!target) return null;
+    const longest = Math.max(target.area.width, target.area.height, 1);
+    const ppi = Math.min(96, Math.max(1, (96 * maxSide) / longest));
+    const status = this.status();
+    const picture = await this.rasterizePng({ ppi, antialias: "art", margin: 0 }, []);
+    this.status.set(status);
+    if (!picture) return null;
+    // The artwork is laid on the page colour, so the preview looks like the page.
+    const background = this.document().background;
+    if (!/^(#[0-9a-f]{3,8}|rgba?\([^)]*\))$/i.test(background ?? "")) return picture.source;
+    try {
+      const image = new Image();
+      image.src = picture.source;
+      await image.decode();
+      const canvas = document.createElement("canvas");
+      canvas.width = image.naturalWidth;
+      canvas.height = image.naturalHeight;
+      const context = canvas.getContext("2d");
+      if (!context) return picture.source;
+      context.fillStyle = background;
+      context.fillRect(0, 0, canvas.width, canvas.height);
+      context.drawImage(image, 0, 0);
+      return canvas.toDataURL("image/png");
+    } catch {
+      return picture.source;
+    }
+  }
   /** Where a result goes: above the topmost selected object, outside its groups, or at the top. */
   private agentInsertIndex(layers: readonly Layer[]): number {
     const selected = new Set(this.selectedLayers().map((layer) => layer.id));

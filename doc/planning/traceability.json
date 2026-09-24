@@ -1065,7 +1065,7 @@
       "id": "FEAT-0031",
       "title": "Change control with Git project history",
       "path": "doc/feat/FEAT-0031.md",
-      "status": "Planned",
+      "status": "Implementing",
       "iteration": "ITER-0006",
       "dependsOn": [
         "FEAT-0002",
@@ -1088,11 +1088,25 @@
         "SC-0130",
         "SC-0131",
         "SC-0132",
-        "SC-0133"
+        "SC-0133",
+        "SC-0155",
+        "SC-0156"
       ],
-      "implementation": [],
-      "tests": [],
-      "evidence": []
+      "implementation": [
+        "services/api/src/vcs.py",
+        "packages/domain/src/commit-graph.ts",
+        "apps/web/src/app/change-control.service.ts",
+        "apps/web/src/app/app.component.ts",
+        "infra/local/api.Dockerfile"
+      ],
+      "tests": [
+        "services/api/tests/test_vcs.py",
+        "packages/domain/tests/commit-graph.test.ts",
+        "apps/web/tests/change-control.test.ts"
+      ],
+      "evidence": [
+        "doc/changelog/0.13.0.md"
+      ]
     },
     {
       "id": "FEAT-0032",

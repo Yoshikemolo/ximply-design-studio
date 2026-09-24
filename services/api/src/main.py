@@ -21,6 +21,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from .administration import TIERS, administration_router, lift_expired_bans
 from .external_tokens import TokenVault, check_openai, tokens_router
 from .agent_tools import OpenAiProvider, PromptStore, Provider, agent_router
+from .vcs import ProjectStore, VcsError, vcs_router
 from .identity import (PERMISSIONS, AuditLog, IdentityConfig, IdentityError, KeycloakAdmin, KeycloakAdminClient,
                        TokenVerifier, require_permission, session_from_claims)
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator, model_validator
@@ -929,6 +930,14 @@ def create_app(repository: DocumentRepository | None = None, token: str | None =
     app.include_router(tokens_router(session, vault, audit, clock, token_checker))
     prompt_store = PromptStore(Path(os.environ.get('XDS_DATA_DIR', './data')) / 'prompts')
     app.include_router(agent_router(session, vault, prompt_store, audit, clock, provider or OpenAiProvider()))
+
+    def validate_document(raw: bytes) -> None:
+        try:
+            Document.model_validate_json(raw)
+        except ValidationError:
+            raise VcsError(422, 'Invalid native project document') from None
+    change_control = ProjectStore(Path(os.environ.get('XDS_DATA_DIR', './data')))
+    app.include_router(vcs_router(session, change_control, validate_document, audit, clock))
 
     # Temporary bans end on their own: a background check lifts them once a minute (SC-0143).
     if lift_bans_every and oidc is not None and oidc.admin_client_id and oidc.admin_client_secret:

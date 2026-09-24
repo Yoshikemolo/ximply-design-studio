@@ -5,6 +5,7 @@ Application data and bundled Markdown are generated; do not edit them.
 
 [Unreleased](doc/changelog/Unreleased.md)
 
+- [0.13.0 — The History tab versions a project with Git, with branches, merges, a shared repository, commit thumbnails and comments](doc/changelog/0.13.0.md)
 - [0.12.0 — The AI Tools panel sends the selection or the document to the model and inserts the result as a new object](doc/changelog/0.12.0.md)
 - [0.11.2 — Pasted, duplicated and converted objects no longer stay inside groups they were only members of](doc/changelog/0.11.2.md)
 - [0.11.1 — Deleting actions carry a red trash icon, and the tool rail neither scrolls sideways nor needs to scroll on a full HD screen](doc/changelog/0.11.1.md)

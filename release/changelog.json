@@ -1,11 +1,66 @@
 {
-  "currentVersion": "0.12.0",
+  "currentVersion": "0.13.0",
   "licence": {
     "file": "LICENSE",
     "name": "Ximply Design Studio \u2014 Limited Use Licence",
     "sha256": "b6f77aae5f066cc5f5e8aa54699d8dcc84a96387007299d30cb78a4f3f7fd6ae"
   },
   "entries": [
+    {
+      "version": "0.13.0",
+      "date": "2026-09-24",
+      "summary": "The History tab versions a project with Git, with branches, merges, a shared repository, commit thumbnails and comments",
+      "breakingChanges": [],
+      "changes": [
+        {
+          "type": "Feature",
+          "description": "Make a project of the open document: the API creates a Git repository with a first commit, a clone for each user and a shared repository through which people pull and push. Open a project from the list into a tab that stays linked to it."
+        },
+        {
+          "type": "Feature",
+          "description": "The History tab shows a vertical graph with a lane per branch, branch badges for local and shared branches, HEAD, a row for changes not yet committed and the number of comments of each commit."
+        },
+        {
+          "type": "Feature",
+          "description": "Each commit keeps a thumbnail of the document, shown when the pointer rests on its node or message and in its details."
+        },
+        {
+          "type": "Feature",
+          "description": "Commit details list the message, author, date, identifier, parents and changed files, with comments that anyone on the project can read and write."
+        },
+        {
+          "type": "Feature",
+          "description": "A context menu on each commit, by right-click, the context menu key or Shift+F10: check out, create a branch here, merge, rename, delete, revert, copy the identifier and show details."
+        },
+        {
+          "type": "Feature",
+          "description": "At the foot of the tab: the commit field and Commit, and New branch, Rename, Delete, Merge, Check out, Fetch, Pull, Push, Undo, Redo and Details. Operations that change the document reload it into its tab as one undo step and ask first when it has changes not committed."
+        },
+        {
+          "type": "Feature",
+          "description": "Merges fast-forward or record a merge commit; conflicts are listed per file and resolved with Keep mine or Keep theirs, or the merge is aborted. Undo and redo follow a journal of the operations and refuse to drop commits already shared, offering revert instead."
+        },
+        {
+          "type": "Security",
+          "description": "Git runs without a shell, with validated project identifiers and reference names that can never become options, hooks disabled, the system and global configuration ignored, no prompts and a timeout; pictures are stored and checked by their hash; the audit records operations without file content."
+        },
+        {
+          "type": "Engineering",
+          "description": "New `/api/vcs` routes, the domain lane layout of the history graph, and the change control facade, with tests against real Git repositories built in a temporary folder."
+        },
+        {
+          "type": "Engineering",
+          "description": "Documents are stored canonically with their pictures as resource files named by hash, restored by the API when read."
+        },
+        {
+          "type": "Engineering",
+          "description": "Recorded SC-0155 and SC-0156 for thumbnails and comments, the decisions of the slice in PLAN-0031-0001, and comments on pull requests as a future requirement."
+        }
+      ],
+      "capabilityStatus": "local-preview",
+      "markdown": "0.13.0.md",
+      "source": "doc/changelog/0.13.0.md"
+    },
     {
       "version": "0.12.0",
       "date": "2026-09-24",

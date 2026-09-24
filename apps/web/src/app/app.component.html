@@ -697,6 +697,155 @@
               </div>
             </div>
           </section>
+        } @else if (inspectorTab() === 'history' && session.capability('change-control').allowed) {
+          <section class="history-panel" id="inspector-panel" role="tabpanel" aria-labelledby="inspector-tab-history" [attr.aria-busy]="!!vcs.busy()">
+            @if (!vcs.project()) {
+              <div class="history-start">
+                <h4>{{ t("Projects") }}</h4>
+                @if (vcs.projects().length) {
+                  <ul class="history-projects">
+                    @for (project of vcs.projects(); track project.id) {
+                      <li><button type="button" (click)="vcs.openProject(project)"><img src="/assets/icons/branch.svg" alt="" /><span>{{ project.name }}</span><small [title]="fullDate(project.createdAt)">{{ shortDate(project.createdAt) }}</small></button></li>
+                    }
+                  </ul>
+                } @else {
+                  <p class="hint">{{ t("No project yet. Make one from the open document to start its history.") }}</p>
+                }
+                <h4>{{ t("New project from this document") }}</h4>
+                <div class="history-inline">
+                  <input type="text" maxlength="120" [attr.aria-label]="t('Project name')" [placeholder]="editor.document().name" [value]="projectName()" (input)="projectName.set(text($event))" (keydown.enter)="createVcsProject()" />
+                  <button type="button" class="primary" [disabled]="!!vcs.busy()" (click)="createVcsProject()">{{ t("Create") }}</button>
+                </div>
+              </div>
+            } @else {
+              <header class="history-head">
+                <div>
+                  <strong>{{ vcs.project()!.name }}</strong>
+                  @if (vcs.status(); as state) {
+                    <span class="history-branch" [class.detached]="!state.branch"><img src="/assets/icons/branch.svg" alt="" />{{ state.branch ?? t("Detached") }}</span>
+                    @if (state.ahead) {<span class="history-count" [title]="t('Commits to push')">↑{{ state.ahead }}</span>}
+                    @if (state.behind) {<span class="history-count" [title]="t('Commits to pull')">↓{{ state.behind }}</span>}
+                  }
+                </div>
+                <button type="button" class="icon-only" [title]="t('Refresh')" [attr.aria-label]="t('Refresh')" (click)="vcs.refresh()"><img src="/assets/icons/refresh.svg" alt="" /></button>
+                <button type="button" class="icon-only" [title]="t('Close the project')" [attr.aria-label]="t('Close the project')" (click)="vcs.close()"><img src="/assets/icons/close.svg" alt="" /></button>
+              </header>
+              @if (vcs.status()?.conflicts?.length) {
+                <div class="history-conflicts" role="alert">
+                  <p>{{ t("The merge has conflicts: choose a side for each file, or abort it.") }}</p>
+                  @for (path of vcs.status()!.conflicts; track path) {
+                    <div class="history-conflict"><span [title]="path">{{ path }}</span>
+                      <button type="button" (click)="vcs.resolve(path, 'mine')">{{ t("Keep mine") }}</button>
+                      <button type="button" (click)="vcs.resolve(path, 'theirs')">{{ t("Keep theirs") }}</button>
+                    </div>
+                  }
+                  <button type="button" class="destructive" (click)="vcs.abortMerge()"><img src="/assets/icons/close.svg" alt="" />{{ t("Abort the merge") }}</button>
+                </div>
+              }
+              <ol class="history-graph" [attr.aria-label]="t('History')" (mouseleave)="vcsHover.set(null)">
+                @if (vcs.dirty() && vcs.rows().length) {
+                  <li class="history-row working">
+                    <svg class="history-lanes" [attr.width]="graphWidth()" height="32" aria-hidden="true">
+                      @for (row of vcs.rows().slice(0, 1); track row.commit.sha) {<path [attr.d]="'M' + laneX(row.lane) + ' 16V32'" [attr.stroke]="laneColor(row.lane)" stroke-dasharray="3 3" />
+                      <circle [attr.cx]="laneX(row.lane)" cy="16" r="4.5" class="working-node" [attr.stroke]="laneColor(row.lane)" />}
+                    </svg>
+                    <span class="history-message">{{ t("Changes not committed") }}</span>
+                  </li>
+                }
+                @for (row of vcs.rows(); track row.commit.sha) {
+                  <li class="history-row" [class.selected]="vcs.selected() === row.commit.sha" [class.head]="row.head" tabindex="0"
+                    [attr.aria-selected]="vcs.selected() === row.commit.sha" (click)="vcs.select(row.commit.sha)"
+                    (contextmenu)="openVcsMenu($event, row.commit.sha)" (keydown)="vcsRowKey($event, row.commit.sha)">
+                    <svg class="history-lanes" [attr.width]="graphWidth()" height="32" aria-hidden="true">
+                      @for (line of rowLines(row); track $index) {<path [attr.d]="line.d" [attr.stroke]="line.color" />}
+                      <circle [attr.cx]="laneX(row.lane)" cy="16" [attr.r]="row.head ? 5.5 : 4.5" [attr.fill]="laneColor(row.lane)" [class.head-node]="row.head"
+                        (mouseenter)="hoverCommit($event, row.commit.sha)" (mousemove)="hoverCommit($event, row.commit.sha)" (mouseleave)="vcsHover.set(null)" />
+                    </svg>
+                    <span class="history-message" (mouseenter)="hoverCommit($event, row.commit.sha)" (mouseleave)="vcsHover.set(null)">
+                      @for (ref of row.refs; track ref.name) {<span class="history-ref" [class.remote]="ref.kind === 'remote'" [class.current]="ref.name === vcs.status()?.branch" [style.border-color]="laneColor(row.lane)">{{ ref.name }}</span>}
+                      <span class="history-subject" [title]="row.commit.subject">{{ row.commit.subject }}</span>
+                    </span>
+                    @if (row.comments) {<span class="history-comments" [title]="t('Comments')"><img src="/assets/icons/comment.svg" alt="" />{{ row.comments }}</span>}
+                    <small class="history-date" [title]="row.commit.author + ' · ' + fullDate(row.commit.date)">{{ shortDate(row.commit.date) }}</small>
+                  </li>
+                }
+              </ol>
+              @if (vcs.log()?.truncated) {<p class="hint history-note">{{ t("Only the latest 400 commits are shown.") }}</p>}
+              @if (vcs.details(); as details) {
+                <section class="history-details" [attr.aria-label]="t('Commit details')">
+                  <p class="history-details-message">{{ details.message }}</p>
+                  <dl>
+                    <dt>{{ t("Author") }}</dt><dd>{{ details.author }} &lt;{{ details.email }}&gt;</dd>
+                    <dt>{{ t("Date") }}</dt><dd>{{ fullDate(details.date) }}</dd>
+                    <dt>{{ t("Commit") }}</dt><dd><button type="button" class="link-button" [title]="t('Copy the commit identifier')" (click)="vcs.copySha(details.sha)">{{ details.sha.slice(0, 12) }}</button></dd>
+                    @if (details.parents.length) {<dt>{{ t("Parents") }}</dt><dd>@for (parent of details.parents; track parent) {<button type="button" class="link-button" (click)="vcs.select(parent)">{{ parent.slice(0, 7) }}</button> }</dd>}
+                  </dl>
+                  @if (vcs.thumbnails()[details.sha]; as picture) {<img class="history-details-thumb" [src]="picture" [alt]="t('Preview of the document at this commit')" />}
+                  <ul class="history-files">@for (file of details.files; track file.path) {<li><span class="file-status" [attr.data-status]="file.status">{{ file.status }}</span>{{ file.path }}</li>}</ul>
+                  <h4>{{ t("Comments") }}</h4>
+                  <ul class="history-comment-list">
+                    @for (comment of vcs.comments(); track comment.id) {
+                      <li><div><strong>{{ comment.author }}</strong><small [title]="fullDate(comment.createdAt)">{{ shortDate(comment.createdAt) }}</small>
+                        @if (comment.subject === session.session()?.subject || session.session()?.admin) {<button type="button" class="icon-only destructive" [title]="t('Remove comment')" [attr.aria-label]="t('Remove comment')" (click)="vcs.removeComment(comment.id)"><img src="/assets/icons/delete-danger.svg" alt="" /></button>}</div>
+                        <p>{{ comment.text }}</p></li>
+                    } @empty {<li class="hint">{{ t("No comments yet.") }}</li>}
+                  </ul>
+                  <div class="history-inline">
+                    <textarea rows="2" maxlength="4000" [attr.aria-label]="t('Write a comment')" [placeholder]="t('Write a comment')" [value]="commentText()" (input)="commentText.set(text($event))"></textarea>
+                    <button type="button" [disabled]="!commentText().trim()" (click)="sendComment()"><img src="/assets/icons/comment.svg" alt="" />{{ t("Comment") }}</button>
+                  </div>
+                </section>
+              }
+              <div class="history-footer">
+                @if (vcs.busy(); as busy) {
+                  <div class="agent-progress" role="progressbar" [attr.aria-valuetext]="t(vcsBusyLabels[busy] || busy)"><span></span></div>
+                  <p class="agent-status" aria-live="polite">{{ t(vcsBusyLabels[busy] || busy) }}</p>
+                } @else if (vcs.outcome(); as outcome) {
+                  <p class="agent-status" [class.error]="!outcome.ok" aria-live="polite">{{ t(outcome.text) }}</p>
+                }
+                @if (vcsForm(); as form) {
+                  <div class="history-inline history-form">
+                    @if (form.kind === 'merge' || form.kind === 'checkout') {
+                      <select [attr.aria-label]="t(form.kind === 'merge' ? 'Branch to merge' : 'Branch to check out')" (change)="vcsForm.set({ kind: form.kind, value: text($event) })">
+                        @for (name of vcs.otherBranches(); track name) {<option [value]="name" [selected]="name === form.value">{{ name }}</option>}
+                      </select>
+                    } @else {
+                      <input type="text" maxlength="100" [attr.aria-label]="t(form.kind === 'branch' ? 'New branch name' : 'New name of the branch')" [placeholder]="t(form.kind === 'branch' ? 'New branch name' : 'New name of the branch')" [value]="form.value" (input)="vcsForm.set({ kind: form.kind, value: text($event), from: form.from, at: form.at })" (keydown.enter)="submitVcsForm()" />
+                    }
+                    <button type="button" class="primary" [disabled]="!form.value.trim()" (click)="submitVcsForm()">{{ t(form.kind === 'branch' ? 'Create' : form.kind === 'rename' ? 'Rename' : form.kind === 'merge' ? 'Merge' : 'Check out') }}</button>
+                    <button type="button" (click)="vcsForm.set(null)">{{ t("Cancel") }}</button>
+                  </div>
+                }
+                <div class="history-inline">
+                  <input type="text" maxlength="5000" [attr.aria-label]="t('Commit message')" [placeholder]="t(vcs.dirty() ? 'Describe your changes' : 'Nothing to commit')" [value]="commitMessage()" (input)="commitMessage.set(text($event))" (keydown.enter)="commitVcs()" />
+                  <button type="button" class="primary" [disabled]="!!vcs.busy() || !commitMessage().trim()" (click)="commitVcs()"><img src="/assets/icons/commit.svg" alt="" />{{ t("Commit") }}</button>
+                </div>
+                <div class="history-toolbar" role="toolbar" [attr.aria-label]="t('Change control')">
+                  <button type="button" [title]="t('New branch')" [attr.aria-label]="t('New branch')" (click)="openVcsForm('branch')"><img src="/assets/icons/branch.svg" alt="" /></button>
+                  <button type="button" [title]="t('Rename branch')" [attr.aria-label]="t('Rename branch')" [disabled]="!vcs.status()?.branch" (click)="openVcsForm('rename')"><img src="/assets/icons/rename.svg" alt="" /></button>
+                  <button type="button" class="destructive" [title]="t('Delete branch')" [attr.aria-label]="t('Delete branch')" (click)="deleteCurrentSelection()"><img src="/assets/icons/delete-danger.svg" alt="" /></button>
+                  <button type="button" [title]="t('Merge')" [attr.aria-label]="t('Merge')" [disabled]="!vcs.otherBranches().length" (click)="openVcsForm('merge')"><img src="/assets/icons/merge.svg" alt="" /></button>
+                  <button type="button" [title]="t('Check out')" [attr.aria-label]="t('Check out')" [disabled]="!vcs.otherBranches().length" (click)="openVcsForm('checkout')"><img src="/assets/icons/checkout.svg" alt="" /></button>
+                  <span class="divider"></span>
+                  <button type="button" [title]="t('Fetch')" [attr.aria-label]="t('Fetch')" (click)="vcs.fetch()"><img src="/assets/icons/fetch.svg" alt="" /></button>
+                  <button type="button" [title]="t('Pull')" [attr.aria-label]="t('Pull')" (click)="vcsReplacing('pull', vcs.pull.bind(vcs))"><img src="/assets/icons/pull.svg" alt="" /></button>
+                  <button type="button" [title]="t('Push')" [attr.aria-label]="t('Push')" (click)="vcs.push()"><img src="/assets/icons/push.svg" alt="" /></button>
+                  <span class="divider"></span>
+                  <button type="button" [title]="t('Undo the last Git operation')" [attr.aria-label]="t('Undo the last Git operation')" [disabled]="!vcs.status()?.canUndo" (click)="vcsReplacing('undo', vcs.undo.bind(vcs))"><img src="/assets/icons/undo.svg" alt="" /></button>
+                  <button type="button" [title]="t('Redo the Git operation')" [attr.aria-label]="t('Redo the Git operation')" [disabled]="!vcs.status()?.canRedo" (click)="vcsReplacing('redo', vcs.redo.bind(vcs))"><img src="/assets/icons/redo.svg" alt="" /></button>
+                  <button type="button" [title]="t('Show details')" [attr.aria-label]="t('Show details')" [disabled]="!vcs.status()" (click)="vcs.select(vcs.selected() ?? vcs.status()!.head)"><img src="/assets/icons/info.svg" alt="" /></button>
+                </div>
+              </div>
+            }
+          </section>
+          @if (vcsHover(); as hover) {
+            @if (vcs.thumbnails()[hover.sha]; as picture) {
+              <div class="history-thumb" role="tooltip" [style.left.px]="hover.x" [style.top.px]="hover.y"><img [src]="picture" alt="" /></div>
+            }
+          }
+          @if (vcsMenu(); as menu) {
+            <xds-context-menu [entries]="vcsMenuEntries()" [label]="t('Commit actions')" [x]="menu.x" [y]="menu.y" (action)="runVcsMenu($event)" (dismiss)="vcsMenu.set(null)" />
+          }
         } @else if (inspectorTab() !== 'properties') {
           <section class="inspector-placeholder" id="inspector-panel" role="tabpanel" [attr.aria-labelledby]="'inspector-tab-' + inspectorTab()">
             <img [src]="'/assets/icons/' + (inspectorTab() === 'ai' ? 'ai-tools' : 'change-control') + '.svg'" alt="" />
