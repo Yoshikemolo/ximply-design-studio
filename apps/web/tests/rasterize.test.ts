@@ -91,10 +91,14 @@ describe('Convert to pixel image of a selection (SC-0123)', () => {
     e.redo(); expect(e.document().layers[2].source).toBe(image.source);
   });
 
-  it('joins the group of the topmost selected object', async () => {
-    const e = editor([rect('a', 0, 0, 20, 20, { groupPath: ['g'] }), rect('b', 40, 0, 20, 20)], ['a']);
+  it('belongs to none of the groups of the converted objects and sits above their outermost group', async () => {
+    const e = editor([rect('a', 0, 0, 20, 20, { groupPath: ['g', 'h'] }), rect('a2', 30, 0, 20, 20, { groupPath: ['g'] }), rect('b', 40, 0, 20, 20)], ['a']);
     await e.rasterizeSelection({ ppi: 72, antialias: 'art', margin: 0 });
-    expect(e.document().layers[1].groupPath).toEqual(['g']);
+    const layers = e.document().layers;
+    expect(layers.map((layer) => layer.id).slice(0, 2)).toEqual(['a', 'a2']);
+    expect(layers[2].kind).toBe('image');
+    expect(layers[2].groupPath).toBeUndefined();
+    expect(layers[3].id).toBe('b');
   });
 
   it('grows the picture by the margin on every side', async () => {

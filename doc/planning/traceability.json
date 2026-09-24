@@ -211,13 +211,15 @@
         "SC-0021",
         "SC-0095",
         "SC-0096",
-        "SC-0099"
+        "SC-0099",
+        "SC-0149"
       ],
       "implementation": [
         "apps/web/src/app/editor.service.ts",
         "packages/domain/src/document.ts",
         "packages/domain/src/wall-boolean.ts",
-        "packages/domain/src/array-copy.ts"
+        "packages/domain/src/array-copy.ts",
+        "packages/domain/src/group-copy.ts"
       ],
       "tests": [
         "packages/domain/tests/document.test.ts",
@@ -231,7 +233,9 @@
         "packages/domain/tests/array-copy.test.ts",
         "apps/web/tests/array-duplicate.test.ts",
         "apps/web/tests/transform-again.test.ts",
-        "apps/web/tests/group-properties.test.ts"
+        "apps/web/tests/group-properties.test.ts",
+        "packages/domain/tests/group-copy.test.ts",
+        "apps/web/tests/group-copies.test.ts"
       ],
       "evidence": [
         "doc/implementation/PLAN-0002-0001.md",
