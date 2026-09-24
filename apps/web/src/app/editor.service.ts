@@ -1,4 +1,5 @@
 import { alphaBounds, drawPaintSource, finishPaint, paintFrame } from "./paint-buffer";
+import { aboveOutermostGroup, clipboardLayers, contextPath, detachedCopies } from "../../../../packages/domain/src/group-copy";
 import { aliasPixels, alignToPixels, cropPixels, DEFAULT_RASTER_OPTIONS, rasterFrame, rasterPixels, rasterScale, rasterTarget, RasterOptions, validRasterOptions } from "../../../../packages/domain/src/rasterize";
 import { Procedural, defaultProcedural, generateProcedural, syncProcedurals, validProcedural } from "../../../../packages/domain/src/procedural";
 import { DEFAULT_GRADIENTS, FillPaint, GradientPaint, MAX_PATTERNS, MAX_SWATCHES, PatternDefinition, PresetPattern, Swatch, defaultSwatches, presetPattern, validFillPaint } from "../../../../packages/domain/src/paint";
@@ -1802,7 +1803,8 @@ export class EditorService {
   copySelection(): boolean {
     const layers = this.selectedLayers().filter((layer) => !layer.guide);
     if (!layers.length) return false;
-    this.clipboard = structuredClone(layers);
+    // The clipboard keeps only the groups selected whole: a member copied alone leaves its group.
+    this.clipboard = clipboardLayers(this.document().layers, layers);
     this.status.set(`Copied ${layers.length} object${layers.length > 1 ? "s" : ""}.`);
     this.revision.update((x) => x + 1);
     return true;
@@ -1822,14 +1824,15 @@ export class EditorService {
     const document = this.document();
     if (document.layers.length + this.clipboard.length > MAX_LAYERS) { this.status.set("The document cannot hold more layers."); return false; }
     const offset = where === "offset" ? 20 : 0;
-    const copies = this.clipboard.map((layer) => ({
-      ...structuredClone(layer),
-      id: crypto.randomUUID(),
-      x: layer.x + offset,
-      y: layer.y + offset,
-    }));
     const selected = new Set(this.selectedLayers().map((layer) => layer.id));
     const indexes = document.layers.map((layer, index) => (selected.has(layer.id) ? index : -1)).filter((index) => index >= 0);
+    // Paste in Front and Paste in Back join the groups of the object they paste at, when it is a
+    // member of a group rather than a whole group; a plain paste joins no group, as in Illustrator.
+    const target = where === "front" && indexes.length ? document.layers[Math.max(...indexes)]
+      : where === "back" && indexes.length ? document.layers[Math.min(...indexes)] : null;
+    const prefix = target ? contextPath(document.layers, selected, target) : [];
+    const copies = detachedCopies(this.clipboard, this.clipboard, () => crypto.randomUUID(), prefix).copies
+      .map((layer) => ({ ...layer, x: layer.x + offset, y: layer.y + offset }));
     // Without a selection the artwork goes to the front, which is where a plain paste lands.
     const at = where === "front"
       ? (indexes.length ? Math.max(...indexes) + 1 : document.layers.length)
@@ -1889,7 +1892,7 @@ export class EditorService {
     let selection = [...ids];
     if (options.copy) {
       if (before.layers.length + mapped.length > MAX_LAYERS) { this.status.set("The document cannot hold more layers."); return false; }
-      const copies = mapped.map((layer) => ({ ...layer, id: crypto.randomUUID(), regroupPath: undefined }));
+      const copies = detachedCopies(before.layers, mapped, () => crypto.randomUUID(), [], ids).copies;
       next = { ...before, layers: [...before.layers, ...copies] };
       selection = copies.map((layer) => layer.id);
     } else {
@@ -1947,7 +1950,7 @@ export class EditorService {
     let selection = [...ids];
     if (options.copy) {
       if (before.layers.length + mapped.length > MAX_LAYERS) { this.status.set("The document cannot hold more layers."); return false; }
-      const copies = mapped.map((layer) => ({ ...layer, id: crypto.randomUUID(), regroupPath: undefined }));
+      const copies = detachedCopies(before.layers, mapped, () => crypto.randomUUID(), [], ids).copies;
       next = { ...before, layers: [...before.layers, ...copies] };
       selection = copies.map((layer) => layer.id);
     } else {
@@ -2746,26 +2749,13 @@ export class EditorService {
     const placed = this.pivotMoved() ? this.pivot() : null;
     this.recordTransform({ dx: 20, dy: 20, duplicate: true });
     this.commitStep(this.document());
-    const groups = new Map<string, string>();
-    const copies = layers.map((layer) => ({
-      ...structuredClone(layer),
-      id: crypto.randomUUID(),
-      name: layer.name + " copy",
-      regroupPath: undefined,
-      x: layer.x + 20,
-      y: layer.y + 20,
-      ...(layer.groupPath
-        ? {
-            groupPath: layer.groupPath.map((id) => {
-              if (!groups.has(id)) groups.set(id, crypto.randomUUID());
-              return groups.get(id)!;
-            }),
-          }
-        : {}),
-    }));
+    // A duplicate keeps only the groups selected whole, renamed; it leaves the groups it was a member of.
+    const detached = detachedCopies(this.document().layers, layers, () => crypto.randomUUID());
+    const groups = detached.groups;
+    const copies = detached.copies.map((copy, index) => ({ ...copy, name: layers[index].name + " copy", x: layers[index].x + 20, y: layers[index].y + 20 }));
     const copyIds = new Map(layers.map((layer, index) => [layer.id, copies[index].id]));
     for(const copy of copies){const p=copy.procedural;if((p?.type==='door'||p?.type==='window')&&p.host){const wallId=copyIds.get(p.host.wallId);if(wallId)p.host={...p.host,wallId};else delete p.host;}}
-    const blends = this.document().blends?.filter((blend) => [...blend.backIds, ...blend.frontIds, ...blend.stepIds.flat()].every((id) => copyIds.has(id))).map((blend) => ({ ...blend, id: crypto.randomUUID(), groupId: groups.get(blend.groupId)!, backIds: blend.backIds.map((id) => copyIds.get(id)!), frontIds: blend.frontIds.map((id) => copyIds.get(id)!), stepIds: blend.stepIds.map((step) => step.map((id) => copyIds.get(id)!)) }));
+    const blends = this.document().blends?.filter((blend) => groups.has(blend.groupId) && [...blend.backIds, ...blend.frontIds, ...blend.stepIds.flat()].every((id) => copyIds.has(id))).map((blend) => ({ ...blend, id: crypto.randomUUID(), groupId: groups.get(blend.groupId)!, backIds: blend.backIds.map((id) => copyIds.get(id)!), frontIds: blend.frontIds.map((id) => copyIds.get(id)!), stepIds: blend.stepIds.map((step) => step.map((id) => copyIds.get(id)!)) }));
     for (const blend of blends ?? []) for (const step of blend.stepIds) for (const id of step) {
       const item = copies.find((layer) => layer.id === id)!;
       const depth = item.groupPath!.indexOf(blend.groupId);
@@ -3440,7 +3430,8 @@ export class EditorService {
     }
     if (!duplicate || !after.length) { this.commitStep(g.before, pivotAtStart); return; }
     const placed = this.pivotMoved() ? this.pivot() : null;
-    const copies = after.map((layer) => ({ ...structuredClone(layer), id: crypto.randomUUID(), regroupPath: undefined }));
+    // A copy left by a drag with Alt leaves the groups its original was only a member of.
+    const copies = detachedCopies(g.before.layers, after, () => crypto.randomUUID(), [], new Set(after.map((layer) => layer.id))).copies;
     const next = { ...g.before, layers: [...g.before.layers, ...copies] };
     try { parseDocument(JSON.stringify(next)); } catch { this.commitStep(g.before, pivotAtStart); return; }
     this.commitStep(g.before, pivotAtStart);
@@ -5848,14 +5839,11 @@ export class EditorService {
     if (this.document() !== before) { this.status.set("The document changed while converting; convert again."); return false; }
     const layer = newLayer("image", crypto.randomUUID(), { x: image.frame.x, y: image.frame.y });
     Object.assign(layer, { name: "Pixel image", width: image.frame.width, height: image.frame.height, source: image.source });
-    // An image never joins the group of a blend, whose members the blend itself manages.
-    const blendGroups = new Set((before.blends ?? []).map((blend) => blend.groupId));
-    const path = image.target.groupPath ?? [];
-    const blendAt = path.findIndex((id) => blendGroups.has(id));
-    const groupPath = blendAt >= 0 ? path.slice(0, blendAt) : path;
-    if (groupPath.length) layer.groupPath = groupPath;
+    // The picture belongs to none of the groups of what it was made from (owner request of
+    // 2026-09-24): it goes just above the outermost group holding the topmost converted object.
     const layers = [...before.layers];
-    layers.splice(image.target.insertAt, 0, layer);
+    const insertAt = image.target.insertAt >= before.layers.length ? before.layers.length : aboveOutermostGroup(before.layers, image.target.insertAt - 1);
+    layers.splice(insertAt, 0, layer);
     this.commitStep(before);
     this.document.set({ ...before, layers });
     this.selectedId.set(layer.id);

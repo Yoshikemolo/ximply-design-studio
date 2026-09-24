@@ -5,6 +5,7 @@ Application data and bundled Markdown are generated; do not edit them.
 
 [Unreleased](doc/changelog/Unreleased.md)
 
+- [0.11.2 — Pasted, duplicated and converted objects no longer stay inside groups they were only members of](doc/changelog/0.11.2.md)
 - [0.11.1 — Deleting actions carry a red trash icon, and the tool rail neither scrolls sideways nor needs to scroll on a full HD screen](doc/changelog/0.11.1.md)
 - [0.11.0 — Advanced mode with Keycloak sign-in, time-limited licences with tiers, an administration workspace and each user's own OpenAI API token](doc/changelog/0.11.0.md)
 - [0.10.0 — Convert to pixel image turns the selection, or every visible layer, into a transparent picture above it](doc/changelog/0.10.0.md)
