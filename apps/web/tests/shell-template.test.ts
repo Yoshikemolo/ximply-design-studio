@@ -27,7 +27,7 @@ describe('shell template', () => {
   it('shows the mode badge, Demo or Pro, after the logo as a button into the local service settings', () => {
     const badge = section('class="preview-badge"', '</button>');
     expect(badge).toContain('(click)="openServerSettings()"');
-    expect(badge).toContain('session.licensed() ? "Pro" : "Demo"');
+    expect(badge).toContain('{{ modeBadge() }}');
     expect(template.indexOf('class="preview-badge"')).toBeGreaterThan(template.indexOf('class="brand"'));
     expect(template.indexOf('class="preview-badge"')).toBeLessThan(template.indexOf('<nav class="menus"'));
     expect(badge).toContain('[title]="modeExplanation()"');

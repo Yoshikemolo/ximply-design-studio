@@ -71,11 +71,15 @@ class AdministrationTests(unittest.TestCase):
                     {'username': 'luis', 'email': 'luis@example.test', 'firstName': 'A', 'lastName': 'B', 'password': 'short'},
                     {'username': 'luis', 'email': 'luis@example.test', 'firstName': 'A', 'lastName': 'B', 'password': 'Secret-Pass-9', 'role': 'root'}]:
             self.assertEqual(422, self.call('POST', '/api/admin/users', bad).status_code, bad)
+        disabled = self.call('PATCH', f"/api/admin/users/{user['id']}", {'enabled': False}).json()
+        self.assertEqual((False, None), (disabled['enabled'], disabled['ban']))
+        self.assertTrue(self.call('PATCH', f"/api/admin/users/{user['id']}", {'enabled': True}).json()['enabled'])
+        self.assertEqual(409, self.call('PATCH', f'/api/admin/users/{ADMIN}', {'enabled': False}).status_code)
         edited = self.call('PATCH', f"/api/admin/users/{user['id']}", {'email': 'marta.gil@example.test', 'lastName': 'Gil Ruiz'}).json()
         self.assertEqual(('marta.gil@example.test', 'Marta Gil Ruiz'), (edited['email'], edited['name']))
         self.assertEqual(204, self.call('DELETE', f"/api/admin/users/{user['id']}").status_code)
         self.assertNotIn(user['id'], self.keycloak.users_by_id)
-        self.assertEqual(['create-user', 'edit-user', 'delete-user'], [entry['change'] for entry in self.audit()])
+        self.assertEqual(['create-user', 'edit-user', 'edit-user', 'edit-user', 'delete-user'], [entry['change'] for entry in self.audit()])
         self.assertNotIn('Secret-Pass-9', json.dumps(self.audit()))
 
     def test_users_show_sign_in_and_documents(self):

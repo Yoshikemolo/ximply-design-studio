@@ -187,26 +187,59 @@ describe('administration calls (SC-0137, SC-0138)', () => {
   }
   it('sends each change with the token and the exact body', async () => {
     const user = { id: 'u 1', username: 'ana', name: 'Ana', email: '', enabled: true, licence: SESSION.licence };
-    const { session, world } = await admin({ '/api/admin/users': () => json({ total: 1, page: 0, size: 20, users: [user] }) });
+    const { session, world } = await admin({
+      '/api/admin/users': () => json({ total: 1, users: [user] }), '/api/admin/roles': () => json({ roles: [] }),
+      '/api/admin/licences': () => json({ licences: [] }), '/api/admin/documents': () => json({ documents: [] }),
+      '/api/me/tokens': () => json({ provider: 'openai', configured: true, updatedAt: null }),
+    });
     expect(session.isAdmin()).toBe(true);
-    expect((await session.adminUsers('an a', 2)).total).toBe(1);
-    await session.issueLicence('u 1', ['ai-tools'], { days: 30 });
-    await session.issueLicence('u 1', ['change-control'], { until: '2026-12-31' });
+    expect(await session.adminUsers()).toEqual([user]);
+    expect(await session.adminRoles()).toEqual([]);
+    expect(await session.adminLicences()).toEqual([]);
+    expect(await session.adminDocuments()).toEqual([]);
+    await session.createUser({ username: 'luis', email: 'l@example.test', firstName: 'L', lastName: 'G', password: 'Secret-Pass-9', temporary: true, admin: false });
+    await session.updateUser('u 1', { email: 'a@example.test' });
+    await session.setPassword('u 1', 'New-Pass-123', false);
+    await session.banUser('u 1', '2026-10-01T00:00:00.000Z', 'abuse');
+    await session.banUser('u 1', null, '');
+    await session.liftBan('u 1');
+    await session.setRole('ai-tools', 'u 1', true);
+    await session.setRole('xds-admin', 'u 1', false);
+    await session.issueLicence('u 1', 'studio', ['ai-tools'], { days: 30 });
+    await session.changeLicence('u 1', { status: 'suspended' });
     await session.extendLicence('u 1', 10);
     await session.revokeLicence('u 1');
-    const sent = world.calls.filter((call) => call.url.startsWith('/api/admin')).map((call) => [call.init?.method ?? 'GET', call.url, call.init?.body ?? null]);
+    await session.deleteUser('u 1');
+    await session.deleteDocument('d1');
+    await session.tokenStatus();
+    await session.saveToken('sk-abc');
+    await session.testToken();
+    await session.removeToken();
+    const sent = world.calls.filter((call) => /\/api\/(admin|me)/.test(call.url)).map((call) => [call.init?.method ?? 'GET', call.url, call.init?.body ?? null]);
     expect(sent).toEqual([
-      ['GET', '/api/admin/users?search=an+a&page=2&size=20', null],
-      ['PUT', '/api/admin/users/u%201/licence', '{"permissions":["ai-tools"],"days":30}'],
-      ['PUT', '/api/admin/users/u%201/licence', '{"permissions":["change-control"],"until":"2026-12-31"}'],
+      ['GET', '/api/admin/users', null], ['GET', '/api/admin/roles', null], ['GET', '/api/admin/licences', null], ['GET', '/api/admin/documents', null],
+      ['POST', '/api/admin/users', '{"username":"luis","email":"l@example.test","firstName":"L","lastName":"G","password":"Secret-Pass-9","temporary":true,"admin":false}'],
+      ['PATCH', '/api/admin/users/u%201', '{"email":"a@example.test"}'],
+      ['PUT', '/api/admin/users/u%201/password', '{"password":"New-Pass-123","temporary":false}'],
+      ['PUT', '/api/admin/users/u%201/ban', '{"until":"2026-10-01T00:00:00.000Z","reason":"abuse"}'],
+      ['PUT', '/api/admin/users/u%201/ban', '{"reason":""}'],
+      ['DELETE', '/api/admin/users/u%201/ban', null],
+      ['PUT', '/api/admin/roles/ai-tools/members/u%201', null],
+      ['DELETE', '/api/admin/roles/xds-admin/members/u%201', null],
+      ['PUT', '/api/admin/users/u%201/licence', '{"tier":"studio","permissions":["ai-tools"],"days":30}'],
+      ['PATCH', '/api/admin/users/u%201/licence', '{"status":"suspended"}'],
       ['POST', '/api/admin/users/u%201/licence/extend', '{"days":10}'],
       ['DELETE', '/api/admin/users/u%201/licence', null],
+      ['DELETE', '/api/admin/users/u%201', null],
+      ['DELETE', '/api/admin/documents/d1', null],
+      ['GET', '/api/me/tokens/openai', null], ['PUT', '/api/me/tokens/openai', '{"token":"sk-abc"}'],
+      ['POST', '/api/me/tokens/openai/test', null], ['DELETE', '/api/me/tokens/openai', null],
     ]);
-    expect(world.calls.filter((call) => call.url.startsWith('/api/admin')).every((call) => (call.init!.headers as Record<string, string>).Authorization === 'Bearer a')).toBe(true);
+    expect(world.calls.filter((call) => /\/api\/(admin|me)/.test(call.url)).every((call) => (call.init!.headers as Record<string, string>).Authorization === 'Bearer a')).toBe(true);
   });
   it('surfaces the reason the API gives', async () => {
     const { session } = await admin({ '/api/admin/users': () => json({ detail: 'Only administrators can manage users and licences' }, 403) });
-    await expect(session.adminUsers('', 0)).rejects.toThrow('Only administrators can manage users and licences');
+    await expect(session.adminUsers()).rejects.toThrow('Only administrators can manage users and licences');
   });
 });
 
@@ -223,43 +256,88 @@ describe('shell wiring (SC-0137)', () => {
   const template = readFileSync('apps/web/src/app/app.component.html', 'utf-8');
   it('shows the Admin menu only to administrators and never a token in the page', () => {
     const menu = template.slice(template.indexOf('@if (session.isAdmin())'), template.indexOf('</details>', template.indexOf('@if (session.isAdmin())')));
-    expect(menu).toContain('openAdmin()');
+    expect(menu).toContain('openAdmin(category.id)');
     expect(template).toContain('@switch (session.state())');
-    expect(template).not.toMatch(/access_token|refresh_token|tokens\b/);
+    // No token of the session reaches the page; the External tokens category only shows a state.
+    expect(template).not.toMatch(/access_token|refresh_token|\.tokens\b|idToken/);
     expect(template).not.toMatch(/\bconfirm\(\s*["']/);
   });
 });
 
-describe('users and licences dialog', () => {
-  it('asks for a permission, sends the chosen period and revokes only on the second press', async () => {
+describe('administration workspace', () => {
+  async function workspace() {
     const { AppComponent } = await import('../src/app/app.component');
-    const { signal } = await import('@angular/core');
+    const { signal, computed } = await import('@angular/core');
     const sent: unknown[][] = [];
-    const user = { id: 'u1', username: 'ana', name: 'Ana', email: '', enabled: true, licence: { state: 'valid', expires: '2026-10-23T10:00:00Z', permissions: ['ai-tools'] } };
-    const dialog = Object.assign(Object.create(AppComponent.prototype), {
-      adminSelected: signal(user), adminError: signal(''), adminBusy: signal(false), adminConfirmRevoke: signal(false),
-      adminPage: signal({ total: 1, page: 0, size: 20, users: [user] }),
-      licencePermissions: [{ id: 'ai-tools', label: 'AI Tools' }, { id: 'change-control', label: 'Change control' }],
-      adminDraft: { permissions: { 'ai-tools': false, 'change-control': false }, period: 'days', days: 30, until: '', extendDays: 7 },
-      session: {
-        issueLicence: async (...args: unknown[]) => { sent.push(['issue', ...args]); return { ...user, licence: { ...user.licence, permissions: ['change-control'] } }; },
-        revokeLicence: async (...args: unknown[]) => { sent.push(['revoke', ...args]); return { ...user, licence: { state: 'none', expires: null, permissions: [] } }; },
-        extendLicence: async (...args: unknown[]) => { sent.push(['extend', ...args]); return user; },
-      },
+    const user = { id: 'u1', username: 'ana', firstName: 'Ana', lastName: 'Diaz', name: 'Ana Diaz', email: 'ana@example.test', enabled: true, admin: false,
+      created: '2026-09-01T10:00:00Z', lastLogin: null, documents: 2, ban: null, licence: { state: 'none', expires: null, permissions: [], tier: null } };
+    const dialog = Object.create(AppComponent.prototype);
+    Object.assign(dialog, {
+      locale: signal('en'), adminCategory: signal('users'), adminUserList: signal([user]), adminRoleList: signal([]), adminLicenceList: signal([]),
+      adminDocumentList: signal([]), adminSelectedId: signal('u1'), adminCreating: signal(false), adminBusy: signal(false), adminError: signal(''),
+      adminNotice: signal(''), confirmation: signal(null), licencePermissions: [{ id: 'ai-tools', label: 'AI Tools' }, { id: 'change-control', label: 'Change control' }],
+      passwordDraft: { password: 'New-Pass-123', temporary: true }, banDraft: { mode: 'temporary', until: '', reason: '' },
+      licenceDraft: { userId: '', tier: 'pro', permissions: { 'ai-tools': false, 'change-control': false }, period: 'days', days: 30, until: '' },
+      session: new Proxy({}, { get: (_target, name: string) => async (...args: unknown[]) => { sent.push([name, ...args]); return name === 'adminUsers' ? [user] : user; } }),
     });
+    dialog.adminUsersById = computed(() => new Map(dialog.adminUserList().map((item: typeof user) => [item.id, item])));
+    dialog.adminSelectedUser = computed(() => dialog.adminUsersById().get(dialog.adminSelectedId()) ?? null);
+    return { dialog, sent };
+  }
+  const settle = () => new Promise((resolve) => setTimeout(resolve));
+
+  it('asks before overwriting a password and sends nothing when cancelled', async () => {
+    const { dialog, sent } = await workspace();
+    dialog.overwritePassword();
+    expect(dialog.confirmation()).toMatchObject({ title: 'Overwrite the password', message: 'The password of Ana Diaz is replaced and their sessions end.', action: 'Overwrite' });
+    dialog.confirmation.set(null);
+    expect(sent).toEqual([]);
+    dialog.overwritePassword();
+    dialog.confirm();
+    await settle(); await settle();
+    expect(sent[0]).toEqual(['setPassword', 'u1', 'New-Pass-123', true]);
+    expect(dialog.adminNotice()).toBe('The password was overwritten.');
+  });
+
+  it('bans until the chosen date, as an instant, only after confirmation', async () => {
+    const { dialog, sent } = await workspace();
+    dialog.banUser();
+    expect(dialog.adminError()).toBe('Choose when the ban ends.');
+    dialog.banDraft = { mode: 'temporary', until: '2026-10-01T12:30', reason: 'abuse' };
+    dialog.banUser();
+    expect(dialog.confirmation().title).toBe('Ban the user');
+    dialog.confirm();
+    await settle(); await settle();
+    expect(sent[0]).toEqual(['banUser', 'u1', new Date('2026-10-01T12:30').toISOString(), 'abuse']);
+    dialog.banDraft = { mode: 'permanent', until: '', reason: '' };
+    dialog.banUser(); dialog.confirm();
+    await settle(); await settle();
+    expect(sent.filter((call) => call[0] === 'banUser').at(-1)).toEqual(['banUser', 'u1', null, '']);
+  });
+
+  it('issues a licence only with a holder and a permission', async () => {
+    const { dialog, sent } = await workspace();
+    dialog.issueLicence();
+    expect(dialog.adminError()).toBe('Choose the holder of the licence.');
+    dialog.licenceDraft.userId = 'u1';
     dialog.issueLicence();
     expect(dialog.adminError()).toBe('Choose at least one permission.');
-    dialog.adminDraft.permissions['change-control'] = true;
-    dialog.adminDraft.period = 'until'; dialog.adminDraft.until = '2026-12-31';
+    dialog.licenceDraft = { userId: 'u1', tier: 'teams', permissions: { 'ai-tools': true, 'change-control': true }, period: 'until', days: 30, until: '2026-12-31' };
     dialog.issueLicence();
-    dialog.extendLicence();
-    await new Promise((resolve) => setTimeout(resolve));
-    dialog.revokeLicence();
-    expect(dialog.adminConfirmRevoke()).toBe(true);
-    dialog.revokeLicence();
-    await new Promise((resolve) => setTimeout(resolve));
-    expect(sent).toEqual([['issue', 'u1', ['change-control'], { until: '2026-12-31' }], ['extend', 'u1', 7], ['revoke', 'u1']]);
-    expect(dialog.adminPage().users[0].licence.state).toBe('none');
+    await settle(); await settle();
+    expect(sent[0]).toEqual(['issueLicence', 'u1', 'teams', ['ai-tools', 'change-control'], { until: '2026-12-31' }]);
+  });
+
+  it('shows dates short with the full date, time and zone on hover', async () => {
+    const { dialog } = await workspace();
+    expect(dialog.shortDate('2026-09-01T10:00:00Z')).toBe('01/09/26');
+    expect(dialog.shortDate(null, 'Never')).toBe('Never');
+    expect(dialog.fullDate('2026-09-01T10:00:00Z')).toContain('2026');
+    expect(dialog.fullDate('2026-09-01T10:00:00Z')).toContain(Intl.DateTimeFormat().resolvedOptions().timeZone);
+    expect(dialog.fullDate(null)).toBe('');
+    expect(dialog.formatSize(512)).toBe('512 B');
+    expect(dialog.formatSize(2048)).toBe('2.0 KB');
+    expect(dialog.formatSize(3 * 1048576)).toBe('3.0 MB');
   });
 });
 
@@ -306,12 +384,12 @@ describe('session edge cases', () => {
   });
 
   it('reports an unreachable API and a refusal without a readable reason', async () => {
-    const world = environment({ '/api/identity': configured, '/api/session': () => json({ ...SESSION, admin: true }), '/api/admin/users?': () => new Response('<html>', { status: 502 }) });
+    const world = environment({ '/api/identity': configured, '/api/session': () => json({ ...SESSION, admin: true }), '/api/admin/users': () => new Response('<html>', { status: 502 }) });
     world.store.set('xds-session-tokens', JSON.stringify({ access: 'a', refresh: 'r', idToken: '', expiresAt: 2_000_000 }));
     const session = service(world.env);
     await session.start();
-    await expect(session.adminUsers('', 0)).rejects.toThrow('The server refused the request (502).');
-    await expect(session.extendLicence('u1', 5)).rejects.toThrow('The server is unreachable.');
+    await expect(session.adminUsers()).rejects.toThrow('The server refused the request (502).');
+    await expect(session.adminRoles()).rejects.toThrow('The server is unreachable.');
     session.signOut();
     expect(new URL(world.assigned[0]).searchParams.has('id_token_hint')).toBe(false);
     await expect(session.revokeLicence('u1')).rejects.toThrow('Sign in to use advanced capabilities.');

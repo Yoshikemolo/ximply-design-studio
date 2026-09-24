@@ -6,12 +6,32 @@ import { Injectable, computed, signal } from "@angular/core";
  * the tab, never in documents, local storage or logs; the API decides every licence.
  */
 export type Permission = "ai-tools" | "change-control";
-export interface Licence { state: "valid" | "expired" | "suspended" | "none" | "unrestricted"; expires: string | null; permissions: Permission[] }
+export type Tier = "free" | "pro" | "teams" | "studio" | "enterprise";
+export const TIERS: { id: Tier; label: string }[] = [
+  { id: "free", label: "Free" }, { id: "pro", label: "Pro" }, { id: "teams", label: "Teams" },
+  { id: "studio", label: "Studio" }, { id: "enterprise", label: "Enterprise" },
+];
+export interface Licence {
+  state: "valid" | "expired" | "suspended" | "none" | "unrestricted";
+  expires: string | null;
+  permissions: Permission[];
+  tier?: Tier | null;
+  status?: "active" | "suspended" | null;
+  issued?: string | null;
+}
 export interface Session { subject: string; username: string; name: string; email: string; admin: boolean; licence: Licence }
 export interface IdentityConfiguration { configured: boolean; issuer?: string; clientId?: string }
 export type SessionState = "loading" | "not-configured" | "unavailable" | "signed-out" | "signed-in";
-export interface AdminUser { id: string; username: string; name: string; email: string; enabled: boolean; licence: Licence }
-export interface AdminPage { total: number; page: number; size: number; users: AdminUser[] }
+export interface Ban { permanent: boolean; until: string | null; reason: string; expired: boolean }
+export interface AdminUser {
+  id: string; username: string; firstName: string; lastName: string; name: string; email: string; enabled: boolean;
+  admin: boolean; created: string | null; lastLogin: string | null; documents: number; ban: Ban | null; licence: Licence;
+}
+export interface AdminRole { name: "xds-admin" | Permission; kind: "role" | "permission"; description: string; members: string[] }
+export interface AdminLicence extends Licence { userId: string; username: string; name: string; email: string }
+export interface AdminDocument { id: string; name: string; owner: string | null; size: number; updatedAt: string }
+export interface NewUser { username: string; email: string; firstName: string; lastName: string; password: string; temporary: boolean; admin: boolean }
+export interface TokenStatus { provider: string; configured: boolean; updatedAt: string | null }
 
 interface Tokens { access: string; refresh: string; idToken: string; expiresAt: number }
 interface Pending { state: string; verifier: string; redirect: string }
@@ -208,24 +228,55 @@ export class SessionService {
     }
   }
 
-  /** The Admin menu's calls; the API refuses them to everyone but administrators. */
-  async adminUsers(search: string, page: number, size = 20): Promise<AdminPage> {
-    return this.adminCall(`/api/admin/users?${new URLSearchParams({ search, page: String(page), size: String(size) })}`);
+  /** The administration workspace's calls; the API refuses them to everyone but the super administrator. */
+  private user(id: string) { return `/api/admin/users/${encodeURIComponent(id)}`; }
+  async adminUsers(): Promise<AdminUser[]> {
+    return (await this.adminCall<{ users: AdminUser[] }>("/api/admin/users")).users;
   }
-  async issueLicence(id: string, permissions: Permission[], period: { days: number } | { until: string }): Promise<AdminUser> {
-    return this.adminCall(`/api/admin/users/${encodeURIComponent(id)}/licence`, { method: "PUT", body: JSON.stringify({ permissions, ...period }) });
+  createUser(user: NewUser): Promise<AdminUser> { return this.adminCall("/api/admin/users", { method: "POST", body: JSON.stringify(user) }); }
+  updateUser(id: string, fields: { email?: string; firstName?: string; lastName?: string; enabled?: boolean }): Promise<AdminUser> {
+    return this.adminCall(this.user(id), { method: "PATCH", body: JSON.stringify(fields) });
   }
-  async extendLicence(id: string, days: number): Promise<AdminUser> {
-    return this.adminCall(`/api/admin/users/${encodeURIComponent(id)}/licence/extend`, { method: "POST", body: JSON.stringify({ days }) });
+  deleteUser(id: string): Promise<void> { return this.adminCall(this.user(id), { method: "DELETE" }); }
+  setPassword(id: string, password: string, temporary: boolean): Promise<AdminUser> {
+    return this.adminCall(this.user(id) + "/password", { method: "PUT", body: JSON.stringify({ password, temporary }) });
   }
-  async revokeLicence(id: string): Promise<AdminUser> {
-    return this.adminCall(`/api/admin/users/${encodeURIComponent(id)}/licence`, { method: "DELETE" });
+  banUser(id: string, until: string | null, reason: string): Promise<AdminUser> {
+    return this.adminCall(this.user(id) + "/ban", { method: "PUT", body: JSON.stringify(until ? { until, reason } : { reason }) });
+  }
+  liftBan(id: string): Promise<AdminUser> { return this.adminCall(this.user(id) + "/ban", { method: "DELETE" }); }
+  async adminRoles(): Promise<AdminRole[]> { return (await this.adminCall<{ roles: AdminRole[] }>("/api/admin/roles")).roles; }
+  setRole(role: string, id: string, granted: boolean): Promise<AdminUser> {
+    return this.adminCall(`/api/admin/roles/${encodeURIComponent(role)}/members/${encodeURIComponent(id)}`, { method: granted ? "PUT" : "DELETE" });
+  }
+  async adminLicences(): Promise<AdminLicence[]> { return (await this.adminCall<{ licences: AdminLicence[] }>("/api/admin/licences")).licences; }
+  issueLicence(id: string, tier: Tier, permissions: Permission[], period: { days: number } | { until: string }): Promise<AdminUser> {
+    return this.adminCall(this.user(id) + "/licence", { method: "PUT", body: JSON.stringify({ tier, permissions, ...period }) });
+  }
+  changeLicence(id: string, change: { tier?: Tier; permissions?: Permission[]; days?: number; until?: string; status?: "active" | "suspended" }): Promise<AdminUser> {
+    return this.adminCall(this.user(id) + "/licence", { method: "PATCH", body: JSON.stringify(change) });
+  }
+  extendLicence(id: string, days: number): Promise<AdminUser> {
+    return this.adminCall(this.user(id) + "/licence/extend", { method: "POST", body: JSON.stringify({ days }) });
+  }
+  revokeLicence(id: string): Promise<AdminUser> { return this.adminCall(this.user(id) + "/licence", { method: "DELETE" }); }
+  async adminDocuments(): Promise<AdminDocument[]> { return (await this.adminCall<{ documents: AdminDocument[] }>("/api/admin/documents")).documents; }
+  deleteDocument(id: string): Promise<void> { return this.adminCall(`/api/admin/documents/${encodeURIComponent(id)}`, { method: "DELETE" }); }
+
+  /** The user's own external provider token: only its state ever reaches the browser. */
+  tokenStatus(provider = "openai"): Promise<TokenStatus> { return this.adminCall(`/api/me/tokens/${provider}`); }
+  saveToken(token: string, provider = "openai"): Promise<TokenStatus> {
+    return this.adminCall(`/api/me/tokens/${provider}`, { method: "PUT", body: JSON.stringify({ token }) });
+  }
+  removeToken(provider = "openai"): Promise<void> { return this.adminCall(`/api/me/tokens/${provider}`, { method: "DELETE" }); }
+  testToken(provider = "openai"): Promise<{ ok: boolean; detail: string }> {
+    return this.adminCall(`/api/me/tokens/${provider}/test`, { method: "POST" });
   }
   private async adminCall<T>(path: string, init: RequestInit = {}): Promise<T> {
     const answer = await this.request(path, init);
     if (!answer) throw new Error(this.message() || "The server is unreachable.");
     if (!answer.ok) throw new Error((await this.reason(answer)) || `The server refused the request (${answer.status}).`);
-    return answer.json();
+    return answer.status === 204 ? (undefined as T) : answer.json();
   }
 
   private async reason(answer: Response): Promise<string> {

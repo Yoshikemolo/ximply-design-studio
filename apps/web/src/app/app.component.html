@@ -6,7 +6,7 @@
         >ximply<span class="brand-sub">design studio</span></span
       ></a
     >
-    <button class="preview-badge" [class.licensed]="session.licensed()" [title]="modeExplanation()" [attr.aria-label]="t(session.licensed() ? 'Pro' : 'Demo') + ': ' + modeExplanation()" (click)="openServerSettings()">{{ t(session.licensed() ? "Pro" : "Demo") }}</button>
+    <button class="preview-badge" [class.licensed]="session.licensed()" [attr.data-tone]="modeTone()" [title]="modeExplanation()" [attr.aria-label]="modeBadge() + ': ' + modeExplanation()" (click)="openServerSettings()">{{ modeBadge() }}</button>
     @if (mobile()) {
       <select class="mobile-documents" [attr.aria-label]="t('Documents')" [title]="t('Documents')" (change)="chooseDocument($event)">
         @for (tab of editor.tabs(); track tab.id) {
@@ -165,7 +165,9 @@
         <details>
           <summary>{{ t("Admin") }}</summary>
           <div class="menu-popover">
-            <button (click)="openAdmin()">{{ t("Users and licences") }}…</button>
+            @for (category of adminCategories; track category.id) {
+              <button (click)="openAdmin(category.id)"><img class="menu-icon" [src]="'/assets/icons/' + category.icon + '.svg'" alt="" />{{ t(category.label) }}…</button>
+            }
           </div>
         </details>
       }
@@ -209,8 +211,8 @@
       }
     }
     <button class="theme-toggle" (click)="theme.set(theme() === 'dark' ? 'light' : 'dark')" [title]="t(theme() === 'dark' ? 'Light theme' : 'Dark theme')" [attr.aria-label]="t(theme() === 'dark' ? 'Light theme' : 'Dark theme')"><img [src]="'/assets/icons/' + (theme() === 'dark' ? 'moon' : 'sun') + '.svg'" alt="" /></button>
-    <button class="primary small icon-action" (click)="openExport()" [title]="t('Export')" [attr.aria-label]="t('Export')">
-      <img src="/assets/icons/export.svg" alt="" />
+    <button class="primary small icon-action" [class.pressed]="inspectorTab() === 'ai' && panels()" [attr.aria-pressed]="inspectorTab() === 'ai' && panels()" (click)="showInspectorTab('ai')" [title]="t('AI Tools')" [attr.aria-label]="t('AI Tools')">
+      <img src="/assets/icons/ai-tools.svg" alt="" />
     </button>
   </header>
   @if (preferences.layoutBlocks().contextBar) {
@@ -611,6 +613,21 @@
       </div>
     </section>
       <aside class="inspector" [class.drawer-open]="panelsOpen() && panelsDrawer()" aria-label="Editor panels">
+        <div class="inspector-tabs" role="tablist" [attr.aria-label]="t('Editor panels')">
+          @for (tab of inspectorTabs; track tab.id; let index = $index) {
+            <button type="button" role="tab" [id]="'inspector-tab-' + tab.id" aria-controls="inspector-panel" [attr.aria-selected]="inspectorTab() === tab.id" [tabIndex]="inspectorTab() === tab.id ? 0 : -1" [class.active]="inspectorTab() === tab.id" [class.locked]="tab.permission && !session.capability(tab.permission).allowed" (click)="selectInspectorTab(tab.id)" (keydown)="inspectorTabKey($event, index)">{{ t(tab.label) }}</button>
+          }
+        </div>
+        @if (inspectorTab() !== 'properties') {
+          <section class="inspector-placeholder" id="inspector-panel" role="tabpanel" [attr.aria-labelledby]="'inspector-tab-' + inspectorTab()">
+            <img [src]="'/assets/icons/' + (inspectorTab() === 'ai' ? 'ai-tools' : 'change-control') + '.svg'" alt="" />
+            <h3>{{ t(inspectorTab() === 'ai' ? 'AI Tools' : 'History') }}</h3>
+            @if (session.capability(inspectorTab() === 'ai' ? 'ai-tools' : 'change-control'); as capability) {
+              <p>{{ t(capability.allowed ? 'Its panel is under development.' : capability.reason) }}</p>
+              @if (!capability.allowed && session.state() !== 'signed-in' && session.state() !== 'not-configured') {<button class="sign-in" (click)="session.signIn()"><img src="/assets/icons/user.svg" alt="" />{{ t("Sign in") }}</button>}
+            }
+          </section>
+        } @else {
         @if (preferences.layoutBlocks().swatches) {
           <details class="panel swatches-panel" open>
             <summary><span>{{ t("Swatches") }}</span></summary>
@@ -1269,6 +1286,7 @@
             }
           </details>
         }
+        }
         <div class="inspector-bottom">
           <span class="local-dot"></span>{{ t("Local preview")
           }}<button (click)="openAbout()">{{ currentVersion() }}</button>
@@ -1517,7 +1535,7 @@
       </header>
       <div class="settings-layout">
         <nav #settingsNav class="settings-nav" role="tablist" aria-orientation="vertical" [attr.aria-label]="t('Settings categories')">
-          @for (category of settingsCategories; track category.id; let index = $index) {
+          @for (category of visibleSettingsCategories(); track category.id; let index = $index) {
             <button type="button" role="tab" [id]="'settings-tab-' + category.id" aria-controls="settings-panel" [attr.aria-selected]="settingsCategory() === category.id" [tabIndex]="settingsCategory() === category.id ? 0 : -1" [class.active]="settingsCategory() === category.id" [title]="t(category.label)" [attr.aria-label]="t(category.label)" (click)="selectSettingsCategory(category.id)" (keydown)="settingsNavKey($event, index)">
               <img [src]="'/assets/icons/' + category.icon + '.svg'" alt="" /><span>{{ t(category.label) }}</span>
             </button>
@@ -1612,6 +1630,17 @@
         <label>{{ t("Grid spacing") }} ({{ preferences.distanceUnit() }})<input type="number" [min]="displayDistance(0.01)" step="any" [value]="displayDistance(preferences.gridSize())" (change)="preferences.setMeasurement('gridSize', distanceInput($event))" /></label>
         @for (aid of measurementAids; track aid.id) {<label>{{ t('Snap radius') }} · {{ t(aid.label) }} (px)<input type="number" min="0" max="100" [value]="snapRadius(aid.id)" (change)="setSnapRadius(aid.id, number($event))" /></label>}
       </div>
+            }
+            @case ('tokens') {
+              <p class="panel-tip"><img src="/assets/icons/tip.svg" alt="" /><span>{{ t('Your own OpenAI API token lets the agent tools call OpenAI on your behalf. It is stored encrypted on the server and never shown again.') }}</span></p>
+              <label class="wide-label">OpenAI API token<input type="password" autocomplete="off" name="openai-token" [(ngModel)]="tokenDraft" [placeholder]="tokenState()?.configured ? t('Enter a new token to replace it') : 'sk-…'" /></label>
+              <p class="token-state">{{ tokenState()?.configured ? t('A token is configured since') + ' ' + formatDate(tokenState()?.updatedAt) : t('No token is configured.') }}</p>
+              <div class="dialog-actions token-actions">
+                <button type="button" class="primary" [disabled]="tokenDraft.trim().length < 20" (click)="saveToken()">{{ t('Save') }}</button>
+                <button type="button" [disabled]="!tokenState()?.configured" (click)="testToken()">{{ t('Test the connection') }}</button>
+                <button type="button" class="danger" [disabled]="!tokenState()?.configured" (click)="removeToken()">{{ t('Remove') }}</button>
+              </div>
+              @if (tokenMessage()) {<p class="admin-notice" role="status">{{ t(tokenMessage()) }}</p>}
             }
             @case ('shortcuts') {
       <p>
@@ -1814,7 +1843,7 @@
 }
 
 @if (confirmation(); as pending) {
-  <div class="modal-backdrop"><section class="server-dialog confirm-dialog" role="alertdialog" aria-modal="true" aria-labelledby="confirm-title" aria-describedby="confirm-message" (keydown.escape)="confirmation.set(null); $event.stopPropagation()">
+  <div class="modal-backdrop confirm-backdrop"><section class="server-dialog confirm-dialog" role="alertdialog" aria-modal="true" aria-labelledby="confirm-title" aria-describedby="confirm-message" (keydown.escape)="confirmation.set(null); $event.stopPropagation()">
     <h2 id="confirm-title">{{ t(pending.title) }}</h2>
     <p id="confirm-message">{{ t(pending.message) }}</p>
     <div class="dialog-actions"><button type="button" autofocus (click)="confirmation.set(null)">{{ t("Cancel") }}</button><button type="button" class="danger" (click)="confirm()">{{ t(pending.action) }}</button></div>
@@ -1985,63 +2014,181 @@
 }
 @if (adminOpen()) {
   <div class="modal-backdrop">
-    <section class="server-dialog admin-dialog" role="dialog" aria-modal="true" aria-labelledby="admin-title" (keydown.escape)="adminOpen.set(false); $event.stopPropagation()">
+    <section class="settings-dialog admin-workspace" role="dialog" aria-modal="true" aria-labelledby="admin-title" (keydown.escape)="adminOpen.set(false); $event.stopPropagation()">
       <header>
-        <h2 id="admin-title">{{ t("Users and licences") }}</h2>
+        <h2 id="admin-title">{{ t("Administration") }}</h2>
         <button (click)="adminOpen.set(false)" [attr.aria-label]="t('Close')">×</button>
       </header>
-      <form class="admin-search" (submit)="$event.preventDefault(); loadAdminUsers(0)">
-        <input type="search" name="search" maxlength="100" [(ngModel)]="adminSearch" [placeholder]="t('Search users')" [attr.aria-label]="t('Search users')" />
-        <button type="submit" [disabled]="adminBusy()">{{ t("Search") }}</button>
-      </form>
-      @if (adminError()) {<p class="admin-error" role="alert">{{ t(adminError()) }}</p>}
-      <div class="admin-layout">
-        <table class="admin-users">
-          <thead><tr><th>{{ t("User") }}</th><th>{{ t("Licence") }}</th><th>{{ t("Permissions") }}</th></tr></thead>
-          <tbody>
-            @for (user of adminPage()?.users ?? []; track user.id) {
-              <tr [class.selected]="adminSelected()?.id === user.id" [class.disabled]="!user.enabled" tabindex="0" (click)="selectAdminUser(user)" (keydown.enter)="selectAdminUser(user)">
-                <td><strong>{{ user.name }}</strong><span>{{ user.email || user.username }}</span></td>
-                <td [class.expired]="user.licence.state === 'expired'">{{ licenceSummary(user.licence) }}</td>
-                <td>{{ permissionList(user.licence.permissions) }}</td>
-              </tr>
-            } @empty {
-              <tr><td colspan="3">{{ t(adminBusy() ? "Loading…" : "No users found.") }}</td></tr>
+      <div class="settings-layout">
+        <nav class="settings-nav" role="tablist" aria-orientation="vertical" [attr.aria-label]="t('Administration')">
+          @for (category of adminCategories; track category.id; let index = $index) {
+            <button type="button" role="tab" [id]="'admin-tab-' + category.id" aria-controls="admin-panel" [attr.aria-selected]="adminCategory() === category.id" [tabIndex]="adminCategory() === category.id ? 0 : -1" [class.active]="adminCategory() === category.id" [title]="t(category.label)" (click)="selectAdminCategory(category.id)" (keydown)="adminNavKey($event, index)">
+              <img [src]="'/assets/icons/' + category.icon + '.svg'" alt="" /><span>{{ t(category.label) }}</span>
+            </button>
+          }
+        </nav>
+        <section class="settings-content admin-content" role="tabpanel" tabindex="0" id="admin-panel" [attr.aria-labelledby]="'admin-tab-' + adminCategory()">
+          <div class="admin-heading">
+            <h3>{{ t(adminCategories[['users', 'roles', 'licences', 'documents'].indexOf(adminCategory())].label) }}</h3>
+            @if (adminCategory() === 'users') {<button class="primary" (click)="startCreating()">{{ t("New user") }}</button>}
+            @if (adminCategory() === 'licences') {<button class="primary" (click)="startCreating()">{{ t("Issue a licence") }}</button>}
+            @if (bulkActions().length) {
+              <select class="bulk-select" [disabled]="!adminChecked().length || adminBusy()" [attr.aria-label]="t('Bulk actions')" (change)="runBulk($event)">
+                <option value="">{{ t("Bulk actions") }} ({{ adminChecked().length }})</option>
+                @for (action of bulkActions(); track action.id) {<option [value]="action.id">{{ t(action.label) }}</option>}
+              </select>
             }
-          </tbody>
-        </table>
-        @if (adminSelected(); as user) {
-          <aside class="admin-licence" [attr.aria-label]="t('Licence of') + ' ' + user.name">
-            <h3>{{ user.name }}</h3>
-            <p>{{ licenceSummary(user.licence) }}</p>
-            <fieldset>
-              <legend>{{ t("Issue a licence") }}</legend>
-              @for (permission of licencePermissions; track permission.id) {
-                <label class="check-row"><input type="checkbox" [name]="'permission-' + permission.id" [(ngModel)]="adminDraft.permissions[permission.id]" />{{ t(permission.label) }}</label>
+            <button (click)="loadAdmin()" [disabled]="adminBusy()">{{ t("Refresh") }}</button>
+          </div>
+          @if (adminError()) {<p class="admin-error" role="alert">{{ t(adminError()) }}</p>}
+          @if (adminNotice()) {<p class="admin-notice" role="status">{{ t(adminNotice()) }}</p>}
+          <div class="admin-layout">
+            <div class="admin-table">
+              @switch (adminCategory()) {
+                @case ('users') {
+                  <xds-smart-table [columns]="adminUserColumns()" [selectable]="true" selectionAt="start" [selected]="adminChecked()" (selectedChange)="adminChecked.set($event)" [selectionLabel]="t('Select')" [selectAllLabel]="t('Select all')" [rows]="adminUserRows()" [searchable]="true" [filterable]="true" [sortable]="true" [pageSize]="15" [activatable]="true" [activeId]="adminSelectedId()" (activate)="selectAdminRow($event)" [label]="t('Users')" [searchLabel]="t('Search')" [filterLabel]="t('Filter')" [sortLabel]="t('Sort by')" [unsortedLabel]="t('No order')" [ascendingLabel]="t('Ascending')" [descendingLabel]="t('Descending')" [emptyLabel]="t(adminBusy() ? 'Loading…' : 'No users found.')" [previousLabel]="t('Previous page')" [nextLabel]="t('Next page')" [anyLabel]="t('Any')" [minimumLabel]="t('At least')" [translate]="translateText"></xds-smart-table>
+                }
+                @case ('roles') {
+                  <xds-smart-table [columns]="adminRoleColumns()" [rows]="adminRoleRows()" [searchable]="true" [filterable]="true" [sortable]="true" [activatable]="true" [activeId]="adminSelectedId()" (activate)="selectAdminRow($event)" [label]="t('Roles and permissions')" [searchLabel]="t('Search')" [filterLabel]="t('Filter')" [sortLabel]="t('Sort by')" [unsortedLabel]="t('No order')" [ascendingLabel]="t('Ascending')" [descendingLabel]="t('Descending')" [emptyLabel]="t(adminBusy() ? 'Loading…' : 'No roles found.')" [anyLabel]="t('Any')" [minimumLabel]="t('At least')" [translate]="translateText"></xds-smart-table>
+                }
+                @case ('licences') {
+                  <xds-smart-table [columns]="adminLicenceColumns()" [selectable]="true" selectionAt="start" [selected]="adminChecked()" (selectedChange)="adminChecked.set($event)" [selectionLabel]="t('Select')" [selectAllLabel]="t('Select all')" [rows]="adminLicenceRows()" [searchable]="true" [filterable]="true" [sortable]="true" [pageSize]="15" [activatable]="true" [activeId]="adminSelectedId()" (activate)="selectAdminRow($event)" [label]="t('Licences')" [searchLabel]="t('Search')" [filterLabel]="t('Filter')" [sortLabel]="t('Sort by')" [unsortedLabel]="t('No order')" [ascendingLabel]="t('Ascending')" [descendingLabel]="t('Descending')" [emptyLabel]="t(adminBusy() ? 'Loading…' : 'No licences found.')" [previousLabel]="t('Previous page')" [nextLabel]="t('Next page')" [anyLabel]="t('Any')" [minimumLabel]="t('At least')" [translate]="translateText"></xds-smart-table>
+                }
+                @case ('documents') {
+                  <xds-smart-table [columns]="adminDocumentColumns()" [selectable]="true" selectionAt="start" [selected]="adminChecked()" (selectedChange)="adminChecked.set($event)" [selectionLabel]="t('Select')" [selectAllLabel]="t('Select all')" [rows]="adminDocumentRows()" [searchable]="true" [filterable]="true" [sortable]="true" [pageSize]="15" [activatable]="true" [activeId]="adminSelectedId()" (activate)="selectAdminRow($event)" [label]="t('Documents')" [searchLabel]="t('Search')" [filterLabel]="t('Filter')" [sortLabel]="t('Sort by')" [unsortedLabel]="t('No order')" [ascendingLabel]="t('Ascending')" [descendingLabel]="t('Descending')" [emptyLabel]="t(adminBusy() ? 'Loading…' : 'No documents found.')" [previousLabel]="t('Previous page')" [nextLabel]="t('Next page')" [anyLabel]="t('Any')" [minimumLabel]="t('At least')" [translate]="translateText"></xds-smart-table>
+                }
               }
-              <label class="check-row"><input type="radio" name="period" value="days" [(ngModel)]="adminDraft.period" />{{ t("Days from today") }}</label>
-              @if (adminDraft.period === "days") {<input type="number" name="days" min="1" max="3650" step="1" [(ngModel)]="adminDraft.days" [attr.aria-label]="t('Days from today')" />}
-              <label class="check-row"><input type="radio" name="period" value="until" [(ngModel)]="adminDraft.period" />{{ t("Until a date") }}</label>
-              @if (adminDraft.period === "until") {<input type="date" name="until" [(ngModel)]="adminDraft.until" [attr.aria-label]="t('Until a date')" />}
-              <button class="primary" (click)="issueLicence()" [disabled]="adminBusy()">{{ t("Issue") }}</button>
-            </fieldset>
-            @if (user.licence.state !== "none") {
-              <fieldset>
-                <legend>{{ t("Extend") }}</legend>
-                <label>{{ t("Days") }}<input type="number" name="extend" min="1" max="3650" step="1" [(ngModel)]="adminDraft.extendDays" /></label>
-                <button (click)="extendLicence()" [disabled]="adminBusy()">{{ t("Extend") }}</button>
-              </fieldset>
-              <button class="danger" (click)="revokeLicence()" [disabled]="adminBusy()">{{ t(adminConfirmRevoke() ? "Confirm revocation" : "Revoke licence") }}</button>
+            </div>
+          </div>
+          <aside class="admin-drawer" [class.open]="adminDrawerOpen()" [attr.aria-hidden]="!adminDrawerOpen()" [attr.inert]="adminDrawerOpen() ? null : ''" (keydown.escape)="closeAdminDrawer(); $event.stopPropagation()">
+            <button class="admin-drawer-close" (click)="closeAdminDrawer()" [attr.aria-label]="t('Close')">×</button>
+            @if (adminCreating() && adminCategory() === 'users') {
+              <form class="admin-form" (submit)="$event.preventDefault(); createUser()">
+                <h4>{{ t("New user") }}</h4>
+                <label>{{ t("Username") }}<input name="username" required minlength="3" maxlength="60" autocomplete="off" [(ngModel)]="newUserDraft.username" /></label>
+                <label>{{ t("Email") }}<input name="email" type="email" required maxlength="200" autocomplete="off" [(ngModel)]="newUserDraft.email" /></label>
+                <label>{{ t("First name") }}<input name="first" required maxlength="100" [(ngModel)]="newUserDraft.firstName" /></label>
+                <label>{{ t("Last name") }}<input name="last" required maxlength="100" [(ngModel)]="newUserDraft.lastName" /></label>
+                <label>{{ t("Initial password") }}<input name="password" type="password" required minlength="8" autocomplete="new-password" [(ngModel)]="newUserDraft.password" /></label>
+                <label class="check-row"><input type="checkbox" name="temporary" [(ngModel)]="newUserDraft.temporary" />{{ t("Ask for a new password at the first sign-in") }}</label>
+                <label class="check-row"><input type="checkbox" name="admin" [(ngModel)]="newUserDraft.admin" />{{ t("Administrator") }}</label>
+                <div class="dialog-actions"><button type="button" (click)="adminCreating.set(false)">{{ t("Cancel") }}</button><button type="submit" class="primary" [disabled]="adminBusy()">{{ t("Create") }}</button></div>
+              </form>
+            }
+            @if (adminCategory() === 'users' && adminSelectedUser(); as user) {
+              <div class="admin-form" [attr.aria-label]="user.name">
+                <h4>{{ user.name }} <small>{{ user.username }}</small></h4>
+                <dl class="admin-facts">
+                  <dt>{{ t("State") }}</dt><dd>{{ accountState(user) }}</dd>
+                  <dt>{{ t("Registered") }}</dt><dd>{{ formatDate(user.created) }}</dd>
+                  <dt>{{ t("Last sign-in") }}</dt><dd>{{ formatDate(user.lastLogin, "Never") }}</dd>
+                  <dt>{{ t("Documents") }}</dt><dd>{{ user.documents }}</dd>
+                  <dt>{{ t("Licence") }}</dt><dd>{{ licenceSummary(user.licence) }}</dd>
+                </dl>
+                <fieldset>
+                  <legend>{{ t("Details") }}</legend>
+                  <label>{{ t("Email") }}<input name="edit-email" type="email" maxlength="200" [(ngModel)]="userDraft.email" /></label>
+                  <label>{{ t("First name") }}<input name="edit-first" maxlength="100" [(ngModel)]="userDraft.firstName" /></label>
+                  <label>{{ t("Last name") }}<input name="edit-last" maxlength="100" [(ngModel)]="userDraft.lastName" /></label>
+                  <button class="primary" (click)="saveUser()" [disabled]="adminBusy()">{{ t("Save") }}</button>
+                </fieldset>
+                <fieldset>
+                  <legend>{{ t("Role and licence") }}</legend>
+                  <button (click)="toggleAdministrator(user)" [disabled]="adminBusy() || user.id === session.session()?.subject">{{ t(user.admin ? "Remove the administrator role" : "Make administrator") }}</button>
+                  <button (click)="manageLicence(user)">{{ t(user.licence.state === "none" ? "Issue a licence" : "Manage the licence") }}</button>
+                </fieldset>
+                <fieldset>
+                  <legend>{{ t("Password") }}</legend>
+                  <label>{{ t("New password") }}<input name="new-password" type="password" minlength="8" autocomplete="new-password" [(ngModel)]="passwordDraft.password" /></label>
+                  <label class="check-row"><input type="checkbox" name="new-temporary" [(ngModel)]="passwordDraft.temporary" />{{ t("Ask for a new password at the next sign-in") }}</label>
+                  <button class="danger" (click)="overwritePassword()" [disabled]="adminBusy() || passwordDraft.password.length < 8">{{ t("Overwrite") }}</button>
+                </fieldset>
+                <fieldset>
+                  <legend>{{ t("Ban") }}</legend>
+                  @if (user.ban) {
+                    <p>{{ accountState(user) }}@if (user.ban.reason) { · {{ user.ban.reason }}}</p>
+                    <button (click)="liftBan(user)" [disabled]="adminBusy()">{{ t("Lift the ban") }}</button>
+                  } @else {
+                    <label class="check-row"><input type="radio" name="ban-mode" value="temporary" [(ngModel)]="banDraft.mode" />{{ t("Until a date") }}</label>
+                    @if (banDraft.mode === 'temporary') {<input type="datetime-local" name="ban-until" [(ngModel)]="banDraft.until" [attr.aria-label]="t('Until a date')" />}
+                    <label class="check-row"><input type="radio" name="ban-mode" value="permanent" [(ngModel)]="banDraft.mode" />{{ t("Permanently") }}</label>
+                    <label>{{ t("Reason") }}<input name="ban-reason" maxlength="200" [(ngModel)]="banDraft.reason" /></label>
+                    <button class="danger" (click)="banUser()" [disabled]="adminBusy() || user.id === session.session()?.subject">{{ t("Ban") }}</button>
+                  }
+                </fieldset>
+                <button class="danger" (click)="deleteUser()" [disabled]="adminBusy() || user.id === session.session()?.subject">{{ t("Delete the user") }}</button>
+              </div>
+            }
+            @if (adminCategory() === 'roles' && adminSelectedRole(); as role) {
+              <div class="admin-form" [attr.aria-label]="roleLabel(role.name)">
+                <h4>{{ roleLabel(role.name) }}</h4>
+                <p>{{ t(role.description) }}</p>
+                <ul class="admin-members">
+                  @for (id of role.members; track id) {
+                    @if (adminUsersById().get(id); as member) {
+                      <li><span>{{ member.name }}<small>{{ member.email }}</small></span><button (click)="removeRoleMember(member)" [disabled]="adminBusy() || (role.name === 'xds-admin' && member.id === session.session()?.subject)">{{ t("Remove") }}</button></li>
+                    }
+                  } @empty {<li>{{ t("No members.") }}</li>}
+                </ul>
+                <label>{{ t("Add a member") }}<select name="role-member" [(ngModel)]="roleMemberToAdd"><option value="">—</option>@for (user of adminUserList(); track user.id) {@if (!role.members.includes(user.id)) {<option [value]="user.id">{{ user.name }} · {{ user.username }}</option>}}</select></label>
+                <button class="primary" (click)="addRoleMember()" [disabled]="adminBusy() || !roleMemberToAdd">{{ t("Add") }}</button>
+                @if (role.kind === 'permission') {<p class="panel-tip"><img src="/assets/icons/tip.svg" alt="" /><span>{{ t("A permission takes effect only with a valid licence.") }}</span></p>}
+              </div>
+            }
+            @if (adminCategory() === 'licences' && (adminCreating() || adminSelectedLicence())) {
+              <div class="admin-form">
+                @if (adminCreating()) {
+                  <h4>{{ t("Issue a licence") }}</h4>
+                  <label>{{ t("Holder") }}<select name="licence-holder" [(ngModel)]="licenceDraft.userId"><option value="">—</option>@for (user of usersWithoutLicence(); track user.id) {<option [value]="user.id">{{ user.name }} · {{ user.username }}</option>}</select></label>
+                } @else if (adminSelectedLicence(); as licence) {
+                  <h4>{{ licence.name }} <small>{{ licence.email }}</small></h4>
+                  <dl class="admin-facts">
+                    <dt>{{ t("State") }}</dt><dd>{{ t(licenceStateLabel(licence.state)) }}</dd>
+                    <dt>{{ t("Issued") }}</dt><dd>{{ formatDate(licence.issued) }}</dd>
+                    <dt>{{ t("Expires") }}</dt><dd>{{ formatDate(licence.expires) }}</dd>
+                  </dl>
+                }
+                <fieldset>
+                  <legend>{{ t("Licence") }}</legend>
+                  <label>{{ t("Tier") }}<select name="licence-tier" [(ngModel)]="licenceDraft.tier">@for (tier of tiers; track tier.id) {<option [value]="tier.id">{{ t(tier.label) }}</option>}</select></label>
+                  @for (permission of licencePermissions; track permission.id) {
+                    <label class="check-row"><input type="checkbox" [name]="'licence-' + permission.id" [(ngModel)]="licenceDraft.permissions[permission.id]" />{{ t(permission.label) }}</label>
+                  }
+                  <label class="check-row"><input type="radio" name="licence-period" value="days" [(ngModel)]="licenceDraft.period" />{{ t("Days from today") }}</label>
+                  @if (licenceDraft.period === 'days') {<input type="number" name="licence-days" min="1" max="3650" step="1" [(ngModel)]="licenceDraft.days" [attr.aria-label]="t('Days from today')" />}
+                  <label class="check-row"><input type="radio" name="licence-period" value="until" [(ngModel)]="licenceDraft.period" />{{ t("Until a date") }}</label>
+                  @if (licenceDraft.period === 'until') {<input type="date" name="licence-until" [(ngModel)]="licenceDraft.until" [attr.aria-label]="t('Until a date')" />}
+                  @if (adminCreating()) {
+                    <div class="dialog-actions"><button type="button" (click)="adminCreating.set(false)">{{ t("Cancel") }}</button><button class="primary" (click)="issueLicence()" [disabled]="adminBusy()">{{ t("Issue") }}</button></div>
+                  } @else {
+                    <button class="primary" (click)="saveLicence()" [disabled]="adminBusy()">{{ t("Save") }}</button>
+                  }
+                </fieldset>
+                @if (!adminCreating() && adminSelectedLicence(); as licence) {
+                  <fieldset>
+                    <legend>{{ t("Extend") }}</legend>
+                    <label>{{ t("Days") }}<input type="number" name="extend-days" min="1" max="3650" step="1" [(ngModel)]="extendDays" /></label>
+                    <button (click)="extendLicence()" [disabled]="adminBusy()">{{ t("Extend") }}</button>
+                  </fieldset>
+                  <button (click)="setLicenceStatus(licence.status === 'suspended' ? 'active' : 'suspended')" [disabled]="adminBusy()">{{ t(licence.status === 'suspended' ? "Resume the licence" : "Suspend the licence") }}</button>
+                  <button class="danger" (click)="revokeLicence()" [disabled]="adminBusy()">{{ t("Revoke the licence") }}</button>
+                }
+              </div>
+            }
+            @if (adminCategory() === 'documents' && adminSelectedDocument(); as item) {
+              <div class="admin-form" [attr.aria-label]="item.name">
+                <h4>{{ item.name }}</h4>
+                <dl class="admin-facts">
+                  <dt>{{ t("Owner") }}</dt><dd>{{ item.owner ? (adminUsersById().get(item.owner)?.name ?? t("Deleted user")) : t("No owner") }}</dd>
+                  <dt>{{ t("Size") }}</dt><dd>{{ formatSize(item.size) }}</dd>
+                  <dt>{{ t("Last change") }}</dt><dd>{{ formatDate(item.updatedAt) }}</dd>
+                </dl>
+                <button class="danger" (click)="deleteDocument()" [disabled]="adminBusy()">{{ t("Delete the document") }}</button>
+              </div>
             }
           </aside>
-        }
+        </section>
       </div>
-      <footer class="admin-paging">
-        <span>{{ adminPage()?.total ?? 0 }} {{ t("users") }}</span>
-        <button (click)="loadAdminUsers(adminPageIndex - 1)" [disabled]="adminBusy() || adminPageIndex === 0" [attr.aria-label]="t('Previous page')">‹</button>
-        <span>{{ adminPageIndex + 1 }} / {{ adminPages() }}</span>
-        <button (click)="loadAdminUsers(adminPageIndex + 1)" [disabled]="adminBusy() || adminPageIndex + 1 >= adminPages()" [attr.aria-label]="t('Next page')">›</button>
-      </footer>
     </section>
   </div>
 }

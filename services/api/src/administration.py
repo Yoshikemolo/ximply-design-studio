@@ -44,6 +44,7 @@ class UserChange(Strict):
     email: Annotated[str, Field(max_length=200, pattern=r'^[^@\s]+@[^@\s]+\.[^@\s]+$')] | None = None
     firstName: Name | None = None
     lastName: Name | None = None
+    enabled: bool | None = None
 
 
 class PasswordChange(Strict):
@@ -172,6 +173,8 @@ def administration_router(administrator: Callable, keycloak: Callable[[], Keyclo
     async def update_user(user_id: str, body: UserChange, current: Admin):
         user_id = valid_user_id(user_id)
         changes = body.model_dump(exclude_none=True)
+        if changes.get('enabled') is False:
+            not_self(current, user_id, 'deactivate')
         if changes:
             await call(keycloak().update_user, user_id, changes)
         await record(current, user_id, 'edit-user', {'fields': sorted(changes)})

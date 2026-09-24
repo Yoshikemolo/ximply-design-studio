@@ -7,7 +7,7 @@ import { ArraySettings, DEFAULT_ARRAY, validArraySettings } from "../../../../pa
 import { defaultMarginGuides, MarginGuides, PAGE_FORMATS, PAGE_RESOLUTIONS, PageCategory, PageOrientation, pageSize, pageSizeFits, RegistrationMarks, REGISTRATION_MARKS, registrationFits } from "../../../../packages/domain/src/page-setup";
 import { BlendEasing } from "../../../../packages/domain/src/object-blend";
 import { FONT_FAMILIES, defaultTypography, defaultTextLayout, TextTypography, TextLayoutOptions } from "../../../../packages/domain/src/text-layout";
-import { AdminPage, AdminUser, Permission, SessionService } from "./session.service";
+import { AdminDocument, AdminLicence, AdminRole, AdminUser, Licence, Permission, SessionService, TIERS, Tier, TokenStatus } from "./session.service";
 import { RASTER_RESOLUTIONS, RasterAntialias, RasterOptions } from "../../../../packages/domain/src/rasterize";
 import { measurementUnits, isUnit, snapPoint, fromPixels, toPixels, formatMeasurement, rulerTicks as makeRulerTicks, SnapConfig } from "../../../../packages/domain/src/measurements";
 import { PreferencesService } from "./preferences.service";
@@ -37,6 +37,7 @@ import {
   ViewChild,
   effect,
   signal,
+  computed,
 } from "@angular/core";
 import { FormsModule } from "@angular/forms";
 import { NgTemplateOutlet } from "@angular/common";
@@ -341,8 +342,13 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     { id: "measurement", label: "Units and snapping", icon: "rulers" },
     { id: "appearance", label: "Appearance", icon: "theme" },
     { id: "shortcuts", label: "Keyboard shortcuts", icon: "keyboard" },
+    { id: "tokens", label: "External tokens", icon: "ai-tools" },
   ] as const;
-  readonly settingsCategory = signal<"cursor" | "selection" | "anchors" | "measurement" | "appearance" | "shortcuts">("cursor");
+  /** The categories this user can open: External tokens needs the agent tools (SC-0148). */
+  visibleSettingsCategories() {
+    return this.settingsCategories.filter((category) => category.id !== "tokens" || this.session.capability("ai-tools").allowed);
+  }
+  readonly settingsCategory = signal<"cursor" | "selection" | "anchors" | "measurement" | "appearance" | "shortcuts" | "tokens">("cursor");
   /** The commands of Object > Path, and those the path panel offers, in Illustrator's order. */
   readonly pathMenuCommands = ["joinPaths", "averageAnchors", "simplifyPath", "outlineStroke", "selectStray"] as const;
   /** Object > Lock and Object > Hide, with their companions, in the order Illustrator gives them. */
@@ -795,6 +801,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   /** Until FEAT-0029 and FEAT-0031 deliver their panels, an entry says so rather than opening an empty one. */
   openAdvancedTool(tool: { label: string; permission: Permission }) {
     const capability = this.session.capability(tool.permission);
+    this.showInspectorTab(tool.permission === "ai-tools" ? "ai" : "history");
     this.editor.status.set(this.t(tool.label) + ": " + this.t(capability.allowed ? "Its panel is under development." : capability.reason));
   }
   modeExplanation() {
@@ -802,90 +809,445 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     const note = this.session.state() === "not-configured" ? " " + this.t("Advanced mode is not configured on this server.") : "";
     return this.t("Demo: every drawing tool is available; sign in with a licence to use the advanced tools. Click to open the settings of the local document service.") + note;
   }
-  /** Admin > Users and licences (FEAT-0032): only administrators see it, and the API decides. */
+  /**
+   * The administration workspace (FEAT-0032, SC-0141 to SC-0146): categories on the left as in
+   * Settings, one smart table per category and an auxiliary form beside it. Only the super
+   * administrator sees it, and the API decides every call.
+   */
   readonly adminOpen = signal(false);
-  readonly adminPage = signal<AdminPage | null>(null);
-  readonly adminSelected = signal<AdminUser | null>(null);
-  readonly adminError = signal("");
+  readonly adminCategories = [
+    { id: "users", label: "Users", icon: "user" },
+    { id: "roles", label: "Roles and permissions", icon: "lock" },
+    { id: "licences", label: "Licences", icon: "document" },
+    { id: "documents", label: "Documents", icon: "image" },
+  ] as const;
+  readonly adminCategory = signal<"users" | "roles" | "licences" | "documents">("users");
+  readonly adminUserList = signal<AdminUser[]>([]);
+  readonly adminRoleList = signal<AdminRole[]>([]);
+  readonly adminLicenceList = signal<AdminLicence[]>([]);
+  readonly adminDocumentList = signal<AdminDocument[]>([]);
+  readonly adminSelectedId = signal<string | null>(null);
+  readonly adminCreating = signal(false);
   readonly adminBusy = signal(false);
-  readonly adminConfirmRevoke = signal(false);
+  readonly adminError = signal("");
+  readonly adminNotice = signal("");
   readonly licencePermissions: { id: Permission; label: string }[] = [{ id: "ai-tools", label: "AI Tools" }, { id: "change-control", label: "Change control" }];
-  adminSearch = "";
-  adminPageIndex = 0;
-  adminDraft = { permissions: { "ai-tools": true, "change-control": false } as Record<Permission, boolean>, period: "days" as "days" | "until", days: 30, until: "", extendDays: 30 };
-  openAdmin() {
+  readonly tiers = TIERS;
+  newUserDraft = { username: "", email: "", firstName: "", lastName: "", password: "", temporary: true, admin: false };
+  userDraft = { email: "", firstName: "", lastName: "" };
+  passwordDraft = { password: "", temporary: true };
+  banDraft = { mode: "temporary" as "temporary" | "permanent", until: "", reason: "" };
+  licenceDraft = { userId: "", tier: "pro" as Tier, permissions: { "ai-tools": true, "change-control": false } as Record<Permission, boolean>, period: "days" as "days" | "until", days: 30, until: "" };
+  extendDays = 30;
+  roleMemberToAdd = "";
+
+  readonly adminUsersById = computed(() => new Map(this.adminUserList().map((user) => [user.id, user])));
+  readonly adminSelectedUser = computed(() => this.adminUsersById().get(this.adminSelectedId() ?? "") ?? null);
+  readonly adminSelectedRole = computed(() => this.adminRoleList().find((role) => role.name === this.adminSelectedId()) ?? null);
+  readonly adminSelectedLicence = computed(() => this.adminLicenceList().find((licence) => licence.userId === this.adminSelectedId()) ?? null);
+  readonly adminSelectedDocument = computed(() => this.adminDocumentList().find((item) => item.id === this.adminSelectedId()) ?? null);
+  readonly adminUserColumns = computed(() => [
+    { key: "name", label: this.t("Name"), noteKey: "username", ellipsis: true, iconKey: "statusIcon", iconTitleKey: "state" },
+    { key: "email", label: this.t("Email"), ellipsis: true },
+    { key: "role", label: this.t("Role"), filter: "choice" as const }, { key: "state", label: this.t("State"), filter: "choice" as const, ellipsis: true },
+    { key: "tier", label: this.t("Tier"), filter: "choice" as const, toneKey: "tierTone" },
+    { key: "licence", label: this.t("Licence"), filter: "choice" as const, ellipsis: true },
+    { key: "created", label: this.t("Registered"), sortKey: "createdAt", titleKey: "createdFull", filter: "period" as const },
+    { key: "lastLogin", label: this.t("Last sign-in"), sortKey: "lastLoginAt", titleKey: "lastLoginFull", filter: "period" as const },
+    { key: "documents", label: this.t("Documents"), align: "end" as const, filter: "minimum" as const },
+  ]);
+  readonly adminUserRows = computed(() => this.adminUserList().map((user) => ({
+    id: user.id, name: user.name, username: user.username, email: user.email, role: this.t(user.admin ? "Administrator" : "User"),
+    state: this.accountState(user), statusIcon: user.ban ? "status-banned" : user.enabled ? "status-active" : "status-disabled",
+    tier: user.admin && user.licence.state === "none" ? this.t("Administrator") : user.licence.tier ? this.tierLabel(user.licence.tier) : this.t("Demo"),
+    tierTone: user.admin && user.licence.state === "none" ? "admin" : user.licence.tier ?? "demo",
+    licence: this.t(this.licenceStateLabel(user.licence.state)),
+    created: this.shortDate(user.created), createdFull: this.fullDate(user.created), createdAt: user.created ?? "",
+    lastLogin: this.shortDate(user.lastLogin, "Never"), lastLoginFull: this.fullDate(user.lastLogin), lastLoginAt: user.lastLogin ?? "", documents: user.documents,
+  })));
+  readonly adminRoleColumns = computed(() => [
+    { key: "label", label: this.t("Role") }, { key: "kind", label: this.t("Kind"), filter: "choice" as const },
+    { key: "description", label: this.t("Description"), ellipsis: true }, { key: "count", label: this.t("Members"), align: "end" as const, filter: "minimum" as const },
+  ]);
+  readonly adminRoleRows = computed(() => this.adminRoleList().map((role) => ({
+    id: role.name, label: this.roleLabel(role.name), kind: this.t(role.kind === "role" ? "Role" : "Permission"),
+    description: this.t(role.description), count: role.members.length,
+  })));
+  readonly adminLicenceColumns = computed(() => [
+    { key: "holder", label: this.t("Holder"), noteKey: "email", ellipsis: true }, { key: "tier", label: this.t("Tier"), filter: "choice" as const, toneKey: "tierTone" },
+    { key: "permissions", label: this.t("Permissions"), filter: "choice" as const, ellipsis: true }, { key: "state", label: this.t("State"), filter: "choice" as const },
+    { key: "issued", label: this.t("Issued"), sortKey: "issuedAt", titleKey: "issuedFull", filter: "period" as const },
+    { key: "expires", label: this.t("Expires"), sortKey: "expiresAt", titleKey: "expiresFull" },
+  ]);
+  readonly adminLicenceRows = computed(() => this.adminLicenceList().map((licence) => ({
+    id: licence.userId, holder: licence.name, email: licence.email, tier: this.tierLabel(licence.tier), tierTone: licence.tier ?? "pro",
+    permissions: this.permissionList(licence.permissions), state: this.t(this.licenceStateLabel(licence.state)),
+    issued: this.shortDate(licence.issued), issuedFull: this.fullDate(licence.issued), issuedAt: licence.issued ?? "",
+    expires: this.shortDate(licence.expires), expiresFull: this.fullDate(licence.expires), expiresAt: licence.expires ?? "",
+  })));
+  readonly adminDocumentColumns = computed(() => [
+    { key: "name", label: this.t("Name"), ellipsis: true }, { key: "owner", label: this.t("Owner"), filter: "choice" as const, ellipsis: true },
+    { key: "size", label: this.t("Size"), sortKey: "bytes", align: "end" as const },
+    { key: "updated", label: this.t("Last change"), sortKey: "updatedAt", titleKey: "updatedFull", filter: "period" as const },
+  ]);
+  readonly adminDocumentRows = computed(() => this.adminDocumentList().map((item) => ({
+    id: item.id, name: item.name, owner: item.owner ? (this.adminUsersById().get(item.owner)?.name ?? this.t("Deleted user")) : this.t("No owner"),
+    size: this.formatSize(item.size), bytes: item.size, updated: this.shortDate(item.updatedAt), updatedFull: this.fullDate(item.updatedAt), updatedAt: item.updatedAt,
+  })));
+  readonly usersWithoutLicence = computed(() => this.adminUserList().filter((user) => user.licence.state === "none"));
+  /** The rows ticked in the current table, for bulk actions. */
+  readonly adminChecked = signal<string[]>([]);
+  /** The side panel slides in from the right while a row is open or a new record is being made. */
+  readonly adminDrawerOpen = computed(() => this.adminCreating() || !!this.adminSelectedId());
+  readonly bulkActions = computed(() => ({
+    users: [
+      { id: "enable", label: "Activate" }, { id: "disable", label: "Deactivate" }, { id: "ban", label: "Ban permanently", destructive: true },
+      { id: "unban", label: "Lift the ban" }, { id: "grant-admin", label: "Make administrator" }, { id: "revoke-admin", label: "Remove the administrator role" },
+      { id: "delete", label: "Delete", destructive: true },
+    ],
+    roles: [],
+    licences: [
+      { id: "suspend", label: "Suspend" }, { id: "resume", label: "Resume" }, { id: "extend", label: "Extend by 30 days" },
+      { id: "revoke", label: "Revoke", destructive: true },
+    ],
+    documents: [{ id: "delete-document", label: "Delete", destructive: true }],
+  } as Record<string, { id: string; label: string; destructive?: boolean }[]>)[this.adminCategory()]);
+  closeAdminDrawer() {
+    this.adminSelectedId.set(null);
+    this.adminCreating.set(false);
+  }
+  /** Applies a bulk action to every ticked row; destructive ones ask first. Rows the API refuses are counted. */
+  runBulk(event: Event) {
+    const select = event.target as HTMLSelectElement, action = this.bulkActions().find((item) => item.id === select.value);
+    select.value = "";
+    const ids = [...this.adminChecked()];
+    if (!action || !ids.length) return;
+    const own = this.session.session()?.subject;
+    const run = async () => {
+      let failed = 0;
+      await this.adminTask(async () => {
+        for (const id of ids) {
+          if (id === own && ["ban", "delete", "disable", "revoke-admin"].includes(action.id)) { failed++; continue; }
+          try { await this.bulkStep(action.id, id); } catch { failed++; }
+        }
+      });
+      this.adminChecked.set([]);
+      await this.loadAdmin();
+      this.adminNotice.set(this.t("Applied to {done} of {total}.").replace("{done}", String(ids.length - failed)).replace("{total}", String(ids.length)));
+    };
+    if (action.destructive)
+      this.askConfirmation(action.label, this.t("{action}: {count} selected. This cannot be undone from here.").replace("{action}", this.t(action.label)).replace("{count}", String(ids.length)), action.label, run);
+    else void run();
+  }
+  private bulkStep(action: string, id: string): Promise<unknown> {
+    switch (action) {
+      case "enable": return this.session.updateUser(id, { enabled: true });
+      case "disable": return this.session.updateUser(id, { enabled: false });
+      case "ban": return this.session.banUser(id, null, "");
+      case "unban": return this.session.liftBan(id);
+      case "grant-admin": return this.session.setRole("xds-admin", id, true);
+      case "revoke-admin": return this.session.setRole("xds-admin", id, false);
+      case "delete": return this.session.deleteUser(id);
+      case "suspend": return this.session.changeLicence(id, { status: "suspended" });
+      case "resume": return this.session.changeLicence(id, { status: "active" });
+      case "extend": return this.session.extendLicence(id, 30);
+      case "revoke": return this.session.revokeLicence(id);
+      case "delete-document": return this.session.deleteDocument(id);
+      default: return Promise.reject(new Error("Unknown action"));
+    }
+  }
+
+  /** Admin menu entries open the workspace directly on their category. */
+  openAdmin(category: "users" | "roles" | "licences" | "documents" = this.adminCategory()) {
     this.dismissMenus();
     this.adminOpen.set(true);
-    this.adminSelected.set(null);
-    void this.loadAdminUsers(0);
+    this.selectAdminCategory(category);
   }
-  async loadAdminUsers(page = this.adminPageIndex) {
+  selectAdminCategory(id: "users" | "roles" | "licences" | "documents") {
+    this.adminCategory.set(id);
+    this.adminChecked.set([]);
+    this.adminSelectedId.set(null);
+    this.adminCreating.set(false);
+    this.adminError.set("");
+    this.adminNotice.set("");
+    void this.loadAdmin();
+  }
+  adminNavKey(event: KeyboardEvent, index: number) {
+    const count = this.adminCategories.length;
+    const next = event.key === "ArrowDown" ? (index + 1) % count : event.key === "ArrowUp" ? (index + count - 1) % count
+      : event.key === "Home" ? 0 : event.key === "End" ? count - 1 : -1;
+    if (next < 0) return;
+    event.preventDefault();
+    this.selectAdminCategory(this.adminCategories[next].id);
+    document.getElementById("admin-tab-" + this.adminCategories[next].id)?.focus();
+  }
+  /** Loads what the category shows; users are always loaded, since the others name them. */
+  async loadAdmin() {
+    await this.adminTask(async () => {
+      this.adminUserList.set(await this.session.adminUsers());
+      const category = this.adminCategory();
+      if (category === "roles") this.adminRoleList.set(await this.session.adminRoles());
+      if (category === "licences") this.adminLicenceList.set(await this.session.adminLicences());
+      if (category === "documents") this.adminDocumentList.set(await this.session.adminDocuments());
+    });
+  }
+  private async adminTask(work: () => Promise<unknown>, notice = "") {
     this.adminBusy.set(true);
     this.adminError.set("");
     try {
-      this.adminPage.set(await this.session.adminUsers(this.adminSearch.trim(), page));
-      this.adminPageIndex = page;
+      await work();
+      this.adminNotice.set(notice);
+      return true;
     } catch (error) {
       this.adminError.set(error instanceof Error ? error.message : String(error));
+      return false;
     } finally {
       this.adminBusy.set(false);
     }
   }
-  adminPages() {
-    const page = this.adminPage();
-    return page ? Math.max(1, Math.ceil(page.total / page.size)) : 1;
-  }
-  selectAdminUser(user: AdminUser) {
-    this.adminSelected.set(user);
-    this.adminConfirmRevoke.set(false);
-    this.adminError.set("");
-    const granted = user.licence.permissions;
-    this.adminDraft.permissions = { "ai-tools": granted.includes("ai-tools") || !granted.length, "change-control": granted.includes("change-control") };
-  }
-  /** Runs one licence change and puts the answer in place of the user in the list. */
-  private async changeLicence(change: () => Promise<AdminUser>) {
-    this.adminBusy.set(true);
-    this.adminError.set("");
-    try {
-      const user = await change();
-      this.adminSelected.set(user);
-      this.adminConfirmRevoke.set(false);
-      this.adminPage.update((page) => page && { ...page, users: page.users.map((item) => (item.id === user.id ? user : item)) });
-    } catch (error) {
-      this.adminError.set(error instanceof Error ? error.message : String(error));
-    } finally {
-      this.adminBusy.set(false);
+  /** Runs a change, then reloads the category so every table shows the new state. */
+  private async adminChange(work: () => Promise<unknown>, notice: string) {
+    if (await this.adminTask(work, notice)) {
+      const kept = this.adminNotice();
+      await this.loadAdmin();
+      this.adminNotice.set(kept);
     }
+  }
+  /** Every destructive action asks through the in-app confirmation of the shell; never a browser dialog. */
+  askConfirmation(title: string, message: string, confirm: string, run: () => Promise<unknown>) {
+    this.confirmation.set({ title: this.t(title), message, action: this.t(confirm), run: () => { void run(); } });
+  }
+  selectAdminRow(id: string) {
+    this.adminSelectedId.set(id);
+    this.adminCreating.set(false);
+    this.adminError.set("");
+    this.adminNotice.set("");
+    const user = this.adminUsersById().get(id);
+    if (this.adminCategory() === "users" && user) {
+      this.userDraft = { email: user.email, firstName: user.firstName, lastName: user.lastName };
+      this.passwordDraft = { password: "", temporary: true };
+      this.banDraft = { mode: "temporary", until: "", reason: "" };
+    }
+    const licence = this.adminLicenceList().find((item) => item.userId === id);
+    if (this.adminCategory() === "licences" && licence) {
+      this.licenceDraft = { userId: id, tier: licence.tier ?? "pro", permissions: { "ai-tools": licence.permissions.includes("ai-tools"), "change-control": licence.permissions.includes("change-control") },
+        period: "until", days: 30, until: (licence.expires ?? "").slice(0, 10) };
+    }
+    this.roleMemberToAdd = "";
+  }
+  startCreating() {
+    this.adminSelectedId.set(null);
+    this.adminCreating.set(true);
+    this.newUserDraft = { username: "", email: "", firstName: "", lastName: "", password: "", temporary: true, admin: false };
+    if (this.adminCategory() === "licences")
+      this.licenceDraft = { userId: "", tier: "pro", permissions: { "ai-tools": true, "change-control": false }, period: "days", days: 30, until: "" };
+  }
+  createUser() {
+    const draft = { ...this.newUserDraft };
+    void this.adminChange(async () => {
+      const user = await this.session.createUser(draft);
+      this.adminCreating.set(false);
+      this.adminSelectedId.set(user.id);
+    }, "The user was created.");
+  }
+  saveUser() {
+    const user = this.adminSelectedUser();
+    if (user) void this.adminChange(() => this.session.updateUser(user.id, { ...this.userDraft }), "The user was saved.");
+  }
+  toggleAdministrator(user: AdminUser) {
+    void this.adminChange(() => this.session.setRole("xds-admin", user.id, !user.admin), user.admin ? "The administrator role was removed." : "The user is now an administrator.");
+  }
+  overwritePassword() {
+    const user = this.adminSelectedUser(), draft = { ...this.passwordDraft };
+    if (!user) return;
+    this.askConfirmation("Overwrite the password", this.t("The password of {name} is replaced and their sessions end.").replace("{name}", user.name), "Overwrite",
+      () => this.adminChange(() => this.session.setPassword(user.id, draft.password, draft.temporary), "The password was overwritten."));
+  }
+  banUser() {
+    const user = this.adminSelectedUser(), draft = { ...this.banDraft };
+    if (!user) return;
+    if (draft.mode === "temporary" && !draft.until) { this.adminError.set("Choose when the ban ends."); return; }
+    const until = draft.mode === "temporary" ? new Date(draft.until).toISOString() : null;
+    this.askConfirmation("Ban the user", (draft.mode === "temporary" ? this.t("{name} cannot sign in until the chosen date; their sessions end.") : this.t("{name} cannot sign in until the ban is lifted; their sessions end.")).replace("{name}", user.name), "Ban",
+      () => this.adminChange(() => this.session.banUser(user.id, until, draft.reason), "The user was banned."));
+  }
+  liftBan(user: AdminUser) {
+    void this.adminChange(() => this.session.liftBan(user.id), "The ban was lifted.");
+  }
+  deleteUser() {
+    const user = this.adminSelectedUser();
+    if (!user) return;
+    this.askConfirmation("Delete the user", this.t("{name} and their licence are deleted from Keycloak. Their documents stay on the server without an owner.").replace("{name}", user.name), "Delete",
+      () => this.adminChange(async () => { await this.session.deleteUser(user.id); this.adminSelectedId.set(null); }, "The user was deleted."));
+  }
+  manageLicence(user: AdminUser) {
+    this.selectAdminCategory("licences");
+    if (user.licence.state === "none") {
+      this.startCreating();
+      this.licenceDraft.userId = user.id;
+    } else this.adminSelectedId.set(user.id);
+  }
+  addRoleMember() {
+    const role = this.adminSelectedRole(), id = this.roleMemberToAdd;
+    if (role && id) void this.adminChange(() => this.session.setRole(role.name, id, true), "The member was added.");
+  }
+  removeRoleMember(user: AdminUser) {
+    const role = this.adminSelectedRole();
+    if (!role) return;
+    this.askConfirmation("Remove from the role", this.t("{name} leaves {role}.").replace("{name}", user.name).replace("{role}", this.roleLabel(role.name)), "Remove",
+      () => this.adminChange(() => this.session.setRole(role.name, user.id, false), "The member was removed."));
+  }
+  private draftPermissions(): Permission[] {
+    return this.licencePermissions.map((item) => item.id).filter((id) => this.licenceDraft.permissions[id]);
+  }
+  private draftPeriod() {
+    return this.licenceDraft.period === "days" ? { days: Math.round(Number(this.licenceDraft.days)) } : { until: this.licenceDraft.until };
   }
   issueLicence() {
-    const user = this.adminSelected(), d = this.adminDraft;
-    const permissions = this.licencePermissions.map((item) => item.id).filter((id) => d.permissions[id]);
-    if (!user) return;
+    const draft = this.licenceDraft, permissions = this.draftPermissions();
+    if (!draft.userId) { this.adminError.set("Choose the holder of the licence."); return; }
     if (!permissions.length) { this.adminError.set("Choose at least one permission."); return; }
-    void this.changeLicence(() => this.session.issueLicence(user.id, permissions, d.period === "days" ? { days: Math.round(Number(d.days)) } : { until: d.until }));
+    void this.adminChange(async () => {
+      await this.session.issueLicence(draft.userId, draft.tier, permissions, this.draftPeriod());
+      this.adminCreating.set(false);
+      this.adminSelectedId.set(draft.userId);
+    }, "The licence was issued.");
+  }
+  saveLicence() {
+    const licence = this.adminSelectedLicence(), permissions = this.draftPermissions();
+    if (!licence) return;
+    if (!permissions.length) { this.adminError.set("Choose at least one permission."); return; }
+    void this.adminChange(() => this.session.changeLicence(licence.userId, { tier: this.licenceDraft.tier, permissions, ...this.draftPeriod() }), "The licence was saved.");
+  }
+  setLicenceStatus(status: "active" | "suspended") {
+    const licence = this.adminSelectedLicence();
+    if (licence) void this.adminChange(() => this.session.changeLicence(licence.userId, { status }), status === "suspended" ? "The licence was suspended." : "The licence was resumed.");
   }
   extendLicence() {
-    const user = this.adminSelected();
-    if (user) void this.changeLicence(() => this.session.extendLicence(user.id, Math.round(Number(this.adminDraft.extendDays))));
+    const licence = this.adminSelectedLicence();
+    if (licence) void this.adminChange(() => this.session.extendLicence(licence.userId, Math.round(Number(this.extendDays))), "The licence was extended.");
   }
   revokeLicence() {
-    const user = this.adminSelected();
-    if (!user) return;
-    // Revoking asks twice in place, without a browser dialog.
-    if (!this.adminConfirmRevoke()) { this.adminConfirmRevoke.set(true); return; }
-    void this.changeLicence(() => this.session.revokeLicence(user.id));
+    const licence = this.adminSelectedLicence();
+    if (!licence) return;
+    this.askConfirmation("Revoke the licence", this.t("{name} loses the licence and its permissions.").replace("{name}", licence.name), "Revoke",
+      () => this.adminChange(async () => { await this.session.revokeLicence(licence.userId); this.adminSelectedId.set(null); }, "The licence was revoked."));
   }
-  licenceSummary(licence: { state: string; expires: string | null }) {
+  deleteDocument() {
+    const item = this.adminSelectedDocument();
+    if (!item) return;
+    this.askConfirmation("Delete the document", this.t("{name} is deleted from the server.").replace("{name}", item.name), "Delete",
+      () => this.adminChange(async () => { await this.session.deleteDocument(item.id); this.adminSelectedId.set(null); }, "The document was deleted."));
+  }
+  accountState(user: AdminUser) {
+    if (user.ban?.permanent) return this.t("Banned permanently");
+    if (user.ban) return this.t("Banned until") + " " + this.formatDate(user.ban.until);
+    return this.t(user.enabled ? "Active" : "Disabled");
+  }
+  roleLabel(role: string) {
+    return role === "xds-admin" ? this.t("Administrator") : this.permissionLabel(role);
+  }
+  tierLabel(tier: string | null | undefined) {
+    return this.t(TIERS.find((item) => item.id === tier)?.label ?? "Pro");
+  }
+  licenceStateLabel(state: string) {
+    return ({ valid: "Valid", expired: "Expired", suspended: "Suspended", none: "No licence", unrestricted: "Unrestricted" } as Record<string, string>)[state] ?? state;
+  }
+  formatDate(value: string | null | undefined, empty = "—") {
+    if (!value) return this.t(empty);
+    return new Date(value).toLocaleString(this.locale() === "es" ? "es-ES" : "en-GB", { dateStyle: "medium", timeStyle: "short" });
+  }
+  /** Dates in tables: short, with the full date, time and zone on hover. */
+  shortDate(value: string | null | undefined, empty = "—") {
+    if (!value) return this.t(empty);
+    return new Date(value).toLocaleDateString(this.locale() === "es" ? "es-ES" : "en-GB", { day: "2-digit", month: "2-digit", year: "2-digit" });
+  }
+  fullDate(value: string | null | undefined) {
+    if (!value) return "";
+    const zone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    return new Date(value).toLocaleString(this.locale() === "es" ? "es-ES" : "en-GB", { dateStyle: "full", timeStyle: "long" }) + " · " + zone;
+  }
+  translateText = (text: string) => this.t(text);
+  formatSize(bytes: number) {
+    return bytes < 1024 ? `${bytes} B` : bytes < 1048576 ? `${(bytes / 1024).toFixed(1)} KB` : `${(bytes / 1048576).toFixed(1)} MB`;
+  }
+  licenceSummary(licence: Licence) {
     if (licence.state === "unrestricted") return this.t("Unrestricted as administrator");
     if (licence.state === "none" || !licence.expires) return this.t("No licence");
-    const date = new Date(licence.expires).toLocaleString(this.locale() === "es" ? "es-ES" : "en-GB", { dateStyle: "medium", timeStyle: "short" });
-    return this.t(licence.state === "valid" ? "Valid until" : licence.state === "suspended" ? "Suspended, expires" : "Expired on") + " " + date;
+    const date = this.formatDate(licence.expires);
+    return this.tierLabel(licence.tier) + " · " + this.t(licence.state === "valid" ? "Valid until" : licence.state === "suspended" ? "Suspended, expires" : "Expired on") + " " + date;
   }
   permissionList(permissions: string[]) {
     return permissions.length ? permissions.map((permission) => this.permissionLabel(permission)).join(", ") : "—";
   }
   permissionLabel(permission: string) {
     return this.t(this.licencePermissions.find((item) => item.id === permission)?.label ?? permission);
+  }
+  /** The colour of the badge after the logo, the same as the tier badges of administration. */
+  modeTone() {
+    if (!this.session.licensed()) return "demo";
+    return this.session.session()?.licence.tier ?? (this.session.isAdmin() ? "admin" : "pro");
+  }
+  /** The badge after the logo: the tier of a valid licence, Pro for the super administrator, or Demo. */
+  modeBadge() {
+    if (!this.session.licensed()) return this.t("Demo");
+    return this.tierLabel(this.session.session()?.licence.tier ?? "pro");
+  }
+
+  /** The right column: Properties, AI Tools and History, each a set of panels (FEAT-0029, FEAT-0031). */
+  readonly inspectorTab = signal<"properties" | "ai" | "history">("properties");
+  readonly inspectorTabs = [
+    { id: "properties", label: "Properties", permission: null },
+    { id: "ai", label: "AI Tools", permission: "ai-tools" },
+    { id: "history", label: "History", permission: "change-control" },
+  ] as const;
+  selectInspectorTab(id: "properties" | "ai" | "history") {
+    this.inspectorTab.set(id);
+  }
+  inspectorTabKey(event: KeyboardEvent, index: number) {
+    const count = this.inspectorTabs.length;
+    const next = event.key === "ArrowRight" ? (index + 1) % count : event.key === "ArrowLeft" ? (index + count - 1) % count : -1;
+    if (next < 0) return;
+    event.preventDefault();
+    this.selectInspectorTab(this.inspectorTabs[next].id);
+    document.getElementById("inspector-tab-" + this.inspectorTabs[next].id)?.focus();
+  }
+  /** Shows the right column on a tab, or hides it when it already shows that tab. */
+  showInspectorTab(id: "properties" | "ai" | "history") {
+    const visible = this.mobile() ? this.panelsOpen() : this.panels();
+    if (visible && this.inspectorTab() === id) {
+      if (this.mobile()) this.panelsOpen.set(false);
+      else this.panels.set(false);
+      return;
+    }
+    this.inspectorTab.set(id);
+    if (this.mobile()) this.openDrawer("panels");
+    else this.panels.set(true);
+  }
+
+  /** Settings > External tokens: the user's own provider token, of which the browser only sees the state. */
+  readonly tokenState = signal<TokenStatus | null>(null);
+  readonly tokenMessage = signal("");
+  tokenDraft = "";
+  async loadTokenState() {
+    this.tokenMessage.set("");
+    try { this.tokenState.set(await this.session.tokenStatus()); } catch (error) { this.tokenMessage.set(error instanceof Error ? error.message : String(error)); }
+  }
+  async saveToken() {
+    const value = this.tokenDraft.trim();
+    this.tokenDraft = "";
+    try { this.tokenState.set(await this.session.saveToken(value)); this.tokenMessage.set("The token was saved."); }
+    catch (error) { this.tokenMessage.set(error instanceof Error ? error.message : String(error)); }
+  }
+  async testToken() {
+    try { this.tokenMessage.set((await this.session.testToken()).detail); }
+    catch (error) { this.tokenMessage.set(error instanceof Error ? error.message : String(error)); }
+  }
+  removeToken() {
+    this.askConfirmation("Remove the token", this.t("The agent tools stop using your OpenAI API token until you enter one again."), "Remove", async () => {
+      try { await this.session.removeToken(); this.tokenState.set({ provider: "openai", configured: false, updatedAt: null }); this.tokenMessage.set("The token was removed."); }
+      catch (error) { this.tokenMessage.set(error instanceof Error ? error.message : String(error)); }
+    });
   }
   /** Convert to pixel image and its values, as Object > Rasterize offers them in Illustrator. */
   readonly rasterizeDialog = signal(false);
@@ -2460,14 +2822,16 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   activeSettingsCategory() {
     return this.settingsCategories.find(category => category.id === this.settingsCategory())!;
   }
-  selectSettingsCategory(id: "cursor" | "selection" | "anchors" | "measurement" | "appearance" | "shortcuts") {
+  selectSettingsCategory(id: "cursor" | "selection" | "anchors" | "measurement" | "appearance" | "shortcuts" | "tokens") {
     this.recording.set(null);
     this.settingsCategory.set(id);
+    if (id === "tokens") void this.loadTokenState();
     const panel = document.getElementById("settings-panel");
     if (panel) panel.scrollTop = 0;
   }
   settingsNavKey(event: KeyboardEvent, index: number) {
-    const count = this.settingsCategories.length;
+    const categories = this.visibleSettingsCategories();
+    const count = categories.length;
     let next: number;
     if (event.key === "ArrowRight") {
       event.preventDefault();
@@ -2480,7 +2844,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     else if (event.key === "End") next = count - 1;
     else return;
     event.preventDefault();
-    const category = this.settingsCategories[next];
+    const category = categories[next];
     this.selectSettingsCategory(category.id);
     document.getElementById("settings-tab-" + category.id)?.focus();
   }

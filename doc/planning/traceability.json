@@ -996,9 +996,17 @@
         "SC-0122",
         "SC-0148"
       ],
-      "implementation": [],
-      "tests": [],
-      "evidence": []
+      "implementation": [
+        "services/api/src/external_tokens.py",
+        "apps/web/src/app/app.component.ts"
+      ],
+      "tests": [
+        "services/api/tests/test_external_tokens.py",
+        "apps/web/tests/session.test.ts"
+      ],
+      "evidence": [
+        "doc/changelog/0.11.0.md"
+      ]
     },
     {
       "id": "FEAT-0030",
@@ -1070,7 +1078,7 @@
       "id": "FEAT-0032",
       "title": "Sign-in, time-limited licences and Admin menu",
       "path": "doc/feat/FEAT-0032.md",
-      "status": "Planned",
+      "status": "Implementing",
       "iteration": "ITER-0001",
       "dependsOn": [
         "FEAT-0002"
@@ -1095,9 +1103,30 @@
         "SC-0146",
         "SC-0147"
       ],
-      "implementation": [],
-      "tests": [],
-      "evidence": []
+      "implementation": [
+        "services/api/src/identity.py",
+        "services/api/src/administration.py",
+        "services/api/src/external_tokens.py",
+        "services/api/src/main.py",
+        "apps/web/src/app/session.service.ts",
+        "apps/web/src/app/smart-table.component.ts",
+        "apps/web/src/app/app.component.ts",
+        "infra/keycloak/xds-realm.json",
+        "scripts/local.py",
+        "scripts/live.py"
+      ],
+      "tests": [
+        "services/api/tests/test_identity.py",
+        "services/api/tests/test_administration.py",
+        "services/api/tests/test_external_tokens.py",
+        "tests/test_local_launcher.py",
+        "apps/web/tests/session.test.ts",
+        "apps/web/tests/smart-table.test.ts"
+      ],
+      "evidence": [
+        "doc/implementation/PLAN-0032-0001.md",
+        "doc/changelog/0.11.0.md"
+      ]
     }
   ]
 }
