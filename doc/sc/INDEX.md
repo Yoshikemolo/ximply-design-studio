@@ -153,3 +153,8 @@
 | [SC-0147 — Super administrator access and the advanced tools block](SC-0147.md) |
 | [SC-0148 — Each user's own OpenAI API token](SC-0148.md) |
 | [SC-0149 — Copies leave the groups of their originals](SC-0149.md) |
+| [SC-0150 — AI Tools panel choices and Generate](SC-0150.md) |
+| [SC-0151 — What a request carries, labelled](SC-0151.md) |
+| [SC-0152 — Saved and favourite prompts](SC-0152.md) |
+| [SC-0153 — The result is inserted as a new object](SC-0153.md) |
+| [SC-0154 — Provider requests through the API](SC-0154.md) |

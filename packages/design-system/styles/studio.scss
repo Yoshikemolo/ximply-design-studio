@@ -3231,3 +3231,265 @@ option.destructive-option {
 .stroke-trigger {
   bottom: 0;
 }
+
+/*
+ * AI Tools panel (FEAT-0029): the choices scroll with the column and Generate stays at its foot,
+ * with a moving bar while the context travels and the model answers.
+ */
+.agent-panel {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  font-size: 11px;
+}
+.agent-scroll {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 12px 12px 16px;
+}
+.agent-block {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.agent-block legend,
+.agent-block label,
+.agent-block h4 {
+  padding: 0;
+  margin: 0 0 2px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.agent-block .hint {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.4;
+}
+.agent-scope {
+  display: flex;
+}
+.agent-scope button {
+  flex: 1;
+  width: auto;
+  gap: 6px;
+  font-size: 11px;
+}
+.agent-scope .count {
+  min-width: 16px;
+  padding: 0 4px;
+  border-radius: 8px;
+  background: var(--panel-raised);
+  color: var(--muted);
+  font-size: 10px;
+}
+.agent-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+.agent-actions .chip {
+  min-height: 24px;
+  padding: 3px 9px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  font-size: 11px;
+}
+.agent-actions .chip.active {
+  border-color: var(--accent);
+  background: var(--selected);
+  color: var(--text);
+}
+.agent-label-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+.agent-label-row output {
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+.agent-label-row .link-button {
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  color: var(--accent);
+  font-size: 11px;
+}
+.agent-label-row .link-button:hover {
+  background: none;
+  text-decoration: underline;
+}
+.agent-panel textarea {
+  width: 100%;
+  box-sizing: border-box;
+  resize: vertical;
+  min-height: 84px;
+  line-height: 1.45;
+}
+.agent-save {
+  display: flex;
+  gap: 6px;
+}
+.agent-save input {
+  flex: 1;
+}
+.agent-save button {
+  border-color: var(--border);
+}
+.agent-library {
+  display: flex;
+  flex-direction: column;
+  max-height: 220px;
+  margin: 0 0 4px;
+  padding: 4px;
+  overflow-y: auto;
+  list-style: none;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--input);
+}
+.agent-library li {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+.agent-library .icon-only {
+  flex: none;
+  width: 26px;
+  min-height: 26px;
+  padding: 0;
+}
+.agent-library .favourite[aria-pressed="true"] img {
+  filter: none;
+}
+.agent-library-use {
+  flex: 1;
+  min-width: 0;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
+  text-align: left;
+}
+.agent-library-use span,
+.agent-library-use small {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.agent-library-use small {
+  color: var(--muted);
+  font-size: 10px;
+}
+.agent-panel input[type="range"] {
+  width: 100%;
+}
+.agent-scale {
+  display: flex;
+  justify-content: space-between;
+  color: var(--muted);
+  font-size: 10px;
+}
+.agent-sent {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.agent-sent li {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  background: var(--panel-raised);
+}
+.agent-sent li::before {
+  content: "✓";
+  color: #14a38b;
+}
+.agent-sent li.pending::before {
+  content: "…";
+  color: var(--muted);
+}
+.agent-sent li span {
+  flex: 1;
+}
+.agent-sent small {
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.agent-footer {
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px 12px;
+  border-top: 1px solid var(--border);
+  background: var(--panel);
+}
+.agent-status {
+  margin: 0;
+  line-height: 1.4;
+}
+.agent-status.error {
+  color: #e5484d;
+}
+.agent-status.muted {
+  color: var(--muted);
+}
+.agent-buttons {
+  display: flex;
+  gap: 8px;
+}
+.agent-buttons .secondary {
+  border-color: var(--border);
+}
+.agent-buttons .generate {
+  flex: 1;
+  min-height: 34px;
+}
+.agent-progress {
+  position: relative;
+  height: 3px;
+  overflow: hidden;
+  border-radius: 2px;
+  background: var(--panel-raised);
+}
+.agent-progress span {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 40%;
+  border-radius: 2px;
+  background: linear-gradient(90deg, transparent, var(--accent), #8b5cf6, transparent);
+  animation: agent-progress 1.3s ease-in-out infinite;
+}
+@keyframes agent-progress {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(250%); }
+}
+.agent-panel[aria-busy="true"] .generate img {
+  animation: agent-sparkle 1.2s ease-in-out infinite;
+}
+@keyframes agent-sparkle {
+  50% { transform: scale(1.2) rotate(15deg); opacity: 0.7; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .agent-progress span { width: 100%; animation: none; opacity: 0.6; }
+  .agent-panel[aria-busy="true"] .generate img { animation: none; }
+}

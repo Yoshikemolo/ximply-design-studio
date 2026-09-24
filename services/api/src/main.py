@@ -20,6 +20,7 @@ from fastapi.responses import JSONResponse
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from .administration import TIERS, administration_router, lift_expired_bans
 from .external_tokens import TokenVault, check_openai, tokens_router
+from .agent_tools import OpenAiProvider, PromptStore, Provider, agent_router
 from .identity import (PERMISSIONS, AuditLog, IdentityConfig, IdentityError, KeycloakAdmin, KeycloakAdminClient,
                        TokenVerifier, require_permission, session_from_claims)
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator, model_validator
@@ -829,7 +830,7 @@ def create_app(repository: DocumentRepository | None = None, token: str | None =
                identity: IdentityConfig | None | Literal['environment'] = 'environment',
                verifier: TokenVerifier | None = None, admin: KeycloakAdmin | None = None,
                clock=lambda: datetime.now(timezone.utc), lift_bans_every: float | None = 60,
-               token_checker=check_openai) -> FastAPI:
+               token_checker=check_openai, provider: Provider | None = None) -> FastAPI:
     configured_version = os.environ.get('XDS_VERSION_FILE')
     version_file = Path(configured_version) if configured_version else Path(__file__).resolve().parents[3]/'release/version.json'
     version = json.loads(version_file.read_text())['version']
@@ -926,6 +927,8 @@ def create_app(repository: DocumentRepository | None = None, token: str | None =
     app.include_router(administration_router(administrator, keycloak, store, audit, clock))
     vault = TokenVault(Path(os.environ.get('XDS_DATA_DIR', './data')) / 'tokens', os.environ.get('XDS_TOKEN_KEY', ''))
     app.include_router(tokens_router(session, vault, audit, clock, token_checker))
+    prompt_store = PromptStore(Path(os.environ.get('XDS_DATA_DIR', './data')) / 'prompts')
+    app.include_router(agent_router(session, vault, prompt_store, audit, clock, provider or OpenAiProvider()))
 
     # Temporary bans end on their own: a background check lifts them once a minute (SC-0143).
     if lift_bans_every and oidc is not None and oidc.admin_client_id and oidc.admin_client_secret:
