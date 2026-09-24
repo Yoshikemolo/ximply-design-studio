@@ -29,6 +29,8 @@ from .identity import AuditLog, IdentityError, require_permission
 
 MAX_IMAGE_BYTES = 20 * 1024 * 1024
 MAX_SVG_CHARS = 2_000_000
+# OpenAI's recommended image model for editing, current in September 2026.
+DEFAULT_IMAGE_MODEL = 'gpt-image-2.5-flare'
 PNG_SIGNATURE = b'\x89PNG\r\n\x1a\n'
 OPENAI = 'https://api.openai.com/v1'
 
@@ -143,6 +145,9 @@ def provider_refusal(error: urllib.error.HTTPError) -> IdentityError:
             return IdentityError(502, 'OpenAI limits how many requests this token can make per minute; wait a moment and try again')
         return IdentityError(502, 'OpenAI limits the rate or quota of this token' + (': ' + message if message else ''))
     if error.code in (400, 403, 404) and message:
+        if 'does not have access to model' in message or 'must be verified' in message:
+            return IdentityError(502, 'OpenAI refused the request: ' + message + '. Allow the model in the limits of the OpenAI project,'
+                                 ' or verify the organization in its general settings')
         return IdentityError(502, 'OpenAI refused the request: ' + message)
     return IdentityError(502, f'OpenAI answered {error.code}')
 
@@ -151,7 +156,7 @@ class OpenAiProvider:
     """OpenAI over HTTPS: the image edit endpoint for pictures, the Responses API for drawings."""
 
     def __init__(self, image_model: str | None = None, text_model: str | None = None, timeout: float = 180):
-        self.image_model = image_model or os.environ.get('XDS_OPENAI_IMAGE_MODEL', 'gpt-image-1')
+        self.image_model = image_model or os.environ.get('XDS_OPENAI_IMAGE_MODEL', DEFAULT_IMAGE_MODEL)
         self.text_model = text_model or os.environ.get('XDS_OPENAI_TEXT_MODEL', 'gpt-4.1')
         self.timeout = timeout
 

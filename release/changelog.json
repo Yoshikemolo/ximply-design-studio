@@ -1,11 +1,34 @@
 {
-  "currentVersion": "0.13.1",
+  "currentVersion": "0.13.2",
   "licence": {
     "file": "LICENSE",
     "name": "Ximply Design Studio \u2014 Limited Use Licence",
     "sha256": "b6f77aae5f066cc5f5e8aa54699d8dcc84a96387007299d30cb78a4f3f7fd6ae"
   },
   "entries": [
+    {
+      "version": "0.13.2",
+      "date": "2026-09-24",
+      "summary": "The agent tools use GPT Image 2.5 Flare by default and explain how to allow a model the OpenAI project cannot use",
+      "breakingChanges": [],
+      "changes": [
+        {
+          "type": "Improvement",
+          "description": "Picture actions use `gpt-image-2.5-flare`, OpenAI's recommended image model, instead of `gpt-image-1`. `XDS_OPENAI_IMAGE_MODEL` still chooses another, such as `gpt-image-2.5-sunburst` for the most precise edits."
+        },
+        {
+          "type": "Fix",
+          "description": "When the OpenAI project of the token cannot use the image model, the panel says to allow the model in the project limits or to verify the organization."
+        },
+        {
+          "type": "Engineering",
+          "description": "SC-0154 names the default model and the setting that changes it."
+        }
+      ],
+      "capabilityStatus": "local-preview",
+      "markdown": "0.13.2.md",
+      "source": "doc/changelog/0.13.2.md"
+    },
     {
       "version": "0.13.1",
       "date": "2026-09-24",
