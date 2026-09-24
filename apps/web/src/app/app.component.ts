@@ -1186,7 +1186,8 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   /** The colour of the badge after the logo, the same as the tier badges of administration. */
   modeTone() {
     if (!this.session.licensed()) return "demo";
-    return this.session.session()?.licence.tier ?? (this.session.isAdmin() ? "admin" : "pro");
+    // The super administrator without a licence shows Pro, in its blue; red never marks a tier.
+    return this.session.session()?.licence.tier ?? "pro";
   }
   /** The badge after the logo: the tier of a valid licence, Pro for the super administrator, or Demo. */
   modeBadge() {

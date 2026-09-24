@@ -499,3 +499,20 @@ describe('token form feedback', () => {
     expect([form.tokenBusy(), form.tokenMessage(), form.tokenOutcome()]).toEqual(['', 'OpenAI refused the token', 'error']);
   });
 });
+
+describe('tier colours', () => {
+  it('gives the header badge the tone of the tier, Pro blue for the super administrator, and no red to any tier', async () => {
+    const { AppComponent } = await import('../src/app/app.component');
+    const { signal } = await import('@angular/core');
+    const badge = (licensed: boolean, tier: string | null, admin: boolean) => Object.assign(Object.create(AppComponent.prototype), {
+      session: { licensed: () => licensed, isAdmin: () => admin, session: () => ({ licence: { tier } }) }, locale: signal('en'),
+    });
+    expect(badge(false, null, false).modeTone()).toBe('demo');
+    expect(badge(true, null, true).modeTone()).toBe('pro');
+    expect(badge(true, 'studio', false).modeTone()).toBe('studio');
+    const styles = readFileSync('packages/design-system/styles/studio.scss', 'utf-8');
+    const tones = [...styles.matchAll(/\[data-tone="(\w+)"\] \{ --tone: (#[0-9a-f]{6}); \}/g)].map(([, name, colour]) => [name, colour]);
+    expect(Object.fromEntries(tones).pro).toBe('#3979ff');
+    expect(tones.map(([, colour]) => colour)).not.toContain('#e5484d');
+  });
+});
