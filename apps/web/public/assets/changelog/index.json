@@ -1,11 +1,34 @@
 {
-  "currentVersion": "0.11.0",
+  "currentVersion": "0.11.1",
   "licence": {
     "file": "LICENSE",
     "name": "Ximply Design Studio \u2014 Limited Use Licence",
     "sha256": "b6f77aae5f066cc5f5e8aa54699d8dcc84a96387007299d30cb78a4f3f7fd6ae"
   },
   "entries": [
+    {
+      "version": "0.11.1",
+      "date": "2026-09-24",
+      "summary": "Deleting actions carry a red trash icon, and the tool rail neither scrolls sideways nor needs to scroll on a full HD screen",
+      "breakingChanges": [],
+      "changes": [
+        {
+          "type": "Improvement",
+          "description": "Every deleting action, in Edit > Delete, the Layers panel, the swatches, the context menu, the administration workspace, its bulk actions and the confirmation that asks before deleting, shows a trash icon and red text, so it reads as dangerous."
+        },
+        {
+          "type": "Improvement",
+          "description": "The tool rail blocks keep an even spacing, the fill and stroke squares at the foot of the rail sit further apart, and the whole rail fits a full HD screen without scrolling."
+        },
+        {
+          "type": "Fix",
+          "description": "The tool rail no longer shows a horizontal scroll bar when its vertical scroll bar appears."
+        }
+      ],
+      "capabilityStatus": "local-preview",
+      "markdown": "0.11.1.md",
+      "source": "doc/changelog/0.11.1.md"
+    },
     {
       "version": "0.11.0",
       "date": "2026-09-24",

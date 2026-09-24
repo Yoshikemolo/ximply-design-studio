@@ -540,7 +540,8 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     };
     return this.editor.contextActions(context.target).map(action => {
       const definition = definitions[action.id];
-      return { id: action.id, label: this.t(definition.label), section: definition.section, disabled: !action.enabled, shortcut: definition.command ? this.shortcut(definition.command) : undefined };
+      return { id: action.id, label: this.t(definition.label), section: definition.section, disabled: !action.enabled, shortcut: definition.command ? this.shortcut(definition.command) : undefined,
+        destructive: action.id === "delete" || action.id === "deleteNode" };
     });
   }
   executeContext(action: string) {
@@ -1015,7 +1016,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   }
   /** Every destructive action asks through the in-app confirmation of the shell; never a browser dialog. */
   askConfirmation(title: string, message: string, confirm: string, run: () => Promise<unknown>) {
-    this.confirmation.set({ title: this.t(title), message, action: this.t(confirm), run: () => { void run(); } });
+    this.confirmation.set({ title: this.t(title), message, action: this.t(confirm), run: () => { void run(); }, deletes: ["Delete", "Remove"].includes(confirm) });
   }
   selectAdminRow(id: string) {
     this.adminSelectedId.set(id);
@@ -3095,7 +3096,7 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     input.value = "";
   }
   /** In-app confirmation for destructive document actions; replaces native browser dialogs. */
-  readonly confirmation = signal<{ title: string; message: string; action: string; run: () => void } | null>(null);
+  readonly confirmation = signal<{ title: string; message: string; action: string; run: () => void; deletes?: boolean } | null>(null);
   confirm() { const pending = this.confirmation(); this.confirmation.set(null); pending?.run(); }
   newDocument() {
     this.commitText();
