@@ -19,7 +19,9 @@ export interface AgentRequest {
   output?: AgentOutput;
   selectionSvg?: string;
 }
-export type AgentResult = { kind: "image"; png: string } | { kind: "svg"; svg: string };
+export type AgentResult = ({ kind: "image"; png: string } | { kind: "svg"; svg: string }) & { model?: string };
+/** What a streamed request reports while it runs: each model tried, and heartbeats while it works. */
+export type AgentEvent = { type: "trying"; model: string } | { type: "waiting" };
 
 export interface SavedPrompt { id: string; title: string; prompt: string; action: AgentAction; creativity: number; favorite: boolean; output?: AgentOutput; hidden?: boolean }
 export interface LibraryPrompt extends SavedPrompt { builtIn: boolean }

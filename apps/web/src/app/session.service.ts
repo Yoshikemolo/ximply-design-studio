@@ -1,5 +1,5 @@
 import { Injectable, computed, signal } from "@angular/core";
-import { AgentRequest, AgentResult, SavedPrompt } from "../../../../packages/domain/src/agent-prompts";
+import { AgentEvent, AgentRequest, AgentResult, SavedPrompt } from "../../../../packages/domain/src/agent-prompts";
 
 /**
  * Sign-in with Keycloak and the licence of advanced mode (FEAT-0032, ADR-0012, ADR-0041).
@@ -283,8 +283,33 @@ export class SessionService {
    * The agent tools (FEAT-0029): one request to the model through the API, which holds the
    * user's token; the signal cancels it. Saved prompts belong to the user.
    */
-  generate(request: AgentRequest, signal?: AbortSignal): Promise<AgentResult> {
-    return this.adminCall("/api/ai/generate", { method: "POST", body: JSON.stringify(request), signal });
+  async generate(request: AgentRequest, signal?: AbortSignal, onEvent?: (event: AgentEvent) => void): Promise<AgentResult> {
+    // The answer streams one JSON object per line: the models tried, heartbeats while the model
+    // works, so that no proxy closes a request of minutes, and then the result or the refusal.
+    const answer = await this.request("/api/ai/generate", { method: "POST", body: JSON.stringify(request), signal, headers: { Accept: "application/x-ndjson" } });
+    if (!answer) throw new Error(this.message() || "The server is unreachable.");
+    if (!answer.ok) throw new Error((await this.reason(answer)) || `The server refused the request (${answer.status}).`);
+    if (!answer.body || !(answer.headers.get("content-type") ?? "").includes("ndjson")) return answer.json();
+    const reader = answer.body.getReader(), decoder = new TextDecoder();
+    let buffer = "";
+    for (;;) {
+      const { value, done } = await reader.read();
+      buffer += decoder.decode(value ?? new Uint8Array(), { stream: !done });
+      const lines = buffer.split("\n");
+      buffer = done ? "" : lines.pop() ?? "";
+      for (const line of lines) {
+        if (!line.trim()) continue;
+        const event = JSON.parse(line) as { type: string; model?: string; detail?: string } & Partial<AgentResult>;
+        if (event.type === "result") {
+          const { type: _type, ...result } = event;
+          return result as AgentResult;
+        }
+        if (event.type === "error") throw new Error(event.detail || "The request failed on the server");
+        if (event.type === "trying" || event.type === "waiting") onEvent?.(event as AgentEvent);
+      }
+      if (done) break;
+    }
+    throw new Error("The server closed the request without a result.");
   }
   async savedPrompts(): Promise<SavedPrompt[]> { return (await this.adminCall<{ prompts: SavedPrompt[] }>("/api/me/prompts")).prompts; }
   async savePrompts(prompts: SavedPrompt[]): Promise<SavedPrompt[]> {

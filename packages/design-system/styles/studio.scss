@@ -3902,3 +3902,7 @@ option.destructive-option {
   color: var(--accent);
   font-size: 11px;
 }
+.agent-status.agent-model {
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+}

@@ -695,9 +695,11 @@
             <div class="agent-footer">
               @if (agent.busy()) {
                 <div class="agent-progress" role="progressbar" [attr.aria-valuetext]="t(agentPhases[agent.phase()])"><span></span></div>
-                <p class="agent-status" aria-live="polite">{{ t(agentPhases[agent.phase()]) }}</p>
+                <p class="agent-status" aria-live="polite">{{ t(agentPhases[agent.phase()]) }}@if (agent.elapsed() > 2) { · {{ agent.elapsed() }} s}</p>
+                @if (agentModelNote(); as note) {<p class="agent-status muted agent-model" aria-live="polite">{{ note }}</p>}
               } @else if (agent.outcome(); as outcome) {
                 <p class="agent-status" [class.error]="!outcome.ok" aria-live="polite">{{ t(outcome.text) }}</p>
+                @if (outcome.ok && agent.usedModel()) {<p class="agent-status muted agent-model">{{ t("Made with {model}").replace("{model}", agent.usedModel()) }}</p>}
               } @else if (agent.problem()) {
                 <p class="agent-status muted">{{ t(agent.problem()) }}</p>
               }

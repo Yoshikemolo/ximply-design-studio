@@ -6,6 +6,7 @@ token of the user who asks, validates what comes back and returns one new object
 to insert: a PNG picture, or an SVG drawing the editor imports as editable paths and groups.
 Model output is untrusted data (SEC-0012); prompts and pixels are never logged or audited.
 """
+import asyncio
 import base64
 import binascii
 import hashlib
@@ -21,8 +22,9 @@ from datetime import datetime
 from pathlib import Path
 from typing import Annotated, Any, Callable, Literal, Protocol
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 from fastapi.concurrency import run_in_threadpool
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, ConfigDict, Field
 
 from .external_tokens import TokenVault
@@ -41,6 +43,8 @@ IMAGE_MODELS = ('gpt-image-2.5-flare', 'gpt-image-2.5-sunburst', 'gpt-image-2', 
 TEXT_MODELS = ('gpt-6-sol', 'gpt-6-luna', 'gpt-6-astra', 'gpt-4.1')
 UNAVAILABLE = ('does not have access to model', 'must be verified', 'does not exist or you do not have access', 'model_not_found')
 PNG_SIGNATURE = b'\x89PNG\r\n\x1a\n'
+# Seconds of silence after which a streamed request sends a heartbeat line.
+HEARTBEAT_SECONDS = 15.0
 OPENAI = 'https://api.openai.com/v1'
 
 Action = Literal['free', 'style', 'reinterpret', 'upscale', 'enhance', 'remove-watermark', 'remove-background', 'remove-object', 'vectorize']
@@ -190,8 +194,8 @@ def svg_from(text: str) -> str:
 
 
 class Provider(Protocol):
-    def edit_image(self, token: str, images: list[bytes], prompt: str, transparent: bool) -> bytes: ...
-    def vectorize(self, token: str, image: bytes, prompt: str, temperature: float) -> str: ...
+    def edit_image(self, token: str, images: list[bytes], prompt: str, transparent: bool, on_model: Callable[[str], None] | None = None) -> bytes: ...
+    def vectorize(self, token: str, image: bytes, prompt: str, temperature: float, on_model: Callable[[str], None] | None = None) -> str: ...
 
 
 def provider_refusal(error: urllib.error.HTTPError) -> IdentityError:
@@ -239,13 +243,15 @@ class OpenAiProvider:
     def text_model(self) -> str:
         return self.text_models[0]
 
-    def _pooled(self, kind: str, token: str, models: tuple[str, ...], call: Callable[[str], Any]) -> Any:
+    def _pooled(self, kind: str, token: str, models: tuple[str, ...], call: Callable[[str], Any], on_model: Callable[[str], None] | None = None) -> Any:
         """Calls each model of the pool in turn while the project cannot use it, until one answers."""
         key = (kind, hashlib.sha256(token.encode()).hexdigest()[:16])
         known = self.working.get(key)
         order = ([known] if known in models else []) + [model for model in models if model != known]
         refused = []
         for model in order:
+            if on_model:
+                on_model(model)
             try:
                 result = call(model)
             except IdentityError as error:
@@ -269,8 +275,8 @@ class OpenAiProvider:
         except (urllib.error.URLError, TimeoutError, OSError):
             raise IdentityError(504, 'OpenAI did not answer in time or is unreachable') from None
 
-    def edit_image(self, token: str, images: list[bytes], prompt: str, transparent: bool) -> bytes:
-        return self._pooled('image', token, self.image_models, lambda model: self._edit_image(model, token, images, prompt, transparent))
+    def edit_image(self, token: str, images: list[bytes], prompt: str, transparent: bool, on_model: Callable[[str], None] | None = None) -> bytes:
+        return self._pooled('image', token, self.image_models, lambda model: self._edit_image(model, token, images, prompt, transparent), on_model)
 
     def _edit_image(self, model: str, token: str, images: list[bytes], prompt: str, transparent: bool) -> bytes:
         boundary = 'xds' + uuid.uuid4().hex
@@ -290,8 +296,8 @@ class OpenAiProvider:
         except (KeyError, IndexError, TypeError, binascii.Error):
             raise IdentityError(502, 'OpenAI answered without an image') from None
 
-    def vectorize(self, token: str, image: bytes, prompt: str, temperature: float) -> str:
-        return self._pooled('text', token, self.text_models, lambda model: self._vectorize(model, token, image, prompt, temperature))
+    def vectorize(self, token: str, image: bytes, prompt: str, temperature: float, on_model: Callable[[str], None] | None = None) -> str:
+        return self._pooled('text', token, self.text_models, lambda model: self._vectorize(model, token, image, prompt, temperature), on_model)
 
     def _vectorize(self, model: str, token: str, image: bytes, prompt: str, temperature: float) -> str:
         content = [{'type': 'input_text', 'text': prompt},
@@ -350,7 +356,7 @@ def agent_router(session: Callable, vault: TokenVault, prompts: PromptStore, aud
     Current = Annotated[dict, Depends(allowed)]
 
     @router.post('/api/ai/generate')
-    async def generate(body: GenerationRequest, current: Current) -> dict[str, Any]:
+    async def generate(body: GenerationRequest, current: Current, request: Request):
         selection = png_bytes(body.selectionPng, 'selection image')
         document = png_bytes(body.documentPng, 'document image')
         if body.scope == 'selection' and selection is None:
@@ -371,31 +377,80 @@ def agent_router(session: Callable, vault: TokenVault, prompts: PromptStore, aud
         text = vector_instruction(body, selection is not None) if vector else instruction(body, selection is not None)
         if not running.acquire(blocking=False):
             raise IdentityError(429, 'Too many requests are running; wait for one to finish')
-        outcome = 'failed'
-        try:
+
+        def work(on_model: Callable[[str], None] | None = None) -> dict[str, Any]:
+            used: list[str] = []
+
+            def announce(model: str) -> None:
+                used.append(model)
+                if on_model:
+                    on_model(model)
             if vector:
-                svg = await run_in_threadpool(provider.vectorize, token, images[0], text, round(0.2 + body.creativity * 0.8, 2))
-                result: dict[str, Any] = {'kind': 'svg', 'svg': svg}
+                result: dict[str, Any] = {'kind': 'svg', 'svg': provider.vectorize(token, images[0], text, round(0.2 + body.creativity * 0.8, 2), on_model=announce)}
             else:
-                data = await run_in_threadpool(provider.edit_image, token, images, text,
-                                               body.action == 'remove-background' or body.scope == 'selection')
+                data = provider.edit_image(token, images, text, body.action == 'remove-background' or body.scope == 'selection', on_model=announce)
                 if not data.startswith(PNG_SIGNATURE) or len(data) > MAX_IMAGE_BYTES:
                     raise IdentityError(502, 'OpenAI answered with an image that is not a PNG under 20 MB')
                 result = {'kind': 'image', 'png': 'data:image/png;base64,' + base64.b64encode(data).decode()}
-            outcome = 'answered'
+            if used:
+                result['model'] = used[-1]
             return result
-        except IdentityError as refused:
-            # The provider's own reason goes to the server log for diagnosis: never the prompt,
-            # the pictures or the token, which the reason does not carry.
-            LOG.warning('Agent request refused (%s, %s, %s): %s', body.action, 'vector' if vector else 'bitmap',
-                        provider_name(provider, vector), refused.reason)
-            raise
-        finally:
+
+        async def finish(outcome: str, refused: IdentityError | None = None) -> None:
             running.release()
+            if refused is not None:
+                # The provider's own reason goes to the server log for diagnosis: never the prompt,
+                # the pictures or the token, which the reason does not carry.
+                LOG.warning('Agent request refused (%s, %s, %s): %s', body.action, 'vector' if vector else 'bitmap',
+                            provider_name(provider, vector), refused.reason)
             # The audit keeps what was asked of whom, never the prompt or the pixels.
             await run_in_threadpool(audit.record, current['subject'], current['subject'], 'agent-request',
                                     {'action': body.action, 'scope': body.scope, 'output': 'vector' if vector else 'bitmap', 'images': len(images),
                                      'bytes': sum(len(image) for image in images), 'outcome': outcome}, clock())
+
+        if 'application/x-ndjson' not in request.headers.get('accept', ''):
+            try:
+                result = await run_in_threadpool(work)
+            except IdentityError as refused:
+                await finish('failed', refused)
+                raise
+            except BaseException:
+                await finish('failed')
+                raise
+            await finish('answered')
+            return result
+
+        async def events():
+            # One JSON object per line: each model tried, a heartbeat while the model works, so
+            # that no proxy closes a request that takes minutes, and then the result or the refusal.
+            loop = asyncio.get_running_loop()
+            queue: asyncio.Queue = asyncio.Queue()
+            task = loop.run_in_executor(None, work, lambda model: loop.call_soon_threadsafe(queue.put_nowait, {'type': 'trying', 'model': model}))
+            quiet = 0.0
+            while True:
+                while not queue.empty():
+                    quiet = 0.0
+                    yield json.dumps(queue.get_nowait()) + '\n'
+                if task.done():
+                    break
+                await asyncio.sleep(0.25)
+                quiet += 0.25
+                if quiet >= HEARTBEAT_SECONDS:
+                    quiet = 0.0
+                    yield json.dumps({'type': 'waiting'}) + '\n'
+            try:
+                result = task.result()
+            except IdentityError as refused:
+                await finish('failed', refused)
+                yield json.dumps({'type': 'error', 'status': refused.status, 'detail': refused.reason}) + '\n'
+                return
+            except Exception:  # noqa: BLE001 - reported to the panel as a failure, never as a trace
+                await finish('failed')
+                yield json.dumps({'type': 'error', 'status': 500, 'detail': 'The request failed on the server'}) + '\n'
+                return
+            await finish('answered')
+            yield json.dumps({'type': 'result', **result}) + '\n'
+        return StreamingResponse(events(), media_type='application/x-ndjson', headers={'Cache-Control': 'no-cache', 'X-Accel-Buffering': 'no'})
 
     @router.get('/api/me/prompts')
     async def saved(current: Current):
