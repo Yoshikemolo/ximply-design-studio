@@ -1,11 +1,34 @@
 {
-  "currentVersion": "0.13.3",
+  "currentVersion": "0.13.4",
   "licence": {
     "file": "LICENSE",
     "name": "Ximply Design Studio \u2014 Limited Use Licence",
     "sha256": "b6f77aae5f066cc5f5e8aa54699d8dcc84a96387007299d30cb78a4f3f7fd6ae"
   },
   "entries": [
+    {
+      "version": "0.13.4",
+      "date": "2026-09-24",
+      "summary": "Test connection names the models the token's project cannot use, and refusals are logged for diagnosis",
+      "breakingChanges": [],
+      "changes": [
+        {
+          "type": "Improvement",
+          "description": "Test connection in Settings > External tokens also checks, at no cost, that the token's project can use the image model and the text model of the agent tools, and names any it cannot use with the way to allow it."
+        },
+        {
+          "type": "Security",
+          "description": "A refused generation is written to the server log with its action, result type, model and the provider's reason; the log never holds the prompt, the pictures or the token."
+        },
+        {
+          "type": "Engineering",
+          "description": "SC-0148 records the model access oracle."
+        }
+      ],
+      "capabilityStatus": "local-preview",
+      "markdown": "0.13.4.md",
+      "source": "doc/changelog/0.13.4.md"
+    },
     {
       "version": "0.13.3",
       "date": "2026-09-24",

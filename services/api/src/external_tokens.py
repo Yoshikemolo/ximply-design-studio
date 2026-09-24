@@ -85,17 +85,37 @@ def masked(value: str) -> str:
     return value[:3] + '…' + value[-4:]
 
 
-def check_openai(token: str) -> dict:
-    """Asks OpenAI for its model list with the token: the cheapest call that proves it works."""
-    request = urllib.request.Request(OPENAI_MODELS, headers={'Authorization': 'Bearer ' + token})
-    try:
+def check_openai(token: str, models: tuple[str, ...] | None = None) -> dict:
+    """Asks OpenAI for its model list with the token, the cheapest call that proves it works, and
+    then whether the token can use each model the agent tools call; neither costs any credit."""
+    if models is None:
+        from .agent_tools import required_models  # imported here: the agent tools import this module
+        models = required_models()
+
+    def get(url: str) -> int:
+        request = urllib.request.Request(url, headers={'Authorization': 'Bearer ' + token})
         with urllib.request.urlopen(request, timeout=10) as answer:  # noqa: S310 - fixed provider URL
-            return {'ok': answer.status == 200, 'detail': 'OpenAI accepted the token'}
+            return answer.status
+    try:
+        if get(OPENAI_MODELS) != 200:
+            return {'ok': False, 'detail': 'OpenAI did not accept the token'}
     except urllib.error.HTTPError as error:
         reason = {401: 'OpenAI refused the token', 403: 'The token has no access to the API', 429: 'OpenAI limits the rate or quota of this token'}
         return {'ok': False, 'detail': reason.get(error.code, f'OpenAI answered {error.code}')}
     except (urllib.error.URLError, TimeoutError, OSError):
         return {'ok': False, 'detail': 'OpenAI is unreachable from the server'}
+    missing = []
+    for model in models:
+        try:
+            get(f'{OPENAI_MODELS}/{model}')
+        except urllib.error.HTTPError:
+            missing.append(model)
+        except (urllib.error.URLError, TimeoutError, OSError):
+            return {'ok': False, 'detail': 'OpenAI is unreachable from the server'}
+    if missing:
+        return {'ok': False, 'detail': 'OpenAI accepted the token, but its project cannot use ' + ', '.join(missing)
+                + '. Allow the models in the limits of the OpenAI project, or verify the organization'}
+    return {'ok': True, 'detail': 'OpenAI accepted the token, and its project can use ' + ', '.join(models)}
 
 
 class TokenValue(BaseModel):

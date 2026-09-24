@@ -132,6 +132,18 @@ class AgentApiTests(unittest.TestCase):
         self.assertEqual(422, self.call('POST', '/api/ai/generate', {'action': 'paint-a-mustache', 'selectionPng': DATA_URL}).status_code)
         self.assertEqual([], self.provider.calls)
 
+    def test_a_provider_refusal_is_logged_without_the_prompt(self):
+        def refuse(*_):
+            raise IdentityError(502, 'OpenAI refused the request: Project `proj_x` does not have access to model `gpt-6-sol`')
+        self.provider.vectorize = refuse
+        with self.assertLogs('xds.agent_tools', 'WARNING') as logged:
+            answer = self.call('POST', '/api/ai/generate', {'prompt': 'secret words', 'action': 'style', 'output': 'vector', 'selectionPng': DATA_URL})
+        self.assertEqual(502, answer.status_code)
+        self.assertIn('does not have access to model `gpt-6-sol`', logged.output[0])
+        self.assertIn('style, vector', logged.output[0])
+        self.assertNotIn('secret words', logged.output[0])
+        self.assertNotIn(SECRET, logged.output[0])
+
     def test_without_a_token_the_user_is_told_where_to_save_one(self):
         self.call('DELETE', '/api/me/tokens/openai')
         answer = self.call('POST', '/api/ai/generate', {'action': 'enhance', 'selectionPng': DATA_URL})

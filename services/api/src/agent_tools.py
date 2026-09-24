@@ -10,6 +10,7 @@ import base64
 import binascii
 import hashlib
 import json
+import logging
 import os
 import re
 import threading
@@ -30,6 +31,7 @@ from .identity import AuditLog, IdentityError, require_permission
 MAX_IMAGE_BYTES = 20 * 1024 * 1024
 MAX_SVG_CHARS = 2_000_000
 # OpenAI's recommended image model for editing, current in September 2026.
+LOG = logging.getLogger('xds.agent_tools')
 DEFAULT_IMAGE_MODEL = 'gpt-image-2.5-flare'
 # The balanced model with image input that draws editable vectors.
 DEFAULT_TEXT_MODEL = 'gpt-6-sol'
@@ -145,6 +147,16 @@ def vector_instruction(request: GenerationRequest, has_selection: bool) -> str:
     elif request.creativity > 0.66:
         parts.append('You may take creative liberties with shapes and colours while keeping the intent.')
     return '\n\n'.join(parts)
+
+
+def required_models() -> tuple[str, ...]:
+    """The models the agent tools call: the image model for bitmaps and the text model for vectors."""
+    return (os.environ.get('XDS_OPENAI_IMAGE_MODEL', DEFAULT_IMAGE_MODEL), os.environ.get('XDS_OPENAI_TEXT_MODEL', DEFAULT_TEXT_MODEL))
+
+
+def provider_name(provider: Any, vector: bool) -> str:
+    """The model a request went to, for the log."""
+    return str(getattr(provider, 'text_model' if vector else 'image_model', type(provider).__name__))
 
 
 def svg_from(text: str) -> str:
@@ -316,6 +328,12 @@ def agent_router(session: Callable, vault: TokenVault, prompts: PromptStore, aud
                 result = {'kind': 'image', 'png': 'data:image/png;base64,' + base64.b64encode(data).decode()}
             outcome = 'answered'
             return result
+        except IdentityError as refused:
+            # The provider's own reason goes to the server log for diagnosis: never the prompt,
+            # the pictures or the token, which the reason does not carry.
+            LOG.warning('Agent request refused (%s, %s, %s): %s', body.action, 'vector' if vector else 'bitmap',
+                        provider_name(provider, vector), refused.reason)
+            raise
         finally:
             running.release()
             # The audit keeps what was asked of whom, never the prompt or the pixels.
