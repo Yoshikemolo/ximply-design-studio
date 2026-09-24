@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { contextData, fitInto, fittedPicture, pngSize } from '../src/agent-result';
+import { contextData, contextSvg, fitInto, fittedPicture, hasPictures, pngSize } from '../src/agent-result';
 import { newLayer } from '../src/document';
 
 const apply = (m: { a: number; b: number; c: number; d: number; e: number; f: number }, x: number, y: number) =>
@@ -60,5 +60,25 @@ describe('the size of the picture the model returns', () => {
     expect(pngSize('data:image/jpeg;base64,' + 'A'.repeat(40))).toBeNull();
     expect(pngSize(header(1, 1).replace('iVBOR', 'iVBOQ'))).toBeNull();
     expect(pngSize(header(0, 10))).toBeNull();
+  });
+});
+
+describe('vector context (FEAT-0029, SC-0157)', () => {
+  const exported = '<svg xmlns="http://www.w3.org/2000/svg" width="800" height="600" viewBox="0 0 800 600"><rect width="100%" height="100%" fill="#ffffff"/><rect x="10" y="10"/></svg>';
+  it('frames the exported drawing on the selection and drops the page background', () => {
+    expect(contextSvg(exported, { x: 9, y: 9.5, width: 42.004, height: 21 }, false)).toBe(
+      '<svg xmlns="http://www.w3.org/2000/svg" width="42" height="21" viewBox="9 9.5 42 21"><rect x="10" y="10"/></svg>');
+  });
+  it('keeps the background for the whole document and gives up beyond the limit', () => {
+    expect(contextSvg(exported, { x: 0, y: 0, width: 800, height: 600 }, true)).toContain('fill="#ffffff"');
+    expect(contextSvg(exported, { x: 0, y: 0, width: 1, height: 1 }, true, 20)).toBeUndefined();
+    expect(contextSvg('not svg', { x: 0, y: 0, width: 1, height: 1 }, true)).toBeUndefined();
+  });
+  it('finds pictures among the visible objects of a context', () => {
+    const shape = newLayer('rectangle', 'r', { x: 0, y: 0 });
+    const picture = { ...newLayer('image', 'p', { x: 0, y: 0 }), source: 'data:image/png;base64,AAAA' };
+    expect(hasPictures([shape])).toBe(false);
+    expect(hasPictures([shape, picture])).toBe(true);
+    expect(hasPictures([shape, { ...picture, visible: false }])).toBe(false);
   });
 });

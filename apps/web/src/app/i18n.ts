@@ -1349,6 +1349,23 @@ const ES: Record<string, string> = {
   "Only its author can remove a comment": "Solo su autor puede eliminar un comentario",
   "The OpenAI account of this token has no API credit left; add credit or raise its limit in the OpenAI billing settings": "La cuenta de OpenAI de este token no tiene crédito de API; añade crédito o sube su límite en la facturación de OpenAI",
   "OpenAI limits how many requests this token can make per minute; wait a moment and try again": "OpenAI limita cuántas peticiones por minuto puede hacer este token; espera un momento y vuelve a intentarlo",
+  "Result": "Resultado",
+  "Bitmap": "Mapa de bits",
+  "Vector": "Vectorial",
+  "The context holds pictures, so the result is a bitmap: vectors from pictures would mean tracing them.": "El contexto contiene imágenes, así que el resultado es un mapa de bits: obtener vectores de imágenes supondría calcarlas.",
+  "The model draws editable paths and groups from the drawing itself, sent as SVG.": "El modelo dibuja trazados y grupos editables a partir del propio dibujo, enviado como SVG.",
+  "The model paints a picture, inserted as an image.": "El modelo pinta una imagen, que se inserta como imagen.",
+  "Drawing as SVG": "Dibujo como SVG",
+  "Vector results are not available when the context holds pictures.": "Los resultados vectoriales no están disponibles cuando el contexto contiene imágenes.",
+  "Vector results are not available when the context holds pictures": "Los resultados vectoriales no están disponibles cuando el contexto contiene imágenes",
+  "Recolour the drawing": "Recolorear el dibujo",
+  "Search prompts": "Buscar prompts",
+  "No prompt matches these words.": "Ningún prompt coincide con estas palabras.",
+  "No saved prompts.": "No hay prompts guardados.",
+  "Restore default prompts": "Restaurar los prompts predeterminados",
+  "The default prompts are back.": "Los prompts predeterminados han vuelto.",
+  "The default prompt {name} leaves your list; Restore default prompts brings it back.": "El prompt predeterminado {name} sale de tu lista; Restaurar los prompts predeterminados lo recupera.",
+  "The prompt {name} is removed.": "Se elimina el prompt {name}.",
 };
 export function translate(key: string, locale: string) {
   return locale === "es" ? (ES[key] ?? key) : key;

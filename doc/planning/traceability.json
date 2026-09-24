@@ -1003,7 +1003,8 @@
         "SC-0151",
         "SC-0152",
         "SC-0153",
-        "SC-0154"
+        "SC-0154",
+        "SC-0157"
       ],
       "implementation": [
         "services/api/src/external_tokens.py",
@@ -1025,7 +1026,8 @@
       ],
       "evidence": [
         "doc/changelog/0.11.0.md",
-        "doc/changelog/0.12.0.md"
+        "doc/changelog/0.12.0.md",
+        "doc/changelog/0.13.3.md"
       ]
     },
     {

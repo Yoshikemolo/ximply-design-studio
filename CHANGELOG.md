@@ -5,6 +5,7 @@ Application data and bundled Markdown are generated; do not edit them.
 
 [Unreleased](doc/changelog/Unreleased.md)
 
+- [0.13.3 — The agent tools let the user choose a bitmap or an editable vector result, and saved prompts can be searched and removed](doc/changelog/0.13.3.md)
 - [0.13.2 — The agent tools use GPT Image 2.5 Flare by default and explain how to allow a model the OpenAI project cannot use](doc/changelog/0.13.2.md)
 - [0.13.1 — The agent tools say whether OpenAI refused a request for lack of API credit or for too many requests](doc/changelog/0.13.1.md)
 - [0.13.0 — The History tab versions a project with Git, with branches, merges, a shared repository, commit thumbnails and comments](doc/changelog/0.13.0.md)

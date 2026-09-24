@@ -3870,3 +3870,35 @@ option.destructive-option {
   max-height: 160px;
   background: #fff;
 }
+
+/* The prompt library: a search box over the list, and a way back for hidden defaults. */
+.agent-library {
+  gap: 4px;
+  max-height: none;
+  overflow: visible;
+}
+.agent-library ul {
+  display: flex;
+  flex-direction: column;
+  max-height: 200px;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+.agent-library li.hint {
+  padding: 6px;
+  color: var(--muted);
+}
+.agent-library-search {
+  width: 100%;
+  box-sizing: border-box;
+}
+.agent-library > .link-button {
+  align-self: flex-start;
+  min-height: 0;
+  padding: 2px 4px;
+  border: 0;
+  color: var(--accent);
+  font-size: 11px;
+}

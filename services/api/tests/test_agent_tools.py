@@ -12,7 +12,7 @@ import urllib.error
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from cryptography.fernet import Fernet
 from fastapi.testclient import TestClient
-from src.agent_tools import OpenAiProvider, instruction, png_bytes, svg_from, GenerationRequest
+from src.agent_tools import OpenAiProvider, instruction, png_bytes, svg_from, vector_instruction, GenerationRequest
 from src.identity import IdentityError, TokenVerifier
 from src.main import FileDocumentRepository, create_app
 from tests.support import CONFIG, NOW, FakeKeycloak, admin_token, jwks, licensed, token
@@ -96,6 +96,30 @@ class AgentApiTests(unittest.TestCase):
         self.assertEqual({'kind': 'svg', 'svg': '<svg viewBox="0 0 10 10"><path d="M0 0L10 10"/></svg>'}, answer.json())
         self.assertEqual(0.4, self.provider.calls[0][4])
 
+    def test_a_vector_result_goes_to_the_drawing_model_with_the_rules_and_the_source(self):
+        source = '<svg viewBox="10 10 40 20"><g id="shape"><rect x="10" y="10" width="40" height="20" fill="#336699"/></g></svg>'
+        answer = self.call('POST', '/api/ai/generate', {'prompt': 'make it red', 'action': 'style', 'output': 'vector', 'creativity': 0.1,
+                                                       'selectionPng': DATA_URL, 'documentPng': DATA_URL, 'selectionSvg': source})
+        self.assertEqual('svg', answer.json()['kind'])
+        kind, _, image, prompt, _ = self.provider.calls[0]
+        self.assertEqual(('vectorize', PNG), (kind, image))
+        for piece in ('exactly one standalone SVG', '<g> groups', '#rrggbb', 'Never use <image>', 'Instruction of the user: make it red',
+                      'Source SVG:\n' + source, 'keep the elements, ids and colours', 'Follow the instruction strictly'):
+            self.assertIn(piece, prompt)
+        self.assertIn('"output": "vector"', self.audit())
+
+    def test_a_vector_result_is_refused_for_pictures(self):
+        answer = self.call('POST', '/api/ai/generate', {'prompt': 'red', 'action': 'style', 'output': 'vector', 'selectionPng': DATA_URL,
+                                                       'selectionData': '[{"kind":"image","source":"[picture sent as an image]"}]'})
+        self.assertEqual((422, 'Vector results are not available when the context holds pictures'), (answer.status_code, answer.json()['detail']))
+        self.assertEqual([], self.provider.calls)
+
+    def test_a_bitmap_result_stays_with_the_image_model(self):
+        self.call('POST', '/api/ai/generate', {'prompt': 'red', 'action': 'style', 'output': 'bitmap', 'selectionPng': DATA_URL,
+                                                'selectionSvg': '<svg/>'})
+        self.assertEqual('edit', self.provider.calls[0][0])
+        self.assertNotIn('Source SVG', self.provider.calls[0][3])
+
     def test_requests_are_validated_before_the_provider_is_called(self):
         cases = [({'action': 'style', 'selectionPng': DATA_URL}, 'Write what the model should do'),
                  ({'action': 'enhance', 'scope': 'selection'}, 'Select objects, or choose the whole document as the context'),
@@ -114,7 +138,7 @@ class AgentApiTests(unittest.TestCase):
         self.assertEqual((409, 'Save your OpenAI API token in Settings > External tokens first'), (answer.status_code, answer.json()['detail']))
 
     def test_prompts_are_saved_per_user(self):
-        prompts = [{'id': 'p1', 'title': 'Watercolour', 'prompt': 'Paint it as a watercolour', 'action': 'style', 'creativity': 0.7, 'favorite': True}]
+        prompts = [{'id': 'p1', 'title': 'Watercolour', 'prompt': 'Paint it as a watercolour', 'action': 'style', 'creativity': 0.7, 'favorite': True, 'output': 'vector', 'hidden': False}]
         self.assertEqual({'prompts': prompts}, self.call('PUT', '/api/me/prompts', {'prompts': prompts}).json())
         self.assertEqual({'prompts': prompts}, self.call('GET', '/api/me/prompts').json())
         self.assertEqual({'prompts': []}, self.call('GET', '/api/me/prompts', bearer=admin_token()).json())
@@ -175,6 +199,15 @@ class OpenAiProviderTests(unittest.TestCase):
             self.assertEqual('gpt-image-2.5-flare', OpenAiProvider().image_model)
         with mock.patch.dict('os.environ', {'XDS_OPENAI_IMAGE_MODEL': 'gpt-image-2.5-sunburst'}):
             self.assertEqual('gpt-image-2.5-sunburst', OpenAiProvider().image_model)
+
+    def test_a_model_without_temperature_is_asked_again_without_it(self):
+        provider = OpenAiProvider(image_model='m', text_model='reasoning')
+        refusal = urllib.error.HTTPError('u', 400, 'x', {}, io.BytesIO(b'{"error": {"message": "Unsupported parameter: \'temperature\' is not supported with this model."}}'))
+        answer = {'output_text': '<svg><path d="M1 1"/></svg>'}
+        with mock.patch('urllib.request.urlopen', side_effect=[refusal, self.answer(answer)]) as sent:
+            self.assertEqual('<svg><path d="M1 1"/></svg>', provider.vectorize(SECRET, PNG, 'Draw', 0.5))
+        bodies = [json.loads(call.args[0].data) for call in sent.call_args_list]
+        self.assertEqual((0.5, None), (bodies[0].get('temperature'), bodies[1].get('temperature')))
 
     def test_provider_failures_are_explained(self):
         provider = OpenAiProvider(image_model='m', text_model='t')

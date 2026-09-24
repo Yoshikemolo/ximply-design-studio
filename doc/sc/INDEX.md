@@ -160,3 +160,4 @@
 | [SC-0154 — Provider requests through the API](SC-0154.md) |
 | [SC-0155 — A thumbnail kept with each commit](SC-0155.md) |
 | [SC-0156 — Comments on commits](SC-0156.md) |
+| [SC-0157 — Bitmap or vector result](SC-0157.md) |
