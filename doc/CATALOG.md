@@ -63,6 +63,7 @@ Generated titles and paths only; authoritative content remains in each linked do
 - [REL-0035 — AI Tools panel](changelog/0.12.0.md)
 - [REL-0036 — Change control with Git](changelog/0.13.0.md)
 - [REL-0037 — Precise reasons for provider limits](changelog/0.13.1.md)
+- [REL-0038 — Current image model](changelog/0.13.2.md)
 - [REL-0004 — First local drawing and image-retouching preview](changelog/0.2.0-alpha.1.md)
 - [REL-0005 — Validated local container preview](changelog/0.2.0-alpha.2.md)
 - [REL-0006 — Drawing workbench preview](changelog/0.3.0-alpha.1.md)

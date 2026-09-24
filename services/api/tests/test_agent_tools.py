@@ -168,6 +168,14 @@ class OpenAiProviderTests(unittest.TestCase):
         self.assertEqual(('text-model', 0.5), (body['model'], body['temperature']))
         self.assertTrue(body['input'][0]['content'][1]['image_url'].startswith('data:image/png;base64,'))
 
+    def test_the_current_image_model_is_the_default(self):
+        with mock.patch.dict('os.environ', {}, clear=False):
+            import os
+            os.environ.pop('XDS_OPENAI_IMAGE_MODEL', None)
+            self.assertEqual('gpt-image-2.5-flare', OpenAiProvider().image_model)
+        with mock.patch.dict('os.environ', {'XDS_OPENAI_IMAGE_MODEL': 'gpt-image-2.5-sunburst'}):
+            self.assertEqual('gpt-image-2.5-sunburst', OpenAiProvider().image_model)
+
     def test_provider_failures_are_explained(self):
         provider = OpenAiProvider(image_model='m', text_model='t')
         cases = [(401, b'{}', 'OpenAI refused the token'), (429, b'{}', 'OpenAI limits the rate or quota of this token'),
@@ -176,7 +184,10 @@ class OpenAiProviderTests(unittest.TestCase):
                  (429, b'{"error": {"code": "rate_limit_exceeded", "message": "Rate limit reached"}}',
                   'OpenAI limits how many requests this token can make per minute; wait a moment and try again'),
                  (429, b'{"error": {"type": "tokens", "message": "Too many tokens"}}', 'OpenAI limits the rate or quota of this token: Too many tokens'),
-                 (400, b'{"error": {"message": "Invalid size"}}', 'OpenAI refused the request: Invalid size'), (500, b'', 'OpenAI answered 500')]
+                 (400, b'{"error": {"message": "Invalid size"}}', 'OpenAI refused the request: Invalid size'),
+                 (403, b'{"error": {"message": "Project `proj_x` does not have access to model `gpt-image-2.5-flare`"}}',
+                  'OpenAI refused the request: Project `proj_x` does not have access to model `gpt-image-2.5-flare`. Allow the model in'
+                  ' the limits of the OpenAI project, or verify the organization in its general settings'), (500, b'', 'OpenAI answered 500')]
         for code, body, reason in cases:
             with mock.patch('urllib.request.urlopen', side_effect=urllib.error.HTTPError('u', code, 'x', {}, io.BytesIO(body))):
                 with self.assertRaises(IdentityError) as refused:
