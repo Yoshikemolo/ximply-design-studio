@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 import '@angular/compiler';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { readFileSync } from 'node:fs';
 import { createCanvas } from '@napi-rs/canvas';
 import { EditorService } from '../src/app/editor.service';
 import { AgentToolsService, describe as describeRequest } from '../src/app/agent-tools.service';
@@ -242,5 +243,35 @@ describe('bitmap or vector result (FEAT-0029, SC-0157)', () => {
     tools.output.set('bitmap');
     tools.usePrompt(session.stored[0]);
     expect(tools.output()).toBe('vector');
+  });
+});
+
+describe('which model works (FEAT-0029, SC-0154)', () => {
+  it('lists the models tried while the request runs and keeps the one that made the result', async () => {
+    const { session, tools } = setup([rect('a', 0, 0, 10, 10)], ['a']);
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => { release = resolve; });
+    (session as any).generate = async (request: AgentRequest, _signal?: AbortSignal, onEvent?: (event: any) => void) => {
+      session.requests.push(request);
+      onEvent?.({ type: 'trying', model: 'gpt-image-2.5-flare' });
+      onEvent?.({ type: 'trying', model: 'gpt-image-2' });
+      await gate;
+      return { kind: 'image', png: createCanvas(20, 10).toDataURL('image/png'), model: 'gpt-image-2' };
+    };
+    tools.action.set('enhance');
+    const running = tools.generate();
+    await vi.waitFor(() => expect(tools.tried()).toEqual(['gpt-image-2.5-flare', 'gpt-image-2']));
+    release();
+    expect(await running).toBe(true);
+    expect(tools.usedModel()).toBe('gpt-image-2');
+  });
+
+  it('describes the model being tried and the one it left', () => {
+    const template = readFileSync('apps/web/src/app/app.component.html', 'utf-8');
+    expect(template).toContain('agentModelNote()');
+    expect(template).toContain('Made with {model}');
+    const source = readFileSync('apps/web/src/app/app.component.ts', 'utf-8');
+    expect(source).toContain('Trying the best model to do this: {model}');
+    expect(source).toContain('{previous} is not available; trying {model}');
   });
 });

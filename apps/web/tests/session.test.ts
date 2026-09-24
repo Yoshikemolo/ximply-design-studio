@@ -533,3 +533,42 @@ describe('destructive actions', () => {
     expect(readFileSync('apps/web/public/assets/icons/delete-danger.svg', 'utf-8')).toContain('#e5484d');
   });
 });
+
+describe('streamed generation (FEAT-0029, SC-0154)', () => {
+  /** A response whose body arrives in the given chunks, as a proxy passes a stream on. */
+  const streamed = (chunks: string[]) => new Response(new ReadableStream({
+    start(controller) { for (const chunk of chunks) controller.enqueue(new TextEncoder().encode(chunk)); controller.close(); },
+  }), { status: 200, headers: { 'Content-Type': 'application/x-ndjson' } });
+  async function signedIn(answer: () => Response) {
+    const world = environment({ '/api/identity': configured, '/api/session': () => json(SESSION), '/api/ai/generate': answer });
+    world.store.set('xds-session-tokens', JSON.stringify({ access: 'a', refresh: 'r', idToken: 'i', expiresAt: 2_000_000 }));
+    const session = service(world.env);
+    await session.start();
+    return { session, world };
+  }
+  const request = { prompt: 'red', action: 'style' as const, scope: 'selection' as const, creativity: 0.5 };
+
+  it('reports each model tried and returns the result, whatever the chunks', async () => {
+    const { session, world } = await signedIn(() => streamed(['{"type":"trying","model":"gpt-6-sol"}\n{"type":"try', 'ing","model":"gpt-6-luna"}\n{"type":"waiting"}\n',
+      '{"type":"result","kind":"svg","svg":"<svg/>","model":"gpt-6-luna"}\n']));
+    const events: unknown[] = [];
+    expect(await session.generate(request, undefined, (event) => events.push(event))).toEqual({ kind: 'svg', svg: '<svg/>', model: 'gpt-6-luna' });
+    expect(events).toEqual([{ type: 'trying', model: 'gpt-6-sol' }, { type: 'trying', model: 'gpt-6-luna' }, { type: 'waiting' }]);
+    const sent = world.calls.find((call) => call.url === '/api/ai/generate')!;
+    expect((sent.init!.headers as Record<string, string>).Accept).toBe('application/x-ndjson');
+  });
+
+  it('throws the reason of a streamed refusal, or of a stream that ends without a result', async () => {
+    const refused = await signedIn(() => streamed(['{"type":"trying","model":"gpt-6-sol"}\n{"type":"error","status":502,"detail":"No model"}\n']));
+    await expect(refused.session.generate(request)).rejects.toThrow('No model');
+    const cut = await signedIn(() => streamed(['{"type":"trying","model":"gpt-6-sol"}\n']));
+    await expect(cut.session.generate(request)).rejects.toThrow('The server closed the request without a result.');
+  });
+
+  it('still reads a plain answer and the reason of a refusal before the stream', async () => {
+    const plain = await signedIn(() => json({ kind: 'image', png: 'data:image/png;base64,AAAA' }));
+    expect(await plain.session.generate(request)).toEqual({ kind: 'image', png: 'data:image/png;base64,AAAA' });
+    const early = await signedIn(() => json({ detail: 'Write what the model should do' }, 422));
+    await expect(early.session.generate(request)).rejects.toThrow('Write what the model should do');
+  });
+});

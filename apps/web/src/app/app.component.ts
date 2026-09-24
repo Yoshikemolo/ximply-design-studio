@@ -1383,6 +1383,14 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   async saveAgentPrompt() {
     if (await this.agent.savePrompt(this.promptTitle())) this.promptTitle.set("");
   }
+  /** Which model the request is trying, and which it left because the project cannot use it. */
+  agentModelNote(): string {
+    const tried = this.agent.tried();
+    if (!tried.length) return "";
+    const current = tried[tried.length - 1];
+    if (tried.length === 1) return this.t("Trying the best model to do this: {model}").replace("{model}", current);
+    return this.t("{previous} is not available; trying {model}").replace("{previous}", tried[tried.length - 2]).replace("{model}", current);
+  }
   removeAgentPrompt(prompt: LibraryPrompt) {
     const title = prompt.builtIn ? this.t(prompt.title) : prompt.title;
     this.askConfirmation("Remove prompt", this.t(prompt.builtIn ? "The default prompt {name} leaves your list; Restore default prompts brings it back." : "The prompt {name} is removed.").replace("{name}", title),

@@ -28,6 +28,11 @@ export class AgentToolsService {
   /** What the last request carried, labelled, so the user sees what was sent. */
   readonly sent = signal<ContextItem[]>([]);
   readonly outcome = signal<{ ok: boolean; text: string } | null>(null);
+  /** The models tried by the running request, in order, and the one that made the last result. */
+  readonly tried = signal<string[]>([]);
+  readonly usedModel = signal("");
+  /** Seconds since the request was sent, shown while the model works. */
+  readonly elapsed = signal(0);
   readonly saved = signal<SavedPrompt[]>([]);
   readonly library = computed<LibraryPrompt[]>(() => promptLibrary(this.saved()));
   /** Words that filter the saved prompts, and how titles read in the panel's language. */
@@ -127,10 +132,17 @@ export class AgentToolsService {
   private async send(request: AgentRequest, frame: Frame, name: string): Promise<boolean> {
     this.sent.set(describe(request));
     this.phase.set("sending");
+    this.tried.set([]);
+    this.usedModel.set("");
+    this.elapsed.set(0);
     this.controller = new AbortController();
     const waiting = setTimeout(() => { if (this.phase() === "sending") this.phase.set("waiting"); }, 600);
+    const clock = setInterval(() => this.elapsed.update((seconds) => seconds + 1), 1000);
     try {
-      const result = await this.session.generate(request, this.controller.signal);
+      const result = await this.session.generate(request, this.controller.signal, (event) => {
+        if (event.type === "trying") this.tried.update((models) => [...models, event.model]);
+      });
+      this.usedModel.set(result.model ?? "");
       this.phase.set("inserting");
       this.last = { request, frame, name };
       this.lastRun.update((count) => count + 1);
@@ -145,6 +157,7 @@ export class AgentToolsService {
       return false;
     } finally {
       clearTimeout(waiting);
+      clearInterval(clock);
       this.controller = undefined;
       this.phase.set("idle");
     }

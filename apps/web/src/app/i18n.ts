@@ -1366,6 +1366,11 @@ const ES: Record<string, string> = {
   "The default prompts are back.": "Los prompts predeterminados han vuelto.",
   "The default prompt {name} leaves your list; Restore default prompts brings it back.": "El prompt predeterminado {name} sale de tu lista; Restaurar los prompts predeterminados lo recupera.",
   "The prompt {name} is removed.": "Se elimina el prompt {name}.",
+  "Trying the best model to do this: {model}": "Probando el mejor modelo para esto: {model}",
+  "{previous} is not available; trying {model}": "{previous} no está disponible; probando {model}",
+  "Made with {model}": "Hecho con {model}",
+  "The server closed the request without a result.": "El servidor cerró la petición sin resultado.",
+  "The request failed on the server": "La petición falló en el servidor",
 };
 export function translate(key: string, locale: string) {
   return locale === "es" ? (ES[key] ?? key) : key;

@@ -16,8 +16,8 @@ class ChangelogTests(unittest.TestCase):
         for filename, content in outputs.items():
             self.assertEqual(content, (ROOT/filename).read_text(), filename)
         manifest = json.loads(outputs['release/changelog.json'])
-        self.assertEqual('0.13.5', manifest['currentVersion'])
-        self.assertEqual(['0.13.5', '0.13.4', '0.13.3', '0.13.2', '0.13.1', '0.13.0', '0.12.0', '0.11.2', '0.11.1', '0.11.0', '0.10.0', '0.9.2', '0.9.1', '0.9.0', '0.8.0', '0.7.0', '0.6.0', '0.5.0', '0.4.0', '0.3.16-alpha.1', '0.3.15-alpha.1', '0.3.14-alpha.1', '0.3.13-alpha.1', '0.3.12-alpha.1', '0.3.11-alpha.1', '0.3.10-alpha.1', '0.3.9-alpha.1', '0.3.8-alpha.1', '0.3.7-alpha.1', '0.3.6-alpha.1', '0.3.5-alpha.1', '0.3.4-alpha.1', '0.3.3-alpha.1', '0.3.2-alpha.1', '0.3.1-alpha.1', '0.3.0-alpha.1', '0.2.0-alpha.2', '0.2.0-alpha.1', '0.1.0-design.2', '0.1.0-design.1'], [x['version'] for x in manifest['entries']])
+        self.assertEqual('0.13.6', manifest['currentVersion'])
+        self.assertEqual(['0.13.6', '0.13.5', '0.13.4', '0.13.3', '0.13.2', '0.13.1', '0.13.0', '0.12.0', '0.11.2', '0.11.1', '0.11.0', '0.10.0', '0.9.2', '0.9.1', '0.9.0', '0.8.0', '0.7.0', '0.6.0', '0.5.0', '0.4.0', '0.3.16-alpha.1', '0.3.15-alpha.1', '0.3.14-alpha.1', '0.3.13-alpha.1', '0.3.12-alpha.1', '0.3.11-alpha.1', '0.3.10-alpha.1', '0.3.9-alpha.1', '0.3.8-alpha.1', '0.3.7-alpha.1', '0.3.6-alpha.1', '0.3.5-alpha.1', '0.3.4-alpha.1', '0.3.3-alpha.1', '0.3.2-alpha.1', '0.3.1-alpha.1', '0.3.0-alpha.1', '0.2.0-alpha.2', '0.2.0-alpha.1', '0.1.0-design.2', '0.1.0-design.1'], [x['version'] for x in manifest['entries']])
         for entry in manifest['entries']:
             if entry['version'] in ('0.9.0', '0.8.0', '0.7.0', '0.6.0', '0.5.0', '0.4.0', '0.3.14-alpha.1', '0.3.13-alpha.1', '0.3.0-alpha.1', '0.3.5-alpha.1', '0.3.7-alpha.1', '0.3.9-alpha.1', '0.3.10-alpha.1'):
                 self.assertTrue(any('Migration:' in note for note in entry['breakingChanges']))

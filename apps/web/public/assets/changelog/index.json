@@ -1,11 +1,34 @@
 {
-  "currentVersion": "0.13.5",
+  "currentVersion": "0.13.6",
   "licence": {
     "file": "LICENSE",
     "name": "Ximply Design Studio \u2014 Limited Use Licence",
     "sha256": "b6f77aae5f066cc5f5e8aa54699d8dcc84a96387007299d30cb78a4f3f7fd6ae"
   },
   "entries": [
+    {
+      "version": "0.13.6",
+      "date": "2026-09-24",
+      "summary": "The agent tools stream which model they try, keep long requests alive, and say which model made the result",
+      "breakingChanges": [],
+      "changes": [
+        {
+          "type": "Improvement",
+          "description": "While a request runs, the panel says which model it is trying, \"Trying the best model to do this\", and when the project cannot use one, which it left and which it tries next; it counts the seconds and, after the result, says which model made it."
+        },
+        {
+          "type": "Fix",
+          "description": "A vector drawing that takes the model more than a minute no longer ends in a 504: the answer streams its progress with a heartbeat every 15 seconds, and the local proxy passes each line on at once and waits up to 300 seconds. On 2026-09-24 a drawing by the text model took about two minutes and was lost to the one-minute limit of a proxy that had not reloaded its settings."
+        },
+        {
+          "type": "Engineering",
+          "description": "SC-0154 records the progress oracle. A running live proxy needs a restart, or `nginx -s reload`, to take the new settings."
+        }
+      ],
+      "capabilityStatus": "local-preview",
+      "markdown": "0.13.6.md",
+      "source": "doc/changelog/0.13.6.md"
+    },
     {
       "version": "0.13.5",
       "date": "2026-09-24",

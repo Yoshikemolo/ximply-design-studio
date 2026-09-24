@@ -25,12 +25,17 @@ SECRET = 'sk-test-' + 'a' * 40
 class FakeProvider:
     def __init__(self):
         self.calls = []
+        self.models = ['text-model']
 
-    def edit_image(self, token, images, prompt, transparent):
+    def edit_image(self, token, images, prompt, transparent, on_model=None):
+        if on_model:
+            on_model('image-model')
         self.calls.append(('edit', token, images, prompt, transparent))
         return PNG + b'result'
 
-    def vectorize(self, token, image, prompt, temperature):
+    def vectorize(self, token, image, prompt, temperature, on_model=None):
+        for model in self.models:
+            on_model and on_model(model)
         self.calls.append(('vectorize', token, image, prompt, temperature))
         return '<svg viewBox="0 0 10 10"><path d="M0 0L10 10"/></svg>'
 
@@ -67,7 +72,7 @@ class AgentApiTests(unittest.TestCase):
         answer = self.call('POST', '/api/ai/generate', {'prompt': 'watercolour', 'action': 'style', 'scope': 'selection', 'creativity': 0.9,
                                                        'selectionPng': DATA_URL, 'documentPng': DATA_URL, 'selectionData': '[{"kind":"path"}]'})
         self.assertEqual(200, answer.status_code, answer.text)
-        self.assertEqual({'kind': 'image', 'png': 'data:image/png;base64,' + base64.b64encode(PNG + b'result').decode()}, answer.json())
+        self.assertEqual({'kind': 'image', 'png': 'data:image/png;base64,' + base64.b64encode(PNG + b'result').decode(), 'model': 'image-model'}, answer.json())
         kind, used, images, prompt, transparent = self.provider.calls[0]
         self.assertEqual(('edit', SECRET, [PNG, PNG], True), (kind, used, images, transparent))
         self.assertIn('Image 1 is the selected objects', prompt)
@@ -93,7 +98,7 @@ class AgentApiTests(unittest.TestCase):
 
     def test_a_drawing_comes_back_for_vectorize(self):
         answer = self.call('POST', '/api/ai/generate', {'action': 'vectorize', 'selectionPng': DATA_URL, 'creativity': 0.25})
-        self.assertEqual({'kind': 'svg', 'svg': '<svg viewBox="0 0 10 10"><path d="M0 0L10 10"/></svg>'}, answer.json())
+        self.assertEqual({'kind': 'svg', 'svg': '<svg viewBox="0 0 10 10"><path d="M0 0L10 10"/></svg>', 'model': 'text-model'}, answer.json())
         self.assertEqual(0.4, self.provider.calls[0][4])
 
     def test_a_vector_result_goes_to_the_drawing_model_with_the_rules_and_the_source(self):
@@ -120,6 +125,46 @@ class AgentApiTests(unittest.TestCase):
         self.assertEqual('edit', self.provider.calls[0][0])
         self.assertNotIn('Source SVG', self.provider.calls[0][3])
 
+    def stream(self, body):
+        answer = self.client.post('/api/ai/generate', json=body, headers={'Authorization': 'Bearer ' + self.user, 'Accept': 'application/x-ndjson'})
+        return answer, [json.loads(line) for line in answer.text.splitlines() if line.strip()]
+
+    def test_a_streamed_request_names_each_model_tried_and_ends_with_the_result(self):
+        self.provider.models = ['gpt-6-sol', 'gpt-6-luna']
+        answer, events = self.stream({'prompt': 'red', 'action': 'style', 'output': 'vector', 'selectionPng': DATA_URL})
+        self.assertEqual(('application/x-ndjson', 'no'), (answer.headers['content-type'], answer.headers['x-accel-buffering']))
+        self.assertEqual([{'type': 'trying', 'model': 'gpt-6-sol'}, {'type': 'trying', 'model': 'gpt-6-luna'}], events[:2])
+        self.assertEqual({'type': 'result', 'kind': 'svg', 'svg': '<svg viewBox="0 0 10 10"><path d="M0 0L10 10"/></svg>', 'model': 'gpt-6-luna'}, events[-1])
+        self.assertIn('"outcome": "answered"', self.audit())
+
+    def test_a_streamed_refusal_ends_with_its_reason(self):
+        def refuse(*_, on_model=None):
+            on_model('gpt-6-sol')
+            raise IdentityError(502, 'The OpenAI project of this token cannot use any of these models: gpt-6-sol')
+        self.provider.vectorize = refuse
+        answer, events = self.stream({'prompt': 'red', 'action': 'style', 'output': 'vector', 'selectionPng': DATA_URL})
+        self.assertEqual(200, answer.status_code)
+        self.assertEqual([{'type': 'trying', 'model': 'gpt-6-sol'},
+                          {'type': 'error', 'status': 502, 'detail': 'The OpenAI project of this token cannot use any of these models: gpt-6-sol'}], events)
+        self.assertIn('"outcome": "failed"', self.audit())
+
+    def test_a_slow_model_is_kept_alive_with_heartbeats(self):
+        import time
+        from src import agent_tools
+
+        def slow(*_, on_model=None):
+            time.sleep(0.8)
+            return '<svg><path d="M0 0"/></svg>'
+        self.provider.vectorize = slow
+        with mock.patch.object(agent_tools, 'HEARTBEAT_SECONDS', 0.25):
+            _, events = self.stream({'prompt': 'red', 'action': 'style', 'output': 'vector', 'selectionPng': DATA_URL})
+        self.assertIn({'type': 'waiting'}, events)
+        self.assertEqual('result', events[-1]['type'])
+
+    def test_a_streamed_request_is_validated_before_it_starts(self):
+        answer, _ = self.stream({'action': 'style', 'selectionPng': DATA_URL})
+        self.assertEqual(422, answer.status_code)
+
     def test_requests_are_validated_before_the_provider_is_called(self):
         cases = [({'action': 'style', 'selectionPng': DATA_URL}, 'Write what the model should do'),
                  ({'action': 'enhance', 'scope': 'selection'}, 'Select objects, or choose the whole document as the context'),
@@ -133,7 +178,7 @@ class AgentApiTests(unittest.TestCase):
         self.assertEqual([], self.provider.calls)
 
     def test_a_provider_refusal_is_logged_without_the_prompt(self):
-        def refuse(*_):
+        def refuse(*_, on_model=None):
             raise IdentityError(502, 'OpenAI refused the request: Project `proj_x` does not have access to model `gpt-6-sol`')
         self.provider.vectorize = refuse
         with self.assertLogs('xds.agent_tools', 'WARNING') as logged:
@@ -218,11 +263,13 @@ class OpenAiProviderTests(unittest.TestCase):
     def test_the_next_model_of_the_pool_is_tried_while_the_project_cannot_use_one(self):
         provider = OpenAiProvider(image_model='m', text_model='sol,luna,astra')
         answer = {'output_text': '<svg><path d="M1 1"/></svg>'}
+        announced = []
         with mock.patch('urllib.request.urlopen', side_effect=[self.refusal(403, 'Project `p` does not have access to model `sol`'),
                                                                self.refusal(404, 'The model `luna` does not exist or you do not have access to it.'),
                                                                self.answer(answer)]) as sent:
-            self.assertEqual('<svg><path d="M1 1"/></svg>', provider.vectorize(SECRET, PNG, 'Draw', 0.5))
+            self.assertEqual('<svg><path d="M1 1"/></svg>', provider.vectorize(SECRET, PNG, 'Draw', 0.5, on_model=announced.append))
         self.assertEqual(['sol', 'luna', 'astra'], [json.loads(call.args[0].data)['model'] for call in sent.call_args_list])
+        self.assertEqual(['sol', 'luna', 'astra'], announced)
         # The model that worked is tried first next time.
         with mock.patch('urllib.request.urlopen', return_value=self.answer(answer)) as sent:
             provider.vectorize(SECRET, PNG, 'Draw', 0.5)
