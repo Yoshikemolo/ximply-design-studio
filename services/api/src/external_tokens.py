@@ -85,12 +85,12 @@ def masked(value: str) -> str:
     return value[:3] + '…' + value[-4:]
 
 
-def check_openai(token: str, models: tuple[str, ...] | None = None) -> dict:
+def check_openai(token: str, pools: dict[str, tuple[str, ...]] | None = None) -> dict:
     """Asks OpenAI for its model list with the token, the cheapest call that proves it works, and
-    then whether the token can use each model the agent tools call; neither costs any credit."""
-    if models is None:
+    then which model of each pool the agent tools use its project can reach; neither costs credit."""
+    if pools is None:
         from .agent_tools import required_models  # imported here: the agent tools import this module
-        models = required_models()
+        pools = required_models()
 
     def get(url: str) -> int:
         request = urllib.request.Request(url, headers={'Authorization': 'Bearer ' + token})
@@ -104,18 +104,23 @@ def check_openai(token: str, models: tuple[str, ...] | None = None) -> dict:
         return {'ok': False, 'detail': reason.get(error.code, f'OpenAI answered {error.code}')}
     except (urllib.error.URLError, TimeoutError, OSError):
         return {'ok': False, 'detail': 'OpenAI is unreachable from the server'}
-    missing = []
-    for model in models:
-        try:
-            get(f'{OPENAI_MODELS}/{model}')
-        except urllib.error.HTTPError:
-            missing.append(model)
-        except (urllib.error.URLError, TimeoutError, OSError):
-            return {'ok': False, 'detail': 'OpenAI is unreachable from the server'}
+    usable, missing = [], []
+    for kind, models in pools.items():
+        found = None
+        for model in models:
+            try:
+                get(f'{OPENAI_MODELS}/{model}')
+            except urllib.error.HTTPError:
+                continue
+            except (urllib.error.URLError, TimeoutError, OSError):
+                return {'ok': False, 'detail': 'OpenAI is unreachable from the server'}
+            found = model
+            break
+        (usable if found else missing).append(found or f"{kind} ({', '.join(models)})")
     if missing:
-        return {'ok': False, 'detail': 'OpenAI accepted the token, but its project cannot use ' + ', '.join(missing)
-                + '. Allow the models in the limits of the OpenAI project, or verify the organization'}
-    return {'ok': True, 'detail': 'OpenAI accepted the token, and its project can use ' + ', '.join(models)}
+        return {'ok': False, 'detail': 'OpenAI accepted the token, but its project can use no model of: ' + '; '.join(missing)
+                + '. Allow one in the limits of the OpenAI project, or verify the organization'}
+    return {'ok': True, 'detail': 'OpenAI accepted the token; its project will use ' + ' and '.join(usable)}
 
 
 class TokenValue(BaseModel):

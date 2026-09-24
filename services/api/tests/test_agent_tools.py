@@ -12,7 +12,7 @@ import urllib.error
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from cryptography.fernet import Fernet
 from fastapi.testclient import TestClient
-from src.agent_tools import OpenAiProvider, instruction, png_bytes, svg_from, vector_instruction, GenerationRequest
+from src.agent_tools import OpenAiProvider, instruction, provider_refusal, png_bytes, svg_from, vector_instruction, GenerationRequest
 from src.identity import IdentityError, TokenVerifier
 from src.main import FileDocumentRepository, create_app
 from tests.support import CONFIG, NOW, FakeKeycloak, admin_token, jwks, licensed, token
@@ -212,6 +212,52 @@ class OpenAiProviderTests(unittest.TestCase):
         with mock.patch.dict('os.environ', {'XDS_OPENAI_IMAGE_MODEL': 'gpt-image-2.5-sunburst'}):
             self.assertEqual('gpt-image-2.5-sunburst', OpenAiProvider().image_model)
 
+    def refusal(self, code, message):
+        return urllib.error.HTTPError('u', code, 'x', {}, io.BytesIO(json.dumps({'error': {'message': message}}).encode()))
+
+    def test_the_next_model_of_the_pool_is_tried_while_the_project_cannot_use_one(self):
+        provider = OpenAiProvider(image_model='m', text_model='sol,luna,astra')
+        answer = {'output_text': '<svg><path d="M1 1"/></svg>'}
+        with mock.patch('urllib.request.urlopen', side_effect=[self.refusal(403, 'Project `p` does not have access to model `sol`'),
+                                                               self.refusal(404, 'The model `luna` does not exist or you do not have access to it.'),
+                                                               self.answer(answer)]) as sent:
+            self.assertEqual('<svg><path d="M1 1"/></svg>', provider.vectorize(SECRET, PNG, 'Draw', 0.5))
+        self.assertEqual(['sol', 'luna', 'astra'], [json.loads(call.args[0].data)['model'] for call in sent.call_args_list])
+        # The model that worked is tried first next time.
+        with mock.patch('urllib.request.urlopen', return_value=self.answer(answer)) as sent:
+            provider.vectorize(SECRET, PNG, 'Draw', 0.5)
+        self.assertEqual(['astra'], [json.loads(call.args[0].data)['model'] for call in sent.call_args_list])
+
+    def test_other_refusals_stop_the_pool(self):
+        provider = OpenAiProvider(image_model='a,b', text_model='t')
+        quota = urllib.error.HTTPError('u', 429, 'x', {}, io.BytesIO(b'{"error": {"code": "insufficient_quota"}}'))
+        with mock.patch('urllib.request.urlopen', side_effect=[quota]) as sent:
+            with self.assertRaises(IdentityError) as refused:
+                provider.edit_image(SECRET, [PNG], 'x', False)
+        self.assertEqual(1, sent.call_count)
+        self.assertIn('no API credit', refused.exception.reason)
+
+    def test_a_project_without_any_model_of_the_pool_is_told_which(self):
+        provider = OpenAiProvider(image_model='a,b', text_model='t')
+        with mock.patch('urllib.request.urlopen', side_effect=[self.refusal(403, 'Project `p` does not have access to model `a`'),
+                                                               self.refusal(403, 'Project `p` does not have access to model `b`')]):
+            with self.assertRaises(IdentityError) as refused:
+                provider.edit_image(SECRET, [PNG], 'x', False)
+        self.assertEqual('The OpenAI project of this token cannot use any of these models: a, b. Allow one of them in the limits '
+                         'of the OpenAI project, or verify the organization', refused.exception.reason)
+
+    def test_an_access_refusal_explains_how_to_allow_the_model(self):
+        error = urllib.error.HTTPError('u', 403, 'x', {}, io.BytesIO(b'{"error": {"message": "Project `proj_x` does not have access to model `gpt-image-2.5-flare`"}}'))
+        self.assertEqual('OpenAI refused the request: Project `proj_x` does not have access to model `gpt-image-2.5-flare`. Allow the model in'
+                         ' the limits of the OpenAI project, or verify the organization in its general settings', provider_refusal(error).reason)
+
+    def test_the_default_pools_start_with_the_current_models(self):
+        with mock.patch.dict('os.environ', {'XDS_OPENAI_IMAGE_MODEL': '', 'XDS_OPENAI_TEXT_MODEL': ''}):
+            provider = OpenAiProvider()
+        self.assertEqual(('gpt-image-2.5-flare', 'gpt-6-sol'), (provider.image_models[0], provider.text_models[0]))
+        self.assertIn('gpt-6-luna', provider.text_models)
+        self.assertIn('gpt-image-1', provider.image_models)
+
     def test_a_model_without_temperature_is_asked_again_without_it(self):
         provider = OpenAiProvider(image_model='m', text_model='reasoning')
         refusal = urllib.error.HTTPError('u', 400, 'x', {}, io.BytesIO(b'{"error": {"message": "Unsupported parameter: \'temperature\' is not supported with this model."}}'))
@@ -230,9 +276,7 @@ class OpenAiProviderTests(unittest.TestCase):
                   'OpenAI limits how many requests this token can make per minute; wait a moment and try again'),
                  (429, b'{"error": {"type": "tokens", "message": "Too many tokens"}}', 'OpenAI limits the rate or quota of this token: Too many tokens'),
                  (400, b'{"error": {"message": "Invalid size"}}', 'OpenAI refused the request: Invalid size'),
-                 (403, b'{"error": {"message": "Project `proj_x` does not have access to model `gpt-image-2.5-flare`"}}',
-                  'OpenAI refused the request: Project `proj_x` does not have access to model `gpt-image-2.5-flare`. Allow the model in'
-                  ' the limits of the OpenAI project, or verify the organization in its general settings'), (500, b'', 'OpenAI answered 500')]
+                 (500, b'', 'OpenAI answered 500')]
         for code, body, reason in cases:
             with mock.patch('urllib.request.urlopen', side_effect=urllib.error.HTTPError('u', code, 'x', {}, io.BytesIO(body))):
                 with self.assertRaises(IdentityError) as refused:

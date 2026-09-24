@@ -35,6 +35,11 @@ LOG = logging.getLogger('xds.agent_tools')
 DEFAULT_IMAGE_MODEL = 'gpt-image-2.5-flare'
 # The balanced model with image input that draws editable vectors.
 DEFAULT_TEXT_MODEL = 'gpt-6-sol'
+# The pools tried in order when a project cannot use a model (owner request of 2026-09-24): the
+# current models first, then earlier ones that most projects can use.
+IMAGE_MODELS = ('gpt-image-2.5-flare', 'gpt-image-2.5-sunburst', 'gpt-image-2', 'gpt-image-1.5', 'gpt-image-1')
+TEXT_MODELS = ('gpt-6-sol', 'gpt-6-luna', 'gpt-6-astra', 'gpt-4.1')
+UNAVAILABLE = ('does not have access to model', 'must be verified', 'does not exist or you do not have access', 'model_not_found')
 PNG_SIGNATURE = b'\x89PNG\r\n\x1a\n'
 OPENAI = 'https://api.openai.com/v1'
 
@@ -149,14 +154,26 @@ def vector_instruction(request: GenerationRequest, has_selection: bool) -> str:
     return '\n\n'.join(parts)
 
 
-def required_models() -> tuple[str, ...]:
-    """The models the agent tools call: the image model for bitmaps and the text model for vectors."""
-    return (os.environ.get('XDS_OPENAI_IMAGE_MODEL', DEFAULT_IMAGE_MODEL), os.environ.get('XDS_OPENAI_TEXT_MODEL', DEFAULT_TEXT_MODEL))
+def model_pool(setting: str, pool: tuple[str, ...]) -> tuple[str, ...]:
+    """The models to try, in order: a comma-separated setting when given, otherwise the pool."""
+    chosen = tuple(model.strip() for model in os.environ.get(setting, '').split(',') if model.strip())
+    return chosen or pool
+
+
+def required_models() -> dict[str, tuple[str, ...]]:
+    """The pools the agent tools call: image models for bitmaps and text models for vectors."""
+    return {'image': model_pool('XDS_OPENAI_IMAGE_MODEL', IMAGE_MODELS), 'text': model_pool('XDS_OPENAI_TEXT_MODEL', TEXT_MODELS)}
+
+
+def model_unavailable(reason: str) -> bool:
+    """Whether a refusal says the project cannot use the model, so that another model may work."""
+    return any(marker in reason for marker in UNAVAILABLE)
 
 
 def provider_name(provider: Any, vector: bool) -> str:
-    """The model a request went to, for the log."""
-    return str(getattr(provider, 'text_model' if vector else 'image_model', type(provider).__name__))
+    """The models a request could go to, for the log."""
+    pool = getattr(provider, 'text_models' if vector else 'image_models', None)
+    return '|'.join(pool) if pool else type(provider).__name__
 
 
 def svg_from(text: str) -> str:
@@ -206,9 +223,42 @@ class OpenAiProvider:
     """OpenAI over HTTPS: the image edit endpoint for pictures, the Responses API for drawings."""
 
     def __init__(self, image_model: str | None = None, text_model: str | None = None, timeout: float = 180):
-        self.image_model = image_model or os.environ.get('XDS_OPENAI_IMAGE_MODEL', DEFAULT_IMAGE_MODEL)
-        self.text_model = text_model or os.environ.get('XDS_OPENAI_TEXT_MODEL', DEFAULT_TEXT_MODEL)
+        pools = required_models()
+        self.image_models = tuple(model.strip() for model in image_model.split(',')) if image_model else pools['image']
+        self.text_models = tuple(model.strip() for model in text_model.split(',')) if text_model else pools['text']
         self.timeout = timeout
+        # The model that last worked for each token, by digest, tried first next time.
+        self.working: dict[tuple[str, str], str] = {}
+        self.last_model = ''
+
+    @property
+    def image_model(self) -> str:
+        return self.image_models[0]
+
+    @property
+    def text_model(self) -> str:
+        return self.text_models[0]
+
+    def _pooled(self, kind: str, token: str, models: tuple[str, ...], call: Callable[[str], Any]) -> Any:
+        """Calls each model of the pool in turn while the project cannot use it, until one answers."""
+        key = (kind, hashlib.sha256(token.encode()).hexdigest()[:16])
+        known = self.working.get(key)
+        order = ([known] if known in models else []) + [model for model in models if model != known]
+        refused = []
+        for model in order:
+            try:
+                result = call(model)
+            except IdentityError as error:
+                if not model_unavailable(error.reason):
+                    raise
+                refused.append(model)
+                LOG.warning('Model %s is not available to the project of a token; trying the next one', model)
+                continue
+            self.working[key] = model
+            self.last_model = model
+            return result
+        raise IdentityError(502, 'The OpenAI project of this token cannot use any of these models: ' + ', '.join(refused)
+                            + '. Allow one of them in the limits of the OpenAI project, or verify the organization')
 
     def _send(self, request: urllib.request.Request) -> dict:
         try:
@@ -220,8 +270,11 @@ class OpenAiProvider:
             raise IdentityError(504, 'OpenAI did not answer in time or is unreachable') from None
 
     def edit_image(self, token: str, images: list[bytes], prompt: str, transparent: bool) -> bytes:
+        return self._pooled('image', token, self.image_models, lambda model: self._edit_image(model, token, images, prompt, transparent))
+
+    def _edit_image(self, model: str, token: str, images: list[bytes], prompt: str, transparent: bool) -> bytes:
         boundary = 'xds' + uuid.uuid4().hex
-        fields = [('model', self.image_model), ('prompt', prompt), ('size', 'auto'), ('output_format', 'png'),
+        fields = [('model', model), ('prompt', prompt), ('size', 'auto'), ('output_format', 'png'),
                   ('background', 'transparent' if transparent else 'auto')]
         body = b''
         for name, value in fields:
@@ -238,11 +291,14 @@ class OpenAiProvider:
             raise IdentityError(502, 'OpenAI answered without an image') from None
 
     def vectorize(self, token: str, image: bytes, prompt: str, temperature: float) -> str:
+        return self._pooled('text', token, self.text_models, lambda model: self._vectorize(model, token, image, prompt, temperature))
+
+    def _vectorize(self, model: str, token: str, image: bytes, prompt: str, temperature: float) -> str:
         content = [{'type': 'input_text', 'text': prompt},
                    {'type': 'input_image', 'image_url': 'data:image/png;base64,' + base64.b64encode(image).decode()}]
 
         def ask(settings: dict) -> dict:
-            body = json.dumps({'model': self.text_model, **settings, 'input': [{'role': 'user', 'content': content}]}).encode()
+            body = json.dumps({'model': model, **settings, 'input': [{'role': 'user', 'content': content}]}).encode()
             return self._send(urllib.request.Request(OPENAI + '/responses', data=body, method='POST', headers={
                 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json'}))
         try:

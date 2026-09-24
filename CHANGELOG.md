@@ -5,6 +5,7 @@ Application data and bundled Markdown are generated; do not edit them.
 
 [Unreleased](doc/changelog/Unreleased.md)
 
+- [0.13.5 — When the OpenAI project cannot use a model, the agent tools try the next model of a pool until one answers](doc/changelog/0.13.5.md)
 - [0.13.4 — Test connection names the models the token's project cannot use, and refusals are logged for diagnosis](doc/changelog/0.13.4.md)
 - [0.13.3 — The agent tools let the user choose a bitmap or an editable vector result, and saved prompts can be searched and removed](doc/changelog/0.13.3.md)
 - [0.13.2 — The agent tools use GPT Image 2.5 Flare by default and explain how to allow a model the OpenAI project cannot use](doc/changelog/0.13.2.md)
