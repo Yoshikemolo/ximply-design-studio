@@ -66,6 +66,7 @@ Generated titles and paths only; authoritative content remains in each linked do
 - [REL-0038 — Current image model](changelog/0.13.2.md)
 - [REL-0039 — Bitmap or vector results and a searchable prompt library](changelog/0.13.3.md)
 - [REL-0040 — Model access in the connection test](changelog/0.13.4.md)
+- [REL-0041 — A pool of models for the agent tools](changelog/0.13.5.md)
 - [REL-0004 — First local drawing and image-retouching preview](changelog/0.2.0-alpha.1.md)
 - [REL-0005 — Validated local container preview](changelog/0.2.0-alpha.2.md)
 - [REL-0006 — Drawing workbench preview](changelog/0.3.0-alpha.1.md)

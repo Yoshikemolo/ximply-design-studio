@@ -105,31 +105,34 @@ class OpenAiCheckTests(unittest.TestCase):
         response = mock.MagicMock()
         response.__enter__.return_value.status = 200
         with mock.patch('urllib.request.urlopen', return_value=response) as opened:
-            self.assertEqual({'ok': True, 'detail': 'OpenAI accepted the token, and its project can use image-model, text-model'},
-                             check_openai(SECRET, ('image-model', 'text-model')))
+            self.assertEqual({'ok': True, 'detail': 'OpenAI accepted the token; its project will use image-model and text-model'},
+                             check_openai(SECRET, {'image': ('image-model',), 'text': ('text-model',)}))
         urls = [call.args[0].full_url for call in opened.call_args_list]
         self.assertEqual([external_tokens.OPENAI_MODELS, external_tokens.OPENAI_MODELS + '/image-model', external_tokens.OPENAI_MODELS + '/text-model'], urls)
         self.assertEqual('Bearer ' + SECRET, opened.call_args_list[0].args[0].headers['Authorization'])
         for code, detail in [(401, 'OpenAI refused the token'), (403, 'The token has no access to the API'),
                              (429, 'OpenAI limits the rate or quota of this token'), (500, 'OpenAI answered 500')]:
             with mock.patch('urllib.request.urlopen', side_effect=urllib.error.HTTPError('u', code, 'x', {}, None)):
-                self.assertEqual({'ok': False, 'detail': detail}, check_openai(SECRET, ('m',)))
+                self.assertEqual({'ok': False, 'detail': detail}, check_openai(SECRET, {'image': ('m',)}))
         with mock.patch('urllib.request.urlopen', side_effect=urllib.error.URLError('down')):
-            self.assertEqual({'ok': False, 'detail': 'OpenAI is unreachable from the server'}, check_openai(SECRET, ('m',)))
+            self.assertEqual({'ok': False, 'detail': 'OpenAI is unreachable from the server'}, check_openai(SECRET, {'image': ('m',)}))
 
     def test_a_model_the_project_cannot_use_is_named(self):
         response = mock.MagicMock()
         response.__enter__.return_value.status = 200
         refused = urllib.error.HTTPError('u', 404, 'x', {}, None)
-        with mock.patch('urllib.request.urlopen', side_effect=[response, response, refused]):
-            answer = check_openai(SECRET, ('image-model', 'text-model'))
-        self.assertEqual({'ok': False, 'detail': 'OpenAI accepted the token, but its project cannot use text-model. '
-                          'Allow the models in the limits of the OpenAI project, or verify the organization'}, answer)
+        with mock.patch('urllib.request.urlopen', side_effect=[response, response, refused, refused]):
+            answer = check_openai(SECRET, {'image': ('image-model',), 'text': ('sol', 'luna')})
+        self.assertEqual({'ok': False, 'detail': 'OpenAI accepted the token, but its project can use no model of: text (sol, luna). '
+                          'Allow one in the limits of the OpenAI project, or verify the organization'}, answer)
+        with mock.patch('urllib.request.urlopen', side_effect=[response, response, refused, response]):
+            answer = check_openai(SECRET, {'image': ('image-model',), 'text': ('sol', 'luna')})
+        self.assertEqual({'ok': True, 'detail': 'OpenAI accepted the token; its project will use image-model and luna'}, answer)
 
     def test_the_models_checked_are_those_the_agent_tools_call(self):
         from src.agent_tools import required_models
-        with mock.patch.dict('os.environ', {'XDS_OPENAI_IMAGE_MODEL': 'i', 'XDS_OPENAI_TEXT_MODEL': 't'}):
-            self.assertEqual(('i', 't'), required_models())
+        with mock.patch.dict('os.environ', {'XDS_OPENAI_IMAGE_MODEL': 'i', 'XDS_OPENAI_TEXT_MODEL': 't1, t2'}):
+            self.assertEqual({'image': ('i',), 'text': ('t1', 't2')}, required_models())
 
 
 if __name__ == '__main__':
