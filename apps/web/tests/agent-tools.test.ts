@@ -225,14 +225,28 @@ describe('bitmap or vector result (FEAT-0029, SC-0157)', () => {
     expect([session.requests[0].output, session.requests[0].selectionSvg]).toEqual(['bitmap', undefined]);
   });
 
-  it('locks the vector result for pictures and says why', async () => {
+  it('traces pictures into a vector result, sending them as pixels only', async () => {
     const picture = { ...newLayer('image', 'p', { x: 0, y: 0 }), width: 10, height: 10, source: createCanvas(4, 4).toDataURL('image/png') };
-    const { session, tools } = setup([picture], ['p']);
-    tools.action.set('style'); tools.prompt.set('red'); tools.output.set('vector');
+    const { editor, session, tools } = setup([picture, rect('a', 20, 0, 10, 10)], ['p', 'a']);
+    // The test canvas cannot paint a real picture; what matters here is what the request carries.
+    vi.spyOn(editor, 'rasterizePng').mockResolvedValue({ source: 'data:image/png;base64,AAAA', frame: { x: 0, y: 0, width: 30, height: 10 } } as never);
+    session.answer = async () => ({ kind: 'svg', svg: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"><g id="traced"><rect width="10" height="10" fill="#f00"/></g></svg>' });
+    tools.action.set('vectorize');
     expect(tools.pictures()).toBe(true);
-    expect(await tools.generate()).toBe(false);
-    expect(tools.outcome()?.text).toBe('Vector results are not available when the context holds pictures.');
-    expect(session.requests).toEqual([]);
+    expect(tools.problem()).toBe('');
+    expect(await tools.generate()).toBe(true);
+    const [request] = session.requests;
+    expect([request.output, request.pictures]).toEqual(['vector', true]);
+    expect(request.selectionSvg).not.toContain('<image');
+    expect(request.selectionSvg).not.toContain('base64');
+    expect(request.selectionPng).toMatch(/^data:image\/png/);
+  });
+
+  it('marks no pictures for a drawing of shapes only', async () => {
+    const { session, tools } = setup([rect('a', 0, 0, 10, 10)], ['a']);
+    tools.action.set('vectorize');
+    await tools.generate();
+    expect(session.requests[0].pictures).toBeUndefined();
   });
 
   it('remembers the result type with a saved prompt', async () => {

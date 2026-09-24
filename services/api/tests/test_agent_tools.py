@@ -113,11 +113,19 @@ class AgentApiTests(unittest.TestCase):
             self.assertIn(piece, prompt)
         self.assertIn('"output": "vector"', self.audit())
 
-    def test_a_vector_result_is_refused_for_pictures(self):
-        answer = self.call('POST', '/api/ai/generate', {'prompt': 'red', 'action': 'style', 'output': 'vector', 'selectionPng': DATA_URL,
+    def test_pictures_are_traced_into_a_vector_result(self):
+        # Owner decision of 2026-09-24: vector results from pictures are allowed, and the model traces them.
+        answer = self.call('POST', '/api/ai/generate', {'action': 'vectorize', 'selectionPng': DATA_URL,
                                                        'selectionData': '[{"kind":"image","source":"[picture sent as an image]"}]'})
-        self.assertEqual((422, 'Vector results are not available when the context holds pictures'), (answer.status_code, answer.json()['detail']))
-        self.assertEqual([], self.provider.calls)
+        self.assertEqual(200, answer.status_code, answer.text)
+        prompt = self.provider.calls[0][3]
+        self.assertIn('Trace them: redraw each picture as vector shapes', prompt)
+        self.assertIn('flat colours sampled from the picture', prompt)
+        self.call('POST', '/api/ai/generate', {'prompt': 'poster', 'action': 'style', 'output': 'vector', 'scope': 'document',
+                                                'documentPng': DATA_URL, 'pictures': True})
+        self.assertIn('Trace them', self.provider.calls[1][3])
+        self.call('POST', '/api/ai/generate', {'prompt': 'red', 'action': 'style', 'output': 'vector', 'selectionPng': DATA_URL})
+        self.assertNotIn('Trace them', self.provider.calls[2][3])
 
     def test_a_bitmap_result_stays_with_the_image_model(self):
         self.call('POST', '/api/ai/generate', {'prompt': 'red', 'action': 'style', 'output': 'bitmap', 'selectionPng': DATA_URL,

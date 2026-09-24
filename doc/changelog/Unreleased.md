@@ -16,7 +16,7 @@ capability_status: "local-preview"
 
 # Unreleased — Pending changes
 
-Changes after 0.13.6 are recorded here until the next release.
+Changes after 0.13.7 are recorded here until the next release.
 
 ## Breaking changes
 

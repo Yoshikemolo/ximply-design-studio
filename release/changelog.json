@@ -1,11 +1,38 @@
 {
-  "currentVersion": "0.13.6",
+  "currentVersion": "0.13.7",
   "licence": {
     "file": "LICENSE",
     "name": "Ximply Design Studio \u2014 Limited Use Licence",
     "sha256": "b6f77aae5f066cc5f5e8aa54699d8dcc84a96387007299d30cb78a4f3f7fd6ae"
   },
   "entries": [
+    {
+      "version": "0.13.7",
+      "date": "2026-09-24",
+      "summary": "Vector results are offered for pictures: the model traces them into editable paths and groups",
+      "breakingChanges": [],
+      "changes": [
+        {
+          "type": "Feature",
+          "description": "Vector and Convert to paths and groups work on pictures: the model traces them into editable paths and groups with flat colours sampled from the picture, one group per picture and nested groups per region, placed where the picture sits."
+        },
+        {
+          "type": "Improvement",
+          "description": "The source SVG of a vector request carries only the vector objects; pictures travel once, as pixels in the PNG images."
+        },
+        {
+          "type": "Security",
+          "description": "The lock of 0.13.3 on vector results for pictures is lifted by owner decision; the drawing the model answers with is still screened before it is imported."
+        },
+        {
+          "type": "Engineering",
+          "description": "SC-0157 replaces the picture lock oracle with the tracing oracle."
+        }
+      ],
+      "capabilityStatus": "local-preview",
+      "markdown": "0.13.7.md",
+      "source": "doc/changelog/0.13.7.md"
+    },
     {
       "version": "0.13.6",
       "date": "2026-09-24",

@@ -70,12 +70,10 @@ describe('when a request can be sent (FEAT-0029, SC-0150)', () => {
     expect(requestProblem('enhance', '', 'document', 0)).toBe('');
   });
 
-  it('locks vector results when the context holds pictures', () => {
+  it('always gives a vector result for Convert to paths and groups', () => {
     expect(effectiveOutput('vectorize', 'bitmap')).toBe('vector');
-    expect(requestProblem('style', 'red', 'selection', 1, 'vector', true)).toBe('Vector results are not available when the context holds pictures.');
-    expect(requestProblem('vectorize', '', 'selection', 1, 'bitmap', true)).toBe('Vector results are not available when the context holds pictures.');
-    expect(requestProblem('style', 'red', 'selection', 1, 'bitmap', true)).toBe('');
-    expect(requestProblem('style', 'red', 'selection', 1, 'vector', false)).toBe('');
+    expect(effectiveOutput('style', 'bitmap')).toBe('bitmap');
+    expect(requestProblem('vectorize', '', 'selection', 1)).toBe('');
   });
 
   it('asks for a selection when the selection is the context', () => {

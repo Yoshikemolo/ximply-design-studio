@@ -5869,12 +5869,14 @@ export class EditorService {
       const page = this.document();
       const frame = { x: 0, y: 0, width: page.width, height: page.height };
       // A vector request also carries the drawing itself as SVG, so the model edits real geometry.
-      const selectionSvg = vector ? contextSvg(svgExport(page), frame, true) : undefined;
+      // Pictures travel in the PNG only; the model traces them from there.
+      const selectionSvg = vector ? contextSvg(svgExport({ ...page, layers: page.layers.filter((layer) => layer.source === "") }), frame, true) : undefined;
       return { documentPng: document.source, frame, count: 0, ...(selectionSvg ? { selectionSvg } : {}) };
     }
     const selection = await this.rasterizePng({ ppi, antialias: "art", margin: 0 }, selected.map((layer) => layer.id));
     if (!selection) return null;
-    const selectionSvg = vector ? contextSvg(svgExport({ ...this.document(), layers: selected }), selection.frame, false) : undefined;
+    const shapes = selected.filter((layer) => layer.source === "");
+    const selectionSvg = vector && shapes.length ? contextSvg(svgExport({ ...this.document(), layers: shapes }), selection.frame, false) : undefined;
     return { selectionPng: selection.source, documentPng: document?.source, selectionData: contextData(selected), frame: selection.frame, count: selected.length,
       ...(selectionSvg ? { selectionSvg } : {}) };
   }

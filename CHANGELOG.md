@@ -5,6 +5,7 @@ Application data and bundled Markdown are generated; do not edit them.
 
 [Unreleased](doc/changelog/Unreleased.md)
 
+- [0.13.7 — Vector results are offered for pictures: the model traces them into editable paths and groups](doc/changelog/0.13.7.md)
 - [0.13.6 — The agent tools stream which model they try, keep long requests alive, and say which model made the result](doc/changelog/0.13.6.md)
 - [0.13.5 — When the OpenAI project cannot use a model, the agent tools try the next model of a pool until one answers](doc/changelog/0.13.5.md)
 - [0.13.4 — Test connection names the models the token's project cannot use, and refusals are logged for diagnosis](doc/changelog/0.13.4.md)
