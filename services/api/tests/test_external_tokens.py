@@ -42,9 +42,10 @@ class TokenApiTests(unittest.TestCase):
 
     def test_each_user_keeps_their_own_token_encrypted(self):
         ana, owner = licensed(), admin_token()
-        self.assertEqual({'provider': 'openai', 'configured': False, 'updatedAt': None}, self.call('GET', '/api/me/tokens/openai', ana).json())
+        self.assertEqual({'provider': 'openai', 'configured': False, 'updatedAt': None, 'hint': None}, self.call('GET', '/api/me/tokens/openai', ana).json())
         stored = self.call('PUT', '/api/me/tokens/openai', ana, {'token': SECRET})
-        self.assertEqual({'provider': 'openai', 'configured': True, 'updatedAt': '2026-09-23T10:00:00Z'}, stored.json())
+        # Only the prefix and the last four characters are shown, as the owner asked.
+        self.assertEqual({'provider': 'openai', 'configured': True, 'updatedAt': '2026-09-23T10:00:00Z', 'hint': 'sk-…aaaa'}, stored.json())
         # The super administrator has a token of their own and cannot see the user's.
         self.assertFalse(self.call('GET', '/api/me/tokens/openai', owner).json()['configured'])
         self.call('PUT', '/api/me/tokens/openai', owner, {'token': OTHER})
@@ -60,7 +61,8 @@ class TokenApiTests(unittest.TestCase):
         answers = stored.text + self.call('GET', '/api/me/tokens/openai', ana).text
         for text in (on_disk, audit, answers):
             self.assertNotIn(SECRET, text)
-            self.assertNotIn(SECRET[-8:], text)
+            # Nothing beyond the last four characters of the token leaves it.
+            self.assertNotIn(SECRET[-5:], text)
         self.assertEqual(['set-token', 'set-token'], [json.loads(line)['change'] for line in audit.splitlines()])
         self.assertEqual(204, self.call('DELETE', '/api/me/tokens/openai', ana).status_code)
         self.assertFalse(self.call('GET', '/api/me/tokens/openai', ana).json()['configured'])

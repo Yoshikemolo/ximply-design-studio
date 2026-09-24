@@ -1634,13 +1634,13 @@
             @case ('tokens') {
               <p class="panel-tip"><img src="/assets/icons/tip.svg" alt="" /><span>{{ t('Your own OpenAI API token lets the agent tools call OpenAI on your behalf. It is stored encrypted on the server and never shown again.') }}</span></p>
               <label class="wide-label">OpenAI API token<input type="password" autocomplete="off" name="openai-token" [(ngModel)]="tokenDraft" [placeholder]="tokenState()?.configured ? t('Enter a new token to replace it') : 'sk-…'" /></label>
-              <p class="token-state">{{ tokenState()?.configured ? t('A token is configured since') + ' ' + formatDate(tokenState()?.updatedAt) : t('No token is configured.') }}</p>
+              <p class="token-state">{{ tokenState()?.configured ? t('A token is configured since') + ' ' + formatDate(tokenState()?.updatedAt) : t('No token is configured.') }}@if (tokenState()?.hint; as hint) { <code class="token-hint" [title]="t('Only the start and the last four characters are shown.')">{{ hint }}</code>}</p>
               <div class="dialog-actions token-actions">
-                <button type="button" class="primary" [disabled]="tokenDraft.trim().length < 20" (click)="saveToken()">{{ t('Save') }}</button>
-                <button type="button" [disabled]="!tokenState()?.configured" (click)="testToken()">{{ t('Test the connection') }}</button>
-                <button type="button" class="danger" [disabled]="!tokenState()?.configured" (click)="removeToken()">{{ t('Remove') }}</button>
+                <button type="button" class="primary" [disabled]="!!tokenBusy() || tokenDraft.trim().length < 20" (click)="saveToken()">{{ t(tokenBusy() === 'saving' ? 'Saving…' : 'Save') }}</button>
+                <button type="button" [disabled]="!!tokenBusy() || !tokenState()?.configured" [attr.aria-busy]="tokenBusy() === 'testing'" (click)="testToken()">@if (tokenBusy() === 'testing') {<span class="busy-spinner" aria-hidden="true"></span>}{{ t(tokenBusy() === 'testing' ? 'Testing…' : 'Test the connection') }}</button>
+                <button type="button" class="danger" [disabled]="!!tokenBusy() || !tokenState()?.configured" (click)="removeToken()">{{ t('Remove') }}</button>
               </div>
-              @if (tokenMessage()) {<p class="admin-notice" role="status">{{ t(tokenMessage()) }}</p>}
+              @if (tokenMessage()) {<p class="token-result" [class.ok]="tokenOutcome() === 'ok'" [class.error]="tokenOutcome() === 'error'" [class.pending]="!!tokenBusy()" role="status" aria-live="polite">{{ t(tokenMessage()) }}</p>}
             }
             @case ('shortcuts') {
       <p>

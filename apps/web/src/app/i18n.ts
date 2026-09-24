@@ -1,4 +1,11 @@
 const ES: Record<string, string> = {
+  "Only the start and the last four characters are shown.": "Solo se muestran el comienzo y los cuatro últimos caracteres.",
+  "Contacting OpenAI with your token…": "Contactando con OpenAI con tu token…",
+  "Saving the token…": "Guardando el token…",
+  "Removing the token…": "Quitando el token…",
+  "Saving…": "Guardando…",
+  "Testing…": "Probando…",
+  "The sign-in has expired": "La sesión ha caducado",
   "Bulk actions": "Acciones en bloque",
   "Activate": "Activar",
   "Deactivate": "Desactivar",

@@ -46,7 +46,7 @@
         },
         {
           "type": "Feature",
-          "description": "Settings > External tokens keeps each user's own OpenAI API token, encrypted on the server and never shown again, with a connection test."
+          "description": "Settings > External tokens keeps each user's own OpenAI API token, encrypted on the server and shown only masked, with its prefix and last four characters, with a connection test that says what it is doing and how it ended."
         },
         {
           "type": "Improvement",
@@ -59,6 +59,10 @@
         {
           "type": "Fix",
           "description": "The tooltip of the former Local preview badge showed its catalog key in English; the new badge shows a sentence."
+        },
+        {
+          "type": "Fix",
+          "description": "A request made after the access token expired renews it once and tries again, instead of failing with a message that was easy to miss."
         },
         {
           "type": "Security",

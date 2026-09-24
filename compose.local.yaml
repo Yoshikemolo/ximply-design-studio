@@ -75,12 +75,12 @@ services:
       KC_PROXY_HEADERS: xforwarded
       KC_HEALTH_ENABLED: "true"
       KC_BOOTSTRAP_ADMIN_USERNAME: keycloak-admin
-      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:?Start the launcher with --identity}
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-}
       XDS_STUDIO_ORIGIN: http://localhost:${XDS_PORT:-8090}
-      XDS_ADMIN_CLIENT_SECRET: ${XDS_ADMIN_CLIENT_SECRET:?Start the launcher with --identity}
+      XDS_ADMIN_CLIENT_SECRET: ${XDS_ADMIN_CLIENT_SECRET:-}
       XDS_FIRST_ADMIN_USERNAME: ${XDS_FIRST_ADMIN_USERNAME:-admin}
       XDS_FIRST_ADMIN_EMAIL: ${XDS_FIRST_ADMIN_EMAIL:-admin@localhost.test}
-      XDS_FIRST_ADMIN_PASSWORD: ${XDS_FIRST_ADMIN_PASSWORD:?Start the launcher with --identity}
+      XDS_FIRST_ADMIN_PASSWORD: ${XDS_FIRST_ADMIN_PASSWORD:-}
     volumes:
       - ./infra/keycloak/xds-realm.json:/opt/keycloak/data/import/xds-realm.json:ro
       - ./infra/keycloak/themes/xds:/opt/keycloak/themes/xds:ro

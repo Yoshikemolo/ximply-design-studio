@@ -450,3 +450,52 @@ describe('super administrator, suspension and the advanced tools block (SC-0147,
     }
   });
 });
+
+describe('expired access tokens', () => {
+  it('renews the token once when the API answers that it expired, and tries again', async () => {
+    let calls = 0;
+    const world = environment({
+      '/api/identity': configured,
+      [ISSUER + '/protocol/openid-connect/token']: () => tokens({ access_token: 'fresh' }),
+      '/api/session': () => json(SESSION),
+      '/api/me/tokens/openai/test': (call) => (++calls === 1 ? json({ detail: 'The sign-in has expired' }, 401)
+        : json({ provider: 'openai', ok: (call.init!.headers as Record<string, string>).Authorization === 'Bearer fresh', detail: 'OpenAI accepted the token' })),
+    });
+    world.store.set('xds-session-tokens', JSON.stringify({ access: 'stale', refresh: 'r', idToken: 'i', expiresAt: 2_000_000 }));
+    const session = service(world.env);
+    await session.start();
+    expect(await session.testToken()).toEqual({ provider: 'openai', ok: true, detail: 'OpenAI accepted the token' });
+    expect(calls).toBe(2);
+  });
+
+  it('gives up after one renewal and reports the refusal', async () => {
+    const world = environment({
+      '/api/identity': configured,
+      [ISSUER + '/protocol/openid-connect/token']: () => tokens(),
+      '/api/session': () => json(SESSION),
+      '/api/me/tokens/openai': () => json({ detail: 'The sign-in has expired' }, 401),
+    });
+    world.store.set('xds-session-tokens', JSON.stringify({ access: 'stale', refresh: 'r', idToken: 'i', expiresAt: 2_000_000 }));
+    const session = service(world.env);
+    await session.start();
+    await expect(session.tokenStatus()).rejects.toThrow('The sign-in has expired');
+    expect(world.calls.filter((call) => call.url === '/api/me/tokens/openai')).toHaveLength(2);
+  });
+});
+
+describe('token form feedback', () => {
+  it('says what it is doing while testing and how the test ended', async () => {
+    const { AppComponent } = await import('../src/app/app.component');
+    const { signal } = await import('@angular/core');
+    let resolve!: (value: { ok: boolean; detail: string }) => void;
+    const form = Object.assign(Object.create(AppComponent.prototype), {
+      tokenState: signal({ provider: 'openai', configured: true, updatedAt: null }), tokenMessage: signal(''), tokenBusy: signal(''), tokenOutcome: signal(''),
+      session: { testToken: () => new Promise((done) => { resolve = done; }) },
+    });
+    const running = form.testToken();
+    expect([form.tokenBusy(), form.tokenMessage(), form.tokenOutcome()]).toEqual(['testing', 'Contacting OpenAI with your token…', '']);
+    resolve({ ok: false, detail: 'OpenAI refused the token' });
+    await running;
+    expect([form.tokenBusy(), form.tokenMessage(), form.tokenOutcome()]).toEqual(['', 'OpenAI refused the token', 'error']);
+  });
+});

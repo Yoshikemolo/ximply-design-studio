@@ -31,7 +31,7 @@ export interface AdminRole { name: "xds-admin" | Permission; kind: "role" | "per
 export interface AdminLicence extends Licence { userId: string; username: string; name: string; email: string }
 export interface AdminDocument { id: string; name: string; owner: string | null; size: number; updatedAt: string }
 export interface NewUser { username: string; email: string; firstName: string; lastName: string; password: string; temporary: boolean; admin: boolean }
-export interface TokenStatus { provider: string; configured: boolean; updatedAt: string | null }
+export interface TokenStatus { provider: string; configured: boolean; updatedAt: string | null; hint?: string | null }
 
 interface Tokens { access: string; refresh: string; idToken: string; expiresAt: number }
 interface Pending { state: string; verifier: string; redirect: string }
@@ -216,12 +216,17 @@ export class SessionService {
     return { allowed: true, reason: "" };
   }
 
-  /** Calls the API with the access token of the session. */
-  async request(path: string, init: RequestInit = {}): Promise<Response | null> {
+  /**
+   * Calls the API with the access token of the session. When the API answers that the token
+   * expired, the token is renewed once and the call is made again, so a tab left open keeps working.
+   */
+  async request(path: string, init: RequestInit = {}, renewed = false): Promise<Response | null> {
     if (!this.tokens) { this.fail("Sign in to use advanced capabilities."); return null; }
     try {
-      return await this.env.fetch(path, { ...init, headers: { ...(init.headers ?? {}), Authorization: "Bearer " + this.tokens.access,
+      const answer = await this.env.fetch(path, { ...init, headers: { ...(init.headers ?? {}), Authorization: "Bearer " + this.tokens.access,
         ...(init.body ? { "Content-Type": "application/json" } : {}) } });
+      if (answer.status === 401 && !renewed && this.tokens.refresh && (await this.refresh())) return this.request(path, init, true);
+      return answer;
     } catch {
       this.message.set("The server is unreachable.");
       return null;

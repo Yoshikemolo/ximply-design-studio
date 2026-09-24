@@ -1228,26 +1228,51 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   /** Settings > External tokens: the user's own provider token, of which the browser only sees the state. */
   readonly tokenState = signal<TokenStatus | null>(null);
   readonly tokenMessage = signal("");
+  /** What the token form is doing, so it can say so while the server works. */
+  readonly tokenBusy = signal<"" | "saving" | "testing" | "removing">("");
+  readonly tokenOutcome = signal<"" | "ok" | "error">("");
   tokenDraft = "";
   async loadTokenState() {
     this.tokenMessage.set("");
     try { this.tokenState.set(await this.session.tokenStatus()); } catch (error) { this.tokenMessage.set(error instanceof Error ? error.message : String(error)); }
   }
-  async saveToken() {
+  /** Runs one token action, saying what happens while it runs and how it ended. */
+  private async tokenAction(busy: "saving" | "testing" | "removing", work: () => Promise<{ ok: boolean; message: string }>) {
+    this.tokenBusy.set(busy);
+    this.tokenOutcome.set("");
+    this.tokenMessage.set(busy === "testing" ? "Contacting OpenAI with your token…" : busy === "saving" ? "Saving the token…" : "Removing the token…");
+    try {
+      const result = await work();
+      this.tokenOutcome.set(result.ok ? "ok" : "error");
+      this.tokenMessage.set(result.message);
+    } catch (error) {
+      this.tokenOutcome.set("error");
+      this.tokenMessage.set(error instanceof Error ? error.message : String(error));
+    } finally {
+      this.tokenBusy.set("");
+    }
+  }
+  saveToken() {
     const value = this.tokenDraft.trim();
     this.tokenDraft = "";
-    try { this.tokenState.set(await this.session.saveToken(value)); this.tokenMessage.set("The token was saved."); }
-    catch (error) { this.tokenMessage.set(error instanceof Error ? error.message : String(error)); }
+    return this.tokenAction("saving", async () => {
+      this.tokenState.set(await this.session.saveToken(value));
+      return { ok: true, message: "The token was saved." };
+    });
   }
-  async testToken() {
-    try { this.tokenMessage.set((await this.session.testToken()).detail); }
-    catch (error) { this.tokenMessage.set(error instanceof Error ? error.message : String(error)); }
+  testToken() {
+    return this.tokenAction("testing", async () => {
+      const result = await this.session.testToken();
+      return { ok: result.ok, message: result.detail };
+    });
   }
   removeToken() {
-    this.askConfirmation("Remove the token", this.t("The agent tools stop using your OpenAI API token until you enter one again."), "Remove", async () => {
-      try { await this.session.removeToken(); this.tokenState.set({ provider: "openai", configured: false, updatedAt: null }); this.tokenMessage.set("The token was removed."); }
-      catch (error) { this.tokenMessage.set(error instanceof Error ? error.message : String(error)); }
-    });
+    this.askConfirmation("Remove the token", this.t("The agent tools stop using your OpenAI API token until you enter one again."), "Remove",
+      () => this.tokenAction("removing", async () => {
+        await this.session.removeToken();
+        this.tokenState.set({ provider: "openai", configured: false, updatedAt: null });
+        return { ok: true, message: "The token was removed." };
+      }));
   }
   /** Convert to pixel image and its values, as Object > Rasterize offers them in Illustrator. */
   readonly rasterizeDialog = signal(false);

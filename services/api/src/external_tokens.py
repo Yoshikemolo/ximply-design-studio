@@ -2,7 +2,8 @@
 
 Each user keeps their own OpenAI API token. It is encrypted at rest with the service key,
 tied to the verified subject, and never returned to the browser, logged or audited; the
-browser only learns whether a token is configured and when it was last changed.
+browser learns whether a token is configured, when it last changed and, as the owner asked
+on 2026-09-24, a masked form with the prefix and the last four characters only.
 """
 import hashlib
 import json
@@ -50,7 +51,8 @@ class TokenVault:
             self.directory.mkdir(parents=True, exist_ok=True)
             path = self._path(subject, provider)
             temporary = path.with_suffix('.tmp')
-            temporary.write_text(json.dumps({'token': cipher.encrypt(value.encode()).decode(), 'updatedAt': format_instant(now)}))
+            temporary.write_text(json.dumps({'token': cipher.encrypt(value.encode()).decode(), 'hint': masked(value),
+                                             'updatedAt': format_instant(now)}))
             os.chmod(temporary, 0o600)
             temporary.replace(path)
 
@@ -59,9 +61,9 @@ class TokenVault:
         try:
             saved = json.loads(self._path(subject, provider).read_text())
         except (OSError, ValueError):
-            return {'configured': False, 'updatedAt': None}
+            return {'configured': False, 'updatedAt': None, 'hint': None}
         instant = parse_instant(saved.get('updatedAt'))
-        return {'configured': True, 'updatedAt': format_instant(instant) if instant else None}
+        return {'configured': True, 'updatedAt': format_instant(instant) if instant else None, 'hint': saved.get('hint')}
 
     def get(self, subject: str, provider: str) -> str | None:
         """The token for use by the service itself; never sent to the browser."""
@@ -76,6 +78,11 @@ class TokenVault:
         self._require()
         with self.lock:
             self._path(subject, provider).unlink(missing_ok=True)
+
+
+def masked(value: str) -> str:
+    """The prefix and the last four characters, enough to recognise a token and never to rebuild it."""
+    return value[:3] + '…' + value[-4:]
 
 
 def check_openai(token: str) -> dict:
