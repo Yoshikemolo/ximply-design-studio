@@ -55,8 +55,8 @@
             {{ t("Redo") }}<kbd>{{ shortcut("redo") }}</kbd></button
           ><button (click)="editor.duplicate()">
             {{ t("Duplicate") }}<kbd>{{ shortcut("duplicate") }}</kbd></button
-          ><button (click)="editor.remove()">
-            {{ t("Delete") }}<kbd>{{ shortcut("remove") }}</kbd>
+          ><button class="destructive" (click)="editor.remove()">
+            <img class="destructive-icon" src="/assets/icons/delete-danger.svg" alt="" />{{ t("Delete") }}<kbd>{{ shortcut("remove") }}</kbd>
           </button>
           <hr />
           <button [disabled]="!commandEnabled('definePattern')" (click)="runCommand('definePattern')">{{ t("Define pattern") }}<kbd>{{ shortcut("definePattern") }}</kbd></button>
@@ -647,7 +647,7 @@
               </div>
               <div class="swatch-actions">
                 <button (click)="newSwatch()" [title]="t('New swatch')" [attr.aria-label]="t('New swatch')"><img src="/assets/icons/plus.svg" alt="" /></button>
-                <button [disabled]="!chosenSwatch()" (click)="deleteSwatch()" [title]="t('Delete swatch')" [attr.aria-label]="t('Delete swatch')"><img src="/assets/icons/delete.svg" alt="" /></button>
+                <button class="destructive" [disabled]="!chosenSwatch()" (click)="deleteSwatch()" [title]="t('Delete swatch')" [attr.aria-label]="t('Delete swatch')"><img src="/assets/icons/delete-danger.svg" alt="" /></button>
               </div>
             </div>
           </details>
@@ -1165,10 +1165,11 @@
                   >
                     <img src="/assets/icons/layer-down.svg" alt="" /></button
                   ><button
+                    class="destructive"
                     (click)="editor.remove()"
                     [title]="commandTitle('remove')"
                   >
-                    <img src="/assets/icons/delete.svg" alt="Delete" />
+                    <img src="/assets/icons/delete-danger.svg" [attr.alt]="t('Delete')" />
                   </button>
                 </div>
               } @else {
@@ -1638,7 +1639,7 @@
               <div class="dialog-actions token-actions">
                 <button type="button" class="primary" [disabled]="!!tokenBusy() || tokenDraft.trim().length < 20" (click)="saveToken()">{{ t(tokenBusy() === 'saving' ? 'Saving…' : 'Save') }}</button>
                 <button type="button" [disabled]="!!tokenBusy() || !tokenState()?.configured" [attr.aria-busy]="tokenBusy() === 'testing'" (click)="testToken()">@if (tokenBusy() === 'testing') {<span class="busy-spinner" aria-hidden="true"></span>}{{ t(tokenBusy() === 'testing' ? 'Testing…' : 'Test the connection') }}</button>
-                <button type="button" class="danger" [disabled]="!!tokenBusy() || !tokenState()?.configured" (click)="removeToken()">{{ t('Remove') }}</button>
+                <button type="button" class="destructive" [disabled]="!!tokenBusy() || !tokenState()?.configured" (click)="removeToken()"><img class="destructive-icon" src="/assets/icons/delete-danger.svg" alt="" />{{ t('Remove') }}</button>
               </div>
               @if (tokenMessage()) {<p class="token-result" [class.ok]="tokenOutcome() === 'ok'" [class.error]="tokenOutcome() === 'error'" [class.pending]="!!tokenBusy()" role="status" aria-live="polite">{{ t(tokenMessage()) }}</p>}
             }
@@ -1846,7 +1847,7 @@
   <div class="modal-backdrop confirm-backdrop"><section class="server-dialog confirm-dialog" role="alertdialog" aria-modal="true" aria-labelledby="confirm-title" aria-describedby="confirm-message" (keydown.escape)="confirmation.set(null); $event.stopPropagation()">
     <h2 id="confirm-title">{{ t(pending.title) }}</h2>
     <p id="confirm-message">{{ t(pending.message) }}</p>
-    <div class="dialog-actions"><button type="button" autofocus (click)="confirmation.set(null)">{{ t("Cancel") }}</button><button type="button" class="danger" (click)="confirm()">{{ t(pending.action) }}</button></div>
+    <div class="dialog-actions"><button type="button" autofocus (click)="confirmation.set(null)">{{ t("Cancel") }}</button><button type="button" class="danger" (click)="confirm()">@if (pending.deletes) {<img class="destructive-icon on-danger" src="/assets/icons/delete.svg" alt="" />}{{ t(pending.action) }}</button></div>
   </section></div>
 }
 
@@ -2035,7 +2036,7 @@
             @if (bulkActions().length) {
               <select class="bulk-select" [disabled]="!adminChecked().length || adminBusy()" [attr.aria-label]="t('Bulk actions')" (change)="runBulk($event)">
                 <option value="">{{ t("Bulk actions") }} ({{ adminChecked().length }})</option>
-                @for (action of bulkActions(); track action.id) {<option [value]="action.id">{{ t(action.label) }}</option>}
+                @for (action of bulkActions(); track action.id) {<option [value]="action.id" [class.destructive-option]="action.destructive">{{ t(action.label) }}</option>}
               </select>
             }
             <button (click)="loadAdmin()" [disabled]="adminBusy()">{{ t("Refresh") }}</button>
@@ -2116,7 +2117,7 @@
                     <button class="danger" (click)="banUser()" [disabled]="adminBusy() || user.id === session.session()?.subject">{{ t("Ban") }}</button>
                   }
                 </fieldset>
-                <button class="danger" (click)="deleteUser()" [disabled]="adminBusy() || user.id === session.session()?.subject">{{ t("Delete the user") }}</button>
+                <button class="destructive" (click)="deleteUser()" [disabled]="adminBusy() || user.id === session.session()?.subject"><img class="destructive-icon" src="/assets/icons/delete-danger.svg" alt="" />{{ t("Delete the user") }}</button>
               </div>
             }
             @if (adminCategory() === 'roles' && adminSelectedRole(); as role) {
@@ -2183,7 +2184,7 @@
                   <dt>{{ t("Size") }}</dt><dd>{{ formatSize(item.size) }}</dd>
                   <dt>{{ t("Last change") }}</dt><dd>{{ formatDate(item.updatedAt) }}</dd>
                 </dl>
-                <button class="danger" (click)="deleteDocument()" [disabled]="adminBusy()">{{ t("Delete the document") }}</button>
+                <button class="destructive" (click)="deleteDocument()" [disabled]="adminBusy()"><img class="destructive-icon" src="/assets/icons/delete-danger.svg" alt="" />{{ t("Delete the document") }}</button>
               </div>
             }
           </aside>

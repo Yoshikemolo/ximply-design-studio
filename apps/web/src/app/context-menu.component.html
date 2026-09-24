@@ -4,8 +4,9 @@
     @if (index > 0 && entries[index - 1].section !== entry.section) {
       <div class="context-menu-separator" role="separator"></div>
     }
-    <button type="button" role="menuitem" tabindex="-1" [disabled]="entry.disabled"
+    <button type="button" role="menuitem" tabindex="-1" [disabled]="entry.disabled" [class.destructive]="entry.destructive"
       [attr.aria-disabled]="entry.disabled ? 'true' : null" (click)="activate(entry)">
+      @if (entry.destructive) {<img class="destructive-icon" src="/assets/icons/delete-danger.svg" alt="" />}
       <span>{{ entry.label }}</span>
       @if (entry.shortcut) { <span class="context-menu-shortcut">{{ entry.shortcut }}</span> }
     </button>

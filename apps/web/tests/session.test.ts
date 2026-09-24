@@ -516,3 +516,20 @@ describe('tier colours', () => {
     expect(tones.map(([, colour]) => colour)).not.toContain('#e5484d');
   });
 });
+
+describe('destructive actions', () => {
+  it('draws every deleting action with the red trash icon', () => {
+    const template = readFileSync('apps/web/src/app/app.component.html', 'utf-8');
+    for (const call of ['editor.remove()', 'deleteSwatch()', 'deleteUser()', 'deleteDocument()', 'removeToken()']) {
+      const at = template.indexOf(`(click)="${call}"`);
+      const tag = template.slice(template.lastIndexOf('<button', at), template.indexOf('</button>', at));
+      expect(tag, call).toContain('destructive');
+      expect(tag, call).toContain('delete-danger.svg');
+    }
+    expect(template).toContain('[class.destructive-option]="action.destructive"');
+    expect(template).toContain('@if (pending.deletes)');
+    const menu = readFileSync('apps/web/src/app/context-menu.component.html', 'utf-8');
+    expect(menu).toContain('[class.destructive]="entry.destructive"');
+    expect(readFileSync('apps/web/public/assets/icons/delete-danger.svg', 'utf-8')).toContain('#e5484d');
+  });
+});

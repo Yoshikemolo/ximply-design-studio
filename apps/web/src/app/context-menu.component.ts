@@ -6,6 +6,8 @@ export interface ContextMenuEntry {
   section: string;
   disabled?: boolean;
   shortcut?: string;
+  /** Deleting entries are drawn in red with the trash icon. */
+  destructive?: boolean;
 }
 
 @Component({
