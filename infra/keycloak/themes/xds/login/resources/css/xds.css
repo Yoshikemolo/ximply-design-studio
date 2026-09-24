@@ -1,0 +1,25 @@
+/*
+ * The studio's logo block, centred above every form of the realm (SC-0140): the X mark,
+ * ximply and design studio as outlines, so no font is needed. The realm name stays in the
+ * page for screen readers.
+ */
+#kc-header {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 28px;
+}
+#kc-header-wrapper {
+  width: 315px;
+  max-width: 80vw;
+  aspect-ratio: 315 / 100;
+  background: url("../img/wordmark-light.svg") center / contain no-repeat;
+  font-size: 0;
+  color: transparent;
+  overflow: hidden;
+}
+.pf-v5-theme-dark #kc-header-wrapper {
+  background-image: url("../img/wordmark-dark.svg");
+}
+.pf-v5-c-login__main {
+  border-radius: 12px;
+}

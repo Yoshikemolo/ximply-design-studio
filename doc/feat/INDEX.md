@@ -35,3 +35,4 @@
 | [FEAT-0029 — AI Tools panel and external agent provider](FEAT-0029.md) |
 | [FEAT-0030 — Convert to pixel image](FEAT-0030.md) |
 | [FEAT-0031 — Change control with Git project history](FEAT-0031.md) |
+| [FEAT-0032 — Sign-in, time-limited licences and Admin menu](FEAT-0032.md) |

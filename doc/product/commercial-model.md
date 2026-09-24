@@ -53,6 +53,15 @@ dependencies must also be entitled, or the product shows the dependency requirem
 Avoid surprise activation when a bundle changes. Upgrades preview the entitlement
 diff; downgrades preserve documents and unknown/locked plugin nodes.
 
+### Licence tiers requested by the owner — future requirement
+
+On 2026-09-24 the owner announced licence tiers named Free/Demo, Pro, Teams, Studio and
+Enterprise, which will differ in limits such as the number of users, the tools available
+and the number of works. They are recorded here as a future requirement; no tier, limit
+or price is decided or implemented. The current Keycloak licence of ADR-0041 carries only
+an expiry, a state and permissions; tiers will need a plan field, limits enforced by the
+API, and the badge after the logo will name the tier instead of Pro.
+
 ## Time and seats
 
 Default proposed user metric: named active human subjects per installation, not

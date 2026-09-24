@@ -102,13 +102,14 @@ describe('printing', () => {
 });
 
 describe('export entry points', () => {
-  it('offers PDF and printing in the File menu and opens the dialog from the header', () => {
+  it('offers PDF, printing and the export dialog in the File menu', () => {
     const template = readFileSync('apps/web/src/app/app.component.html', 'utf-8');
     const file = template.slice(template.indexOf('<summary>{{ t("File") }}</summary>'), template.indexOf('</details>'));
     expect(file).toContain('t("Export PDF")');
     expect(file).toContain('t("Print")');
     expect(file).toContain('(click)="openExport()"');
-    expect(template).toContain('class="primary small icon-action" (click)="openExport()"');
+    // The header's primary button shows the AI Tools tab since 0.11.0 (FEAT-0029); Export stays in File.
+    expect(template).toContain('(click)="showInspectorTab(\'ai\')"');
     expect(template).toContain('class="export-documents"');
   });
 });

@@ -7,6 +7,12 @@ services:
     environment:
       XDS_API_TOKEN: ${XDS_API_TOKEN:?Run the local launcher first}
       XDS_DATA_DIR: /data
+      # Advanced mode (FEAT-0032): empty unless the launcher starts with --identity.
+      XDS_OIDC_ISSUER: ${XDS_OIDC_ISSUER:-}
+      XDS_KEYCLOAK_INTERNAL_URL: ${XDS_KEYCLOAK_INTERNAL_URL:-}
+      XDS_ADMIN_CLIENT_ID: xds-admin-service
+      XDS_ADMIN_CLIENT_SECRET: ${XDS_ADMIN_CLIENT_SECRET:-}
+      XDS_TOKEN_KEY: ${XDS_TOKEN_KEY:-}
     volumes:
       - projects:/data
     init: true
@@ -40,7 +46,57 @@ services:
       timeout: 5s
       retries: 6
     networks: [preview]
+  live-web:
+    # Live preview only (scripts/live.py): the same address, with the page from the development server.
+    profiles: [live]
+    image: nginx:1.28-alpine@sha256:a8b39bd9cf0f83869a2162827a0caf6137ddf759d50a171451b335cecc87d236
+    volumes:
+      - ./infra/local/nginx.live.conf:/etc/nginx/conf.d/default.conf:ro
+    ports:
+      - "127.0.0.1:${XDS_PORT:-8090}:8080"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      api:
+        condition: service_healthy
+    init: true
+    security_opt:
+      - no-new-privileges:true
+    networks: [preview]
+  keycloak:
+    # Local identity for advanced mode only; started by the launcher's --identity switch.
+    profiles: [identity]
+    image: quay.io/keycloak/keycloak:26.0.8
+    command: [start-dev, --import-realm]
+    environment:
+      KC_HTTP_RELATIVE_PATH: /auth
+      KC_HOSTNAME: http://localhost:${XDS_PORT:-8090}/auth
+      KC_HOSTNAME_BACKCHANNEL_DYNAMIC: "true"
+      KC_PROXY_HEADERS: xforwarded
+      KC_HEALTH_ENABLED: "true"
+      KC_BOOTSTRAP_ADMIN_USERNAME: keycloak-admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-}
+      XDS_STUDIO_ORIGIN: http://localhost:${XDS_PORT:-8090}
+      XDS_ADMIN_CLIENT_SECRET: ${XDS_ADMIN_CLIENT_SECRET:-}
+      XDS_FIRST_ADMIN_USERNAME: ${XDS_FIRST_ADMIN_USERNAME:-admin}
+      XDS_FIRST_ADMIN_EMAIL: ${XDS_FIRST_ADMIN_EMAIL:-admin@localhost.test}
+      XDS_FIRST_ADMIN_PASSWORD: ${XDS_FIRST_ADMIN_PASSWORD:-}
+    volumes:
+      - ./infra/keycloak/xds-realm.json:/opt/keycloak/data/import/xds-realm.json:ro
+      - ./infra/keycloak/themes/xds:/opt/keycloak/themes/xds:ro
+      - identity:/opt/keycloak/data
+    init: true
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: [CMD-SHELL, "exec 3<>/dev/tcp/127.0.0.1/9000 && printf 'GET /auth/health/ready HTTP/1.0\r\n\r\n' >&3 && grep -q UP <&3"]
+      interval: 10s
+      timeout: 5s
+      retries: 18
+    networks: [preview]
 volumes:
   projects:
+  identity:
 networks:
   preview:
