@@ -1,10 +1,46 @@
-<table class="smart-table" [attr.aria-label]="label">
+@if (searchable || sortable) {
+  <div class="smart-table-tools">
+    @if (searchable) {
+      <input type="search" class="smart-table-search" [value]="search()" [placeholder]="searchLabel" [attr.aria-label]="searchLabel" (input)="setSearch($any($event.target).value)" />
+    }
+    @if (sortable) {
+      <label class="smart-table-sort">{{ sortLabel }}
+        <select [value]="sort()?.key ?? ''" (change)="setSort($any($event.target).value)">
+          <option value="">{{ unsortedLabel }}</option>
+          @for (column of columns; track column.key) {<option [value]="column.key">{{ column.label }}</option>}
+        </select>
+        <select [value]="sort()?.direction ?? 'ascending'" [disabled]="!sort()" [attr.aria-label]="sortLabel" (change)="setSort(sort()?.key ?? '', $any($event.target).value)">
+          <option value="ascending">{{ ascendingLabel }}</option>
+          <option value="descending">{{ descendingLabel }}</option>
+        </select>
+      </label>
+    }
+  </div>
+}
+<table class="smart-table" [class.activatable]="activatable" [attr.aria-label]="label">
   <thead>
     <tr>
-      @for (column of columns; track column.key) {
-        <th scope="col" [class.end]="column.align === 'end'">{{ column.label }}</th>
+      @if (selectable && selectionAt === 'start') {
+        <th scope="col" class="select-column start">
+          <input type="checkbox" [checked]="allChosen()" [indeterminate]="someChosen()" [attr.aria-label]="selectAllLabel" (change)="toggleAll($any($event.target).checked)" />
+        </th>
       }
-      @if (selectable) {
+      @for (column of columns; track column.key) {
+        <th scope="col" [class.end]="column.align === 'end'" [attr.aria-sort]="sortable ? ariaSort(column.key) : null">
+          @if (sortable) {
+            <span class="sort-heading">
+              <button type="button" class="sort-label" (click)="sortBy(column.key)">{{ column.label }}</button>
+              <span class="sort-buttons">
+                <button type="button" [class.active]="ariaSort(column.key) === 'ascending'" [attr.aria-pressed]="ariaSort(column.key) === 'ascending'" [attr.aria-label]="column.label + ' · ' + ascendingLabel" [title]="ascendingLabel" (click)="sortDirection(column.key, 'ascending')">▲</button>
+                <button type="button" [class.active]="ariaSort(column.key) === 'descending'" [attr.aria-pressed]="ariaSort(column.key) === 'descending'" [attr.aria-label]="column.label + ' · ' + descendingLabel" [title]="descendingLabel" (click)="sortDirection(column.key, 'descending')">▼</button>
+              </span>
+            </span>
+          } @else {
+            {{ column.label }}
+          }
+        </th>
+      }
+      @if (selectable && selectionAt === 'end') {
         <th scope="col" class="select-column">
           <input
             type="checkbox"
@@ -16,17 +52,57 @@
         </th>
       }
     </tr>
+    @if (filterable) {
+      <tr class="filter-row">
+        @if (selectable && selectionAt === 'start') {<th></th>}
+        @for (column of columns; track column.key) {
+          <th scope="col">
+            @switch (column.filter ?? 'text') {
+              @case ('choice') {
+                <select [value]="filterValue(column.key)" [attr.aria-label]="filterLabel + ': ' + column.label" (change)="setFilter(column.key, $any($event.target).value)">
+                  <option value="">{{ anyLabel }}</option>
+                  @for (choice of choices(column); track choice) {<option [value]="choice.toLowerCase()">{{ choice }}</option>}
+                </select>
+              }
+              @case ('period') {
+                <select [value]="filterValue(column.key)" [attr.aria-label]="filterLabel + ': ' + column.label" (change)="setFilter(column.key, $any($event.target).value)">
+                  <option value="">{{ anyLabel }}</option>
+                  @for (period of periods; track period.id) {<option [value]="period.id">{{ translate(period.label) }}</option>}
+                </select>
+              }
+              @case ('minimum') {
+                <input type="number" min="0" [value]="filterValue(column.key)" [placeholder]="minimumLabel" [attr.aria-label]="minimumLabel + ': ' + column.label" (input)="setFilter(column.key, $any($event.target).value)" />
+              }
+              @default {
+                <input type="search" [value]="filterValue(column.key)" [placeholder]="filterLabel" [attr.aria-label]="filterLabel + ': ' + column.label" (input)="setFilter(column.key, $any($event.target).value)" />
+              }
+            }
+          </th>
+        }
+        @if (selectable && selectionAt === 'end') {<th></th>}
+      </tr>
+    }
   </thead>
   <tbody>
-    @for (row of records(); track row.id) {
-      <tr [class.chosen]="isChosen(row.id)">
+    @for (row of view(); track row.id) {
+      <tr [class.chosen]="isChosen(row.id)" [class.active]="activeId === row.id" [attr.tabindex]="activatable ? 0 : null" (click)="choose(row.id)" (keydown.enter)="choose(row.id)">
+        @if (selectable && selectionAt === 'start') {
+          <td class="select-column start" (click)="$event.stopPropagation()">
+            <input type="checkbox" [checked]="isChosen(row.id)" [attr.aria-label]="selectionLabel + ': ' + value(row, columns[0].key)" (change)="toggle(row.id, $any($event.target).checked)" />
+          </td>
+        }
         @for (column of columns; track column.key) {
-          <td [class.end]="column.align === 'end'">
-            <span class="cell-value">{{ value(row, column.key) }}</span>
+          <td [class.end]="column.align === 'end'" [class.ellipsis]="column.ellipsis" [attr.title]="title(row, column)">
+            @if (icon(row, column); as icon) {<img class="cell-icon" [src]="'/assets/icons/' + icon + '.svg'" [attr.alt]="iconTitle(row, column)" [attr.title]="iconTitle(row, column) || null" />}
+            @if (tone(row, column); as tone) {
+              <span class="table-badge" [attr.data-tone]="tone">{{ value(row, column.key) }}</span>
+            } @else {
+              <span class="cell-value">{{ value(row, column.key) }}</span>
+            }
             @if (note(row, column); as note) {<small class="cell-note">{{ note }}</small>}
           </td>
         }
-        @if (selectable) {
+        @if (selectable && selectionAt === 'end') {
           <td class="select-column">
             <input
               type="checkbox"
@@ -37,6 +113,15 @@
           </td>
         }
       </tr>
+    } @empty {
+      @if (emptyLabel) {<tr class="empty-row"><td [attr.colspan]="columns.length + (selectable ? 1 : 0)">{{ emptyLabel }}</td></tr>}
     }
   </tbody>
 </table>
+@if (size() && pages() > 1) {
+  <div class="smart-table-paging">
+    <button type="button" [disabled]="page() === 0" [attr.aria-label]="previousLabel" (click)="goTo(page() - 1)">‹</button>
+    <span>{{ page() + 1 }} / {{ pages() }}</span>
+    <button type="button" [disabled]="page() + 1 >= pages()" [attr.aria-label]="nextLabel" (click)="goTo(page() + 1)">›</button>
+  </div>
+}

@@ -1,11 +1,121 @@
 {
-  "currentVersion": "0.10.0",
+  "currentVersion": "0.11.1",
   "licence": {
     "file": "LICENSE",
     "name": "Ximply Design Studio \u2014 Limited Use Licence",
     "sha256": "b6f77aae5f066cc5f5e8aa54699d8dcc84a96387007299d30cb78a4f3f7fd6ae"
   },
   "entries": [
+    {
+      "version": "0.11.1",
+      "date": "2026-09-24",
+      "summary": "Deleting actions carry a red trash icon, and the tool rail neither scrolls sideways nor needs to scroll on a full HD screen",
+      "breakingChanges": [],
+      "changes": [
+        {
+          "type": "Improvement",
+          "description": "Every deleting action, in Edit > Delete, the Layers panel, the swatches, the context menu, the administration workspace, its bulk actions and the confirmation that asks before deleting, shows a trash icon and red text, so it reads as dangerous."
+        },
+        {
+          "type": "Improvement",
+          "description": "The tool rail blocks keep an even spacing, the fill and stroke squares at the foot of the rail sit further apart, and the whole rail fits a full HD screen without scrolling."
+        },
+        {
+          "type": "Fix",
+          "description": "The tool rail no longer shows a horizontal scroll bar when its vertical scroll bar appears."
+        }
+      ],
+      "capabilityStatus": "local-preview",
+      "markdown": "0.11.1.md",
+      "source": "doc/changelog/0.11.1.md"
+    },
+    {
+      "version": "0.11.0",
+      "date": "2026-09-24",
+      "summary": "Advanced mode with Keycloak sign-in, time-limited licences with tiers, an administration workspace and each user's own OpenAI API token",
+      "breakingChanges": [],
+      "changes": [
+        {
+          "type": "Feature",
+          "description": "Sign in and register from the header through Keycloak with the authorization code flow and PKCE; the user menu shows the licence, its tier and permissions, and Sign out."
+        },
+        {
+          "type": "Feature",
+          "description": "A badge after the logo shows Demo, or the tier of a valid licence, in the colour of that tier; the super administrator works without a licence."
+        },
+        {
+          "type": "Feature",
+          "description": "Licences kept in Keycloak with a tier (Free, Pro, Teams, Studio or Enterprise, which grant the same for now), a state (active or suspended), an issue date, an expiry and permissions for AI Tools and change control; the API checks them on every advanced request."
+        },
+        {
+          "type": "Feature",
+          "description": "An administration workspace in the Settings layout, opened from the Admin menu for Users, Roles and permissions, Licences and Documents: shared smart tables with global search, filters after the content of each column, sort buttons in each heading, paging, short dates with the full date, time and zone on hover, ellipsis for long values, first-column selection with bulk actions, and forms in a side panel that slides in from the right."
+        },
+        {
+          "type": "Feature",
+          "description": "Users can be created, edited, activated or deactivated, made administrators, given a new password, banned until a date or permanently with the ban lifted automatically when it ends, and deleted; each shows a status icon, the tier badge, registration, last sign-in and documents saved."
+        },
+        {
+          "type": "Feature",
+          "description": "Documents saved to the server while signed in record their owner; administrators can list, filter and delete them."
+        },
+        {
+          "type": "Feature",
+          "description": "The Keycloak pages of the realm carry the studio wordmark above the form."
+        },
+        {
+          "type": "Feature",
+          "description": "The right column has Properties, AI Tools and History tabs, the header's AI button shows and hides AI Tools, and a separate advanced tools block in the tool rail opens them; the AI Tools and History panels say that they are under development."
+        },
+        {
+          "type": "Feature",
+          "description": "Settings > External tokens keeps each user's own OpenAI API token, encrypted on the server and shown only masked, with its prefix and last four characters, with a connection test that says what it is doing and how it ended."
+        },
+        {
+          "type": "Improvement",
+          "description": "Settings and the administration workspace use the room the screen offers."
+        },
+        {
+          "type": "Improvement",
+          "description": "The Export button of the header gave way to the AI button; Export stays in File > Export\u2026."
+        },
+        {
+          "type": "Fix",
+          "description": "The tooltip of the former Local preview badge showed its catalog key in English; the new badge shows a sentence."
+        },
+        {
+          "type": "Fix",
+          "description": "A request made after the access token expired renews it once and tries again, instead of failing with a message that was easy to miss."
+        },
+        {
+          "type": "Security",
+          "description": "The API accepts only access tokens signed by the realm, with the expected issuer and audience and an allowed algorithm, and decides licences on its own clock; administration requires the super administrator and acts through a service account limited to managing realm users."
+        },
+        {
+          "type": "Security",
+          "description": "Passwords set from the workspace go straight to Keycloak and never appear in answers, logs or the audit; every administrative change is audited."
+        },
+        {
+          "type": "Security",
+          "description": "External tokens are encrypted at rest with a service key, tied to their user and never returned; without the key the API refuses to store them."
+        },
+        {
+          "type": "Engineering",
+          "description": "New API dependencies: PyJWT 2.14.0 with cryptography 46.0.4, cffi 2.0.0 and pycparser 3.0; Keycloak 26.0.8 in the local compose file."
+        },
+        {
+          "type": "Engineering",
+          "description": "The local launcher gains start --identity and reset-identity, and scripts/live.py serves the editor with hot reload at http://localhost:8090."
+        },
+        {
+          "type": "Engineering",
+          "description": "Recorded the owner's decisions of 2026-09-23 and 2026-09-24: ADR-0012, ADR-0037 (amended for per-user tokens), ADR-0038 and ADR-0039 accepted, ADR-0040 revised, ADR-0041 accepted and amended for the super administrator, FEAT-0032 with SC-0134 to SC-0147, SC-0148, SEC-0014 and the licence tiers as a future requirement."
+        }
+      ],
+      "capabilityStatus": "local-preview",
+      "markdown": "0.11.0.md",
+      "source": "doc/changelog/0.11.0.md"
+    },
     {
       "version": "0.10.0",
       "date": "2026-09-23",

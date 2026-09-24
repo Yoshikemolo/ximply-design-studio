@@ -26,8 +26,20 @@ python3 -m unittest discover -s tests -v
 The single-user editor preview runs with `npm start` (Angular on port 4200) or in
 containers through `compose.local.yaml` and `scripts/local.py`, with an optional local
 FastAPI artifact store; [quick-install.md](../../quick-install.md) gives the exact
-commands. The production services below, TypeORM persistence, SignalR, Keycloak and
-workers, are not implemented. The architecture package remains the versioned source of
+commands. The production services below, TypeORM persistence, SignalR and workers, are
+not implemented.
+
+Advanced mode (FEAT-0032) runs a local Keycloak 26.0.8 behind the same address, under
+`/auth/`: `scripts/local.py start --identity` imports the realm from
+`infra/keycloak/xds-realm.json` with the login theme of `infra/keycloak/themes/xds` and
+writes its secrets once into the ignored `.env.local` (Keycloak administrator, service
+account, first studio administrator and the key that encrypts external tokens). Keycloak
+imports a realm only once; after the realm file changes, `scripts/local.py reset-identity
+--confirm identity` drops the local Keycloak data, users included, so the next start imports
+it again. `scripts/live.py` serves the editor with hot reload at the same address,
+http://localhost:8090: the Angular development server runs on 127.0.0.1:4390 and a small
+nginx of the `live` profile takes the place of the packaged web container until the live
+preview stops. Port 4200 is not used. The architecture package remains the versioned source of
 design truth for them.
 
 ## Toolchain resolution — SPIKE-0001

@@ -975,27 +975,38 @@
       "id": "FEAT-0029",
       "title": "AI Tools panel and external agent provider",
       "path": "doc/feat/FEAT-0029.md",
-      "status": "Planned",
+      "status": "Implementing",
       "iteration": "ITER-0007",
       "dependsOn": [
         "FEAT-0006",
         "FEAT-0007",
-        "FEAT-0030"
+        "FEAT-0030",
+        "FEAT-0032"
       ],
       "adrs": [
         "ADR-0015",
-        "ADR-0037"
+        "ADR-0037",
+        "ADR-0041"
       ],
       "scenarios": [
         "SC-0118",
         "SC-0119",
         "SC-0120",
         "SC-0121",
-        "SC-0122"
+        "SC-0122",
+        "SC-0148"
       ],
-      "implementation": [],
-      "tests": [],
-      "evidence": []
+      "implementation": [
+        "services/api/src/external_tokens.py",
+        "apps/web/src/app/app.component.ts"
+      ],
+      "tests": [
+        "services/api/tests/test_external_tokens.py",
+        "apps/web/tests/session.test.ts"
+      ],
+      "evidence": [
+        "doc/changelog/0.11.0.md"
+      ]
     },
     {
       "id": "FEAT-0030",
@@ -1038,12 +1049,15 @@
       "iteration": "ITER-0006",
       "dependsOn": [
         "FEAT-0002",
-        "FEAT-0006"
+        "FEAT-0006",
+        "FEAT-0032"
       ],
       "adrs": [
         "ADR-0038",
         "ADR-0039",
-        "ADR-0040"
+        "ADR-0040",
+        "ADR-0041",
+        "ADR-0012"
       ],
       "scenarios": [
         "SC-0125",
@@ -1059,6 +1073,60 @@
       "implementation": [],
       "tests": [],
       "evidence": []
+    },
+    {
+      "id": "FEAT-0032",
+      "title": "Sign-in, time-limited licences and Admin menu",
+      "path": "doc/feat/FEAT-0032.md",
+      "status": "Implementing",
+      "iteration": "ITER-0001",
+      "dependsOn": [
+        "FEAT-0002"
+      ],
+      "adrs": [
+        "ADR-0012",
+        "ADR-0041"
+      ],
+      "scenarios": [
+        "SC-0134",
+        "SC-0135",
+        "SC-0136",
+        "SC-0137",
+        "SC-0138",
+        "SC-0139",
+        "SC-0140",
+        "SC-0141",
+        "SC-0142",
+        "SC-0143",
+        "SC-0144",
+        "SC-0145",
+        "SC-0146",
+        "SC-0147"
+      ],
+      "implementation": [
+        "services/api/src/identity.py",
+        "services/api/src/administration.py",
+        "services/api/src/external_tokens.py",
+        "services/api/src/main.py",
+        "apps/web/src/app/session.service.ts",
+        "apps/web/src/app/smart-table.component.ts",
+        "apps/web/src/app/app.component.ts",
+        "infra/keycloak/xds-realm.json",
+        "scripts/local.py",
+        "scripts/live.py"
+      ],
+      "tests": [
+        "services/api/tests/test_identity.py",
+        "services/api/tests/test_administration.py",
+        "services/api/tests/test_external_tokens.py",
+        "tests/test_local_launcher.py",
+        "apps/web/tests/session.test.ts",
+        "apps/web/tests/smart-table.test.ts"
+      ],
+      "evidence": [
+        "doc/implementation/PLAN-0032-0001.md",
+        "doc/changelog/0.11.0.md"
+      ]
     }
   ]
 }

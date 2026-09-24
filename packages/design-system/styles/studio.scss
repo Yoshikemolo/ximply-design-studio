@@ -2576,3 +2576,658 @@ textarea,
 .about-credits { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 8px 12px; margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--border); color: var(--muted); font-size: 10px; text-align: center;
   .credits { white-space: normal; font-size: 10px; }
   button.version { font-size: 10px; color: var(--muted); letter-spacing: 0.5px; padding: 2px 6px; min-height: 20px; white-space: nowrap; } }
+
+/* Sign-in, licence state and the users and licences of the Admin menu (FEAT-0032). */
+/* Sign in reads as a button, since advanced mode starts there. */
+.sign-in {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 5px 10px;
+  border: 1px solid var(--accent);
+  border-radius: 6px;
+  color: var(--accent);
+}
+.sign-in img {
+  width: 14px;
+  height: 14px;
+  filter: var(--icon);
+}
+.advanced-note {
+  font-size: 9px;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  color: var(--muted);
+  border: 1px dashed var(--border);
+  padding: 4px 7px;
+  border-radius: 4px;
+  cursor: help;
+}
+.account-menu {
+  position: relative;
+}
+.account-menu > summary {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  list-style: none;
+  cursor: pointer;
+  font-size: 11px;
+  max-width: 160px;
+}
+.account-menu > summary::-webkit-details-marker {
+  display: none;
+}
+.account-menu > summary span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.account-menu > summary img {
+  width: 16px;
+  height: 16px;
+  filter: var(--icon);
+}
+.account-popover {
+  left: auto;
+  right: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px;
+  font-size: 11px;
+}
+.account-detail,
+.account-licence {
+  color: var(--muted);
+}
+.account-licence.valid {
+  color: var(--accent);
+}
+.account-permissions {
+  margin: 0;
+  padding-left: 16px;
+}
+/*
+ * The administration workspace (SC-0141): the Settings dialog and layout, with the category's
+ * table and its form in the right column, which scrolls. The form sits beside the table when
+ * there is room and below it otherwise; the table scrolls sideways inside its own box.
+ */
+.admin-heading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.admin-heading h3 {
+  margin: 0 auto 0 0;
+  font-size: 16px;
+}
+.admin-error {
+  color: #e5484d;
+  font-size: 11px;
+  margin: 0 0 10px;
+}
+.admin-notice {
+  color: var(--accent);
+  font-size: 11px;
+  margin: 0 0 10px;
+}
+.admin-layout {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  align-items: flex-start;
+}
+.admin-table {
+  flex: 999 1 420px;
+  min-width: 0;
+  overflow-x: auto;
+}
+.admin-form {
+  flex: 1 1 250px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 11px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel-raised);
+}
+.admin-form h4 {
+  margin: 0;
+  font-size: 13px;
+}
+.admin-form h4 small,
+.admin-members small {
+  display: block;
+  font-weight: 400;
+  color: var(--muted);
+}
+.admin-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  color: var(--muted);
+}
+.admin-form .check-row {
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+  color: var(--text);
+}
+.admin-form fieldset {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px;
+  margin: 0;
+}
+.admin-form p {
+  margin: 0;
+}
+.admin-facts {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 4px 10px;
+  margin: 0;
+}
+.admin-facts dt {
+  color: var(--muted);
+}
+.admin-facts dd {
+  margin: 0;
+}
+.admin-members {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.admin-members li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 5px 0;
+  border-bottom: 1px solid var(--border);
+}
+.token-state {
+  font-size: 11px;
+  color: var(--muted);
+}
+.token-actions {
+  justify-content: flex-start;
+}
+/* A confirmation shows above any dialog that asked for it. */
+.modal-backdrop.confirm-backdrop {
+  z-index: 120;
+}
+
+/* The smart table's search, general order, filters, active row and pages. */
+.smart-table-tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.smart-table-search {
+  flex: 1 1 180px;
+}
+.smart-table-sort {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--muted);
+}
+.smart-table .sort-heading {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+.smart-table .sort-mark {
+  font-size: 8px;
+  color: var(--accent);
+}
+.smart-table .filter-row th {
+  padding-top: 0;
+}
+.smart-table .filter-row input {
+  width: 100%;
+  min-width: 60px;
+  font-size: 11px;
+}
+.smart-table.activatable tbody tr {
+  cursor: pointer;
+}
+.smart-table tbody tr.active {
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+}
+.smart-table tbody tr:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+.smart-table .empty-row td {
+  color: var(--muted);
+  text-align: center;
+}
+.smart-table-paging {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 8px;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+/* The right column's tabs: Properties, AI Tools and History. */
+.inspector-tabs {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  gap: 2px;
+  padding: 6px 8px 0;
+  background: var(--panel);
+  border-bottom: 1px solid var(--border);
+}
+.inspector-tabs button {
+  flex: 1;
+  min-height: 30px;
+  padding: 6px 4px;
+  font-size: 11px;
+  color: var(--muted);
+  border: 0;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  background: none;
+}
+.inspector-tabs button.active {
+  color: var(--text);
+  border-bottom-color: var(--accent);
+}
+.inspector-tabs button.locked {
+  opacity: 0.6;
+}
+.inspector-placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 36px 20px;
+  text-align: center;
+  font-size: 11px;
+  color: var(--muted);
+}
+.inspector-placeholder img {
+  width: 36px;
+  height: 36px;
+  filter: var(--icon);
+  opacity: 0.7;
+}
+.inspector-placeholder h3 {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text);
+}
+.icon-action.pressed {
+  box-shadow: inset 0 0 0 2px #ffffff88;
+}
+
+/* The advanced tools block: shown to everyone, dimmed where the licence does not reach. */
+.advanced-tools .family-primary.locked {
+  opacity: 0.45;
+}
+.preview-badge.licensed {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+.admin-workspace .settings-nav button {
+  justify-content: flex-start;
+}
+@media (max-width: 650px) {
+  .admin-workspace .settings-nav button {
+    justify-content: center;
+  }
+}
+.menu-popover .menu-icon {
+  width: 16px;
+  height: 16px;
+  margin-right: 8px;
+  filter: var(--icon);
+}
+
+/*
+ * Settings and Administration use the room the screen offers (owner request of 2026-09-24),
+ * and the smart tables keep an even rhythm: the same inner spacing in headings, filters and
+ * cells, and inputs that never touch the dividing lines.
+ */
+.settings-dialog {
+  width: min(1320px, 100%);
+  height: min(900px, 92dvh);
+}
+/* Tables take the whole column; their forms slide in from the right over them. */
+.admin-workspace .settings-layout {
+  position: relative;
+  overflow: hidden;
+}
+.admin-workspace .admin-table {
+  flex: 1 1 auto;
+}
+.admin-drawer {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: min(420px, 100%);
+  padding: 18px;
+  overflow-y: auto;
+  background: var(--panel);
+  border-left: 1px solid var(--border);
+  box-shadow: -18px 0 40px #0006;
+  transform: translateX(105%);
+  visibility: hidden;
+  transition: transform 0.22s ease, visibility 0s linear 0.22s;
+  z-index: 5;
+}
+.admin-drawer.open {
+  transform: none;
+  visibility: visible;
+  transition: transform 0.22s ease;
+}
+.admin-drawer .admin-form {
+  border: 0;
+  padding: 0;
+  background: none;
+}
+.admin-drawer-close {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  min-height: 0;
+  padding: 2px 8px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .admin-drawer,
+  .admin-drawer.open {
+    transition: none;
+  }
+}
+.smart-table-tools {
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.smart-table-sort select {
+  min-width: 120px;
+}
+.smart-table th,
+.smart-table td {
+  padding: 10px 12px;
+  vertical-align: middle;
+}
+.smart-table th {
+  white-space: nowrap;
+}
+.smart-table .filter-row th {
+  padding: 8px 12px 10px;
+  border-bottom: 1px solid var(--border);
+}
+.smart-table .filter-row input {
+  display: block;
+  box-sizing: border-box;
+  width: 100%;
+  margin: 0;
+}
+.admin-table .smart-table td .cell-note {
+  display: block;
+  margin: 2px 0 0;
+}
+.smart-table-paging {
+  margin-top: 12px;
+  gap: 12px;
+}
+.admin-form {
+  gap: 10px;
+  padding: 14px;
+}
+.admin-form fieldset {
+  gap: 8px;
+  padding: 10px 12px 12px;
+}
+.admin-heading {
+  gap: 10px;
+  margin-bottom: 16px;
+}
+/* Headings sit on the filters without a line between them; the line closes the filters. */
+.smart-table thead tr:first-child th {
+  border-bottom: 0;
+  padding-bottom: 4px;
+}
+.smart-table thead tr:only-child th {
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 10px;
+}
+.smart-table .filter-row select {
+  display: block;
+  box-sizing: border-box;
+  width: 100%;
+  margin: 0;
+}
+.smart-table .sort-heading {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: default;
+}
+.smart-table .sort-label {
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  cursor: pointer;
+}
+.smart-table .sort-buttons {
+  display: inline-flex;
+  flex-direction: column;
+  line-height: 1;
+}
+.smart-table .sort-buttons button {
+  min-height: 0;
+  padding: 0 2px;
+  border: 0;
+  background: none;
+  font-size: 7px;
+  color: var(--muted);
+  opacity: 0.55;
+  cursor: pointer;
+}
+.smart-table .sort-buttons button.active,
+.smart-table .sort-buttons button:hover {
+  color: var(--accent);
+  opacity: 1;
+}
+.smart-table td.ellipsis {
+  max-width: 220px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.smart-table td.ellipsis .cell-value,
+.smart-table td.ellipsis .cell-note {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* Filters keep the body type, not the small capitals of the headings above them. */
+.smart-table .filter-row input,
+.smart-table .filter-row select {
+  font-size: 11px;
+  font-weight: 400;
+  letter-spacing: normal;
+  text-transform: none;
+}
+
+/*
+ * Tier tones, shared by the badge after the logo and the tier badges of administration, so
+ * a tier has one colour everywhere.
+ */
+[data-tone="demo"] { --tone: #8a94a6; }
+[data-tone="free"] { --tone: #6f8fa8; }
+[data-tone="pro"] { --tone: #3979ff; }
+[data-tone="teams"] { --tone: #14a38b; }
+[data-tone="studio"] { --tone: #8b5cf6; }
+[data-tone="enterprise"] { --tone: #d9962b; }
+[data-tone="admin"] { --tone: #c026d3; }
+.preview-badge[data-tone],
+.table-badge[data-tone] {
+  color: var(--tone);
+  border: 1px solid color-mix(in srgb, var(--tone) 55%, transparent);
+  background: color-mix(in srgb, var(--tone) 12%, transparent);
+}
+.table-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.4px;
+  white-space: nowrap;
+}
+.smart-table .cell-icon {
+  width: 14px;
+  height: 14px;
+  margin-right: 8px;
+  vertical-align: -2px;
+}
+.smart-table th.select-column.start,
+.smart-table td.select-column.start {
+  width: 36px;
+  text-align: left;
+  padding-right: 0;
+}
+.bulk-select {
+  min-width: 170px;
+}
+
+/* The token form says what it is doing and how it ended. */
+.token-result {
+  margin: 12px 0 0;
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 11px;
+  border: 1px solid var(--border);
+  color: var(--muted);
+}
+.token-result.ok {
+  color: #2fb67c;
+  border-color: color-mix(in srgb, #2fb67c 50%, transparent);
+  background: color-mix(in srgb, #2fb67c 10%, transparent);
+}
+.token-result.error {
+  color: #e5484d;
+  border-color: color-mix(in srgb, #e5484d 50%, transparent);
+  background: color-mix(in srgb, #e5484d 10%, transparent);
+}
+.busy-spinner {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  margin-right: 6px;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  vertical-align: -1px;
+  animation: busy-spin 0.8s linear infinite;
+}
+@keyframes busy-spin {
+  to { transform: rotate(360deg); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .busy-spinner { animation: none; }
+}
+.token-hint {
+  margin-left: 8px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: var(--panel-raised);
+  color: var(--text);
+  font-size: 11px;
+}
+
+/*
+ * The tool rail never scrolls sideways: two columns of tools and a thin vertical scrollbar
+ * fit its width. Blocks sit a little closer so the rail fits common laptop heights.
+ */
+.toolrail {
+  overflow-x: hidden;
+  scrollbar-gutter: stable;
+  padding: 8px 4px 6px;
+}
+.tool-section {
+  gap: 3px;
+  padding: 5px 0;
+}
+.rail-palette {
+  padding: 6px 4px;
+}
+
+/* Deleting actions read as dangerous: the trash icon and the text in red, everywhere. */
+button.destructive,
+.menu-popover button.destructive,
+.context-menu button.destructive {
+  color: #e5484d;
+}
+button.destructive:not(:disabled):hover {
+  background: color-mix(in srgb, #e5484d 12%, transparent);
+  border-color: color-mix(in srgb, #e5484d 55%, transparent);
+}
+button.destructive img:not(.destructive-icon),
+button.destructive .destructive-icon {
+  filter: none;
+}
+.destructive-icon {
+  width: 14px;
+  height: 14px;
+  margin-right: 8px;
+  vertical-align: -2px;
+  flex-shrink: 0;
+}
+.destructive-icon.on-danger {
+  filter: brightness(0) invert(1);
+}
+button.destructive:disabled {
+  opacity: 0.45;
+}
+option.destructive-option {
+  color: #e5484d;
+}
+/* A little more air between tool blocks, and fill and stroke further apart at the foot of the rail. */
+.tool-section {
+  padding: 7px 0;
+}
+.overlapping-paints {
+  width: 72px;
+  height: 68px;
+}
+.overlapping-paints .paint-trigger {
+  width: 36px;
+  height: 36px;
+}
+.stroke-trigger {
+  bottom: 0;
+}

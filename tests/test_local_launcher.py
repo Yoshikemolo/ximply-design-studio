@@ -20,6 +20,28 @@ class LocalLauncherTests(unittest.TestCase):
                 self.assertIn('ximply-design-studio-preview',command)
                 self.assertEqual(['up','--build','-d','--wait'],command[-4:])
 
+    def test_identity_adds_secrets_once_and_starts_the_profile(self):
+        with tempfile.TemporaryDirectory() as folder, redirect_stdout(StringIO()) as output:
+            root = Path(folder)
+            def start(*arguments):
+                with patch.object(local, 'ROOT', root), patch('sys.argv', ['local.py', 'start', *arguments]),                      patch.dict('os.environ', {}, clear=True),                      patch.object(local.subprocess, 'run', return_value=SimpleNamespace(stdout='unix:///var/run/docker.sock')) as run:
+                    self.assertEqual(0, local.main())
+                return next(call for call in run.call_args_list if call.args[0][:2] == ['docker', 'compose']).kwargs['env']
+            plain = start()
+            self.assertEqual('', plain['XDS_OIDC_ISSUER'])
+            self.assertNotIn('COMPOSE_PROFILES', plain)
+            self.assertNotIn('XDS_ADMIN_CLIENT_SECRET', (root / '.env.local').read_text())
+            advanced = start('--identity')
+            first = local.read_environment(root / '.env.local')
+            self.assertEqual(('identity', 'http://localhost:8090/auth/realms/xds', 'http://keycloak:8080/auth'),
+                             (advanced['COMPOSE_PROFILES'], advanced['XDS_OIDC_ISSUER'], advanced['XDS_KEYCLOAK_INTERNAL_URL']))
+            self.assertGreater(len(first['XDS_ADMIN_CLIENT_SECRET']), 32)
+            self.assertEqual('admin', first['XDS_FIRST_ADMIN_USERNAME'])
+            start('--identity')
+            self.assertEqual(first, local.read_environment(root / '.env.local'))
+            self.assertNotIn(first['XDS_FIRST_ADMIN_PASSWORD'], output.getvalue())
+            self.assertNotIn(first['XDS_ADMIN_CLIENT_SECRET'], output.getvalue())
+
     def test_remote_context_never_runs_compose(self):
         with tempfile.TemporaryDirectory() as folder, redirect_stdout(StringIO()):
             with patch.object(local,'ROOT',Path(folder)),patch('sys.argv',['local.py','start']),patch.object(local.subprocess,'run',return_value=SimpleNamespace(stdout='tcp://remote:2376')) as run:
