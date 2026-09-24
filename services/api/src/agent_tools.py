@@ -31,6 +31,8 @@ MAX_IMAGE_BYTES = 20 * 1024 * 1024
 MAX_SVG_CHARS = 2_000_000
 # OpenAI's recommended image model for editing, current in September 2026.
 DEFAULT_IMAGE_MODEL = 'gpt-image-2.5-flare'
+# The balanced model with image input that draws editable vectors.
+DEFAULT_TEXT_MODEL = 'gpt-6-sol'
 PNG_SIGNATURE = b'\x89PNG\r\n\x1a\n'
 OPENAI = 'https://api.openai.com/v1'
 
@@ -57,6 +59,9 @@ class GenerationRequest(BaseModel):
     selectionPng: Annotated[str, Field(max_length=30_000_000)] | None = None
     documentPng: Annotated[str, Field(max_length=30_000_000)] | None = None
     selectionData: Annotated[str, Field(max_length=400_000)] | None = None
+    # What the user wants back: pixels from the image model, or an editable drawing (FEAT-0029, SC-0157).
+    output: Literal['bitmap', 'vector'] = 'bitmap'
+    selectionSvg: Annotated[str, Field(max_length=600_000)] | None = None
 
 
 class SavedPrompt(BaseModel):
@@ -67,6 +72,8 @@ class SavedPrompt(BaseModel):
     action: Action = 'free'
     creativity: Annotated[float, Field(ge=0, le=1)] = 0.5
     favorite: bool = False
+    output: Literal['bitmap', 'vector'] = 'bitmap'
+    hidden: bool = False
 
 
 class PromptList(BaseModel):
@@ -106,6 +113,37 @@ def instruction(request: GenerationRequest, has_selection: bool) -> str:
         parts.append('Follow the instruction strictly and change nothing else.')
     elif request.creativity > 0.66:
         parts.append('You may take creative liberties while keeping the intent.')
+    return '\n\n'.join(parts)
+
+
+# The drawing rules a vector answer must follow, given to the model as a skill: the editor
+# imports the SVG as paths and groups, so the answer must be plain, structured geometry.
+VECTOR_RULES = """You are a vector illustrator working inside a design editor. Answer with exactly one standalone SVG document and nothing else: no explanation and no Markdown fence.
+Rules for the SVG:
+- The root <svg> has xmlns="http://www.w3.org/2000/svg" and a viewBox: the viewBox of the source SVG when one is given, otherwise 0 0 and the pixel size of Image 1.
+- Organise the drawing in <g> groups, one per logical part (for example a face, a leaf, a letter shape, a background), nested where parts belong together, each with a short descriptive id.
+- Draw with <path>, <rect>, <circle>, <ellipse>, <polygon>, <polyline> and <line> only. Prefer few clean shapes with smooth cubic Bezier curves over many tiny segments.
+- Paint with solid fill and stroke colours written as #rrggbb, and stroke-width where there is a stroke. Use <linearGradient> or <radialGradient> in <defs> only where a gradient is essential.
+- Never use <image>, <text>, <foreignObject>, <script>, <style>, CSS classes, filters, masks, clip paths, patterns or external references.
+- Order the elements from back to front, and keep every coordinate inside the viewBox.
+- When a source SVG is given, edit it: keep the elements, ids and colours the instruction does not concern, and change only what it asks."""
+
+
+def vector_instruction(request: GenerationRequest, has_selection: bool) -> str:
+    """The text for an editable drawing: the rules, the action, the user's words and the source geometry."""
+    parts = [VECTOR_RULES, 'Task: ' + ACTIONS[request.action]]
+    if request.prompt.strip():
+        parts.append('Instruction of the user: ' + request.prompt.strip())
+    if request.scope == 'selection' and has_selection:
+        parts.append('Image 1 is the selected objects rendered as a PNG; the SVG below is their source, when given. Draw only them.')
+    else:
+        parts.append('Image 1 is the whole design document rendered as a PNG; the SVG below is its source, when given.')
+    if request.selectionSvg:
+        parts.append('Source SVG:\n' + request.selectionSvg[:300_000])
+    if request.creativity < 0.34:
+        parts.append('Follow the instruction strictly and keep the drawing as close to the source as possible.')
+    elif request.creativity > 0.66:
+        parts.append('You may take creative liberties with shapes and colours while keeping the intent.')
     return '\n\n'.join(parts)
 
 
@@ -157,7 +195,7 @@ class OpenAiProvider:
 
     def __init__(self, image_model: str | None = None, text_model: str | None = None, timeout: float = 180):
         self.image_model = image_model or os.environ.get('XDS_OPENAI_IMAGE_MODEL', DEFAULT_IMAGE_MODEL)
-        self.text_model = text_model or os.environ.get('XDS_OPENAI_TEXT_MODEL', 'gpt-4.1')
+        self.text_model = text_model or os.environ.get('XDS_OPENAI_TEXT_MODEL', DEFAULT_TEXT_MODEL)
         self.timeout = timeout
 
     def _send(self, request: urllib.request.Request) -> dict:
@@ -188,13 +226,20 @@ class OpenAiProvider:
             raise IdentityError(502, 'OpenAI answered without an image') from None
 
     def vectorize(self, token: str, image: bytes, prompt: str, temperature: float) -> str:
-        content = [{'type': 'input_text', 'text': prompt + '\n\nAnswer with one SVG document only: paths grouped by part with '
-                    'fills and strokes, a viewBox matching the image, no raster images, no text elements and no scripts.'},
+        content = [{'type': 'input_text', 'text': prompt},
                    {'type': 'input_image', 'image_url': 'data:image/png;base64,' + base64.b64encode(image).decode()}]
-        body = json.dumps({'model': self.text_model, 'temperature': temperature,
-                           'input': [{'role': 'user', 'content': content}]}).encode()
-        answer = self._send(urllib.request.Request(OPENAI + '/responses', data=body, method='POST', headers={
-            'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json'}))
+
+        def ask(settings: dict) -> dict:
+            body = json.dumps({'model': self.text_model, **settings, 'input': [{'role': 'user', 'content': content}]}).encode()
+            return self._send(urllib.request.Request(OPENAI + '/responses', data=body, method='POST', headers={
+                'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json'}))
+        try:
+            answer = ask({'temperature': temperature})
+        except IdentityError as refused:
+            # Reasoning models refuse a temperature; the instruction already carries the creativity.
+            if 'temperature' not in refused.reason:
+                raise
+            answer = ask({})
         text = answer.get('output_text') or ''.join(part.get('text', '') for item in answer.get('output', []) if isinstance(item, dict)
                                                     for part in item.get('content', []) if isinstance(part, dict))
         return svg_from(text)
@@ -251,12 +296,16 @@ def agent_router(session: Callable, vault: TokenVault, prompts: PromptStore, aud
             raise IdentityError(409, 'Save your OpenAI API token in Settings > External tokens first')
         images = [selection, document] if body.scope == 'selection' else [document]
         images = [image for image in images if image is not None]
-        text = instruction(body, selection is not None)
+        vector = body.output == 'vector' or body.action == 'vectorize'
+        # A vector result from pictures would mean tracing them, which is not offered yet (owner decision of 2026-09-24).
+        if vector and body.selectionData and '[picture sent as an image]' in body.selectionData:
+            raise IdentityError(422, 'Vector results are not available when the context holds pictures')
+        text = vector_instruction(body, selection is not None) if vector else instruction(body, selection is not None)
         if not running.acquire(blocking=False):
             raise IdentityError(429, 'Too many requests are running; wait for one to finish')
         outcome = 'failed'
         try:
-            if body.action == 'vectorize':
+            if vector:
                 svg = await run_in_threadpool(provider.vectorize, token, images[0], text, round(0.2 + body.creativity * 0.8, 2))
                 result: dict[str, Any] = {'kind': 'svg', 'svg': svg}
             else:
@@ -271,7 +320,7 @@ def agent_router(session: Callable, vault: TokenVault, prompts: PromptStore, aud
             running.release()
             # The audit keeps what was asked of whom, never the prompt or the pixels.
             await run_in_threadpool(audit.record, current['subject'], current['subject'], 'agent-request',
-                                    {'action': body.action, 'scope': body.scope, 'images': len(images),
+                                    {'action': body.action, 'scope': body.scope, 'output': 'vector' if vector else 'bitmap', 'images': len(images),
                                      'bytes': sum(len(image) for image in images), 'outcome': outcome}, clock())
 
     @router.get('/api/me/prompts')

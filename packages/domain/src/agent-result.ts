@@ -46,3 +46,22 @@ export function pngSize(dataUrl: string): { width: number; height: number } | nu
   const width = read(16), height = read(20);
   return width > 0 && height > 0 ? { width, height } : null;
 }
+
+/** Whether a context holds pictures: a vector result would then mean tracing them, which is not offered yet. */
+export function hasPictures(layers: readonly Layer[]): boolean {
+  return layers.some((layer) => layer.visible && !layer.guide && layer.source !== "");
+}
+
+/**
+ * The source SVG sent with a vector request: the exported drawing framed on the context, without
+ * the page background unless the whole document is the context, or nothing when it is too large.
+ */
+export function contextSvg(exported: string, frame: Frame, keepBackground: boolean, limit = 500_000): string | undefined {
+  const opening = /^<svg [^>]*>/.exec(exported);
+  if (!opening) return undefined;
+  let body = exported.slice(opening[0].length);
+  if (!keepBackground) body = body.replace(/^<rect width="100%" height="100%" fill="[^"]*"\/>/, "");
+  const round = (value: number) => Math.round(value * 100) / 100;
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${round(frame.width)}" height="${round(frame.height)}" viewBox="${round(frame.x)} ${round(frame.y)} ${round(frame.width)} ${round(frame.height)}">` + body;
+  return svg.length <= limit ? svg : undefined;
+}

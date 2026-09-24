@@ -1,6 +1,6 @@
 import { alphaBounds, drawPaintSource, finishPaint, paintFrame } from "./paint-buffer";
 import { aboveOutermostGroup, clipboardLayers, contextPath, detachedCopies } from "../../../../packages/domain/src/group-copy";
-import { contextData, fitInto, fittedPicture, Frame } from "../../../../packages/domain/src/agent-result";
+import { contextData, contextSvg, fitInto, fittedPicture, Frame } from "../../../../packages/domain/src/agent-result";
 import { aliasPixels, alignToPixels, cropPixels, DEFAULT_RASTER_OPTIONS, rasterFrame, rasterPixels, rasterScale, rasterTarget, RasterOptions, validRasterOptions } from "../../../../packages/domain/src/rasterize";
 import { Procedural, defaultProcedural, generateProcedural, syncProcedurals, validProcedural } from "../../../../packages/domain/src/procedural";
 import { DEFAULT_GRADIENTS, FillPaint, GradientPaint, MAX_PATTERNS, MAX_SWATCHES, PatternDefinition, PresetPattern, Swatch, defaultSwatches, presetPattern, validFillPaint } from "../../../../packages/domain/src/paint";
@@ -5860,18 +5860,23 @@ export class EditorService {
    * is where the result will be placed. Returns null, with the reason in the status line, when
    * there is nothing to send.
    */
-  async agentContext(scope: "selection" | "document", ppi = 144): Promise<{ selectionPng?: string; documentPng?: string; selectionData?: string; frame: Frame; count: number } | null> {
+  async agentContext(scope: "selection" | "document", ppi = 144, vector = false): Promise<{ selectionPng?: string; documentPng?: string; selectionData?: string; selectionSvg?: string; frame: Frame; count: number } | null> {
     const selected = this.selectedLayers().filter((layer) => !layer.guide && layer.visible);
     if (scope === "selection" && !selected.length) { this.status.set("Select objects, or choose the whole document as the context."); return null; }
     const document = await this.rasterizePng({ ppi: 96, antialias: "art", margin: 0 }, []);
     if (scope === "document") {
       if (!document) { this.status.set("The document has nothing visible to send."); return null; }
       const page = this.document();
-      return { documentPng: document.source, frame: { x: 0, y: 0, width: page.width, height: page.height }, count: 0 };
+      const frame = { x: 0, y: 0, width: page.width, height: page.height };
+      // A vector request also carries the drawing itself as SVG, so the model edits real geometry.
+      const selectionSvg = vector ? contextSvg(svgExport(page), frame, true) : undefined;
+      return { documentPng: document.source, frame, count: 0, ...(selectionSvg ? { selectionSvg } : {}) };
     }
     const selection = await this.rasterizePng({ ppi, antialias: "art", margin: 0 }, selected.map((layer) => layer.id));
     if (!selection) return null;
-    return { selectionPng: selection.source, documentPng: document?.source, selectionData: contextData(selected), frame: selection.frame, count: selected.length };
+    const selectionSvg = vector ? contextSvg(svgExport({ ...this.document(), layers: selected }), selection.frame, false) : undefined;
+    return { selectionPng: selection.source, documentPng: document?.source, selectionData: contextData(selected), frame: selection.frame, count: selected.length,
+      ...(selectionSvg ? { selectionSvg } : {}) };
   }
   /**
    * Change control (FEAT-0031, SC-0155): a small picture of the visible artwork, at most

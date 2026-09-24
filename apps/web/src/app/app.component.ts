@@ -429,6 +429,11 @@ export class AppComponent implements AfterViewInit, OnDestroy {
       }
     });
     effect(() => {
+      // The prompt search reads titles in the language of the panel.
+      const locale = this.locale();
+      agent.label.set((text: string) => translate(text, locale));
+    });
+    effect(() => {
       // The prompt library loads the first time the AI Tools tab is shown to a licensed user.
       if (this.inspectorTab() === "ai" && session.capability("ai-tools").allowed) void agent.loadPrompts();
     });
@@ -1377,6 +1382,11 @@ export class AppComponent implements AfterViewInit, OnDestroy {
   }
   async saveAgentPrompt() {
     if (await this.agent.savePrompt(this.promptTitle())) this.promptTitle.set("");
+  }
+  removeAgentPrompt(prompt: LibraryPrompt) {
+    const title = prompt.builtIn ? this.t(prompt.title) : prompt.title;
+    this.askConfirmation("Remove prompt", this.t(prompt.builtIn ? "The default prompt {name} leaves your list; Restore default prompts brings it back." : "The prompt {name} is removed.").replace("{name}", title),
+      "Remove", () => this.agent.removePrompt(prompt.id));
   }
   useLibraryPrompt(prompt: LibraryPrompt) {
     this.agent.usePrompt(prompt);

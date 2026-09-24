@@ -1,11 +1,42 @@
 {
-  "currentVersion": "0.13.2",
+  "currentVersion": "0.13.3",
   "licence": {
     "file": "LICENSE",
     "name": "Ximply Design Studio \u2014 Limited Use Licence",
     "sha256": "b6f77aae5f066cc5f5e8aa54699d8dcc84a96387007299d30cb78a4f3f7fd6ae"
   },
   "entries": [
+    {
+      "version": "0.13.3",
+      "date": "2026-09-24",
+      "summary": "The agent tools let the user choose a bitmap or an editable vector result, and saved prompts can be searched and removed",
+      "breakingChanges": [],
+      "changes": [
+        {
+          "type": "Feature",
+          "description": "Result: choose Bitmap or Vector in the prompt controls. Vector sends the drawing itself as SVG with the images, asks the model for one SVG of groups with ids, solid colours and clean paths, and inserts the answer as editable paths and groups. Convert to paths and groups always gives a vector result."
+        },
+        {
+          "type": "Feature",
+          "description": "Saved prompts can be searched by words, in the title, text or action, ignoring case and accents, and every prompt can be removed after a confirmation; removing a default hides it until Restore default prompts. Saved prompts keep their result type, and a new default, Recolour the drawing, gives a vector result."
+        },
+        {
+          "type": "Improvement",
+          "description": "Vector results use the current balanced model with image input by default, which the text model setting can change; when a model does not accept a temperature, the request is sent again without one and the creativity stays in the instruction."
+        },
+        {
+          "type": "Security",
+          "description": "Vector results are locked, in the panel and in the API, when the context holds pictures, since they would mean tracing them."
+        },
+        {
+          "type": "Engineering",
+          "description": "Recorded SC-0157 and the search and removal oracle of SC-0152."
+        }
+      ],
+      "capabilityStatus": "local-preview",
+      "markdown": "0.13.3.md",
+      "source": "doc/changelog/0.13.3.md"
+    },
     {
       "version": "0.13.2",
       "date": "2026-09-24",

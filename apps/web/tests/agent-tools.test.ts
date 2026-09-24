@@ -202,3 +202,45 @@ describe('an empty document (FEAT-0029, SC-0150)', () => {
     expect(session.requests).toEqual([]);
   });
 });
+
+describe('bitmap or vector result (FEAT-0029, SC-0157)', () => {
+  it('sends the drawing as SVG and asks for a vector result when the user chooses one', async () => {
+    const { session, tools } = setup([rect('a', 10, 10, 40, 20)], ['a']);
+    session.answer = async () => ({ kind: 'svg', svg: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"><g id="shape"><rect width="10" height="10" fill="#f00"/></g></svg>' });
+    tools.action.set('style'); tools.prompt.set('red'); tools.output.set('vector');
+    expect(await tools.generate()).toBe(true);
+    const [request] = session.requests;
+    expect(request.output).toBe('vector');
+    expect(request.selectionSvg).toMatch(/^<svg xmlns="http:\/\/www.w3.org\/2000\/svg" width="42" height="22" viewBox="9 9 42 22">/);
+    expect(request.selectionSvg).not.toContain('100%');
+    expect(describeRequest(request).map((item) => item.label)).toContain('Drawing as SVG');
+    expect(tools.outcome()?.text).toBe('The result was inserted as editable paths.');
+  });
+
+  it('sends no SVG for a bitmap result', async () => {
+    const { session, tools } = setup([rect('a', 10, 10, 40, 20)], ['a']);
+    tools.action.set('enhance');
+    await tools.generate();
+    expect([session.requests[0].output, session.requests[0].selectionSvg]).toEqual(['bitmap', undefined]);
+  });
+
+  it('locks the vector result for pictures and says why', async () => {
+    const picture = { ...newLayer('image', 'p', { x: 0, y: 0 }), width: 10, height: 10, source: createCanvas(4, 4).toDataURL('image/png') };
+    const { session, tools } = setup([picture], ['p']);
+    tools.action.set('style'); tools.prompt.set('red'); tools.output.set('vector');
+    expect(tools.pictures()).toBe(true);
+    expect(await tools.generate()).toBe(false);
+    expect(tools.outcome()?.text).toBe('Vector results are not available when the context holds pictures.');
+    expect(session.requests).toEqual([]);
+  });
+
+  it('remembers the result type with a saved prompt', async () => {
+    const { session, tools } = setup([], []);
+    tools.prompt.set('Recolour'); tools.output.set('vector');
+    await tools.savePrompt('Palette');
+    expect(session.stored[0].output).toBe('vector');
+    tools.output.set('bitmap');
+    tools.usePrompt(session.stored[0]);
+    expect(tools.output()).toBe('vector');
+  });
+});

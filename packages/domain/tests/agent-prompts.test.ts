@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_PROMPTS, MAX_SAVED_PROMPTS, promptLibrary, removePrompt, requestProblem, savePrompt, toggleFavourite, type SavedPrompt } from '../src/agent-prompts';
+import { DEFAULT_PROMPTS, MAX_SAVED_PROMPTS, effectiveOutput, filterPrompts, hiddenDefaults, promptLibrary, removePrompt, requestProblem, restoreDefaults, savePrompt, toggleFavourite, type SavedPrompt } from '../src/agent-prompts';
 
 let counter = 0;
 const makeId = () => `p${++counter}`;
@@ -22,7 +22,26 @@ describe('prompt library (FEAT-0029, SC-0152)', () => {
     expect(marked).toHaveLength(1);
     expect(promptLibrary(marked).filter((prompt) => prompt.id === 'default-flat')).toHaveLength(1);
     expect(toggleFavourite(marked, 'default-flat')).toEqual([]);
-    expect(removePrompt(marked, 'default-flat')).toEqual(marked);
+  });
+
+  it('hides a removed default until the defaults are restored', () => {
+    const hidden = removePrompt(toggleFavourite([], 'default-flat'), 'default-flat');
+    expect(promptLibrary(hidden).some((prompt) => prompt.id === 'default-flat')).toBe(false);
+    expect(hiddenDefaults(hidden)).toBe(1);
+    expect(restoreDefaults(hidden)).toEqual([]);
+    expect(promptLibrary(restoreDefaults(hidden)).filter((prompt) => prompt.id === 'default-flat')).toHaveLength(1);
+  });
+
+  it('filters by every word of the query in the title, text or action, ignoring case and accents', () => {
+    const library = promptLibrary([mine, { ...mine, id: 'es', title: 'Acuarela suave', prompt: 'Pintura' }]);
+    expect(filterPrompts(library, '').length).toBe(library.length);
+    expect(filterPrompts(library, 'NEON').map((prompt) => prompt.id)).toEqual(['mine']);
+    expect(filterPrompts(library, 'acuarela suave').map((prompt) => prompt.id)).toEqual(['es']);
+    expect(filterPrompts(library, 'glow acuarela')).toEqual([]);
+    expect(filterPrompts(library, 'paths').map((prompt) => prompt.id)).toEqual(['default-logo']);
+    const spanish = (text: string) => (text === 'Watercolour' ? 'Acuarela' : text);
+    expect(filterPrompts(library, 'acuarela', spanish).map((prompt) => prompt.id)).toEqual(['es', 'default-watercolour']);
+    expect(filterPrompts([{ ...mine, title: 'Crème brûlée' }], 'creme brulee')).toHaveLength(1);
   });
 
   it('saves under a title, replacing a prompt with the same title and keeping its mark', () => {
@@ -49,6 +68,14 @@ describe('when a request can be sent (FEAT-0029, SC-0150)', () => {
     expect(requestProblem('free', '', 'document', 0)).toBe('Write what the model should do.');
     expect(requestProblem('remove-object', 'the lamp', 'selection', 1)).toBe('');
     expect(requestProblem('enhance', '', 'document', 0)).toBe('');
+  });
+
+  it('locks vector results when the context holds pictures', () => {
+    expect(effectiveOutput('vectorize', 'bitmap')).toBe('vector');
+    expect(requestProblem('style', 'red', 'selection', 1, 'vector', true)).toBe('Vector results are not available when the context holds pictures.');
+    expect(requestProblem('vectorize', '', 'selection', 1, 'bitmap', true)).toBe('Vector results are not available when the context holds pictures.');
+    expect(requestProblem('style', 'red', 'selection', 1, 'bitmap', true)).toBe('');
+    expect(requestProblem('style', 'red', 'selection', 1, 'vector', false)).toBe('');
   });
 
   it('asks for a selection when the selection is the context', () => {
