@@ -1,11 +1,58 @@
 {
-  "currentVersion": "0.11.2",
+  "currentVersion": "0.12.0",
   "licence": {
     "file": "LICENSE",
     "name": "Ximply Design Studio \u2014 Limited Use Licence",
     "sha256": "b6f77aae5f066cc5f5e8aa54699d8dcc84a96387007299d30cb78a4f3f7fd6ae"
   },
   "entries": [
+    {
+      "version": "0.12.0",
+      "date": "2026-09-24",
+      "summary": "The AI Tools panel sends the selection or the document to the model and inserts the result as a new object",
+      "breakingChanges": [],
+      "changes": [
+        {
+          "type": "Feature",
+          "description": "The AI Tools panel: the selection or the whole document as the context; quick actions to change the style, reinterpret in a style, rescale, improve quality, remove watermarks, clean the background, remove an object and convert to paths and groups; a prompt; and a creativity slider from Precise to Creative."
+        },
+        {
+          "type": "Feature",
+          "description": "Saved prompts: save the prompt, action and creativity under a title, mark favourites and load from a list that includes seven defaults. The prompts are kept per user by the API."
+        },
+        {
+          "type": "Feature",
+          "description": "Generate stays at the bottom of the column, with a moving bar and the phase while the context is sent and the model answers, and Cancel while it runs. The panel lists what was sent: the prompt, the selected objects as data, the selection as PNG, the whole document as PNG and the modifiers. Ctrl+Enter in the prompt generates."
+        },
+        {
+          "type": "Feature",
+          "description": "The result is inserted as a new object above the selection and outside its groups: a picture fitted into the selection or the page, or editable paths and groups for Convert to paths and groups. One undo removes it. Repeat sends the last request again for another result."
+        },
+        {
+          "type": "Security",
+          "description": "The API validates every request before calling the provider, uses the token of the user who asked, keeps at most four requests running, and audits the action, scope, sizes and outcome without the prompt or pixels."
+        },
+        {
+          "type": "Security",
+          "description": "Drawings the model returns are screened for scripts, event handlers and javascript links before the editor imports them."
+        },
+        {
+          "type": "Engineering",
+          "description": "New API routes `/api/ai/generate` and `/api/me/prompts`, with a provider port and an OpenAI adapter; the image and text models can be set with `XDS_OPENAI_IMAGE_MODEL` and `XDS_OPENAI_TEXT_MODEL`."
+        },
+        {
+          "type": "Engineering",
+          "description": "The local nginx allows the model four minutes and 60 MB requests on `/api/ai/`."
+        },
+        {
+          "type": "Engineering",
+          "description": "Recorded SC-0150 to SC-0154 and the owner decision to insert results directly, which defers the proposal flow of SC-0120."
+        }
+      ],
+      "capabilityStatus": "local-preview",
+      "markdown": "0.12.0.md",
+      "source": "doc/changelog/0.12.0.md"
+    },
     {
       "version": "0.11.2",
       "date": "2026-09-24",

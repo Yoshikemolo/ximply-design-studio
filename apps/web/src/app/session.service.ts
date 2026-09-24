@@ -1,4 +1,5 @@
 import { Injectable, computed, signal } from "@angular/core";
+import { AgentRequest, AgentResult, SavedPrompt } from "../../../../packages/domain/src/agent-prompts";
 
 /**
  * Sign-in with Keycloak and the licence of advanced mode (FEAT-0032, ADR-0012, ADR-0041).
@@ -227,7 +228,8 @@ export class SessionService {
         ...(init.body ? { "Content-Type": "application/json" } : {}) } });
       if (answer.status === 401 && !renewed && this.tokens.refresh && (await this.refresh())) return this.request(path, init, true);
       return answer;
-    } catch {
+    } catch (error) {
+      if (init.signal?.aborted) throw error;
       this.message.set("The server is unreachable.");
       return null;
     }
@@ -276,6 +278,17 @@ export class SessionService {
   removeToken(provider = "openai"): Promise<void> { return this.adminCall(`/api/me/tokens/${provider}`, { method: "DELETE" }); }
   testToken(provider = "openai"): Promise<{ ok: boolean; detail: string }> {
     return this.adminCall(`/api/me/tokens/${provider}/test`, { method: "POST" });
+  }
+  /**
+   * The agent tools (FEAT-0029): one request to the model through the API, which holds the
+   * user's token; the signal cancels it. Saved prompts belong to the user.
+   */
+  generate(request: AgentRequest, signal?: AbortSignal): Promise<AgentResult> {
+    return this.adminCall("/api/ai/generate", { method: "POST", body: JSON.stringify(request), signal });
+  }
+  async savedPrompts(): Promise<SavedPrompt[]> { return (await this.adminCall<{ prompts: SavedPrompt[] }>("/api/me/prompts")).prompts; }
+  async savePrompts(prompts: SavedPrompt[]): Promise<SavedPrompt[]> {
+    return (await this.adminCall<{ prompts: SavedPrompt[] }>("/api/me/prompts", { method: "PUT", body: JSON.stringify({ prompts }) })).prompts;
   }
   private async adminCall<T>(path: string, init: RequestInit = {}): Promise<T> {
     const answer = await this.request(path, init);

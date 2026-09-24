@@ -11,6 +11,8 @@ import { AdminDocument, AdminLicence, AdminRole, AdminUser, Licence, Permission,
 import { RASTER_RESOLUTIONS, RasterAntialias, RasterOptions } from "../../../../packages/domain/src/rasterize";
 import { measurementUnits, isUnit, snapPoint, fromPixels, toPixels, formatMeasurement, rulerTicks as makeRulerTicks, SnapConfig } from "../../../../packages/domain/src/measurements";
 import { PreferencesService } from "./preferences.service";
+import { AgentToolsService } from "./agent-tools.service";
+import { AgentAction, LibraryPrompt } from "../../../../packages/domain/src/agent-prompts";
 import { DEFAULT_SIMPLIFY, FreehandToolOptions, PAINTBRUSH_DEFAULTS, PENCIL_DEFAULTS, SMOOTH_DEFAULTS, SimplifyOptions, validFreehandTool } from "../../../../packages/domain/src/path-fit";
 import { BrushStroke, DEFAULT_BRUSH_STROKE } from "../../../../packages/domain/src/brush-stroke";
 import {
@@ -415,7 +417,12 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     readonly editor: EditorService,
     readonly preferences: PreferencesService,
     readonly session: SessionService,
+    readonly agent: AgentToolsService,
   ) {
+    effect(() => {
+      // The prompt library loads the first time the AI Tools tab is shown to a licensed user.
+      if (this.inspectorTab() === "ai" && session.capability("ai-tools").allowed) void agent.loadPrompts();
+    });
     effect(() => {
       const config: SnapConfig = {
         zoom: editor.zoom(),
@@ -1225,6 +1232,31 @@ export class AppComponent implements AfterViewInit, OnDestroy {
     this.inspectorTab.set(id);
     if (this.mobile()) this.openDrawer("panels");
     else this.panels.set(true);
+  }
+
+  /** AI Tools panel (FEAT-0029): labels and small helpers the template uses. */
+  readonly promptTitle = signal("");
+  readonly libraryOpen = signal(false);
+  readonly agentPhases: Record<string, string> = {
+    capturing: "Capturing the context…", sending: "Sending the context…", waiting: "Waiting for the model…", inserting: "Inserting the result…",
+  };
+  agentSelectionCount(): number { return this.editor.selectedLayers().filter((layer) => !layer.guide).length; }
+  creativityLabel(value: number): string {
+    return value < 0.25 ? "Precise" : value < 0.5 ? "Faithful" : value < 0.75 ? "Balanced" : "Creative";
+  }
+  agentActionTitle(action: AgentAction): string {
+    return this.agent.actions.find((item) => item.action === action)?.title ?? "Free prompt";
+  }
+  async saveAgentPrompt() {
+    if (await this.agent.savePrompt(this.promptTitle())) this.promptTitle.set("");
+  }
+  useLibraryPrompt(prompt: LibraryPrompt) {
+    this.agent.usePrompt(prompt);
+    this.libraryOpen.set(false);
+  }
+  agentKey(event: KeyboardEvent) {
+    // Ctrl+Enter or Cmd+Enter in the prompt generates, as in chat inputs.
+    if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) { event.preventDefault(); void this.agent.generate(); }
   }
 
   /** Settings > External tokens: the user's own provider token, of which the browser only sees the state. */

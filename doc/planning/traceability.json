@@ -998,18 +998,34 @@
         "SC-0120",
         "SC-0121",
         "SC-0122",
-        "SC-0148"
+        "SC-0148",
+        "SC-0150",
+        "SC-0151",
+        "SC-0152",
+        "SC-0153",
+        "SC-0154"
       ],
       "implementation": [
         "services/api/src/external_tokens.py",
-        "apps/web/src/app/app.component.ts"
+        "apps/web/src/app/app.component.ts",
+        "services/api/src/agent_tools.py",
+        "packages/domain/src/agent-prompts.ts",
+        "packages/domain/src/agent-result.ts",
+        "apps/web/src/app/agent-tools.service.ts",
+        "apps/web/src/app/editor.service.ts",
+        "apps/web/src/app/session.service.ts"
       ],
       "tests": [
         "services/api/tests/test_external_tokens.py",
-        "apps/web/tests/session.test.ts"
+        "apps/web/tests/session.test.ts",
+        "services/api/tests/test_agent_tools.py",
+        "packages/domain/tests/agent-prompts.test.ts",
+        "packages/domain/tests/agent-result.test.ts",
+        "apps/web/tests/agent-tools.test.ts"
       ],
       "evidence": [
-        "doc/changelog/0.11.0.md"
+        "doc/changelog/0.11.0.md",
+        "doc/changelog/0.12.0.md"
       ]
     },
     {

@@ -1,5 +1,6 @@
 import { alphaBounds, drawPaintSource, finishPaint, paintFrame } from "./paint-buffer";
 import { aboveOutermostGroup, clipboardLayers, contextPath, detachedCopies } from "../../../../packages/domain/src/group-copy";
+import { contextData, fitInto, fittedPicture, Frame } from "../../../../packages/domain/src/agent-result";
 import { aliasPixels, alignToPixels, cropPixels, DEFAULT_RASTER_OPTIONS, rasterFrame, rasterPixels, rasterScale, rasterTarget, RasterOptions, validRasterOptions } from "../../../../packages/domain/src/rasterize";
 import { Procedural, defaultProcedural, generateProcedural, syncProcedurals, validProcedural } from "../../../../packages/domain/src/procedural";
 import { DEFAULT_GRADIENTS, FillPaint, GradientPaint, MAX_PATTERNS, MAX_SWATCHES, PatternDefinition, PresetPattern, Swatch, defaultSwatches, presetPattern, validFillPaint } from "../../../../packages/domain/src/paint";
@@ -5851,6 +5852,62 @@ export class EditorService {
     this.status.set("Converted to a pixel image.");
     this.changed();
     return true;
+  }
+  /**
+   * Agent tools (FEAT-0029): what a request carries, as the panel describes it. With the
+   * selection as context, the selected objects go as a transparent PNG and as data, and the
+   * whole document as a PNG for context; with the document as context, only its PNG. The frame
+   * is where the result will be placed. Returns null, with the reason in the status line, when
+   * there is nothing to send.
+   */
+  async agentContext(scope: "selection" | "document", ppi = 144): Promise<{ selectionPng?: string; documentPng?: string; selectionData?: string; frame: Frame; count: number } | null> {
+    const selected = this.selectedLayers().filter((layer) => !layer.guide && layer.visible);
+    if (scope === "selection" && !selected.length) { this.status.set("Select objects, or choose the whole document as the context."); return null; }
+    const document = await this.rasterizePng({ ppi: 96, antialias: "art", margin: 0 }, []);
+    if (scope === "document") {
+      if (!document) { this.status.set("The document has nothing visible to send."); return null; }
+      const page = this.document();
+      return { documentPng: document.source, frame: { x: 0, y: 0, width: page.width, height: page.height }, count: 0 };
+    }
+    const selection = await this.rasterizePng({ ppi, antialias: "art", margin: 0 }, selected.map((layer) => layer.id));
+    if (!selection) return null;
+    return { selectionPng: selection.source, documentPng: document?.source, selectionData: contextData(selected), frame: selection.frame, count: selected.length };
+  }
+  /** Where a result goes: above the topmost selected object, outside its groups, or at the top. */
+  private agentInsertIndex(layers: readonly Layer[]): number {
+    const selected = new Set(this.selectedLayers().map((layer) => layer.id));
+    const indexes = layers.map((layer, index) => (selected.has(layer.id) ? index : -1)).filter((index) => index >= 0);
+    return indexes.length ? aboveOutermostGroup(layers, Math.max(...indexes)) : layers.length;
+  }
+  private insertAgentLayers(created: Layer[], status: string): boolean {
+    const before = this.document();
+    if (before.layers.length + created.length > MAX_LAYERS) { this.status.set("The document cannot hold more layers."); return false; }
+    const layers = [...before.layers];
+    layers.splice(this.agentInsertIndex(before.layers), 0, ...created);
+    const next = { ...before, layers };
+    try { parseDocument(JSON.stringify(next)); } catch { this.status.set("The result cannot be placed in this document."); return false; }
+    this.commitStep(before);
+    this.document.set(next);
+    this.selectedIds.set(created.map((layer) => layer.id));
+    this.selectedId.set(created[0].id);
+    this.status.set(status);
+    this.changed();
+    return true;
+  }
+  /** Inserts the picture the model returned as a new object fitted into the frame; nothing is replaced. */
+  insertAgentPicture(png: string, width: number, height: number, frame: Frame, name: string): boolean {
+    const box = fittedPicture(width, height, frame);
+    const layer = newLayer("image", crypto.randomUUID(), { x: box.x, y: box.y });
+    Object.assign(layer, { name: name.slice(0, 150), width: box.width, height: box.height, source: png });
+    return this.insertAgentLayers([layer], "The result was inserted as a new object.");
+  }
+  /** Inserts the drawing the model returned as editable paths and groups fitted into the frame. */
+  insertAgentDrawing(svg: string, frame: Frame, name: string): boolean {
+    let imported;
+    try { imported = importSvg(svg, { name: name.slice(0, 80) }); } catch { this.status.set("The drawing the model returned cannot be read."); return false; }
+    if (!imported.layers.length) { this.status.set("The drawing the model returned is empty."); return false; }
+    const placed = affineLayers(imported.layers, fitInto(selectionBounds(imported.layers), frame), { scaleStrokes: true });
+    return this.insertAgentLayers(placed, "The result was inserted as editable paths.");
   }
   /**
    * Imports a drawing or an image. The file is data: vector readers parse it in the domain,

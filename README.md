@@ -88,8 +88,12 @@ keyboard shortcuts, cleanup and development commands.
   documents, with bulk actions and typed filters. The online preview has no Keycloak and runs
   in demo mode.
 - Convert to pixel image, the advanced tools block, the Properties, AI Tools and History tabs
-  and each user's own OpenAI API token in Settings > External tokens; the AI Tools and History
-  panels are still being built.
+  and each user's own OpenAI API token in Settings > External tokens.
+- The AI Tools panel: the selection or the whole document as the context, quick actions
+  (change or reinterpret the style, rescale, improve quality, remove watermarks, clean the
+  background, remove an object, convert to paths and groups), a prompt, creativity, saved and
+  favourite prompts, Repeat, and Generate with progress and Cancel. The result is inserted as a
+  new object through the API with the user's own token. The History panel is still being built.
 - Copies, duplicates and converted pictures leave the groups their originals were only members
   of, as in Illustrator; Paste in Front and Paste in Back at a group member join its group.
 
