@@ -1347,6 +1347,8 @@ const ES: Record<string, string> = {
   "Give the project a name": "Pon un nombre al proyecto",
   "Write the comment first": "Escribe antes el comentario",
   "Only its author can remove a comment": "Solo su autor puede eliminar un comentario",
+  "The OpenAI account of this token has no API credit left; add credit or raise its limit in the OpenAI billing settings": "La cuenta de OpenAI de este token no tiene crédito de API; añade crédito o sube su límite en la facturación de OpenAI",
+  "OpenAI limits how many requests this token can make per minute; wait a moment and try again": "OpenAI limita cuántas peticiones por minuto puede hacer este token; espera un momento y vuelve a intentarlo",
 };
 export function translate(key: string, locale: string) {
   return locale === "es" ? (ES[key] ?? key) : key;

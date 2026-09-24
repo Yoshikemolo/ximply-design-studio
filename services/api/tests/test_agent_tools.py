@@ -171,6 +171,11 @@ class OpenAiProviderTests(unittest.TestCase):
     def test_provider_failures_are_explained(self):
         provider = OpenAiProvider(image_model='m', text_model='t')
         cases = [(401, b'{}', 'OpenAI refused the token'), (429, b'{}', 'OpenAI limits the rate or quota of this token'),
+                 (429, b'{"error": {"code": "insufficient_quota", "message": "You exceeded your current quota"}}',
+                  'The OpenAI account of this token has no API credit left; add credit or raise its limit in the OpenAI billing settings'),
+                 (429, b'{"error": {"code": "rate_limit_exceeded", "message": "Rate limit reached"}}',
+                  'OpenAI limits how many requests this token can make per minute; wait a moment and try again'),
+                 (429, b'{"error": {"type": "tokens", "message": "Too many tokens"}}', 'OpenAI limits the rate or quota of this token: Too many tokens'),
                  (400, b'{"error": {"message": "Invalid size"}}', 'OpenAI refused the request: Invalid size'), (500, b'', 'OpenAI answered 500')]
         for code, body, reason in cases:
             with mock.patch('urllib.request.urlopen', side_effect=urllib.error.HTTPError('u', code, 'x', {}, io.BytesIO(body))):

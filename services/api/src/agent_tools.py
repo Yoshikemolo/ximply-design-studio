@@ -127,13 +127,21 @@ class Provider(Protocol):
 
 def provider_refusal(error: urllib.error.HTTPError) -> IdentityError:
     try:
-        message = str(json.loads(error.read() or b'{}').get('error', {}).get('message', ''))[:200]
+        detail = json.loads(error.read() or b'{}').get('error', {})
+        message = str(detail.get('message', ''))[:200]
+        code = str(detail.get('code') or detail.get('type') or '')
     except (ValueError, AttributeError, OSError):
-        message = ''
+        message, code = '', ''
     if error.code == 401:
         return IdentityError(502, 'OpenAI refused the token')
     if error.code == 429:
-        return IdentityError(502, 'OpenAI limits the rate or quota of this token')
+        # OpenAI answers 429 both for an account without API credit and for too many requests;
+        # the size of the prompt has nothing to do with either.
+        if code == 'insufficient_quota':
+            return IdentityError(502, 'The OpenAI account of this token has no API credit left; add credit or raise its limit in the OpenAI billing settings')
+        if code == 'rate_limit_exceeded':
+            return IdentityError(502, 'OpenAI limits how many requests this token can make per minute; wait a moment and try again')
+        return IdentityError(502, 'OpenAI limits the rate or quota of this token' + (': ' + message if message else ''))
     if error.code in (400, 403, 404) and message:
         return IdentityError(502, 'OpenAI refused the request: ' + message)
     return IdentityError(502, f'OpenAI answered {error.code}')
