@@ -73,6 +73,8 @@ class GenerationRequest(BaseModel):
     # What the user wants back: pixels from the image model, or an editable drawing (FEAT-0029, SC-0157).
     output: Literal['bitmap', 'vector'] = 'bitmap'
     selectionSvg: Annotated[str, Field(max_length=600_000)] | None = None
+    # The context holds pictures: a vector result redraws them as shapes (owner decision of 2026-09-24).
+    pictures: bool = False
 
 
 class SavedPrompt(BaseModel):
@@ -151,6 +153,14 @@ def vector_instruction(request: GenerationRequest, has_selection: bool) -> str:
         parts.append('Image 1 is the whole design document rendered as a PNG; the SVG below is its source, when given.')
     if request.selectionSvg:
         parts.append('Source SVG:\n' + request.selectionSvg[:300_000])
+    if request.pictures or (request.selectionData and '[picture sent as an image]' in request.selectionData):
+        # Pixels become shapes: the pictures are only in Image 1, never in the source SVG.
+        parts.append('The context holds bitmap pictures, which appear in Image 1 but not in the source SVG. Trace them: redraw each '
+                     'picture as vector shapes that reproduce it, with one group per picture and nested groups per region or '
+                     'object, flat colours sampled from the picture for each region, smooth outlines, and enough shapes to keep '
+                     'its recognisable forms and main colour areas without imitating every pixel. Place the traced shapes where '
+                     'the picture sits in Image 1, and keep the vector objects of the source SVG as they are unless the '
+                     'instruction concerns them.')
     if request.creativity < 0.34:
         parts.append('Follow the instruction strictly and keep the drawing as close to the source as possible.')
     elif request.creativity > 0.66:
@@ -371,9 +381,6 @@ def agent_router(session: Callable, vault: TokenVault, prompts: PromptStore, aud
         images = [selection, document] if body.scope == 'selection' else [document]
         images = [image for image in images if image is not None]
         vector = body.output == 'vector' or body.action == 'vectorize'
-        # A vector result from pictures would mean tracing them, which is not offered yet (owner decision of 2026-09-24).
-        if vector and body.selectionData and '[picture sent as an image]' in body.selectionData:
-            raise IdentityError(422, 'Vector results are not available when the context holds pictures')
         text = vector_instruction(body, selection is not None) if vector else instruction(body, selection is not None)
         if not running.acquire(blocking=False):
             raise IdentityError(429, 'Too many requests are running; wait for one to finish')

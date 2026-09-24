@@ -1371,6 +1371,7 @@ const ES: Record<string, string> = {
   "Made with {model}": "Hecho con {model}",
   "The server closed the request without a result.": "El servidor cerró la petición sin resultado.",
   "The request failed on the server": "La petición falló en el servidor",
+  "The model traces the pictures into editable paths and groups with flat colours.": "El modelo calca las imágenes en trazados y grupos editables con colores planos.",
 };
 export function translate(key: string, locale: string) {
   return locale === "es" ? (ES[key] ?? key) : key;

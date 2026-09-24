@@ -68,6 +68,7 @@ Generated titles and paths only; authoritative content remains in each linked do
 - [REL-0040 — Model access in the connection test](changelog/0.13.4.md)
 - [REL-0041 — A pool of models for the agent tools](changelog/0.13.5.md)
 - [REL-0042 — Model progress and long requests](changelog/0.13.6.md)
+- [REL-0043 — Vector results from pictures](changelog/0.13.7.md)
 - [REL-0004 — First local drawing and image-retouching preview](changelog/0.2.0-alpha.1.md)
 - [REL-0005 — Validated local container preview](changelog/0.2.0-alpha.2.md)
 - [REL-0006 — Drawing workbench preview](changelog/0.3.0-alpha.1.md)

@@ -18,6 +18,8 @@ export interface AgentRequest {
   selectionData?: string;
   output?: AgentOutput;
   selectionSvg?: string;
+  /** The context holds pictures, which a vector result traces. */
+  pictures?: boolean;
 }
 export type AgentResult = ({ kind: "image"; png: string } | { kind: "svg"; svg: string }) & { model?: string };
 /** What a streamed request reports while it runs: each model tried, and heartbeats while it works. */
@@ -125,8 +127,7 @@ export function effectiveOutput(action: AgentAction, output: AgentOutput): Agent
 }
 
 /** Why a request cannot be sent yet, or an empty string when it can. */
-export function requestProblem(action: AgentAction, prompt: string, scope: AgentScope, selected: number, output: AgentOutput = "bitmap", pictures = false): string {
-  if (pictures && effectiveOutput(action, output) === "vector") return "Vector results are not available when the context holds pictures.";
+export function requestProblem(action: AgentAction, prompt: string, scope: AgentScope, selected: number): string {
   const needsPrompt = action === "free" || AGENT_ACTIONS.some((item) => item.action === action && item.needsPrompt);
   if (needsPrompt && !prompt.trim()) return "Write what the model should do.";
   if (scope === "selection" && selected === 0) return "Select objects, or choose the whole document as the context.";

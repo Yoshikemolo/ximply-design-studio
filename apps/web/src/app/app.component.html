@@ -633,15 +633,15 @@
                 <legend>{{ t("Result") }}</legend>
                 <div class="segmented agent-scope" role="radiogroup" [attr.aria-label]="t('Result')">
                   <button type="button" role="radio" [attr.aria-checked]="agent.result() === 'bitmap'" [class.active]="agent.result() === 'bitmap'" [disabled]="agent.busy() || agent.action() === 'vectorize'" (click)="agent.output.set('bitmap')">{{ t("Bitmap") }}</button>
-                  <button type="button" role="radio" [attr.aria-checked]="agent.result() === 'vector'" [class.active]="agent.result() === 'vector'" [disabled]="agent.busy() || agent.pictures()" (click)="agent.output.set('vector')">{{ t("Vector") }}</button>
+                  <button type="button" role="radio" [attr.aria-checked]="agent.result() === 'vector'" [class.active]="agent.result() === 'vector'" [disabled]="agent.busy()" (click)="agent.output.set('vector')">{{ t("Vector") }}</button>
                 </div>
-                <p class="hint">{{ t(agent.pictures() ? 'The context holds pictures, so the result is a bitmap: vectors from pictures would mean tracing them.' : agent.result() === 'vector' ? 'The model draws editable paths and groups from the drawing itself, sent as SVG.' : 'The model paints a picture, inserted as an image.') }}</p>
+                <p class="hint">{{ t(agent.result() === 'vector' ? (agent.pictures() ? 'The model traces the pictures into editable paths and groups with flat colours.' : 'The model draws editable paths and groups from the drawing itself, sent as SVG.') : 'The model paints a picture, inserted as an image.') }}</p>
               </fieldset>
               <fieldset class="agent-block">
                 <legend>{{ t("Quick actions") }}</legend>
                 <div class="agent-actions">
                   @for (item of agent.actions; track item.action) {
-                    <button type="button" class="chip" [class.active]="agent.action() === item.action" [attr.aria-pressed]="agent.action() === item.action" [disabled]="agent.busy() || (item.action === 'vectorize' && agent.pictures())" (click)="agent.chooseAction(item.action)">{{ t(item.title) }}</button>
+                    <button type="button" class="chip" [class.active]="agent.action() === item.action" [attr.aria-pressed]="agent.action() === item.action" [disabled]="agent.busy()" (click)="agent.chooseAction(item.action)">{{ t(item.title) }}</button>
                   }
                 </div>
               </fieldset>

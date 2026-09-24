@@ -50,14 +50,13 @@ export class AgentToolsService {
 
   constructor(private readonly editor: EditorService, private readonly session: SessionService) {}
 
-  /** Whether the context holds pictures, which locks the vector result until tracing exists. */
+  /** Whether the context holds pictures, which a vector result traces into shapes. */
   readonly pictures = computed(() => hasPictures(this.scope() === "document" ? this.editor.document().layers : this.editor.selectedLayers()));
   /** The result the request will ask for: Convert to paths and groups always draws vectors. */
   readonly result = computed(() => effectiveOutput(this.action(), this.output()));
 
   /** Why Generate is not available yet, or an empty string. */
-  readonly problem = computed(() => requestProblem(this.action(), this.prompt(), this.scope(), this.editor.selectedLayers().filter((layer) => !layer.guide).length,
-    this.output(), this.pictures()));
+  readonly problem = computed(() => requestProblem(this.action(), this.prompt(), this.scope(), this.editor.selectedLayers().filter((layer) => !layer.guide).length));
 
   chooseAction(action: AgentAction) { this.action.set(this.action() === action ? "free" : action); }
   setCreativity(value: number) { if (Number.isFinite(value)) this.creativity.set(Math.min(1, Math.max(0, value))); }
@@ -113,7 +112,8 @@ export class AgentToolsService {
     const vector = this.result() === "vector";
     const context = await this.editor.agentContext(this.scope(), 144, vector);
     if (!context) { this.phase.set("idle"); this.outcome.set({ ok: false, text: this.editor.status() || "The context could not be captured." }); return false; }
-    const request: AgentRequest = { prompt: this.prompt().trim(), action: this.action(), scope: this.scope(), creativity: this.creativity(), output: this.result(), ...context };
+    const request: AgentRequest = { prompt: this.prompt().trim(), action: this.action(), scope: this.scope(), creativity: this.creativity(), output: this.result(),
+      ...(vector && this.pictures() ? { pictures: true } : {}), ...context };
     delete (request as Partial<typeof context>).frame;
     delete (request as Partial<typeof context>).count;
     const title = this.actions.find((item) => item.action === request.action)?.title ?? "Generated";
